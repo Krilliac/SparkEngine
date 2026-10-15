@@ -28,7 +28,6 @@
 
 #include "Utils/BenchmarkFramework.h"
 
-#include <array>
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
@@ -77,11 +76,13 @@ namespace
 
         FuzzDirectory()
         {
-            std::array<char, 64> pattern{};
-            std::snprintf(pattern.data(), pattern.size(), "/tmp/spark-baseline-fuzz-XXXXXX");
+            // Honor TMPDIR like mkstemp-based tools do; fall back to /tmp.
+            const char* tmpRoot = std::getenv("TMPDIR");
+            std::string pattern = (tmpRoot != nullptr && tmpRoot[0] != '\0') ? tmpRoot : "/tmp";
+            pattern += "/spark-baseline-fuzz-XXXXXX";
             if (::mkdtemp(pattern.data()) == nullptr)
                 InfrastructureFailure("mkdtemp");
-            base = pattern.data();
+            base = pattern;
             input = base / "baseline.json";
             roundTrip = base / "round-trip.json";
         }

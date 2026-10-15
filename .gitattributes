@@ -73,6 +73,8 @@ FuzzerTests/corpora/navmesh-loader/** -text
 FuzzerTests/corpora/terrain-sparkterrain/** -text
 FuzzerTests/corpora/asset-service-protocol/** -text
 FuzzerTests/corpora/daemon-protocol-frame/** -text
+FuzzerTests/corpora/benchmark-baseline-json/** -text
+FuzzerTests/corpora/freeze-buffer-blob/** -text
 FuzzerTests/corpora/daemon-bounded-wire-codec/** -text
 FuzzerTests/corpora/binary-serializer/** -text
 FuzzerTests/corpora/datatable-system/** -text

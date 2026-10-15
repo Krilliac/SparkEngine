@@ -3990,6 +3990,8 @@ set_tests_properties(FuzzFreezeBufferBlobSmoke PROPERTIES
 # SEC-120 benchmark baseline reader. BenchmarkFrameworkBaseline.cpp holds
 # LoadBaseline and its line helpers; the adapter supplies only the private-constructor
 # GetInstance() seam instead of linking BenchmarkFramework.cpp (console and scenarios).
+# Do not add BenchmarkFramework.cpp to this target: it also defines GetInstance(), so the
+# link would fail with a duplicate symbol.
 # Same libstdc++ driver / libc++ production split as SparkFuzzJsonUtils.
 add_executable(SparkFuzzBenchmarkBaselineJson
     FuzzBenchmarkBaselineJson.cpp

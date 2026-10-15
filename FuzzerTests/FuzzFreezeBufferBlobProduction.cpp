@@ -23,11 +23,6 @@
 
 #include "FuzzFreezeBufferBlobProduction.h"
 
-// FreezeSystem.h uses std::min and std::is_trivially_copyable_v without
-// including their headers, so supply them first.
-#include <algorithm>
-#include <type_traits>
-
 #include "Engine/SaveSystem/FreezeSystem.h"
 
 #include <cstddef>
@@ -36,6 +31,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 namespace
@@ -130,8 +126,7 @@ namespace
 
     bool SameState(const Snapshot& a, const Snapshot& b)
     {
-        return a.count == b.count && a.label == b.label &&
-               std::memcmp(&a.record, &b.record, sizeof(LegacyRecord)) == 0;
+        return a.count == b.count && a.label == b.label && std::memcmp(&a.record, &b.record, sizeof(LegacyRecord)) == 0;
     }
 
     void ThawThroughFramework(Fixtures& fixtures, const std::vector<std::uint8_t>& blob)
