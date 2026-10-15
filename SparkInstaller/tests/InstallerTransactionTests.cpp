@@ -2,6 +2,7 @@
 #include "Installer.h"
 #include "InstallState.h"
 #include "InstallerPreflight.h"
+#include "PathUtf8.h"
 #include "ProcessRunner.h"
 
 #include <chrono>
@@ -17,6 +18,16 @@
 #include <string_view>
 #include <thread>
 #include <vector>
+
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 namespace
 {
@@ -1256,6 +1267,162 @@ namespace
         return failures;
     }
 
+    // A non-ASCII character with its UTF-8 bytes, for picking one the active
+    // code page can (or cannot) represent. The probe calls the Win32 API
+    // directly so it does not depend on the helper under test.
+    struct NonAsciiCandidate
+    {
+        wchar_t wide;
+        const char* utf8;
+    };
+
+    [[maybe_unused]] constexpr NonAsciiCandidate kNonAsciiCandidates[] = {
+        {L'\u00EB', "\xC3\xAB"},     // Latin small e with diaeresis (cp1252 and most Western pages)
+        {L'\u0416', "\xD0\x96"},     // Cyrillic Zhe (cp1251, cp932, cp936)
+        {L'\u65E5', "\xE6\x97\xA5"}, // CJK "sun" (cp932, cp936, cp949, cp950)
+        {L'\u05D0', "\xD7\x90"},     // Hebrew Alef (cp1255)
+        {L'\u0E01', "\xE0\xB8\x81"}, // Thai Ko Kai (cp874)
+    };
+
+#ifdef _WIN32
+    [[maybe_unused]] bool ActiveCodePageRepresents(wchar_t character)
+    {
+        if (::GetACP() == CP_UTF8)
+        {
+            return true;
+        }
+        char buffer[8] = {};
+        BOOL usedDefault = FALSE;
+        const int size = ::WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, &character, 1, buffer, sizeof(buffer),
+                                               nullptr, &usedDefault);
+        return size > 0 && !usedDefault;
+    }
+#endif
+
+    // Returns nullptr when every candidate is (or none is) representable.
+    [[maybe_unused]] const NonAsciiCandidate* FindCandidate(bool representable)
+    {
+        for (const NonAsciiCandidate& candidate : kNonAsciiCandidates)
+        {
+#ifdef _WIN32
+            if (ActiveCodePageRepresents(candidate.wide) == representable)
+            {
+                return &candidate;
+            }
+#else
+            // POSIX paths are bytes: everything is representable.
+            if (representable)
+            {
+                return &candidate;
+            }
+#endif
+        }
+        return nullptr;
+    }
+
+    [[maybe_unused]] std::filesystem::path CandidateLeaf(const NonAsciiCandidate& candidate)
+    {
+#ifdef _WIN32
+        return std::filesystem::path(std::wstring(L"Zo") + candidate.wide + L"-install");
+#else
+        return std::filesystem::path(std::string("Zo") + candidate.utf8 + "-install");
+#endif
+    }
+
+    // The destination arrives as UTF-8 from every frontend. On Windows a narrow
+    // fs::path reads it in the ANSI code page, so a non-ASCII character became
+    // several code-page characters and the install landed in a mojibake sibling.
+    int RunFreshInstallUtf8DestinationTest(const fs::path& executable)
+    {
+        const std::string name = "fresh install UTF-8 destination";
+        const NonAsciiCandidate* candidate = FindCandidate(true);
+        if (candidate == nullptr)
+        {
+            std::cout << "SKIP: " << name << ": the active code page represents no non-ASCII candidate\n";
+            return 0;
+        }
+        const fs::path root = MakeTestRoot();
+        int failures = CreateFakeGit(root, executable, name);
+        const fs::path destination = root / CandidateLeaf(*candidate);
+        // The installer normalises the destination to native separators.
+        const std::string utf8Destination = SparkInstaller::PathToUtf8(root) +
+                                            static_cast<char>(fs::path::preferred_separator) + "Zo" + candidate->utf8 +
+                                            "-install";
+        fs::path lockFile = destination;
+        lockFile += ".sparkinstall-lock";
+
+        ScopedPathPrefix pathPrefix(root / "tools");
+        failures += Check(pathPrefix.IsSet(), name + ": could not prepend fake git to PATH");
+
+        std::string log;
+        SparkInstaller::InstallerContext context = MakeContext(destination, executable, log);
+        context.destination = utf8Destination;
+        context.configManager.config.buildPath.clear();
+        const int result = SparkInstaller::Installer::Run(context);
+
+        failures += Check(result == 0, name + ": expected success, got " + std::to_string(result) + "\n" + log);
+        failures += Check(fs::is_regular_file(destination / SparkInstaller::InstallState::FileName()),
+                          name + ": install state was not written inside the requested UTF-8 destination\n" + log);
+        failures += Check(fs::exists(destination / "CMakeLists.txt"),
+                          name + ": the clone was not activated at the requested UTF-8 destination");
+        std::error_code error;
+        for (const fs::directory_entry& entry : fs::directory_iterator(root, error))
+        {
+            const fs::path leaf = entry.path().filename();
+            failures += Check(leaf == "tools" || leaf == destination.filename() || leaf == lockFile.filename(),
+                              name + ": the install wrote outside the requested destination: " +
+                                  SparkInstaller::PathToUtf8(entry.path()));
+        }
+        SparkInstaller::InstallState loaded;
+        failures += Check(SparkInstaller::InstallState::Load(utf8Destination, loaded) &&
+                              loaded.destination == utf8Destination && context.destination == utf8Destination,
+                          name + ": the installer did not keep the destination as UTF-8: " + context.destination);
+        failures += Check(log.find(" at " + utf8Destination) != std::string::npos,
+                          name + ": the log did not report the UTF-8 destination\n" + log);
+
+        fs::remove_all(root, error);
+        return failures;
+    }
+
+    // git and CMake run through CreateProcessA, so a destination the active
+    // code page cannot represent is refused up front with an explicit message,
+    // before the lock, preflight or any write.
+    int RunUnrepresentableDestinationRefusalTest(const fs::path& executable)
+    {
+        const std::string name = "unrepresentable destination refusal";
+#ifdef _WIN32
+        const NonAsciiCandidate* missing = FindCandidate(false);
+        if (missing == nullptr)
+        {
+            std::cout << "SKIP: " << name << ": active code page " << ::GetACP() << " represents every candidate\n";
+            return 0;
+        }
+        const fs::path root = MakeTestRoot();
+        std::error_code error;
+        fs::create_directories(root, error);
+        int failures = Check(!error, name + ": could not create test root");
+
+        std::string log;
+        SparkInstaller::InstallerContext context = MakeContext(root / "install", executable, log);
+        context.destination = SparkInstaller::PathToUtf8(root) + "\\Zo" + missing->utf8 + "-install";
+        context.configManager.config.buildPath.clear();
+        const int result = SparkInstaller::Installer::Run(context);
+
+        failures += Check(result == 2, name + ": expected exit 2, got " + std::to_string(result) + "\n" + log);
+        failures += Check(log.find("contains characters this system's code page cannot represent") != std::string::npos,
+                          name + ": the refusal did not name the code-page limit\n" + log);
+        failures += Check(log.find("Mode:") == std::string::npos && log.find("preflight") == std::string::npos,
+                          name + ": the refusal came after mode detection or preflight\n" + log);
+        failures += Check(fs::is_empty(root, error), name + ": the refused install wrote into its parent");
+        fs::remove_all(root, error);
+        return failures;
+#else
+        (void)executable;
+        (void)name;
+        return 0;
+#endif
+    }
+
     // The destination turned non-empty after the emptiness check: activation
     // must refuse and leave both trees intact, and succeed once it is empty.
     int RunActivateStagedTreeTest()
@@ -1409,6 +1576,8 @@ int main(int argc, char* argv[])
         failures += RunPostBuildHeadCommitFailureTest(executable);
         failures += RunFreshInstallCloneFailureTest(executable);
         failures += RunFreshInstallTrailingSeparatorTest(executable);
+        failures += RunFreshInstallUtf8DestinationTest(executable);
+        failures += RunUnrepresentableDestinationRefusalTest(executable);
         failures += RunActivateStagedTreeTest();
     }
     if (interrupted)

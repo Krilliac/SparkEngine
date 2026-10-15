@@ -6,8 +6,10 @@
 #include "GitRunner.h"
 #include "InstallState.h"
 #include "InstallerPreflight.h"
+#include "PathUtf8.h"
 #include "ProcessRunner.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -53,7 +55,8 @@ namespace SparkInstaller
           public:
             explicit DestinationLock(const fs::path& destination)
             {
-                const fs::path path = destination.string() + ".sparkinstall-lock";
+                fs::path path = destination;
+                path += ".sparkinstall-lock";
 #ifdef _WIN32
                 m_handle = CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS,
                                        FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
@@ -134,7 +137,9 @@ namespace SparkInstaller
 
         fs::path PendingPreviousPath(const fs::path& destination)
         {
-            return destination.string() + ".sparkinstall-previous-pending";
+            fs::path previous = destination;
+            previous += ".sparkinstall-previous-pending";
+            return previous;
         }
 
         bool PendingMarkerExists(const fs::path& dest)
@@ -157,7 +162,10 @@ namespace SparkInstaller
         // A sibling of the destination, so activation is a same-volume rename.
         fs::path MakeStagingPath(const fs::path& dest)
         {
-            return dest.parent_path() / ("." + dest.filename().string() + ".sparkinstall-" + TransactionSuffix());
+            fs::path leaf = ".";
+            leaf += dest.filename();
+            leaf += ".sparkinstall-" + TransactionSuffix();
+            return dest.parent_path() / leaf;
         }
 
         bool PathLooksLikeEngineClone(const fs::path& dest)
@@ -177,21 +185,56 @@ namespace SparkInstaller
             ctx.configManager.config.enginePath = ctx.destination;
             if (ctx.configManager.config.buildPath.empty())
             {
-                ctx.configManager.config.buildPath = (fs::path(ctx.destination) / "build").string();
+                ctx.configManager.config.buildPath = PathToUtf8(PathFromUtf8(ctx.destination) / "build");
             }
 
             std::error_code ec;
-            fs::create_directories(ctx.configManager.config.buildPath, ec);
+            fs::create_directories(PathFromUtf8(ctx.configManager.config.buildPath), ec);
+
+            // Every string in the config is UTF-8; ProcessRunner needs the
+            // process code page. Commands run from a converted copy, logs show
+            // UTF-8. A value the code page cannot hold is refused by name.
+            SparkBuild::ConfigManager processConfig = ctx.configManager;
+            std::string processDestination;
+            const auto convert = [&log](const std::string& value, std::string& converted, const char* what)
+            {
+                if (ProcessArgFromUtf8(value, converted))
+                {
+                    return true;
+                }
+                Emit(log,
+                     std::string("error: ") + what + " cannot be passed to CMake in this system's code page: " + value);
+                return false;
+            };
+            bool converted =
+                convert(ctx.destination, processDestination, "the install path") &&
+                convert(ctx.configManager.config.buildPath, processConfig.config.buildPath, "the build path") &&
+                convert(ctx.configManager.config.cmakePath, processConfig.config.cmakePath, "the CMake path") &&
+                convert(ctx.configManager.config.cmakePreset, processConfig.config.cmakePreset, "the CMake preset") &&
+                convert(ctx.configManager.config.msvcToolset, processConfig.config.msvcToolset, "the MSVC toolset");
+            for (auto& option : processConfig.config.options)
+            {
+                converted = converted && convert(option.cmakeVar, option.cmakeVar, "a CMake option name");
+            }
+            if (!converted)
+            {
+                return 6;
+            }
+            processConfig.config.enginePath = processDestination;
 
             std::string configureCmd;
+            std::string configureDisplay;
             try
             {
-                configureCmd = ctx.configManager.BuildCMakeConfigureCommand();
+                configureCmd = processConfig.BuildCMakeConfigureCommand();
+                configureDisplay = ctx.configManager.BuildCMakeConfigureCommand();
                 if (ctx.mode == Mode::Update)
                 {
-                    configureCmd += " -B " +
-                                    GitRunner::EncodeProcessRunnerArgument(ctx.configManager.config.buildPath) +
+                    configureCmd += " -B " + GitRunner::EncodeProcessRunnerArgument(processConfig.config.buildPath) +
                                     " -DCMAKE_BUILD_RPATH_USE_ORIGIN=ON";
+                    configureDisplay += " -B " +
+                                        GitRunner::EncodeProcessRunnerArgument(ctx.configManager.config.buildPath) +
+                                        " -DCMAKE_BUILD_RPATH_USE_ORIGIN=ON";
                 }
             }
             catch (const std::invalid_argument& error)
@@ -199,11 +242,11 @@ namespace SparkInstaller
                 Emit(log, std::string("error: unsafe CMake configure input: ") + error.what());
                 return 6;
             }
-            Emit(log, "Configuring: " + configureCmd);
+            Emit(log, "Configuring: " + configureDisplay);
             {
                 SparkBuild::ProcessRunner runner;
                 std::string out;
-                int rc = runner.RunSync(configureCmd, ctx.destination, out);
+                int rc = runner.RunSync(configureCmd, processDestination, out);
                 if (!out.empty())
                 {
                     Emit(log, out);
@@ -216,20 +259,22 @@ namespace SparkInstaller
             }
 
             std::string buildCmd;
+            std::string buildDisplay;
             try
             {
-                buildCmd = ctx.configManager.BuildCMakeBuildCommand();
+                buildCmd = processConfig.BuildCMakeBuildCommand();
+                buildDisplay = ctx.configManager.BuildCMakeBuildCommand();
             }
             catch (const std::invalid_argument& error)
             {
                 Emit(log, std::string("error: unsafe CMake build input: ") + error.what());
                 return 7;
             }
-            Emit(log, "Building: " + buildCmd);
+            Emit(log, "Building: " + buildDisplay);
             {
                 SparkBuild::ProcessRunner runner;
                 std::string out;
-                int rc = runner.RunSync(buildCmd, ctx.destination, out);
+                int rc = runner.RunSync(buildCmd, processDestination, out);
                 if (!out.empty())
                 {
                     Emit(log, out);
@@ -247,24 +292,26 @@ namespace SparkInstaller
                                   const fs::path& relativeBuild, const LogSink& log)
         {
             std::vector<std::string> paths;
-            if (!git.IgnoredFiles(destination.string(), paths, log))
+            if (!git.IgnoredFiles(PathToUtf8(destination), paths, log))
             {
                 return false;
             }
-            const std::string buildPrefix = relativeBuild.generic_string() + "/";
             for (const std::string& name : paths)
             {
-                const fs::path relative = fs::u8path(name);
+                // git prints paths as UTF-8.
+                const fs::path relative = PathFromUtf8(name);
                 if (relative.empty() || relative.has_root_path() || relative.lexically_normal() != relative ||
                     *relative.begin() == "..")
                 {
                     Emit(log, "error: unsafe ignored-file path; preserving the existing install");
                     return false;
                 }
-                const std::string generic = relative.generic_string();
                 const auto first = *relative.begin();
-                if (first == ".git" || first == "build" || relative == relativeBuild ||
-                    generic.compare(0, buildPrefix.size(), buildPrefix) == 0 || relative == InstallState::FileName() ||
+                // The build directory itself or anything below it.
+                const bool underBuild =
+                    std::mismatch(relativeBuild.begin(), relativeBuild.end(), relative.begin(), relative.end()).first ==
+                    relativeBuild.end();
+                if (first == ".git" || first == "build" || underBuild || relative == InstallState::FileName() ||
                     relative == InstallState::FileName() + ".tmp" || relative == InstallState::PendingFileName() ||
                     relative == InstallState::RepairRequiredFileName())
                 {
@@ -280,14 +327,14 @@ namespace SparkInstaller
                     to /= component;
                     if (!PlainDirectory(from))
                     {
-                        Emit(log, "error: ignored-file parent is linked or unreadable: " + from.string());
+                        Emit(log, "error: ignored-file parent is linked or unreadable: " + PathToUtf8(from));
                         return false;
                     }
                     std::error_code ec;
                     fs::create_directory(to, ec);
                     if (ec || !PlainDirectory(to))
                     {
-                        Emit(log, "error: ignored-file destination is linked or unavailable: " + to.string());
+                        Emit(log, "error: ignored-file destination is linked or unavailable: " + PathToUtf8(to));
                         return false;
                     }
                 }
@@ -297,26 +344,26 @@ namespace SparkInstaller
                 const auto status = fs::symlink_status(from, ec);
                 if (ec || !fs::is_regular_file(status))
                 {
-                    Emit(log, "error: ignored user file is not a regular file: " + from.string());
+                    Emit(log, "error: ignored user file is not a regular file: " + PathToUtf8(from));
                     return false;
                 }
 #ifdef _WIN32
                 const DWORD attributes = GetFileAttributesW(from.c_str());
                 if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
                 {
-                    Emit(log, "error: ignored user file is a reparse point: " + from.string());
+                    Emit(log, "error: ignored user file is a reparse point: " + PathToUtf8(from));
                     return false;
                 }
 #endif
                 const auto targetStatus = fs::symlink_status(to, ec);
                 if (fs::exists(targetStatus) || (ec && ec != std::errc::no_such_file_or_directory))
                 {
-                    Emit(log, "error: ignored user file collides with the staged tree: " + to.string());
+                    Emit(log, "error: ignored user file collides with the staged tree: " + PathToUtf8(to));
                     return false;
                 }
                 if (!fs::copy_file(from, to, fs::copy_options::none, ec))
                 {
-                    Emit(log, "error: could not preserve ignored user file " + from.string() + ": " + ec.message());
+                    Emit(log, "error: could not preserve ignored user file " + PathToUtf8(from) + ": " + ec.message());
                     return false;
                 }
             }
@@ -325,20 +372,20 @@ namespace SparkInstaller
 
         int UpdateInStaging(InstallerContext& ctx, const GitRunner& git, const fs::path& dest)
         {
-            const std::string previousCommit = git.HeadCommit(dest.string());
+            const std::string previousCommit = git.HeadCommit(PathToUtf8(dest));
             if (previousCommit.empty())
             {
                 Emit(ctx.log, "error: could not determine the current install commit; refusing update");
                 return 5;
             }
             InstallState recorded;
-            if (InstallState::Load(dest.string(), recorded) && recorded.commit != previousCommit)
+            if (InstallState::Load(PathToUtf8(dest), recorded) && recorded.commit != previousCommit)
             {
                 Emit(ctx.log, "error: Interrupted update detected: HEAD differs from the recorded build; "
                               "preserving the existing tree for explicit repair");
                 return 5;
             }
-            if (!git.WorkingTreeClean(dest.string(), ctx.log))
+            if (!git.WorkingTreeClean(PathToUtf8(dest), ctx.log))
             {
                 Emit(ctx.log, "error: existing install has local changes; refusing update");
                 return 5;
@@ -349,7 +396,7 @@ namespace SparkInstaller
             // existing binaries, including when a preset supplies binaryDir.
             const fs::path configured = ctx.configManager.config.buildPath.empty()
                                             ? fs::path("build")
-                                            : fs::path(ctx.configManager.config.buildPath);
+                                            : PathFromUtf8(ctx.configManager.config.buildPath);
             fs::path relativeBuild =
                 (configured.is_absolute() ? configured.lexically_relative(dest) : configured).lexically_normal();
             if (!relativeBuild.has_filename() && relativeBuild.has_relative_path())
@@ -367,7 +414,7 @@ namespace SparkInstaller
             std::error_code ec;
             if (fs::exists(fs::symlink_status(staging, ec)) || (ec && ec != std::errc::no_such_file_or_directory))
             {
-                Emit(ctx.log, "error: staging path is not available: " + staging.string());
+                Emit(ctx.log, "error: staging path is not available: " + PathToUtf8(staging));
                 return 5;
             }
             const auto fail = [&](const std::string& reason, int code)
@@ -379,37 +426,37 @@ namespace SparkInstaller
                 fs::remove_all(staging, ignored);
                 return code;
             };
-            Emit(ctx.log, "Staging update " + ctx.ref + " at " + staging.string());
-            if (!git.Clone(ctx.repoUrl, ctx.ref, staging.string(), ctx.log) || !git.Fetch(staging.string(), ctx.log) ||
-                !git.CheckoutRef(ctx.ref, staging.string(), ctx.log))
+            Emit(ctx.log, "Staging update " + ctx.ref + " at " + PathToUtf8(staging));
+            if (!git.Clone(ctx.repoUrl, ctx.ref, PathToUtf8(staging), ctx.log) ||
+                !git.Fetch(PathToUtf8(staging), ctx.log) || !git.CheckoutRef(ctx.ref, PathToUtf8(staging), ctx.log))
             {
                 return fail("git clone/fetch/checkout failed", 5);
             }
-            if (!ctx.skipSubmoduleUpdate && !git.UpdateSubmodules(staging.string(), ctx.log))
+            if (!ctx.skipSubmoduleUpdate && !git.UpdateSubmodules(PathToUtf8(staging), ctx.log))
             {
                 return fail("submodule update failed", 5);
             }
-            const std::string stagedCommit = git.HeadCommit(staging.string());
+            const std::string stagedCommit = git.HeadCommit(PathToUtf8(staging));
             if (stagedCommit.empty())
             {
                 return fail("could not determine the staged commit", 5);
             }
             if (ctx.skipBuild)
             {
-                Emit(ctx.log, "skipBuild set; unverified update kept at " + staging.string() +
+                Emit(ctx.log, "skipBuild set; unverified update kept at " + PathToUtf8(staging) +
                                   "; working install was not changed");
                 return 0;
             }
 
             InstallerContext staged = ctx;
-            staged.destination = staging.string();
-            staged.configManager.config.enginePath = staging.string();
-            staged.configManager.config.buildPath = (staging / relativeBuild).string();
+            staged.destination = PathToUtf8(staging);
+            staged.configManager.config.enginePath = PathToUtf8(staging);
+            staged.configManager.config.buildPath = PathToUtf8(staging / relativeBuild);
             if (const int result = ConfigureAndBuild(staged, ctx.log); result != 0)
             {
                 return fail(result == 6 ? "CMake configure failure" : "CMake build failure", result);
             }
-            if (git.HeadCommit(staging.string()) != stagedCommit)
+            if (git.HeadCommit(PathToUtf8(staging)) != stagedCommit)
             {
                 return fail("could not determine the installed commit or it changed during the build", 8);
             }
@@ -428,20 +475,21 @@ namespace SparkInstaller
                 state.options[option.cmakeVar] = option.currentValue;
             }
             InstallState verified;
-            if (!state.Save(staging.string(), dest.string()) || !InstallState::Load(staging.string(), verified) ||
-                verified.commit != stagedCommit || verified.destination != dest.string())
+            if (!state.Save(PathToUtf8(staging), PathToUtf8(dest)) ||
+                !InstallState::Load(PathToUtf8(staging), verified) || verified.commit != stagedCommit ||
+                verified.destination != PathToUtf8(dest))
             {
                 return fail("could not write install state file and verify it", 8);
             }
             // Recheck before the only operation that can move the live tree.
-            if (git.HeadCommit(dest.string()) != previousCommit || !git.WorkingTreeClean(dest.string(), ctx.log))
+            if (git.HeadCommit(PathToUtf8(dest)) != previousCommit || !git.WorkingTreeClean(PathToUtf8(dest), ctx.log))
             {
                 return fail("existing install changed while the update was building", 5);
             }
             std::string error;
             if (!detail::ActivateStagedTree(staging, dest, error, PendingPreviousPath(dest)))
             {
-                Emit(ctx.log, "error: " + error + "; staged build kept at " + staging.string());
+                Emit(ctx.log, "error: " + error + "; staged build kept at " + PathToUtf8(staging));
                 return 9;
             }
             // This only archives the retained previous tree. A failure leaves
@@ -451,8 +499,8 @@ namespace SparkInstaller
             {
                 Emit(ctx.log, "warning: " + error);
             }
-            ctx.configManager.config.enginePath = dest.string();
-            ctx.configManager.config.buildPath = (dest / relativeBuild).string();
+            ctx.configManager.config.enginePath = PathToUtf8(dest);
+            ctx.configManager.config.buildPath = PathToUtf8(dest / relativeBuild);
             Emit(ctx.log, "Done. Engine built at: " + ctx.configManager.config.buildPath);
             return 0;
         }
@@ -470,8 +518,15 @@ namespace SparkInstaller
         // Everything downstream (cmake -S, InstallState, log messages) uses
         // this absolute form — otherwise a relative --dest combined with a
         // CWD-change during configure produces a "<dest>/<dest>" source path.
+        // Every frontend hands over UTF-8; anything else would name a
+        // different directory than the one the user chose.
+        if (!IsValidUtf8(ctx.destination))
+        {
+            Emit(ctx.log, "error: destination is not valid UTF-8");
+            return 2;
+        }
         std::error_code absErr;
-        fs::path dest = fs::absolute(fs::path(ctx.destination), absErr).lexically_normal();
+        fs::path dest = fs::absolute(PathFromUtf8(ctx.destination), absErr).lexically_normal();
         if (absErr)
         {
             Emit(ctx.log, "error: could not resolve destination to absolute path: " + absErr.message());
@@ -484,7 +539,19 @@ namespace SparkInstaller
         {
             dest = dest.parent_path();
         }
-        ctx.destination = dest.string();
+        ctx.destination = PathToUtf8(dest);
+
+        // git and CMake are started through CreateProcessA, so they can only
+        // be pointed at a path the process code page represents. Refuse here,
+        // before the lock and preflight, rather than fail later with a
+        // misleading git or CMake error.
+        if (std::string processDestination; !ProcessArgFromUtf8(ctx.destination, processDestination))
+        {
+            Emit(ctx.log, "error: destination " + ctx.destination +
+                              " contains characters this system's code page cannot represent; git and CMake "
+                              "cannot be run there. Choose a path without those characters.");
+            return 2;
+        }
 
         // --- Mode detection ------------------------------------------------
         // A pending marker without install state is a clone this installer
@@ -601,7 +668,7 @@ namespace SparkInstaller
             const fs::path staging = MakeStagingPath(dest);
             if (fs::exists(fs::symlink_status(staging, ec)))
             {
-                Emit(ctx.log, "error: staging path already exists: " + staging.string());
+                Emit(ctx.log, "error: staging path already exists: " + PathToUtf8(staging));
                 return 5;
             }
             const auto discardStaging = [&staging]
@@ -610,21 +677,21 @@ namespace SparkInstaller
                 fs::remove_all(staging, ignored);
             };
 
-            Emit(ctx.log, "Cloning " + ctx.repoUrl + " @ " + ctx.ref + " -> " + staging.string());
-            if (!git.Clone(ctx.repoUrl, ctx.ref, staging.string(), ctx.log))
+            Emit(ctx.log, "Cloning " + ctx.repoUrl + " @ " + ctx.ref + " -> " + PathToUtf8(staging));
+            if (!git.Clone(ctx.repoUrl, ctx.ref, PathToUtf8(staging), ctx.log))
             {
                 Emit(ctx.log, "error: git clone failed; " + ctx.destination + " was not changed");
                 discardStaging();
                 return 5;
             }
-            const std::string stagedCommit = git.HeadCommit(staging.string());
+            const std::string stagedCommit = git.HeadCommit(PathToUtf8(staging));
             if (stagedCommit.empty())
             {
                 Emit(ctx.log, "error: could not determine the cloned commit; " + ctx.destination + " was not changed");
                 discardStaging();
                 return 5;
             }
-            if (!InstallState::WritePendingMarker(staging.string(), ctx.ref, stagedCommit))
+            if (!InstallState::WritePendingMarker(PathToUtf8(staging), ctx.ref, stagedCommit))
             {
                 Emit(ctx.log,
                      "error: could not write the pending-install marker; " + ctx.destination + " was not changed");
@@ -635,7 +702,7 @@ namespace SparkInstaller
             std::string activationError;
             if (!detail::ActivateStagedTree(staging, dest, activationError))
             {
-                Emit(ctx.log, "error: " + activationError + "; the clone is kept at " + staging.string());
+                Emit(ctx.log, "error: " + activationError + "; the clone is kept at " + PathToUtf8(staging));
                 return 4;
             }
             Emit(ctx.log, "Activated " + stagedCommit + " at " + ctx.destination);
@@ -644,7 +711,7 @@ namespace SparkInstaller
         {
             std::string pendingRef;
             std::string pendingCommit;
-            if (!InstallState::ReadPendingMarker(dest.string(), pendingRef, pendingCommit))
+            if (!InstallState::ReadPendingMarker(PathToUtf8(dest), pendingRef, pendingCommit))
             {
                 Emit(ctx.log, "error: the pending-install marker in " + ctx.destination +
                                   " cannot be read; remove the destination and install again");
@@ -732,7 +799,7 @@ namespace SparkInstaller
         }
         if (ec || !PlainDirectory(previous) || !PathLooksLikeEngineClone(previous))
         {
-            error = "unsafe or unreadable previous install at " + previous.string() + "; preserved for repair";
+            error = "unsafe or unreadable previous install at " + PathToUtf8(previous) + "; preserved for repair";
             return false;
         }
         const auto destinationStatus = fs::symlink_status(destination, ec);
@@ -746,31 +813,32 @@ namespace SparkInstaller
             fs::rename(previous, destination, ec);
             if (ec)
             {
-                error = "could not restore " + previous.string() + ": " + ec.message();
+                error = "could not restore " + PathToUtf8(previous) + ": " + ec.message();
                 return false;
             }
             return true;
         }
         InstallState active;
-        if (!PlainDirectory(destination) || !InstallState::Load(destination.string(), active) ||
-            active.destination != destination.string())
+        if (!PlainDirectory(destination) || !InstallState::Load(PathToUtf8(destination), active) ||
+            active.destination != PathToUtf8(destination))
         {
-            error = "activation is ambiguous; preserve " + previous.string() + " for explicit recovery";
+            error = "activation is ambiguous; preserve " + PathToUtf8(previous) + " for explicit recovery";
             return false;
         }
         // A successful activation keeps the whole prior tree, including its
         // build outputs and ignored user data. Never garbage-collect it here.
-        const fs::path archived = destination.string() + ".sparkinstall-previous-" + TransactionSuffix();
+        fs::path archived = destination;
+        archived += ".sparkinstall-previous-" + TransactionSuffix();
         const auto archiveStatus = fs::symlink_status(archived, ec);
         if (fs::exists(archiveStatus) || (ec && ec != std::errc::no_such_file_or_directory))
         {
-            error = "previous install archive path is unavailable: " + archived.string();
+            error = "previous install archive path is unavailable: " + PathToUtf8(archived);
             return false;
         }
         fs::rename(previous, archived, ec);
         if (ec)
         {
-            error = "previous install retained at " + previous.string() + ": " + ec.message();
+            error = "previous install retained at " + PathToUtf8(previous) + ": " + ec.message();
             return false;
         }
         return true;
@@ -782,7 +850,7 @@ namespace SparkInstaller
         std::error_code ec;
         if (!PlainDirectory(staging))
         {
-            error = "staging tree is not an ordinary directory: " + staging.string();
+            error = "staging tree is not an ordinary directory: " + PathToUtf8(staging);
             return false;
         }
         if (!previous.empty())
@@ -791,7 +859,7 @@ namespace SparkInstaller
             if (staging.parent_path() != destination.parent_path() ||
                 previous.parent_path() != destination.parent_path() || staging == destination ||
                 previous == destination || previous == staging || !PlainDirectory(destination) ||
-                !InstallState::Load(staging.string(), staged) || staged.destination != destination.string())
+                !InstallState::Load(PathToUtf8(staging), staged) || staged.destination != PathToUtf8(destination))
             {
                 error = "update activation requires verified sibling trees and a separate previous path";
                 return false;
@@ -799,7 +867,7 @@ namespace SparkInstaller
             const auto previousStatus = fs::symlink_status(previous, ec);
             if (fs::exists(previousStatus) || (ec && ec != std::errc::no_such_file_or_directory))
             {
-                error = "previous install path is unavailable: " + previous.string();
+                error = "previous install path is unavailable: " + PathToUtf8(previous);
                 return false;
             }
             fs::rename(destination, previous, ec);
@@ -817,7 +885,7 @@ namespace SparkInstaller
                 if (restoreError)
                 {
                     error += "; restore failed: " + restoreError.message() + "; previous install kept at " +
-                             previous.string();
+                             PathToUtf8(previous);
                 }
                 return false;
             }
@@ -834,19 +902,19 @@ namespace SparkInstaller
         {
             if (fs::is_symlink(status) || !fs::is_directory(status))
             {
-                error = destination.string() + " exists and is not a directory";
+                error = PathToUtf8(destination) + " exists and is not a directory";
                 return false;
             }
             if (!fs::is_empty(destination, ec) || ec)
             {
-                error = destination.string() + " is no longer empty";
+                error = PathToUtf8(destination) + " is no longer empty";
                 return false;
             }
             // remove() deletes only an empty directory, so an entry created
             // after the check makes it fail rather than delete anything.
             if (!fs::remove(destination, ec) || ec)
             {
-                error = "could not replace the empty destination " + destination.string() + ": " + ec.message();
+                error = "could not replace the empty destination " + PathToUtf8(destination) + ": " + ec.message();
                 return false;
             }
         }
@@ -854,7 +922,7 @@ namespace SparkInstaller
         fs::rename(staging, destination, ec);
         if (ec)
         {
-            error = "could not move the staged clone to " + destination.string() + ": " + ec.message();
+            error = "could not move the staged clone to " + PathToUtf8(destination) + ": " + ec.message();
             if (existed)
             {
                 std::error_code ignored;

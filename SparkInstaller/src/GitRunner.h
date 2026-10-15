@@ -8,6 +8,11 @@
 
 namespace SparkInstaller
 {
+    // Destination and working-directory arguments are UTF-8 (see PathUtf8.h)
+    // and are converted to the process code page at the ProcessRunner call; a
+    // path that code page cannot represent fails the command. gitExe is
+    // already in the process encoding (it comes from PATH resolution or the
+    // portable Git cache).
     class GitRunner
     {
       public:
@@ -45,7 +50,9 @@ namespace SparkInstaller
         static std::string EncodeProcessRunnerArgument(std::string_view argument);
 
       private:
-        int Run(const std::string& args, const std::string& cwd, const LogSink& log) const;
+        // args are process-encoded; displayArgs (UTF-8) replaces them in the log.
+        int Run(const std::string& args, const std::string& cwd, const LogSink& log,
+                std::string_view displayArgs = {}) const;
 
         std::string m_gitExe;
     };

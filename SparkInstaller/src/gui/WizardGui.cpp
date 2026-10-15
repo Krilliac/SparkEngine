@@ -7,6 +7,7 @@
 
 #include "InstallState.h"
 #include "Installer.h"
+#include "PathUtf8.h"
 
 #include "SparkUI/Brand.h"
 #include "SparkUI/Fonts.h"
@@ -1032,7 +1033,7 @@ namespace SparkInstaller
         {
             std::error_code ec;
             const fs::path cwd = fs::current_path(ec);
-            initialDest = ec ? std::string("SparkEngine") : (cwd / "SparkEngine").string();
+            initialDest = ec ? std::string("SparkEngine") : PathToUtf8(cwd / "SparkEngine");
         }
         CopyToBuffer(s.destBuf, initialDest);
         if (!ctx.ref.empty())
