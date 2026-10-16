@@ -467,12 +467,19 @@ def contained_environment(home: Path, extra: dict[str, str]) -> dict[str, str]:
     return env
 
 
-def frame_is_authored(frame_check: Path, image: Path) -> bool:
-    """CheckFPSVisibleFrame.ps1, run outside the container on the saved frame."""
+def frame_is_authored(frame_check: Path, image: Path, audit: Path, scene_directory: str) -> bool:
+    """CheckFPSVisibleFrame.ps1, run outside the container on the saved frame.
+
+    Same arguments as RunInstalledFPSD3D11.cmake: the run's exec audit carries the
+    authored-scene identity the check requires, and the scene must come from the
+    package's own Assets/Scenes.
+    """
     powershell = ntpath.join(os.environ["SystemRoot"], "System32", "WindowsPowerShell", "v1.0",
                              "powershell.exe")
     result = subprocess.run([powershell, "-NoProfile", "-NonInteractive", "-File", str(frame_check),
-                             "-ImagePath", str(image)], capture_output=True, text=True, timeout=60)
+                             "-ImagePath", str(image), "-LogPath", str(audit),
+                             "-ExpectedSceneDirectory", scene_directory],
+                            capture_output=True, text=True, timeout=60)
     print(f"frame check {image.name} ({image.parent.name}): exit {result.returncode} "
           f"{result.stdout.strip()} {result.stderr.strip()}")
     return result.returncode == 0
@@ -550,9 +557,10 @@ def run_session(args: argparse.Namespace) -> list[str]:
                 if phase == "d3d11":
                     frame = published_run / SCREENSHOT_NAME
                     screenshots[name] = str(frame) if frame.is_file() else None
-                    if screenshots[name] is not None:
-                        authored[name] = frame_is_authored(args.frame_check, frame)
                     audit = published_run / AUDIT_NAME
+                    if screenshots[name] is not None:
+                        authored[name] = audit.is_file() and frame_is_authored(
+                            args.frame_check, frame, audit, ntpath.join(package_root, "bin", "Assets", "Scenes"))
                     audits[name] = audit.read_text(encoding="utf-8", errors="replace") if audit.is_file() else ""
     summary = {name: result.exit_code for name, result in results.items()}
     (output_dir / "appcontainer-summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
