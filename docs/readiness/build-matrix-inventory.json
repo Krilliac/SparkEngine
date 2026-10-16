@@ -4850,7 +4850,7 @@
       "target": "spark_legacy_actor_header_checks",
       "kind": "object_library",
       "file": "Tests/LegacyActorPublicSDK/CMakeLists.txt",
-      "line": 108,
+      "line": 115,
       "conditionFrames": [],
       "definitionScope": [],
       "origin": "declaration",
@@ -8760,7 +8760,7 @@
       "declarations": [
         {
           "file": "Tests/LegacyActorPublicSDK/CMakeLists.txt",
-          "line": 108,
+          "line": 115,
           "kind": "object_library",
           "origin": "declaration",
           "definitionScope": [],

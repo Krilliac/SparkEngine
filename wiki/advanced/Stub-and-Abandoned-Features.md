@@ -57,7 +57,6 @@ delete. Any wiki page that describes these as active is stale.
 | `AIDebugRenderer` | `Engine/AI/` | Tested (`Tests/TestAIDebugRendererReal.cpp`) but no draw consumer. |
 | `HLODSystem` | `Engine/HLOD/` | No renderer consumer; see [HLOD and World Partition](../gameplay-tools/HLOD-And-World-Partition.md). |
 | `Engine/HotReload/ModuleHotReload` singleton | `Engine/HotReload/` | Duplicate of the live `Spark::ModuleHotReloadManager` (`Core/ModuleHotReload.cpp`, polled by the platform frame loops). |
-| `Spark::FileLogger` + `SPARK_FILE_LOG*` | `Utils/FileLogger.h` | Zero production writers; its two lifecycle calls were removed in the 2026-09 sweep. Engine log files come from the `Logger` `FileSink` installed by `InstallDefaultSinks`. Pending wire-it-in-or-delete. |
 | `RenderingSettings::occlusionCulling` | `Core/EngineSettings.h` | Setting is still exposed although the implementation behind it is unreachable (see `OcclusionCullingSystem` above). |
 | `ReplicatedFieldSet::WriteDirtyMask`/`ReadDirtyMask` | `Engine/Networking/` | Not wired into `EntityReplicator`'s serialize/deserialize path (zero callers), so `ReadDirtyMask`'s `[[nodiscard]]` "abandon the packet" contract is unenforced and untested. |
 | `MobilePlatform`, `RagdollSystem` | `Engine/Mobile/`, `Engine/Physics/` | Lifecycle comment corrected; deletion routed to their owners. |
@@ -78,6 +77,7 @@ could never report occlusion is retired: both trace `WorldStatic` hits once a
 | `SparkEditor/Source/MaterialEditor/MaterialEditor.{h,cpp}` | Standalone class with no production caller; the shipped panel is `Panels/MaterialEditorPanel`. |
 | `SparkEditor/Source/Lighting/LightingTools*.{h,cpp}` | No production caller. `BakeLightmaps` wrote a fixed radial ramp in texture space (nothing scene-derived) and `GenerateLightProbes` discarded its probes -- no lightmap baking or light probes are claimed anywhere now. |
 | `SparkEditor/Source/Animation/*` (timeline, clip manager, curve, playback) | No production caller. |
+| `SparkEngine/Source/Utils/FileLogger.{h,cpp}` + `SPARK_FILE_LOG*` | Zero production writers; a duplicate of the `Logger` `FileSink` that `InstallDefaultSinks` installs, which produces every engine log file. |
 | `SparkEditor/Source/AssetBrowser/AssetDatabase.{h,cpp}` | No production caller. |
 | Former AssetDatabase and PrefabManager test stubs | Decoy tests that included no production header; `Tests/TestEditorSubsystemsReal.cpp` covers the real `PrefabManager`. |
 | `GameModules/SparkGameFPS/Source/Game/{Console,Terrain,ArenaBuilder}.*` | Unreachable in-game console overlay, unreferenced terrain, and an `ArenaBuilder` whose body was entirely commented out. |
