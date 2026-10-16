@@ -3841,6 +3841,12 @@ if(UNIX AND NOT APPLE AND SPARK_PACKAGE_HAS_SDL2 AND BUILD_GAME_MODULES AND TARG
             modules ${_spark_manifest_index} cmakeTarget)
         # SPARK_GAME_MODULES may select a subset (e.g. the stable-v1 FPS-only
         # profile); with the full module set every manifest module must build.
+        # A module that declares a configuration-driven skip (e.g. MMOFPS with
+        # ENABLE_NETWORKING=OFF) is absent on purpose, not missing.
+        get_property(_spark_skipped_game_modules GLOBAL PROPERTY SPARK_SKIPPED_GAME_MODULES)
+        if(_spark_experimental_module IN_LIST _spark_skipped_game_modules)
+            continue()
+        endif()
         if(NOT TARGET ${_spark_experimental_module})
             list(APPEND _spark_experimental_unregistered "${_spark_experimental_module}")
             continue()

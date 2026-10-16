@@ -29,6 +29,8 @@ endif()
 # configuration path.
 if(DEFINED ENABLE_NETWORKING AND NOT ENABLE_NETWORKING)
     message(STATUS "SparkGameMMOFPS skipped - requires ENABLE_NETWORKING=ON")
+    # Tests/CMakeLists.txt exempts a declared skip from the RDY-015 target check.
+    set_property(GLOBAL APPEND PROPERTY SPARK_SKIPPED_GAME_MODULES SparkGameMMOFPS)
     return()
 endif()
 
