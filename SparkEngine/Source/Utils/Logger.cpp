@@ -508,25 +508,16 @@ namespace Spark
     {
         // Bounded wait: the writer or flush thread releases these locks within
         // microseconds, but a lock held by the crashing thread never comes back.
-        // The returned lock owns the mutex only if one of the attempts succeeded.
-        const auto lockBriefly = [](std::mutex& mutex)
-        {
-            std::unique_lock<std::mutex> lock(mutex, std::try_to_lock);
-            for (int attempt = 1; attempt < 50 && !lock.owns_lock(); ++attempt)
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                if (lock.try_lock())
-                {
-                    break;
-                }
-            }
-            return lock;
-        };
-
+        // Each lock is taken in place so this function's own scope releases it.
+        constexpr int kLockAttempts = 50;
         try
         {
             // Lock order sink, then queue: the same as AsyncWriterThread.
-            const std::unique_lock<std::mutex> sinkLock = lockBriefly(m_sinkMutex);
+            std::unique_lock<std::mutex> sinkLock(m_sinkMutex, std::defer_lock);
+            for (int attempt = 0; attempt < kLockAttempts && !sinkLock.try_lock(); ++attempt)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
             if (!sinkLock.owns_lock())
             {
                 return;
@@ -535,7 +526,11 @@ namespace Spark
             std::queue<LogMessage> pending;
             if (m_asyncEnabled.load(std::memory_order_relaxed))
             {
-                const std::unique_lock<std::mutex> queueLock = lockBriefly(m_queueMutex);
+                std::unique_lock<std::mutex> queueLock(m_queueMutex, std::defer_lock);
+                for (int attempt = 0; attempt < kLockAttempts && !queueLock.try_lock(); ++attempt)
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                }
                 if (queueLock.owns_lock())
                 {
                     std::swap(pending, m_messageQueue);
