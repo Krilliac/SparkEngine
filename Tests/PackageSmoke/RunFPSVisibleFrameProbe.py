@@ -92,7 +92,8 @@ def main() -> int:
                 if "FPS scene identity: procedural fallback arena" not in log:
                     raise RuntimeError("RED run never reached the procedural fallback")
                 if check.returncode == 0 or b"FPS run used the procedural fallback arena" not in check.stderr:
-                    reason = check.stderr.decode("utf-8", errors="replace").strip()[-1500:]
+                    # A passing checker writes its verdict to stdout, so keep both streams.
+                    reason = (check.stdout + check.stderr).decode("utf-8", errors="replace").strip()[-1500:]
                     raise RuntimeError(
                         f"RED check did not reject the fallback for its scene identity; logs: {case_root}\n{reason}")
                 print("RED: real fallback frame rejected for procedural scene identity", flush=True)

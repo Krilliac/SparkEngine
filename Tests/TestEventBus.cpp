@@ -4,6 +4,7 @@
 #include <Spark/EventBus.h>
 
 #include <string>
+#include <typeinfo>
 #include <vector>
 
 // Event types used in tests
@@ -223,4 +224,79 @@ TEST(UtilEventBus_Global_IsSingleton)
     auto& a = Spark::EventBus::Global();
     auto& b = Spark::EventBus::Global();
     EXPECT_TRUE(&a == &b);
+}
+
+// ============================================================================
+// Cross-module channel identity (libc++ matches SDK event channels by name)
+// ============================================================================
+
+TEST(UtilEventBus_SharedTypeName_AcceptsExternalLinkageNames)
+{
+    using Spark::Detail::SharedTypeNameParser;
+    EXPECT_TRUE(SharedTypeNameParser::IsShared("14EBCounterEvent"));
+    EXPECT_TRUE(SharedTypeNameParser::IsShared("N5Spark15PlayerDiedEventE"));
+    // An uppercase "IZ" inside an identifier is not a local-entity marker.
+    EXPECT_TRUE(SharedTypeNameParser::IsShared("12HORIZONEvent"));
+    EXPECT_TRUE(SharedTypeNameParser::IsShared("N6WIZARD9CastEventE"));
+    EXPECT_TRUE(SharedTypeNameParser::IsShared("1WIiE"));
+    EXPECT_TRUE(SharedTypeNameParser::IsShared("1WIJiPK3FooEE"));
+    EXPECT_TRUE(SharedTypeNameParser::IsShared("1WILi5EE"));
+    EXPECT_TRUE(SharedTypeNameParser::IsShared("1WILin5EE"));
+    EXPECT_TRUE(SharedTypeNameParser::IsShared("1WINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEE"));
+    // S_ back-references the already accepted N5Spark component.
+    EXPECT_TRUE(SharedTypeNameParser::IsShared("N5Spark1WIS_EE"));
+}
+
+TEST(UtilEventBus_SharedTypeName_RefusesInternalLinkageNames)
+{
+    using Spark::Detail::SharedTypeNameParser;
+    // Function-local types, alone and as template arguments in every position.
+    EXPECT_FALSE(SharedTypeNameParser::IsShared("Z4mainE1L"));
+    EXPECT_FALSE(SharedTypeNameParser::IsShared("1WIZ4mainE1LE"));
+    EXPECT_FALSE(SharedTypeNameParser::IsShared("1WIJZ4mainE1LEE"));
+    EXPECT_FALSE(SharedTypeNameParser::IsShared("1WIJiZ4mainE1LEE"));
+    EXPECT_FALSE(SharedTypeNameParser::IsShared("1WIJPZ4mainE1LEE"));
+    EXPECT_FALSE(SharedTypeNameParser::IsShared("1WIJKZ4mainE1LEE"));
+    EXPECT_FALSE(SharedTypeNameParser::IsShared("1WIiPZ4mainE1LE"));
+    // Anonymous namespaces, unnamed and lambda types, clang's $_N.
+    EXPECT_FALSE(SharedTypeNameParser::IsShared("N12_GLOBAL__N_13FooE"));
+    EXPECT_FALSE(SharedTypeNameParser::IsShared("1WIN12_GLOBAL__N_13FooEEE"));
+    EXPECT_FALSE(SharedTypeNameParser::IsShared("N5SparkUt_E"));
+    EXPECT_FALSE(SharedTypeNameParser::IsShared("N5SparkUlvE_E"));
+    EXPECT_FALSE(SharedTypeNameParser::IsShared("3$_0"));
+    // Malformed or truncated input.
+    EXPECT_FALSE(SharedTypeNameParser::IsShared(""));
+    EXPECT_FALSE(SharedTypeNameParser::IsShared("9Short"));
+    EXPECT_FALSE(SharedTypeNameParser::IsShared("N5Spark"));
+    EXPECT_FALSE(SharedTypeNameParser::IsShared("1WIi"));
+    EXPECT_FALSE(SharedTypeNameParser::IsShared("05Event"));
+}
+
+namespace
+{
+    struct EBAnonymousEvent
+    {
+    };
+} // namespace
+
+template <typename... Ts> struct EBTemplateEvent
+{
+};
+
+TEST(UtilEventBus_SharedTypeName_ClassifiesRealTypeNames)
+{
+#if defined(_MSC_VER) && !defined(__clang__)
+    SKIP_TEST("typeid().name() is not an Itanium mangled name under MSVC");
+#else
+    using Spark::Detail::SharedTypeNameParser;
+    struct LocalEvent
+    {
+    };
+    EXPECT_TRUE(SharedTypeNameParser::IsShared(typeid(EBCounterEvent).name()));
+    EXPECT_TRUE(SharedTypeNameParser::IsShared(typeid(EBTemplateEvent<int, const EBCounterEvent*>).name()));
+    EXPECT_FALSE(SharedTypeNameParser::IsShared(typeid(LocalEvent).name()));
+    EXPECT_FALSE(SharedTypeNameParser::IsShared(typeid(EBAnonymousEvent).name()));
+    EXPECT_FALSE(SharedTypeNameParser::IsShared(typeid(EBTemplateEvent<LocalEvent>).name()));
+    EXPECT_FALSE(SharedTypeNameParser::IsShared(typeid(EBTemplateEvent<int, const LocalEvent*>).name()));
+#endif
 }

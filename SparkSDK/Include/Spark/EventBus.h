@@ -79,6 +79,191 @@ namespace Spark
     // Forward declaration
     class EventBus;
 
+    namespace Detail
+    {
+        /**
+         * @brief Recognises the Itanium-mangled name (typeid(T).name()) of an external-linkage event type.
+         *
+         * Accepts class names, nested names, std substitutions and template arguments made of those,
+         * builtins, cv/pointer/reference types and integral literals. Everything else is refused:
+         * function-local types (Z), anonymous namespaces (_GLOBAL__N), unnamed and lambda types (Ut, Ul),
+         * clang's $_N types, expressions. Refusing a shared type only loses the cross-module name match;
+         * accepting an internal one would alias two distinct event types. Pure and allocation-free.
+         */
+        class SharedTypeNameParser
+        {
+          public:
+            static bool IsShared(const char* name) noexcept
+            {
+                SharedTypeNameParser parser{name};
+                return parser.Type() && *parser.m_cursor == '\0';
+            }
+
+          private:
+            explicit SharedTypeNameParser(const char* name) noexcept : m_cursor(name) {}
+
+            static bool IsDigit(char ch) noexcept { return ch >= '0' && ch <= '9'; }
+            bool At(const char* set) const noexcept { return *m_cursor != '\0' && std::strchr(set, *m_cursor); }
+
+            // <length><identifier>
+            bool SourceName() noexcept
+            {
+                if (*m_cursor < '1' || *m_cursor > '9')
+                {
+                    return false;
+                }
+                size_t length = 0;
+                while (IsDigit(*m_cursor))
+                {
+                    length = length * 10 + static_cast<size_t>(*m_cursor - '0');
+                    ++m_cursor;
+                    if (length > 4096)
+                    {
+                        return false;
+                    }
+                }
+                if (std::memchr(m_cursor, '\0', length) != nullptr)
+                {
+                    return false;
+                }
+                const std::string_view identifier(m_cursor, length);
+                if (identifier.starts_with("_GLOBAL__N") || identifier.find('$') != std::string_view::npos)
+                {
+                    return false;
+                }
+                m_cursor += length;
+                return true;
+            }
+
+            // One name component (or std substitution), with optional template arguments.
+            bool Component() noexcept
+            {
+                if (*m_cursor == 'S')
+                {
+                    ++m_cursor;
+                    if (*m_cursor == 't')
+                    {
+                        ++m_cursor;
+                        if (!SourceName())
+                        {
+                            return false;
+                        }
+                    }
+                    else if (At("absiod"))
+                    {
+                        ++m_cursor;
+                    }
+                    else
+                    {
+                        // S_ or S<seq-id>_: a back-reference to an already accepted component.
+                        while (IsDigit(*m_cursor) || (*m_cursor >= 'A' && *m_cursor <= 'Z'))
+                        {
+                            ++m_cursor;
+                        }
+                        if (*m_cursor != '_')
+                        {
+                            return false;
+                        }
+                        ++m_cursor;
+                    }
+                }
+                else if (!SourceName())
+                {
+                    return false;
+                }
+                return *m_cursor != 'I' || TemplateArgs();
+            }
+
+            bool Type() noexcept
+            {
+                if (At("vwbcahstijlmxynofde"))
+                {
+                    ++m_cursor;
+                    return true;
+                }
+                if (At("PROKV"))
+                {
+                    ++m_cursor;
+                    return Type();
+                }
+                if (*m_cursor == 'N')
+                {
+                    ++m_cursor;
+                    do
+                    {
+                        if (!Component())
+                        {
+                            return false;
+                        }
+                    } while (*m_cursor != 'E');
+                    ++m_cursor;
+                    return true;
+                }
+                return Component();
+            }
+
+            // L<integral builtin>[n]<digits>E
+            bool Literal() noexcept
+            {
+                ++m_cursor;
+                if (!At("bcahstijlmxy"))
+                {
+                    return false;
+                }
+                ++m_cursor;
+                if (*m_cursor == 'n')
+                {
+                    ++m_cursor;
+                }
+                if (!IsDigit(*m_cursor))
+                {
+                    return false;
+                }
+                while (IsDigit(*m_cursor))
+                {
+                    ++m_cursor;
+                }
+                if (*m_cursor != 'E')
+                {
+                    return false;
+                }
+                ++m_cursor;
+                return true;
+            }
+
+            bool TemplateArg() noexcept { return *m_cursor == 'L' ? Literal() : Type(); }
+
+            // I<arg>+E, where an argument may be a pack J<arg>*E.
+            bool TemplateArgs() noexcept
+            {
+                ++m_cursor;
+                while (*m_cursor != 'E')
+                {
+                    if (*m_cursor == 'J')
+                    {
+                        ++m_cursor;
+                        while (*m_cursor != 'E')
+                        {
+                            if (!TemplateArg())
+                            {
+                                return false;
+                            }
+                        }
+                        ++m_cursor;
+                    }
+                    else if (!TemplateArg())
+                    {
+                        return false;
+                    }
+                }
+                ++m_cursor;
+                return true;
+            }
+
+            const char* m_cursor;
+        };
+    } // namespace Detail
+
     // =========================================================================
     // SubscriptionHandle
     // =========================================================================
@@ -353,20 +538,12 @@ namespace Spark
         // event type would miss across the module boundary. Channels are therefore
         // hashed by mangled name and match by name for external-linkage types; the
         // lookup stays O(1) in both directions. libstdc++ and MSVC already compare
-        // names, so they keep std::type_index.
-        static bool IsSharedTypeName(const char* name) noexcept
-        {
-            // Internal-linkage types are distinct even when their mangled names match:
-            // function-local classes (Z..., or IZ... as a template argument), anonymous
-            // namespaces (_GLOBAL__N) and clang's unnamed $_N types. Rejecting a shared
-            // type here only loses the cross-module match, which is safe.
-            return name[0] != 'Z' && std::strstr(name, "_GLOBAL__N") == nullptr && std::strstr(name, "IZ") == nullptr &&
-                   std::strchr(name, '$') == nullptr;
-        }
-
+        // names, so they keep std::type_index. Internal-linkage types stay distinct
+        // even when their mangled names match (Detail::SharedTypeNameParser).
         struct ChannelKey
         {
             const std::type_info* type;
+            bool shared; ///< The name identifies the type across modules; a pure function of the name.
         };
         struct ChannelKeyHash
         {
@@ -380,14 +557,16 @@ namespace Spark
         {
             bool operator()(const ChannelKey& a, const ChannelKey& b) const noexcept
             {
-                const char* aName = a.type->name();
-                const char* bName = b.type->name();
-                return *a.type == *b.type ||
-                       (IsSharedTypeName(aName) && IsSharedTypeName(bName) && std::strcmp(aName, bName) == 0);
+                return *a.type == *b.type || (a.shared && b.shared && std::strcmp(a.type->name(), b.type->name()) == 0);
             }
         };
         using ChannelMap = std::unordered_map<ChannelKey, std::unique_ptr<IChannel>, ChannelKeyHash, ChannelKeyEqual>;
-        template <typename E> static ChannelKey KeyOf() noexcept { return ChannelKey{&typeid(E)}; }
+        template <typename E> static ChannelKey KeyOf() noexcept
+        {
+            // Parsed once per type per module image.
+            static const bool shared = Detail::SharedTypeNameParser::IsShared(typeid(E).name());
+            return ChannelKey{&typeid(E), shared};
+        }
 #else
         using ChannelMap = std::unordered_map<std::type_index, std::unique_ptr<IChannel>>;
         template <typename E> static std::type_index KeyOf() noexcept { return std::type_index(typeid(E)); }
