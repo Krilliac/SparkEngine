@@ -326,7 +326,6 @@ SparkEngine/Source/Utils/DebugHookManager.h
 SparkEngine/Source/Utils/DebugOverlay.h
 SparkEngine/Source/Utils/EntityEventBus.h
 SparkEngine/Source/Utils/EventBus.h
-SparkEngine/Source/Utils/FileLogger.h
 SparkEngine/Source/Utils/FileWatcher/FileWatcher.h
 SparkEngine/Source/Utils/FrameInspector.h
 SparkEngine/Source/Utils/GameplayDebugger.h
