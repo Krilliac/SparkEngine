@@ -3,6 +3,7 @@
 #include "../Core/RuntimePackage.h"
 #include "Utils/CrashHandlerSupport.h"
 #include "Utils/CrashReportUploader.h"
+#include "Utils/Logger.h"
 #include "Utils/Assert.h"
 #include "Utils/Process.h"
 #include "Utils/SparkError.h"
@@ -1088,6 +1089,12 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg, C
     }
 
     std::lock_guard<std::mutex> guard(g_lock);
+
+    // Get the engine log tail onto disk before anything slow or fragile: the
+    // dump and report take seconds, and a second fault while writing them
+    // would otherwise lose the lines that explain this one.
+    Spark::Logger::Get().FlushForCrash();
+
     if (!ep)
         return;
 
@@ -1959,6 +1966,10 @@ static void HandleLinuxCrash(int sig, siginfo_t* info, void* context)
     // best-effort behaviour (matching industry-standard crash reporters).
     // We intentionally do NOT acquire g_lock here because the crashing
     // thread may already hold it, which would deadlock.
+
+    // Engine log tail first (bounded lock waits, never throws).
+    Spark::Logger::Get().FlushForCrash();
+
     try
     {
         const std::string reportId = MakeCrashReportId();

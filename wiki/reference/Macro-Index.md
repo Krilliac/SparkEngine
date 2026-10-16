@@ -144,7 +144,7 @@
 | `BuildSettings` | alias | SparkEditor | [BuildPipeline.h:L25](../../SparkEditor/Source/Panels/BuildPipeline.h#L25) |  |
 | `BYTE` | alias | SparkEngine | [PlatformTypes.h:L32](../../SparkEngine/Source/Core/PlatformTypes.h#L32) |  |
 | `CALLBACK` | macro | SparkEngine | [PlatformTypes.h:L204](../../SparkEngine/Source/Core/PlatformTypes.h#L204) |  |
-| `Callback` | alias | SparkEngine | [Logger.h:L376](../../SparkEngine/Source/Utils/Logger.h#L376) | Calls a user-provided callback for each log message |
+| `Callback` | alias | SparkEngine | [Logger.h:L395](../../SparkEngine/Source/Utils/Logger.h#L395) | Calls a user-provided callback for each log message |
 | `Callback` | alias | SparkEngine | [ScopedTimer.h:L47](../../SparkEngine/Source/Utils/ScopedTimer.h#L47) | Measures elapsed time from construction to destruction. |
 | `CallbackHandle` | alias | SparkEngine | [ScheduledCallback.h:L50](../../SparkEngine/Source/Utils/ScheduledCallback.h#L50) | Manages time-delayed and repeating callbacks. |
 | `CallbackHandle` | alias | Tests | [TestScheduledCallback.cpp:L13](../../Tests/TestScheduledCallback.cpp#L13) |  |
@@ -664,7 +664,7 @@
 | `LOG_TO_CONSOLE_RATE_LIMITED` | macro | GameModules | [ProjectilePool.cpp:L23](../../GameModules/SparkGameFPS/Source/Projectiles/ProjectilePool.cpp#L23) |  |
 | `LOG_TO_CONSOLE_RATE_LIMITED` | macro | SparkEngine | [SparkEngineCameraInternal.h:L46](../../SparkEngine/Source/Camera/SparkEngineCameraInternal.h#L46) |  |
 | `LOG_TO_CONSOLE_RATE_LIMITED` | macro | SparkEngine | [LogMacros.h:L187](../../SparkEngine/Source/Utils/LogMacros.h#L187) | Log a message with rate limiting (max 3 messages per 3-second window). |
-| `LogCategoryMask` | alias | SparkEngine | [Logger.h:L169](../../SparkEngine/Source/Utils/Logger.h#L169) |  |
+| `LogCategoryMask` | alias | SparkEngine | [Logger.h:L188](../../SparkEngine/Source/Utils/Logger.h#L188) |  |
 | `LogSink` | alias | SparkEngine | [DynamicPluginHost.h:L22](../../SparkEngine/Source/Core/DynamicPluginHost.h#L22) |  |
 | `LogSink` | alias | SparkInstaller | [InstallerContext.h:L23](../../SparkInstaller/src/InstallerContext.h#L23) |  |
 | `LONG` | alias | SparkEngine | [PlatformTypes.h:L37](../../SparkEngine/Source/Core/PlatformTypes.h#L37) |  |
@@ -729,7 +729,7 @@
 | `NotifyCallback` | alias | SparkEngine | [AnimNotify.h:L142](../../SparkEngine/Source/Engine/Animation/AnimNotify.h#L142) | Manages animation notifies across all clips |
 | `NotifyReboundFn` | alias | SparkEngine | [Reflection.h:L300](../../SparkEngine/Source/Core/Reflection.h#L300) |  |
 | `NS` | alias | SparkEngine | [EngineSettings.cpp:L211](../../SparkEngine/Source/Core/EngineSettings.cpp#L211) |  |
-| `NtCreateFileFn` | alias | SparkEngine | [CrashHandler.cpp:L223](../../SparkEngine/Source/Utils/CrashHandler.cpp#L223) |  |
+| `NtCreateFileFn` | alias | SparkEngine | [CrashHandler.cpp:L224](../../SparkEngine/Source/Utils/CrashHandler.cpp#L224) |  |
 | `ObjectID` | alias | SparkEditor | [SceneFileTypes.h:L38](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L38) | Unique identifier for scene objects |
 | `ObjectKeys` | alias | GameModules | [TFSocialSystemStore.cpp:L43](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystemStore.cpp#L43) |  |
 | `ObjectType` | alias | SparkEngine | [JsonUtils.h:L99](../../SparkEngine/Source/Utils/JsonUtils.h#L99) | A JSON value that can be null, bool, number, string, array, or object. |
@@ -837,7 +837,7 @@
 | `RHIShaderHandle` | alias | SparkEngine | [RHITypes.h:L452](../../SparkEngine/Source/Graphics/RHI/RHITypes.h#L452) |  |
 | `RHITextureHandle` | alias | SparkEngine | [RHITypes.h:L451](../../SparkEngine/Source/Graphics/RHI/RHITypes.h#L451) |  |
 | `RS` | alias | SparkEngine | [EngineSettings.cpp:L102](../../SparkEngine/Source/Core/EngineSettings.cpp#L102) |  |
-| `RtlDllShutdownInProgressFn` | alias | SparkEngine | [CrashHandler.cpp:L872](../../SparkEngine/Source/Utils/CrashHandler.cpp#L872) |  |
+| `RtlDllShutdownInProgressFn` | alias | SparkEngine | [CrashHandler.cpp:L873](../../SparkEngine/Source/Utils/CrashHandler.cpp#L873) |  |
 | `S_FALSE` | macro | SparkEngine | [PlatformTypes.h:L62](../../SparkEngine/Source/Core/PlatformTypes.h#L62) |  |
 | `S_OK` | macro | SparkEngine | [PlatformTypes.h:L59](../../SparkEngine/Source/Core/PlatformTypes.h#L59) |  |
 | `SamplerHandle` | alias | SparkEngine | [RHIHandlePool.h:L100](../../SparkEngine/Source/Graphics/RHI/RHIHandlePool.h#L100) |  |
@@ -1157,12 +1157,12 @@
 | `SPARK_PRINT_MEMORY_SUMMARY` | macro | SparkEngine | [MemoryDebugger.h:L456](../../SparkEngine/Source/Utils/MemoryDebugger.h#L456) | Print memory usage summary |
 | `SPARK_PRINT_THREAD_REPORT` | macro | SparkEngine | [ThreadDebugger.h:L486](../../SparkEngine/Source/Utils/ThreadDebugger.h#L486) | Print thread debugger summary |
 | `SPARK_PRINT_THREAD_REPORT` | macro | SparkEngine | [ThreadDebugger.h:L496](../../SparkEngine/Source/Utils/ThreadDebugger.h#L496) |  |
-| `SPARK_PRINTF_FORMAT_ATTRIBUTE` | macro | SparkEngine | [Logger.h:L50](../../SparkEngine/Source/Utils/Logger.h#L50) |  |
-| `SPARK_PRINTF_FORMAT_ATTRIBUTE` | macro | SparkEngine | [Logger.h:L53](../../SparkEngine/Source/Utils/Logger.h#L53) |  |
-| `SPARK_PRINTF_FORMAT_ATTRIBUTE` | macro | SparkEngine | [Logger.h:L57](../../SparkEngine/Source/Utils/Logger.h#L57) |  |
-| `SPARK_PRINTF_FORMAT_STRING` | macro | SparkEngine | [Logger.h:L49](../../SparkEngine/Source/Utils/Logger.h#L49) |  |
-| `SPARK_PRINTF_FORMAT_STRING` | macro | SparkEngine | [Logger.h:L52](../../SparkEngine/Source/Utils/Logger.h#L52) |  |
-| `SPARK_PRINTF_FORMAT_STRING` | macro | SparkEngine | [Logger.h:L56](../../SparkEngine/Source/Utils/Logger.h#L56) |  |
+| `SPARK_PRINTF_FORMAT_ATTRIBUTE` | macro | SparkEngine | [Logger.h:L69](../../SparkEngine/Source/Utils/Logger.h#L69) |  |
+| `SPARK_PRINTF_FORMAT_ATTRIBUTE` | macro | SparkEngine | [Logger.h:L72](../../SparkEngine/Source/Utils/Logger.h#L72) |  |
+| `SPARK_PRINTF_FORMAT_ATTRIBUTE` | macro | SparkEngine | [Logger.h:L76](../../SparkEngine/Source/Utils/Logger.h#L76) |  |
+| `SPARK_PRINTF_FORMAT_STRING` | macro | SparkEngine | [Logger.h:L68](../../SparkEngine/Source/Utils/Logger.h#L68) |  |
+| `SPARK_PRINTF_FORMAT_STRING` | macro | SparkEngine | [Logger.h:L71](../../SparkEngine/Source/Utils/Logger.h#L71) |  |
+| `SPARK_PRINTF_FORMAT_STRING` | macro | SparkEngine | [Logger.h:L75](../../SparkEngine/Source/Utils/Logger.h#L75) |  |
 | `SPARK_PROFILE_ADD_U32` | macro | SparkEngine | [ProfileProperties.h:L116](../../SparkEngine/Source/Utils/ProfileProperties.h#L116) | Add to a uint32 profile property (debug only) |
 | `SPARK_PROFILE_ADD_U32` | macro | SparkEngine | [ProfileProperties.h:L122](../../SparkEngine/Source/Utils/ProfileProperties.h#L122) | Add to a uint32 profile property (debug only) |
 | `SPARK_PROFILE_PROPERTY` | macro | SparkEngine | [ProfileProperties.h:L110](../../SparkEngine/Source/Utils/ProfileProperties.h#L110) | Register a profile property (debug only). Evaluates to the property ID. |

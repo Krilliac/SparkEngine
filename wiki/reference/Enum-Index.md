@@ -185,7 +185,7 @@
 | `CraftingDiscipline` | enum | GameModules | [MMOEnums.h:L73](../../GameModules/SparkGameMMO/Source/Enums/MMOEnums.h#L73) | Crafting skill disciplines |
 | `CraftingStation` | enum | GameModules | [MMOEnums.h:L59](../../GameModules/SparkGameMMO/Source/Enums/MMOEnums.h#L59) | Crafting station types required for recipes |
 | `CraftState` | enum | SparkEngine | [LootAndCraftingSystem.h:L266](../../SparkEngine/Source/Engine/Crafting/LootAndCraftingSystem.h#L266) | State of an in-progress craft |
-| `CrashReportDelivery` | enum | SparkEngine | [CrashHandler.cpp:L580](../../SparkEngine/Source/Utils/CrashHandler.cpp#L580) |  |
+| `CrashReportDelivery` | enum | SparkEngine | [CrashHandler.cpp:L581](../../SparkEngine/Source/Utils/CrashHandler.cpp#L581) |  |
 | `CrosshairStyle` | enum | GameModules | [HUDSystem.h:L33](../../GameModules/SparkGameFPS/Source/Game/HUDSystem.h#L33) | Crosshair style options |
 | `CSGOperation` | enum | SparkEngine | [CSGSystem.h:L80](../../SparkEngine/Source/Engine/LevelDesign/CSGSystem.h#L80) | Boolean operation types |
 | `CullMode` | enum | SparkEditor | [RenderingEnums.h:L84](../../SparkEditor/Source/Enums/RenderingEnums.h#L84) | Cull modes |
@@ -440,11 +440,11 @@
 | `LODQualityTier` | enum | SparkEditor | [AssetPipelineTypes.h:L53](../../SparkEditor/Source/AssetPipeline/AssetPipelineTypes.h#L53) |  |
 | `LODTargetPlatform` | enum | SparkEditor | [AssetPipelineTypes.h:L46](../../SparkEditor/Source/AssetPipeline/AssetPipelineTypes.h#L46) |  |
 | `LogCategory` | enum | SparkEditor | [EditorLogger.h:L43](../../SparkEditor/Source/Core/EditorLogger.h#L43) | Log categories for classification |
-| `LogCategory` | enum | SparkEngine | [Logger.h:L146](../../SparkEngine/Source/Utils/Logger.h#L146) |  |
+| `LogCategory` | enum | SparkEngine | [Logger.h:L165](../../SparkEngine/Source/Utils/Logger.h#L165) |  |
 | `LogFileFormat` | enum | SparkEngine | [FileLogger.h:L62](../../SparkEngine/Source/Utils/FileLogger.h#L62) | Log file output format |
 | `LoginUIState` | enum | GameModules | [MMOLoginUI.h:L33](../../GameModules/SparkGameMMO/Source/UI/MMOLoginUI.h#L33) | UI flow state machine |
 | `LogLevel` | enum | SparkEditor | [EditorLogger.h:L30](../../SparkEditor/Source/Core/EditorLogger.h#L30) | Log severity levels |
-| `LogLevel` | enum | SparkEngine | [Logger.h:L74](../../SparkEngine/Source/Utils/Logger.h#L74) |  |
+| `LogLevel` | enum | SparkEngine | [Logger.h:L93](../../SparkEngine/Source/Utils/Logger.h#L93) |  |
 | `LoopMode` | enum | SparkEngine | [TweenSystem.h:L65](../../SparkEngine/Source/Engine/Tween/TweenSystem.h#L65) | Loop behavior for a tween. |
 | `LoopMode` | enum | Tests | [TestSplineMath.cpp:L121](../../Tests/TestSplineMath.cpp#L121) |  |
 | `LoopType` | enum | SparkEngine | [Tween.h:L247](../../SparkEngine/Source/Utils/Tween.h#L247) | How a tween behaves when it reaches the end. |
