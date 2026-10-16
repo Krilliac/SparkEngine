@@ -6,7 +6,9 @@
 #include "FPSAssetPaths.h"
 
 #include <algorithm>
+#include <string>
 #include <string_view>
+#include <system_error>
 
 // Executable discovery needs the native API, not private engine platform types.
 #ifdef _WIN32
@@ -38,6 +40,54 @@ namespace Spark
                 }
                 return exePath.parent_path();
 #endif // _WIN32
+            }
+
+            // Link-resolved identity of an existing file or directory, for containment checks.
+            // canonical() asks for the DOS-volume final path (it already retries in NT form only on
+            // ERROR_PATH_NOT_FOUND). The packaged FPS run inside an AppContainer saw canonical() fail;
+            // the suspected cause is the DOS-volume query (mount manager), not yet confirmed. On any
+            // other failure this retries with the NT-volume final path, used only as an identity to
+            // compare (\Device\HarddiskVolumeN\...), never to open. The library's NT retry form
+            // (\\?\GLOBALROOT\Device\...) and this one never compare equal, so mixed results fail
+            // closed. If the fallback also fails, ec carries its Win32 error so the log names the cause.
+            std::filesystem::path ResolvedIdentity(const std::filesystem::path& path, std::error_code& ec)
+            {
+                std::filesystem::path resolved = std::filesystem::canonical(path, ec);
+#ifdef _WIN32
+                if (!ec)
+                {
+                    return resolved;
+                }
+                const HANDLE handle = ::CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES,
+                                                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                                                    OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+                if (handle == INVALID_HANDLE_VALUE)
+                {
+                    ec.assign(static_cast<int>(::GetLastError()), std::system_category());
+                    return {};
+                }
+                std::wstring buffer(MAX_PATH, L'\0');
+                DWORD length = ::GetFinalPathNameByHandleW(handle, buffer.data(), static_cast<DWORD>(buffer.size()),
+                                                           FILE_NAME_NORMALIZED | VOLUME_NAME_NT);
+                if (length >= buffer.size())
+                {
+                    // Too small: length is the required size including the terminator.
+                    buffer.resize(length);
+                    length = ::GetFinalPathNameByHandleW(handle, buffer.data(), static_cast<DWORD>(buffer.size()),
+                                                         FILE_NAME_NORMALIZED | VOLUME_NAME_NT);
+                }
+                const DWORD queryError = length == 0 ? ::GetLastError() : ERROR_INSUFFICIENT_BUFFER;
+                ::CloseHandle(handle);
+                if (length == 0 || length >= buffer.size())
+                {
+                    ec.assign(static_cast<int>(queryError), std::system_category());
+                    return {};
+                }
+                buffer.resize(length);
+                ec.clear();
+                resolved = std::filesystem::path(buffer);
+#endif // _WIN32
+                return resolved;
             }
         } // namespace
 
@@ -123,13 +173,13 @@ namespace Spark
                 error = "host executable directory is unavailable";
                 return false;
             }
-            const auto root = std::filesystem::canonical(executable, ec);
-            if (ec)
+            const auto root = ResolvedIdentity(executable, ec);
+            if (ec || root.empty())
             {
-                error = "host executable directory cannot be resolved";
+                error = "host executable directory cannot be resolved (" + ec.message() + ")";
                 return false;
             }
-            resolved = root / "Startup.sparkscene";
+            resolved = executable / "Startup.sparkscene";
             const auto status = std::filesystem::symlink_status(resolved, ec);
             if (status.type() == std::filesystem::file_type::not_found &&
                 (!ec || ec == std::errc::no_such_file_or_directory))
@@ -142,13 +192,14 @@ namespace Spark
                 error = "Startup.sparkscene must be a readable regular file beside the host";
                 return false;
             }
-            const auto canonical = std::filesystem::canonical(resolved, ec);
-            if (ec || canonical.parent_path() != root)
+            // Compare identities resolved the same way, so a link anywhere on either path
+            // cannot place the scene outside the host directory.
+            const auto sceneIdentity = ResolvedIdentity(resolved, ec);
+            if (ec || sceneIdentity.empty() || sceneIdentity.parent_path() != root)
             {
                 error = "Startup.sparkscene resolves outside the host directory";
                 return false;
             }
-            resolved = canonical;
             return true;
         }
 
