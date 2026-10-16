@@ -92,12 +92,15 @@ def main() -> int:
                 if "FPS scene identity: procedural fallback arena" not in log:
                     raise RuntimeError("RED run never reached the procedural fallback")
                 if check.returncode == 0 or b"FPS run used the procedural fallback arena" not in check.stderr:
+                    reason = check.stderr.decode("utf-8", errors="replace").strip()[-1500:]
                     raise RuntimeError(
-                        f"RED check did not reject the fallback for its scene identity; logs: {case_root}")
+                        f"RED check did not reject the fallback for its scene identity; logs: {case_root}\n{reason}")
                 print("RED: real fallback frame rejected for procedural scene identity", flush=True)
             else:
                 if check.returncode != 0:
-                    raise RuntimeError(f"GREEN authored frame check failed; logs: {case_root}")
+                    # Carry the checker's own reason: CI keeps only the failure tail, not case_root.
+                    reason = check.stderr.decode("utf-8", errors="replace").strip()[-1500:]
+                    raise RuntimeError(f"GREEN authored frame check failed; logs: {case_root}\n{reason}")
                 print("GREEN: real authored frame passed scene identity and pixel checks", flush=True)
     finally:
         scene.write_bytes(original)
