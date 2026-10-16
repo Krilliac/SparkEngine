@@ -555,10 +555,9 @@ bool Game::StartWaves()
     {
         const Spark::RespawnPoint spawn =
             m_respawnSystem ? m_respawnSystem->GetBestSpawnPoint(-1) : Spark::RespawnPoint{};
-        m_player->Console_SetHealth(m_player->GetMaxHealth());
-        m_player->Console_SetArmor(0.0f);
-        m_player->Console_SetPosition(spawn.position.x, spawn.position.y, spawn.position.z);
-        m_player->SetActive(true);
+        // Respawn restores the class loadout armor; the old zero armor was an
+        // artifact of the manual revive, not a documented restart rule.
+        m_player->Respawn(spawn.position.x, spawn.position.y, spawn.position.z);
         if (m_camera)
         {
             m_camera->Console_SetPosition(spawn.position.x, spawn.position.y, spawn.position.z);

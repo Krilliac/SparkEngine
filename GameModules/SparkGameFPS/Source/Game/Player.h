@@ -308,6 +308,37 @@ class SPARK_GAME_API Player : public GameObject
     void SetClass(PlayerClass classType, Spark::ClassSystem* classSystem);
 
     /**
+     * @brief Seconds of invulnerability granted by Respawn().
+     *
+     * Enemies keep ticking their attack cooldowns while the player is dead, so
+     * every one in range fires on the revive frame. The grace window lets the
+     * player take a step before that backlog lands.
+     */
+    static constexpr float kSpawnProtectionSeconds = 2.0f;
+
+    /**
+     * @brief Revive the player at a spawn point with the class loadout restored
+     *
+     * Restores health to its maximum, armor and shield to the class loadout
+     * (the values ApplyClassStats applies), clears ability state and the shield
+     * recharge timer, teleports to the position, reactivates the player and
+     * starts the spawn-protection window (kSpawnProtectionSeconds). Call this
+     * instead of moving a dead player: Update returns early while health is zero.
+     *
+     * Thread affinity: game thread.
+     * @param x Spawn X coordinate
+     * @param y Spawn Y coordinate
+     * @param z Spawn Z coordinate
+     */
+    void Respawn(float x, float y, float z);
+
+    /**
+     * @brief Check whether spawn protection is currently absorbing damage
+     * @return true while the window opened by Respawn() has not elapsed
+     */
+    bool IsSpawnProtected() const { return m_spawnProtectionTimer > 0.0f; }
+
+    /**
      * @brief Get the player's current class type
      * @return Current PlayerClass
      */
@@ -661,11 +692,12 @@ class SPARK_GAME_API Player : public GameObject
     std::unique_ptr<class Model> m_grenadeModel; ///< Grenade launcher model
 
     // Console integration state
-    bool m_godModeEnabled{false};      ///< God mode prevents damage
-    bool m_noclipEnabled{false};       ///< Noclip disables collision
-    bool m_infiniteAmmoEnabled{false}; ///< Infinite ammo prevents consumption
-    float m_gravityForce{-20.0f};      ///< Gravity force applied
-    float m_frictionCoeff{0.9f};       ///< Movement friction coefficient
+    float m_spawnProtectionTimer{0.0f}; ///< Seconds of post-respawn invulnerability left
+    bool m_godModeEnabled{false};       ///< God mode prevents damage
+    bool m_noclipEnabled{false};        ///< Noclip disables collision
+    bool m_infiniteAmmoEnabled{false};  ///< Infinite ammo prevents consumption
+    float m_gravityForce{-20.0f};       ///< Gravity force applied
+    float m_frictionCoeff{0.9f};        ///< Movement friction coefficient
 
     // Console callback system
     std::function<void(const PlayerState&)> m_stateCallback;
@@ -774,6 +806,10 @@ class SPARK_GAME_API Player : public GameObject
      * @brief Apply class definition stats to player
      */
     void ApplyClassStats(const Spark::ClassDefinition& classDef);
+
+    /// Refill stamina, shield and energy and clear ability state. Shared by
+    /// ApplyClassStats and Respawn; call after the maxima are set.
+    void ResetClassRuntimeState();
 
     /**
      * @brief Get weapon statistics for a specific weapon type

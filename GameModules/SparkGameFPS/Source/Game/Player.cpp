@@ -120,6 +120,8 @@ void Player::Update(float dt)
     if (!IsAlive())
         return;
 
+    m_spawnProtectionTimer = std::max(0.0f, m_spawnProtectionTimer - dt);
+
     HandleInput(dt);
     UpdateMovement(dt);
     UpdateCombat(dt);
@@ -225,6 +227,10 @@ void Player::TakeDamage(float dmg)
         FPS_CONSOLE_RATE_LIMITED(2, 5, "Damage blocked by god mode", "INFO");
         return;
     }
+
+    // Respawn grace window: ignore silently so it neither logs nor flashes as a hit
+    if (m_spawnProtectionTimer > 0.0f)
+        return;
 
     if (!IsAlive())
         return;
@@ -799,13 +805,39 @@ void Player::ApplyClassStats(const Spark::ClassDefinition& classDef)
     m_secondaryAbility = classDef.secondaryAbility;
     m_secondaryAbility.Reset();
 
-    // Reset class-specific state
+    ResetClassRuntimeState();
+}
+
+void Player::ResetClassRuntimeState()
+{
+    m_primaryAbility.Reset();
+    m_secondaryAbility.Reset();
     m_jetpackActive = false;
     m_jetpackFuel = m_jetpackMaxFuel;
     m_cloakActive = false;
     m_energyShieldHP = 0.0f;
     m_lockedDown = false;
     m_energy = m_maxEnergy;
+    m_stamina = m_maxStamina;
+    m_shield = m_maxShield;
+}
+
+void Player::Respawn(float x, float y, float z)
+{
+    std::lock_guard<std::recursive_mutex> lock(m_stateMutex);
+
+    m_health = m_maxHealth;
+
+    // Same loadout values ApplyClassStats applies at class setup. Without a
+    // class system there is no loadout, so armor falls back to none.
+    m_armor = m_classSystem ? m_classSystem->GetClassDefinition(m_playerClass).baseArmor : 0.0f;
+    ResetClassRuntimeState();
+    m_shieldRechargeTimer = 0.0f;
+
+    m_spawnProtectionTimer = kSpawnProtectionSeconds;
+
+    Console_SetPosition(x, y, z);
+    SetActive(true);
 }
 
 bool Player::ActivatePrimaryAbility()

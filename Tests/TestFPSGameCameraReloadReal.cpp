@@ -1,6 +1,7 @@
 /**
  * @file TestFPSGameCameraReloadReal.cpp
- * @brief Fresh-process regression for authored camera reloads through the real FPS DLL.
+ * @brief Fresh-process regression for authored camera reloads and the respawn
+ *        loadout/spawn-protection contract through the real FPS DLL.
  */
 
 #include "Game/Game.h"
@@ -8,6 +9,9 @@
 #include "Camera/SparkEngineCamera.h"
 #include "Graphics/GraphicsEngine.h"
 #include "Input/InputManager.h"
+
+#include <Spark/EventBus.h>
+#include <Spark/EventSystem.h>
 
 #include <chrono>
 #include <cmath>
@@ -113,6 +117,7 @@ int main(int argc, char** argv)
         // a graphics device; no simulation tick or platform input window is needed.
         GraphicsEngine graphics;
         InputManager input;
+        Spark::EventBus bus; // declared before Game so it outlives Game's subscription handles
         Game game;
         Require(SUCCEEDED(game.Initialize(&graphics, &input)), "real FPS Game initialization failed");
         SparkEngineCamera* const camera = game.GetCamera();
@@ -150,7 +155,50 @@ int main(int argc, char** argv)
                     scene->GetMetadata().sceneName == "ReloadB" && scene->FindNode("FloorB") >= 0 &&
                     scene->FindNode("CameraB") >= 0 && scene->FindNode("BrokenCamera") < 0,
                 "failed reload changed the committed scene graph");
-        std::cout << "Real FPS DLL camera reload and failed-load retention passed\n";
+
+        // Respawn restores the class loadout and grants spawn protection. The
+        // initial state is the SCOUT loadout Game applied at startup.
+        const float loadoutArmor = player->GetArmor();
+        const float loadoutShield = player->GetMaxShield();
+        Require(player->GetShield() == loadoutShield && player->GetHealth() == player->GetMaxHealth(),
+                "player did not start at its class loadout");
+        player->TakeDamage(10.0f);
+        player->Console_SetArmor(0.0f);
+        player->Console_SetHealth(0.0f);
+        Require(!player->IsAlive() && !player->IsActive(), "the player was not dead before respawn");
+        Require(loadoutArmor > 0.0f, "the respawn armor check needs a class loadout with armor");
+
+        // Drive the respawn through the bus so the Game handler is what runs.
+        game.SetEventBus(&bus);
+        bus.Publish(Spark::PlayerRespawnEvent{0, 2.0f, 3.0f, 4.0f});
+        Require(player->IsAlive() && player->IsActive(), "respawn did not revive the player");
+        Require(player->GetHealth() == player->GetMaxHealth(), "respawn did not restore health");
+        Require(player->GetArmor() == loadoutArmor, "respawn did not restore the loadout armor");
+        Require(player->GetShield() == loadoutShield, "respawn did not restore the loadout shield");
+        ExpectVector(player->GetPosition(), {2, 3, 4}, "player position after respawn");
+        Require(player->IsSpawnProtected(), "respawn did not start spawn protection");
+
+        const float protectedTotal = player->GetHealth() + player->GetShield() + player->GetArmor();
+        player->TakeDamage(50.0f);
+        Require(player->GetHealth() + player->GetShield() + player->GetArmor() == protectedTotal,
+                "damage inside the spawn-protection window was applied");
+
+        player->Update(Player::kSpawnProtectionSeconds + 0.1f);
+        Require(!player->IsSpawnProtected(), "spawn protection did not expire");
+        player->TakeDamage(10.0f);
+        Require(player->GetHealth() + player->GetShield() + player->GetArmor() < protectedTotal,
+                "damage after the spawn-protection window was ignored");
+
+        player->Console_SetGodMode(true);
+        const float godTotal = player->GetHealth() + player->GetShield() + player->GetArmor();
+        player->TakeDamage(10.0f);
+        player->Console_SetGodMode(false);
+        Require(player->GetHealth() + player->GetShield() + player->GetArmor() == godTotal,
+                "god mode no longer blocks damage");
+
+        game.SetEventBus(nullptr);
+
+        std::cout << "Real FPS DLL camera reload, failed-load retention and respawn protection passed\n";
         return 0;
     }
     catch (const std::exception& error)

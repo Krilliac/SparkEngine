@@ -640,10 +640,9 @@ void Game::SetEventBus(Spark::EventBus* bus)
             {
                 // Restore before reactivating: Player::Update returns early while
                 // health is zero, so a respawn that only moves the player is inert.
-                m_player->Console_SetHealth(m_player->GetMaxHealth());
-                m_player->Console_SetArmor(0.0f);
-                m_player->Console_SetPosition(e.spawnX, e.spawnY, e.spawnZ);
-                m_player->SetActive(true);
+                // Respawn also grants spawn protection against enemy attack
+                // cooldowns that expired while the player was dead.
+                m_player->Respawn(e.spawnX, e.spawnY, e.spawnZ);
             }
 
             // Reset HUD damage indicators on respawn

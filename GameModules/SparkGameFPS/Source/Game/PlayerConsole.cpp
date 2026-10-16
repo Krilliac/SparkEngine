@@ -23,6 +23,8 @@ void Player::Console_SetHealth(float health)
     m_health = std::max(0.0f, std::min(m_maxHealth, health));
     if (m_health <= 0.0f)
     {
+        // A death that bypasses TakeDamage must not leave a stale protection window.
+        m_spawnProtectionTimer = 0.0f;
         SetActive(false);
     }
     else if (!IsActive())
