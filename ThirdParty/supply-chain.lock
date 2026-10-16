@@ -374,6 +374,9 @@
     "anchore/scan-action": [
       "27805bf3b4e84b4a5c980df22ed233c00390a439"
     ],
+    "anthropics/claude-code-action": [
+      "374f254f5efaf968abfe15d399fd90972e8138b9"
+    ],
     "github/codeql-action": [
       "cdf488f595d80d6e07e03d4674febd5ab45fa938"
     ],
