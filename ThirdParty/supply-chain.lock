@@ -342,6 +342,9 @@
     "actions/checkout": [
       "3d3c42e5aac5ba805825da76410c181273ba90b1"
     ],
+    "actions/dependency-review-action": [
+      "a1d282b36b6f3519aa1f3fc636f609c47dddb294"
+    ],
     "actions/download-artifact": [
       "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
     ],
@@ -363,8 +366,14 @@
     "microsoft/setup-msbuild": [
       "30375c66a4eea26614e0d39710365f22f8b0af57"
     ],
+    "ossf/scorecard-action": [
+      "fa7117db83c52d787ae5a89f350999701505d78e"
+    ],
     "softprops/action-gh-release": [
       "3d0d9888cb7fd7b750713d6e236d1fcb99157228"
+    ],
+    "zizmorcore/zizmor-action": [
+      "f9597c869b2e67095f9b527070297a13a6efe928"
     ]
   }
 }
