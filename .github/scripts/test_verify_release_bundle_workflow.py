@@ -75,8 +75,8 @@ class ReleaseBundleWorkflowTests(unittest.TestCase):
         block = self.text[start:self.text.index("\n    - name:", start + 10)]
         invocation = block[block.index("python .github/scripts/qualify-windows-msi.py"):]
         self.assertEqual(invocation.count("--previous-signer-thumbprint"), 1)
-        self.assertIn('--previous-signer-thumbprint "${{ vars.SPARK_PREVIOUS_RELEASE_SIGNER_THUMBPRINT }}" `',
-                      invocation)
+        self.assertIn('--previous-signer-thumbprint "$env:SPARK_PREVIOUS_SIGNER_THUMBPRINT" `', invocation)
+        self.assertIn("SPARK_PREVIOUS_SIGNER_THUMBPRINT: ${{ vars.SPARK_PREVIOUS_RELEASE_SIGNER_THUMBPRINT }}", block)
         self.assertIn("if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }", invocation)
 
     def test_windows_authenticode_gate_requires_explicit_self_signed_policy(self) -> None:

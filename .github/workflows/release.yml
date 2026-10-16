@@ -179,6 +179,7 @@ jobs:
         # The v0.9.0 bootstrap qualification resolves the source commit's
         # parent to bind its evidence to the reviewed baselineCommit.
         fetch-depth: 2
+        persist-credentials: false
 
     - name: Test native Windows signature rejection
       if: needs.prepare.outputs.is_versioned == 'true'
@@ -471,22 +472,25 @@ jobs:
       # other version must use the exact published N-1 path below. The evidence
       # is bound to the owner-reviewed predecessorRelease baselineCommit here,
       # before any installer command; an unrecorded baseline fails closed.
+      env:
+        SPARK_CMAKE_VERSION: ${{ needs.prepare.outputs.cmake_version }}
+        SPARK_BUILD_DIR: ${{ matrix.build_dir }}
       run: |
         $readiness = Get-Content -Raw -LiteralPath "${{ github.workspace }}/docs/site/readiness.json" | ConvertFrom-Json
         $baselineCommit = $readiness.predecessorRelease.sourceCommitEvidence.baselineCommit
         if (-not ($baselineCommit -is [string]) -or [string]::IsNullOrEmpty($baselineCommit)) {
           throw 'predecessorRelease.sourceCommitEvidence.baselineCommit is not recorded; bootstrap qualification requires the reviewed baseline'
         }
-        $packageManifest = "${{ github.workspace }}/${{ matrix.build_dir }}/packages/shipping-package-manifest.json"
+        $packageManifest = "${{ github.workspace }}/$env:SPARK_BUILD_DIR/packages/shipping-package-manifest.json"
         python .github/scripts/write-shipping-package-manifest.py `
-          --packages "${{ github.workspace }}/${{ matrix.build_dir }}/packages" `
-          --version "${{ needs.prepare.outputs.cmake_version }}" `
+          --packages "${{ github.workspace }}/$env:SPARK_BUILD_DIR/packages" `
+          --version "$env:SPARK_CMAKE_VERSION" `
           --commit-sha "${{ github.sha }}" --out $packageManifest
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         python .github/scripts/qualify-windows-msi.py `
-          --packages "${{ github.workspace }}/${{ matrix.build_dir }}/packages" `
-          --version "${{ needs.prepare.outputs.cmake_version }}" `
-          --manifest "${{ github.workspace }}/${{ matrix.build_dir }}/SparkEngineGameModules.cmake" `
+          --packages "${{ github.workspace }}/$env:SPARK_BUILD_DIR/packages" `
+          --version "$env:SPARK_CMAKE_VERSION" `
+          --manifest "${{ github.workspace }}/$env:SPARK_BUILD_DIR/SparkEngineGameModules.cmake" `
           --package-manifest $packageManifest `
           --bootstrap-repair --reviewed-baseline-commit $baselineCommit `
           --drills interrupt `
@@ -504,19 +508,22 @@ jobs:
       # requires the exact published immutable v0.9.0 predecessor. This job is
       # not a bootstrap path for v0.9.0; no synthetic predecessor is permitted.
       env:
+        SPARK_CMAKE_VERSION: ${{ needs.prepare.outputs.cmake_version }}
+        SPARK_BUILD_DIR: ${{ matrix.build_dir }}
+        SPARK_PREVIOUS_SIGNER_THUMBPRINT: ${{ vars.SPARK_PREVIOUS_RELEASE_SIGNER_THUMBPRINT }}
         GH_TOKEN: ${{ github.token }}
       run: |
-        $packageManifest = "${{ github.workspace }}/${{ matrix.build_dir }}/packages/shipping-package-manifest.json"
+        $packageManifest = "${{ github.workspace }}/$env:SPARK_BUILD_DIR/packages/shipping-package-manifest.json"
         python .github/scripts/write-shipping-package-manifest.py `
-          --packages "${{ github.workspace }}/${{ matrix.build_dir }}/packages" `
-          --version "${{ needs.prepare.outputs.cmake_version }}" `
+          --packages "${{ github.workspace }}/$env:SPARK_BUILD_DIR/packages" `
+          --version "$env:SPARK_CMAKE_VERSION" `
           --commit-sha "${{ github.sha }}" --out $packageManifest
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         $previousRoot = Join-Path "${{ runner.temp }}" "spark-previous-release-${{ github.run_id }}-${{ github.run_attempt }}"
         $previousReceipt = Join-Path $previousRoot "provisioning-receipt.json"
         python .github/scripts/provision-previous-windows-msi.py `
           --repository "${{ github.repository }}" `
-          --current-version "${{ needs.prepare.outputs.cmake_version }}" `
+          --current-version "$env:SPARK_CMAKE_VERSION" `
           --output-dir $previousRoot --receipt $previousReceipt
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         if (-not (Test-Path -LiteralPath $previousReceipt -PathType Leaf)) { throw "Previous-release provisioner did not publish its receipt" }
@@ -528,14 +535,14 @@ jobs:
         if (-not (Test-Path -LiteralPath $previousPackages -PathType Container) -or
             -not (Test-Path -LiteralPath $previousManifest -PathType Leaf)) { throw "Previous-release provisioner did not publish the required MSI and manifest" }
         python .github/scripts/qualify-windows-msi.py `
-          --packages "${{ github.workspace }}/${{ matrix.build_dir }}/packages" `
-          --version "${{ needs.prepare.outputs.cmake_version }}" `
-          --manifest "${{ github.workspace }}/${{ matrix.build_dir }}/SparkEngineGameModules.cmake" `
+          --packages "${{ github.workspace }}/$env:SPARK_BUILD_DIR/packages" `
+          --version "$env:SPARK_CMAKE_VERSION" `
+          --manifest "${{ github.workspace }}/$env:SPARK_BUILD_DIR/SparkEngineGameModules.cmake" `
           --package-manifest $packageManifest `
           --previous-packages $previousPackages `
           --previous-version $previousVersion `
           --previous-package-manifest $previousManifest `
-          --previous-signer-thumbprint "${{ vars.SPARK_PREVIOUS_RELEASE_SIGNER_THUMBPRINT }}" `
+          --previous-signer-thumbprint "$env:SPARK_PREVIOUS_SIGNER_THUMBPRINT" `
           --previous-receipt $previousReceipt `
           --drills interrupt `
           --runner-temp "${{ runner.temp }}" --logs "${{ github.workspace }}/msi-qualification" `

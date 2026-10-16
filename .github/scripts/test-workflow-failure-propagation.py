@@ -5459,12 +5459,20 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn("python .github/scripts/write-shipping-package-manifest.py", block)
         self.assertIn("python .github/scripts/provision-previous-windows-msi.py", block)
         self.assertIn('--repository "${{ github.repository }}"', block)
-        self.assertIn('--current-version "${{ needs.prepare.outputs.cmake_version }}"', block)
+        # Step outputs and matrix values reach the script through env, never by
+        # template expansion into the pwsh source (zizmor template-injection).
+        self.assertIn("SPARK_CMAKE_VERSION: ${{ needs.prepare.outputs.cmake_version }}", block)
+        self.assertIn("SPARK_BUILD_DIR: ${{ matrix.build_dir }}", block)
+        run = block[block.index("      run: |"):]
+        self.assertNotIn("${{ needs.", run)
+        self.assertNotIn("${{ matrix.", run)
+        self.assertNotIn("${{ vars.", run)
+        self.assertIn('--current-version "$env:SPARK_CMAKE_VERSION"', block)
         self.assertIn("provisioning-receipt.json", block)
         self.assertNotIn("SPARK_PREVIOUS_WINDOWS_PACKAGE_DIR", block)
         self.assertNotIn("SPARK_PREVIOUS_WINDOWS_PACKAGE_MANIFEST", block)
-        self.assertIn('--manifest "${{ github.workspace }}/${{ matrix.build_dir }}/SparkEngineGameModules.cmake"', block)
-        self.assertIn('$packageManifest = "${{ github.workspace }}/${{ matrix.build_dir }}/packages/shipping-package-manifest.json"', block)
+        self.assertIn('--manifest "${{ github.workspace }}/$env:SPARK_BUILD_DIR/SparkEngineGameModules.cmake"', block)
+        self.assertIn('$packageManifest = "${{ github.workspace }}/$env:SPARK_BUILD_DIR/packages/shipping-package-manifest.json"', block)
         self.assertIn("--package-manifest $packageManifest", block)
         self.assertIn("--previous-packages $previousPackages", block)
         self.assertIn("--previous-version $previousVersion", block)
