@@ -2888,12 +2888,24 @@ if(WIN32 AND SPARK_ENGINE_IMGUI_FOR_MODULES)
     set(_spark_ui_markers
         "Gameplay Showcase" "ARPG Combat System" "Start / Restart Survival" "MMO Chat"
         "Open World Player" "Platformer Player" "RPG Combat System" "RTS Match System" "Racing Track")
+    # The FPS developer panel follows FPSConsolePolicy.h: plain Shipping
+    # (MinSizeRel without ENABLE_DEVCOMMANDS_IN_SHIPPING) must NOT carry it.
+    if(ENABLE_DEVCOMMANDS_IN_SHIPPING)
+        set(_spark_fps_panel_absent 0)
+    else()
+        set(_spark_fps_panel_absent "$<CONFIG:MinSizeRel>")
+    endif()
     foreach(_spark_ui_module _spark_ui_marker IN ZIP_LISTS _spark_ui_modules _spark_ui_markers)
         if(TARGET ${_spark_ui_module})
+            set(_spark_ui_expect_absent 0)
+            if(_spark_ui_module STREQUAL "SparkGameFPS")
+                set(_spark_ui_expect_absent "${_spark_fps_panel_absent}")
+            endif()
             add_test(NAME GameModuleImGuiUI_${_spark_ui_module}
                 COMMAND ${CMAKE_COMMAND}
                     "-DMODULE_IMAGE=$<TARGET_FILE:${_spark_ui_module}>"
                     "-DMARKER=${_spark_ui_marker}"
+                    "-DEXPECT_ABSENT=${_spark_ui_expect_absent}"
                     -P "${CMAKE_SOURCE_DIR}/cmake/CheckModuleImGuiCompiledIn.cmake")
             set_tests_properties(GameModuleImGuiUI_${_spark_ui_module} PROPERTIES
                 LABELS "module;unit"

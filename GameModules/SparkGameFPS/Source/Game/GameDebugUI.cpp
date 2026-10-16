@@ -171,7 +171,10 @@ void Game::UpdateArenaAutopilot(float dt)
 
 void Game::RenderDebugUI()
 {
-#ifdef SPARK_HAS_IMGUI
+    // Developer panel (autopilot, survival restart, raw status): it follows the
+    // developer-command policy in Console/FPSConsolePolicy.h, so a Shipping
+    // build without ENABLE_DEVCOMMANDS_IN_SHIPPING draws no overlay over play.
+#if defined(SPARK_HAS_IMGUI) && (defined(SPARK_DEVCOMMANDS_IN_SHIPPING) || !defined(SPARK_BUILD_SHIPPING))
     if (!ImGui::CollapsingHeader("Spark Arena", ImGuiTreeNodeFlags_DefaultOpen))
     {
         return;

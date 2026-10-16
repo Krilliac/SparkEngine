@@ -4,7 +4,7 @@
 
   Usage (CTest, see Tests/CMakeLists.txt):
     cmake -DMODULE_IMAGE=<path to module DLL> -DMARKER=<UI string literal>
-          -P cmake/CheckModuleImGuiCompiledIn.cmake
+          [-DEXPECT_ABSENT=1] -P cmake/CheckModuleImGuiCompiledIn.cmake
 
   MARKER is a string literal that only the module's SPARK_HAS_IMGUI-guarded
   draw code references (for example a CollapsingHeader label). When the guard
@@ -25,6 +25,17 @@ endif()
 string(REGEX REPLACE "([][+.*()^$?|\\\\])" "\\\\\\1" _marker_regex "${MARKER}")
 file(STRINGS "${MODULE_IMAGE}" _hits REGEX "^${_marker_regex}$")
 list(LENGTH _hits _hit_count)
+# EXPECT_ABSENT inverts the check for UI that a build profile deliberately
+# compiles out (the FPS developer panel in plain Shipping).
+if(EXPECT_ABSENT)
+    if(NOT _hit_count EQUAL 0)
+        message(FATAL_ERROR
+            "CheckModuleImGuiCompiledIn: '${MARKER}' is present in ${MODULE_IMAGE}, "
+            "but this build profile must compile that UI out")
+    endif()
+    message(STATUS "CheckModuleImGuiCompiledIn: '${MARKER}' correctly absent from ${MODULE_IMAGE}")
+    return()
+endif()
 if(_hit_count EQUAL 0)
     message(FATAL_ERROR
         "CheckModuleImGuiCompiledIn: '${MARKER}' is missing from ${MODULE_IMAGE}; "
