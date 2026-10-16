@@ -13,6 +13,25 @@
  * - Runtime filtering by category and severity
  * - Formatted output with timestamp, thread ID, category, severity, file:line
  *
+ * Flush policy (the log tail is what crash reports and support triage read, so
+ * it must survive a crash or a force-kill):
+ * - Warn, Error and Fatal lines are flushed to the OS by the sink that writes
+ *   them, before Log() returns (sync mode) or before the writer thread moves on.
+ * - Lower levels are flushed by a background thread at most
+ *   Logger::kPeriodicFlushInterval after they were written, so a quiet process
+ *   still gets its last Info lines out. Per-line flushing was measured at
+ *   ~3.5 us/line against ~0.5 us buffered (one WriteFile per line on Windows),
+ *   too much for a per-frame log site; the interval check costs the caller nothing.
+ * - The crash handler calls Logger::FlushForCrash() before writing the dump.
+ * - Shutdown() flushes every sink.
+ * Data handed to the OS survives TerminateProcess/_exit; only the in-process
+ * buffer is lost, so the bounded loss on a force-kill is the last interval of
+ * Trace/Debug/Info lines.
+ *
+ * Thread affinity: every entry point is thread-safe. Sinks are only called
+ * with the sink mutex held, from the logging thread (sync), the writer thread
+ * (async) or the periodic flush thread.
+ *
  * @code
  *   auto& logger = Spark::Logger::Get();
  *   logger.Initialize();
@@ -592,6 +611,21 @@ namespace Spark
          */
         void FlushAll();
 
+        /**
+         * @brief Best-effort flush for crash handlers
+         *
+         * Like FlushAll(), but never waits more than a few tens of milliseconds
+         * for a logger lock: the crashing thread may be the one holding it (a
+         * fault inside a sink), and a crash handler that deadlocks writes no
+         * dump at all. Swallows every exception. Not async-signal-safe; the
+         * POSIX handler calls it from its best-effort section.
+         */
+        void FlushForCrash() noexcept;
+
+        /// Longest time a Trace/Debug/Info line may sit in a sink's buffer
+        /// before the periodic flush thread hands it to the OS.
+        static constexpr std::chrono::milliseconds kPeriodicFlushInterval{100};
+
         bool IsInitialized() const { return m_initialized.load(std::memory_order_acquire); }
 
         /**
@@ -629,9 +663,18 @@ namespace Spark
         void AsyncWriterThread();
 
         /**
+         * @brief Background thread that flushes sinks every kPeriodicFlushInterval
+         *        when something was written since the last flush
+         */
+        void PeriodicFlushThread();
+
+        /**
          * @brief Dispatch a message to all sinks (called from writer thread or inline)
          */
         void DispatchToSinks(const LogMessage& msg);
+
+        /// DispatchToSinks body for callers that already hold m_sinkMutex
+        void DispatchToSinksLocked(const LogMessage& msg);
 
         /**
          * @brief Format a log message into a human-readable string
@@ -659,6 +702,13 @@ namespace Spark
         std::condition_variable m_queueCV;
         std::atomic<bool> m_stopThread{false};
         std::thread m_writerThread;
+
+        // Periodic flush (see the flush policy in the file comment)
+        std::atomic<bool> m_sinksDirty{false}; ///< Set by DispatchToSinks, cleared by the flush thread
+        std::mutex m_flushThreadMutex;
+        std::condition_variable m_flushThreadCV;
+        bool m_stopFlushThread = false; ///< Guarded by m_flushThreadMutex
+        std::thread m_flushThread;
 
         // Backpressure: drop oldest Trace/Debug when queue exceeds this size.
         // Chosen to bound memory (~100KB at 1KB/msg) while tolerating short bursts.

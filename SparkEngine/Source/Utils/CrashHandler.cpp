@@ -4,6 +4,7 @@
 #include "Utils/CrashArtifactRetention.h"
 #include "Utils/CrashHandlerSupport.h"
 #include "Utils/CrashSymbolication.h"
+#include "Utils/Logger.h"
 #include "Utils/Assert.h"
 #include "Utils/Process.h"
 #include "Utils/SparkError.h"
@@ -1068,6 +1069,12 @@ static void HandleCrashInternal(EXCEPTION_POINTERS* ep, const char* assertMsg, C
     }
 
     std::lock_guard<std::mutex> guard(g_lock);
+
+    // Get the engine log tail onto disk before anything slow or fragile: the
+    // dump and report take seconds, and a second fault while writing them
+    // would otherwise lose the lines that explain this one.
+    Spark::Logger::Get().FlushForCrash();
+
     if (!ep)
         return;
 
@@ -2666,8 +2673,14 @@ static void HandleLinuxCrash(int sig, siginfo_t* info, void* context)
 
 #ifdef SPARK_PLATFORM_LINUX
     WriteBoundedSignalArtifacts(fd, sig, reportSequence);
+
+    // The engine log tail is not async-signal-safe to flush (bounded lock
+    // waits, heap), so it runs only after the signal-safe report is on disk.
+    Spark::Logger::Get().FlushForCrash();
 #else
     // The macOS best-effort path is unchanged by the Linux signal-safety fix.
+    // Engine log tail first (bounded lock waits, never throws).
+    Spark::Logger::Get().FlushForCrash();
     try
     {
         WriteBestEffortReport(fd, sig);

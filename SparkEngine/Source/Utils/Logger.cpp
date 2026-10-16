@@ -145,6 +145,12 @@ namespace Spark
         {
             m_writerThread = std::thread(&Logger::AsyncWriterThread, this);
         }
+
+        {
+            std::lock_guard<std::mutex> lock(m_flushThreadMutex);
+            m_stopFlushThread = false;
+        }
+        m_flushThread = std::thread(&Logger::PeriodicFlushThread, this);
     }
 
     // ============================================================================
@@ -168,6 +174,16 @@ namespace Spark
             {
                 m_writerThread.join();
             }
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(m_flushThreadMutex);
+            m_stopFlushThread = true;
+        }
+        m_flushThreadCV.notify_all();
+        if (m_flushThread.joinable())
+        {
+            m_flushThread.join();
         }
 
         // Flush all sinks
@@ -488,46 +504,129 @@ namespace Spark
         }
     }
 
+    void Logger::FlushForCrash() noexcept
+    {
+        // Bounded wait: the writer or flush thread releases these locks within
+        // microseconds, but a lock held by the crashing thread never comes back.
+        // The returned lock owns the mutex only if one of the attempts succeeded.
+        const auto lockBriefly = [](std::mutex& mutex)
+        {
+            std::unique_lock<std::mutex> lock(mutex, std::try_to_lock);
+            for (int attempt = 1; attempt < 50 && !lock.owns_lock(); ++attempt)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                if (lock.try_lock())
+                {
+                    break;
+                }
+            }
+            return lock;
+        };
+
+        try
+        {
+            // Lock order sink, then queue: the same as AsyncWriterThread.
+            const std::unique_lock<std::mutex> sinkLock = lockBriefly(m_sinkMutex);
+            if (!sinkLock.owns_lock())
+            {
+                return;
+            }
+
+            std::queue<LogMessage> pending;
+            if (m_asyncEnabled.load(std::memory_order_relaxed))
+            {
+                const std::unique_lock<std::mutex> queueLock = lockBriefly(m_queueMutex);
+                if (queueLock.owns_lock())
+                {
+                    std::swap(pending, m_messageQueue);
+                }
+            }
+            for (; !pending.empty(); pending.pop())
+            {
+                DispatchToSinksLocked(pending.front());
+            }
+            for (auto& sink : m_sinks)
+            {
+                sink->Flush();
+            }
+        }
+        catch (...)
+        {
+            // A crash handler must keep going to write its dump.
+        }
+    }
+
+    // ============================================================================
+    // Periodic Flush Thread
+    // ============================================================================
+
+    void Logger::PeriodicFlushThread()
+    {
+        std::unique_lock<std::mutex> lock(m_flushThreadMutex);
+        while (!m_stopFlushThread)
+        {
+            m_flushThreadCV.wait_for(lock, kPeriodicFlushInterval, [this] { return m_stopFlushThread; });
+            if (m_stopFlushThread)
+            {
+                break;
+            }
+            // Idle processes skip the sink lock entirely.
+            if (!m_sinksDirty.exchange(false, std::memory_order_acq_rel))
+            {
+                continue;
+            }
+            lock.unlock();
+            {
+                std::lock_guard<std::mutex> sinkLock(m_sinkMutex);
+                for (auto& sink : m_sinks)
+                {
+                    sink->Flush();
+                }
+            }
+            lock.lock();
+        }
+    }
+
     // ============================================================================
     // Background Writer Thread
     // ============================================================================
 
     void Logger::AsyncWriterThread()
     {
+        // Takes each batch while holding the sink lock (lock order: sink, then
+        // queue -- the same order FlushForCrash uses), so a message is always
+        // either still queued or already written to the sinks, never in flight
+        // where a crash-time flush could miss it. Producers only ever take the
+        // queue lock, so Log() never waits on sink I/O.
+        const auto writeQueuedBatch = [this]
+        {
+            std::lock_guard<std::mutex> sinkLock(m_sinkMutex);
+            std::queue<LogMessage> batch;
+            {
+                std::lock_guard<std::mutex> queueLock(m_queueMutex);
+                std::swap(batch, m_messageQueue);
+            }
+            for (; !batch.empty(); batch.pop())
+            {
+                DispatchToSinksLocked(batch.front());
+            }
+        };
+
         while (true)
         {
-            std::queue<LogMessage> batch;
-
             {
                 std::unique_lock<std::mutex> lock(m_queueMutex);
                 m_queueCV.wait(lock, [this]
                                { return !m_messageQueue.empty() || m_stopThread.load(std::memory_order_acquire); });
-
-                // Drain the entire queue into a local batch
-                std::swap(batch, m_messageQueue);
             }
 
-            // Dispatch all messages outside the queue lock
-            while (!batch.empty())
-            {
-                DispatchToSinks(batch.front());
-                batch.pop();
-            }
+            writeQueuedBatch();
 
-            // Check stop condition after draining
             if (m_stopThread.load(std::memory_order_acquire))
             {
-                // Final drain
-                std::queue<LogMessage> finalBatch;
-                {
-                    std::lock_guard<std::mutex> lock(m_queueMutex);
-                    std::swap(finalBatch, m_messageQueue);
-                }
-                while (!finalBatch.empty())
-                {
-                    DispatchToSinks(finalBatch.front());
-                    finalBatch.pop();
-                }
+                // Final drain: a Log() that passed its initialized check before
+                // Shutdown() may have enqueued after the batch above.
+                writeQueuedBatch();
                 break;
             }
         }
@@ -536,10 +635,16 @@ namespace Spark
     void Logger::DispatchToSinks(const LogMessage& msg)
     {
         std::lock_guard<std::mutex> lock(m_sinkMutex);
+        DispatchToSinksLocked(msg);
+    }
+
+    void Logger::DispatchToSinksLocked(const LogMessage& msg)
+    {
         for (auto& sink : m_sinks)
         {
             sink->Write(msg);
         }
+        m_sinksDirty.store(true, std::memory_order_release);
     }
 
     // ============================================================================
@@ -721,8 +826,10 @@ namespace Spark
         m_file << formatted;
         m_currentFileSize += formatted.size();
 
-        // Auto-flush on Error/Fatal
-        if (msg.level >= LogLevel::Error)
+        // Warn and above reach the OS before Log() returns, so a crash or a
+        // force-kill right after one cannot lose it. Lower levels are flushed by
+        // the Logger's periodic flush thread (see the flush policy in Logger.h).
+        if (msg.level >= LogLevel::Warn)
         {
             m_file.flush();
         }

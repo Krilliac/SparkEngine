@@ -322,6 +322,13 @@ Per-category overrides (set to empty string to inherit `GlobalLevel`):
 
 `CoreLevel`, `GraphicsLevel`, `PhysicsLevel`, `AudioLevel`, `AILevel`, `AnimationLevel`, `ECSLevel`, `NetworkLevel`, `InputLevel`, `ScriptingLevel`, `SceneLevel`, `SaveLevel`, `CinematicLevel`, `ProceduralLevel`, `EditorLevel`, `GameLevel`
 
+**Log file flush policy** (`Utils/Logger.h`): the log tail must survive a crash or a force-kill, so
+`Warn`/`Error`/`Fatal` lines are flushed to the OS before `Log()` returns; lower levels are flushed by a
+Logger-owned thread within `Logger::kPeriodicFlushInterval` (100 ms); the crash handler calls
+`Logger::FlushForCrash()` (bounded try-lock waits) before writing its dump; `Shutdown()` flushes every sink.
+A force-killed run therefore loses at most the last ~100 ms of Trace/Debug/Info lines. Per-line flushing
+was measured at ~3.5 us/line against ~0.5 us buffered, which is why Info is interval-flushed.
+
 ---
 
 ## Console Commands
