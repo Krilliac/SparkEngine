@@ -27,6 +27,7 @@ MSVC = ROOT / ".github" / "workflows" / "msvc.yml"
 OPERATIONS = ROOT / ".github" / "workflows" / "operations-scheduled.yml"
 GPU_CERTIFICATION = ROOT / ".github" / "workflows" / "gpu-certification.yml"
 SCORECARD = ROOT / ".github" / "workflows" / "scorecard.yml"
+TEST_REPORT = ROOT / ".github" / "workflows" / "test-report.yml"
 CODEQL_ACTION_SHA = "cdf488f595d80d6e07e03d4674febd5ab45fa938"
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 
@@ -380,6 +381,33 @@ class WorkflowPrivilegeBoundaryTests(unittest.TestCase):
                     if str(step.get("uses", "")).startswith("actions/checkout@"):
                         self.assertEqual(step["with"]["persist-credentials"], False)
         _assert_full_sha_pins(self, text)
+
+    def test_test_report_reads_exact_source_artifacts_and_runs_no_repository_code(self) -> None:
+        text = TEST_REPORT.read_text(encoding="utf-8")
+        report = _block(text, "report", 2)
+
+        self.assertIn('workflows: ["Build SparkEngine"]', text)
+        self.assertIn("types: [completed]", text)
+        self.assertIsNone(re.search(r"^\s*pull_request(?:_target)?:", text, flags=re.MULTILINE))
+        self.assertIn("\npermissions: {}\n", text)
+        self.assertIn("github.event.workflow_run.path == '.github/workflows/build.yml'", report)
+        self.assertEqual(
+            _permissions(report),
+            {"actions": "read", "checks": "write", "contents": "read", "pull-requests": "write"},
+        )
+        # Untrusted JUnit data only: nothing from the source commit is checked out or executed.
+        self.assertNotIn("actions/checkout@", report)
+        self.assertIsNone(re.search(r"^\s*-?\s*run:", report, flags=re.MULTILINE))
+        self.assertIn("run-id: ${{ github.event.workflow_run.id }}", report)
+        self.assertIn("repository: ${{ github.repository }}", report)
+        # Fork PRs are only found by search, and the base delta needs the head commit build mode.
+        self.assertIn("search_pull_requests: true", report)
+        self.assertIn("pull_request_build: commit", report)
+        self.assertIn("commit: ${{ github.event.workflow_run.head_sha }}", report)
+        self.assertRegex(
+            report,
+            r"uses: docker://ghcr\.io/enricomi/publish-unit-test-result-action@sha256:[0-9a-f]{64}\n",
+        )
 
 
 if __name__ == "__main__":

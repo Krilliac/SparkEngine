@@ -1,0 +1,61 @@
+# Posts the Build SparkEngine test results (the JUnit files its test lanes
+# upload as test-results-* artifacts) as a "Test results" check run and a PR
+# comment: totals, failures with their messages, and the change since the base
+# commit. It runs on workflow_run, in the base repository's context, so it can
+# comment on a fork PR. It never checks out or runs repository code: the JUnit
+# files are untrusted data, read only by the digest-pinned publisher image.
+name: Test report
+
+on: # zizmor: ignore[dangerous-triggers] -- reads artifacts only, never checks out or runs PR code
+  workflow_run:
+    workflows: ["Build SparkEngine"]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  report:
+    if: >-
+      github.event.workflow_run.path == '.github/workflows/build.yml' &&
+      github.event.workflow_run.conclusion != 'skipped' &&
+      github.event.workflow_run.conclusion != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: test-report-${{ github.event.workflow_run.id }}
+      cancel-in-progress: true
+    permissions:
+      actions: read # download the source run's artifacts
+      checks: write # the Test results check run
+      contents: read
+      pull-requests: write # the PR comment
+    steps:
+    - name: Download exact source-run test results
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      with:
+        pattern: test-results-*
+        path: results
+        repository: ${{ github.repository }}
+        run-id: ${{ github.event.workflow_run.id }}
+        github-token: ${{ github.token }}
+
+    # The image of EnricoMi/publish-unit-test-result-action v2.25.0, pinned by
+    # digest: the action's own action.yml names the image by its mutable tag.
+    - name: Publish test results
+      uses: docker://ghcr.io/enricomi/publish-unit-test-result-action@sha256:c94dd210d38e0b4cbed1e3812faf17893823a3dd6385759252af3bbe152a810d
+      with:
+        github_token: ${{ github.token }}
+        commit: ${{ github.event.workflow_run.head_sha }}
+        # commit is the PR head, not a merge commit, so compare against the
+        # merge base; the default (merge) yields no base delta on workflow_run.
+        pull_request_build: commit
+        # A fork PR is not listed under its head commit, so find the PR by search.
+        search_pull_requests: true
+        # The macOS and VS2026 lanes are advisory (continue-on-error); their
+        # failures must not paint this check red under a green required gate.
+        junit_files: |
+          results/**/*junit*.xml
+          !results/test-results-macos-*/**
+          !results/test-results-windows-vs2026-*/**
+        check_name: Test results
+        comment_mode: always
