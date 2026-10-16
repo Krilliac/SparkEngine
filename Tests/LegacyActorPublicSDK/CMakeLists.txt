@@ -92,6 +92,13 @@ actor_public_consumer(spark_legacy_actor_host)
 # engine archive here makes accidental test-side replacement implementations
 # unable to satisfy the module's required real engine symbols.
 target_link_libraries(spark_legacy_actor_host PRIVATE ${CMAKE_DL_LIBS})
+# UBSan's vptr check references the typeinfo of every polymorphic type the host
+# touches, and typeinfo for GameObject is emitted only in the engine archive the
+# host deliberately does not link. Drop that one check here; the module, which
+# links the real engine, keeps it.
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang" AND CMAKE_CXX_FLAGS MATCHES "-fsanitize=[^ ]*undefined")
+    target_compile_options(spark_legacy_actor_host PRIVATE -fno-sanitize=vptr)
+endif()
 if(WIN32)
     target_link_libraries(spark_legacy_actor_host PRIVATE d3d11)
 endif()
