@@ -100,6 +100,10 @@ class ManifestSyncHarness(unittest.TestCase):
         self.git_run("config", "user.email", "test@example.invalid")
         self.git_run("config", "user.name", "Manifest Sync Test")
         self.git_run("config", "commit.gpgsign", "false")
+        # LargeDiffTests commits thousands of objects, which can trip auto-gc; its
+        # detached background run kept writing .git while the temp dir was removed.
+        self.git_run("config", "gc.auto", "0")
+        self.git_run("config", "maintenance.auto", "false")
         self.git_run("add", "-A")
         self.git_run("commit", "-q", "-m", "baseline")
 
