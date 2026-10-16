@@ -4121,7 +4121,11 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
     # The build-directory hash keeps separate worktrees/configurations isolated.
     string(MD5 _spark_mod310_build_id "${CMAKE_BINARY_DIR}")
     string(SUBSTRING "${_spark_mod310_build_id}" 0 8 _spark_mod310_build_id)
-    set(_spark_mod310_test_root "$ENV{TEMP}/m310-${_spark_mod310_build_id}")
+    # Resolve TEMP once: hosted runners hand out an 8.3 short path (RUNNER~1),
+    # which the installed-asset reparse-boundary check would otherwise see as a
+    # lexical root that resolves elsewhere.
+    file(REAL_PATH "$ENV{TEMP}" _spark_mod310_temp)
+    set(_spark_mod310_test_root "${_spark_mod310_temp}/m310-${_spark_mod310_build_id}")
 
     # The nested package project also runs CMake try-compiles. Prefer the
     # bundled Ninja binary over a nested Visual Studio project so those probes
