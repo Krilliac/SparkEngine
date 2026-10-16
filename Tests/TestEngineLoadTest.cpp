@@ -988,7 +988,11 @@ TEST(LoadTest_Severe_EventBusStorm)
               << std::flush;
 
     EXPECT_EQ(totalDelivered.load(), expected);
+#if !defined(SPARK_TEST_SANITIZER_BUILD) || !SPARK_TEST_SANITIZER_BUILD
+    // Sanitizer instrumentation alone puts this 2-7x over budget (MSan: 11-35 s),
+    // so the time limit only applies to uninstrumented builds.
     EXPECT_TRUE(totalMs < 5000.0); // < 5 seconds for 5M deliveries
+#endif
 }
 
 // ============================================================================

@@ -113,6 +113,7 @@ cmake -B build \
   -DBUILD_TESTS=ON \
   -DENABLE_SDL2=OFF \
   -DENABLE_VULKAN=OFF \
+  -DCMAKE_DISABLE_FIND_PACKAGE_Freetype=ON \
   -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
   -DCMAKE_CXX_FLAGS="-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -stdlib=libc++ -nostdinc++ -isystem $PREFIX/include/c++/v1 -fsanitize-ignorelist=$(pwd)/Tests/msan_ignorelist.txt" \
   -DCMAKE_C_FLAGS="-fsanitize=memory -fsanitize-memory-track-origins=2 -fsanitize-recover=memory -fno-omit-frame-pointer -fsanitize-ignorelist=$(pwd)/Tests/msan_ignorelist.txt" \
@@ -125,6 +126,8 @@ cd ..
 ```
 
 The job stays `continue-on-error` (advisory) until a run classifies clean with the instrumented runtime; `Tests/TestMSanCanary.cpp` is designed to fail RED if the linked libc++ is not instrumented (RED proof pending the first run), and a failure before the tests run is labelled `infrastructure stage '<stage>' failed` in `ci-errors-linux-msan`. Practically, reproduce it only when CI flags a real MSan finding.
+
+Every library linked into the MSan binary must be instrumented, and the distro `libfreetype` is not, so the job disables ImGui's optional FreeType rasterizer (`CMAKE_DISABLE_FIND_PACKAGE_Freetype=ON`; `cmake/BuildImGui.cmake` then falls back to stb_truetype). With FreeType linked, every editor font-atlas build aborted the run with a use-of-uninitialized-value report in `FT_New_Memory_Face`. Wall-clock budgets in `Tests/TestEngineLoadTest.cpp` are likewise skipped under `SPARK_TEST_SANITIZER_BUILD`, because the instrumentation alone exceeds them.
 
 ## Windows MSVC VS 2022 (v143) — Debug + Release (job `build-windows-vs2022`)
 
