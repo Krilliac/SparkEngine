@@ -2645,7 +2645,8 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
         start = workflow.index("    - name: Collect release assets")
         end = workflow.index("\n    - name:", start + 1)
         script = textwrap.dedent(workflow[start:end].split("run: |\n", 1)[1])
-        script = script.replace("${{ needs.prepare.outputs.is_versioned }}", "false")
+        self.assertNotIn("${{ needs.", script)
+        self.assertNotIn("${{ matrix.", script)
         aliases = {}
         for config in ("Debug", "Release"):
             aliases[f"SparkEngine-Windows-x64-{config}.zip"] = (
@@ -2863,10 +2864,13 @@ class ReleaseWorkflowPreflightTests(unittest.TestCase):
         self.assertIn("--expected-assets-file", complete_step)
         self.assertIn("--expected-digests-file", complete_step)
         completed_commit_step = text[completed_commit:final_state_check]
+        self.assertIn('EXPECTED_STAGED="${STEPS_BADGE_STAGED_COMMIT_OUTPUTS_STAGED_COMMIT}"', completed_commit_step)
         self.assertIn(
-            'EXPECTED_STAGED="${{ steps.badge-staged-commit.outputs.staged_commit }}"',
+            "STEPS_BADGE_STAGED_COMMIT_OUTPUTS_STAGED_COMMIT: "
+            "${{ steps.badge-staged-commit.outputs.staged_commit }}",
             completed_commit_step,
         )
+        self.assertNotIn("${{ steps.", completed_commit_step.split("run: |", 1)[1])
         self.assertIn(".github/badges/downloads-data.json", completed_commit_step)
         self.assertIn(".github/badges/downloads.json", completed_commit_step)
         self.assertIn(".github/badges/installer-downloads.json", completed_commit_step)

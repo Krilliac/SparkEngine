@@ -5,9 +5,9 @@
 name: "CodeQL Trusted Reporter"
 
 on:
-  pull_request_target:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] -- this job has no checkout and only posts a pending marker comment via github-script; no PR code is read or run
     types: [opened, synchronize, reopened]
-  workflow_run:
+  workflow_run: # zizmor: ignore[dangerous-triggers] -- checks out only the default branch (SHA attested); SARIF is downloaded outside the checkout and parsed as data, never executed
     workflows: ["CodeQL Advanced"]
     types: [in_progress, completed]
 

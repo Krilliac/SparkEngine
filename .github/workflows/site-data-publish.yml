@@ -1,7 +1,7 @@
 name: Publish Repository Site Data
 
 on:
-  workflow_run:
+  workflow_run: # zizmor: ignore[dangerous-triggers] -- checks out only Working (SHA attested against the validated run); evidence artifacts are verified data, no PR-head code runs
     workflows: ["Build SparkEngine"]
     branches: [Working]
     types: [completed]
@@ -193,13 +193,15 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags origin Working:refs/remotes/origin/Working
-          if test "${{ steps.latest-run.outputs.latest }}" = true && \
+          if test "${STEPS_LATEST_RUN_OUTPUTS_LATEST}" = true && \
              test "$SOURCE_COMMIT" = "$(git rev-parse refs/remotes/origin/Working)"; then
             echo "publish=true" >> "$GITHUB_OUTPUT"
           else
             echo "publish=false" >> "$GITHUB_OUTPUT"
             echo "Skipping superseded commit $SOURCE_COMMIT"
           fi
+        env:
+          STEPS_LATEST_RUN_OUTPUTS_LATEST: ${{ steps.latest-run.outputs.latest }}
 
       - name: Verify exact staged Build job and attempt evidence
         id: staged-build

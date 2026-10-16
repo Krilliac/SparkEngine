@@ -204,7 +204,9 @@ jobs:
 
     - name: Configure Windows stable validation
       if: needs.prepare.outputs.is_versioned == 'true'
-      run: cmake --preset windows-release -DSPARK_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}"
+      run: cmake --preset windows-release -DSPARK_ENGINE_VERSION="$env:NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION"
+      env:
+        NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION: ${{ needs.prepare.outputs.cmake_version }}
 
     - name: Build Windows stable validation
       if: needs.prepare.outputs.is_versioned == 'true'
@@ -218,13 +220,17 @@ jobs:
       if: needs.prepare.outputs.is_versioned == 'true'
       # Preserve the authoritative Shipping feature surface, including BUILD_TESTS=OFF.
       # The separate Release tree above supplies validation; only this tree is packaged.
-      run: cmake --preset windows-shipping -DSPARK_REQUIRE_WINDOWS_INSTALLERS=ON -DSPARK_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}" -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/stage"
+      run: cmake --preset windows-shipping -DSPARK_REQUIRE_WINDOWS_INSTALLERS=ON -DSPARK_ENGINE_VERSION="$env:NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION" -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/stage"
+      env:
+        NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION: ${{ needs.prepare.outputs.cmake_version }}
 
     - name: Configure CMake
       if: needs.prepare.outputs.is_versioned == 'false'
       # SPARK_REQUIRE_WINDOWS_INSTALLERS turns a missing makensis/WiX toolchain into
       # a configure error here, so the release cannot quietly produce a ZIP only.
-      run: cmake -B build -G "Visual Studio 17 2022" -A x64 -T v143 -DBUILD_TESTS=ON -DSPARK_STRICT_DEPS=ON -DSPARK_REQUIRE_WINDOWS_INSTALLERS=ON -DSPARK_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}" -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/stage"
+      run: cmake -B build -G "Visual Studio 17 2022" -A x64 -T v143 -DBUILD_TESTS=ON -DSPARK_STRICT_DEPS=ON -DSPARK_REQUIRE_WINDOWS_INSTALLERS=ON -DSPARK_ENGINE_VERSION="$env:NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION" -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/stage"
+      env:
+        NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION: ${{ needs.prepare.outputs.cmake_version }}
 
     - name: Build
       run: cmake --build ${{ matrix.build_dir }} --config ${{ matrix.config }} --parallel
@@ -240,12 +246,14 @@ jobs:
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         cmake -S Tests/PackageSmoke -B smoke-build -G "Visual Studio 17 2022" -A x64 -T v143 `
           -DSparkEngine_DIR="${{ github.workspace }}/stage/lib/cmake/SparkEngine" `
-          -DSPARK_EXPECTED_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}"
+          -DSPARK_EXPECTED_ENGINE_VERSION="$env:NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         cmake --build smoke-build --config ${{ matrix.config }} --parallel
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         ctest --test-dir smoke-build -C ${{ matrix.config }} --output-on-failure --no-tests=error
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      env:
+        NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION: ${{ needs.prepare.outputs.cmake_version }}
 
     - name: Build every template against the installed SDK
       shell: pwsh
@@ -456,10 +464,11 @@ jobs:
       env:
         SPARK_RELEASE_SIGNER_THUMBPRINT: ${{ vars.SPARK_RELEASE_SIGNER_THUMBPRINT }}
         SPARK_RELEASE_TRUST_MODEL: ${{ vars.SPARK_RELEASE_TRUST_MODEL }}
+        NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION: ${{ needs.prepare.outputs.cmake_version }}
       run: |
         python .github/scripts/verify-windows-package-signatures.py `
           --packages "${{ github.workspace }}/${{ matrix.build_dir }}/packages" `
-          --version "${{ needs.prepare.outputs.cmake_version }}" --source-sha "${{ github.sha }}" `
+          --version "$env:NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION" --source-sha "${{ github.sha }}" `
           --report "${{ github.workspace }}/signature-verification/result.json"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -578,7 +587,7 @@ jobs:
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         # REL-100: every packaged Spark executable, the archive name and the SDK
         # ConfigVersion embed exactly the release version.
-        python tools/verify_package_versions.py --version "${{ needs.prepare.outputs.cmake_version }}" "$($archives[0].FullName)"
+        python tools/verify_package_versions.py --version "$env:NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION" "$($archives[0].FullName)"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         Remove-Item -LiteralPath ${{ matrix.build_dir }}/packages/_CPack_Packages -Recurse -Force -ErrorAction SilentlyContinue
         $extractRoot = Join-Path "${{ github.workspace }}" "package-extract"
@@ -597,7 +606,7 @@ jobs:
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         cmake -DSPARK_PACKAGE_ROOT="$packageRoot" -DSPARK_PACKAGE_PROFILE=${{ matrix.profile }} -DSPARK_EXECUTABLE_SUFFIX:STRING=.exe -P cmake/ValidateStagedPackageExecutables.cmake
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        cmake -S Tests/PackageSmoke -B package-smoke-build -G "Visual Studio 17 2022" -A x64 -T v143 -DSparkEngine_DIR="$packageRoot/lib/cmake/SparkEngine" -DSPARK_EXPECTED_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}"
+        cmake -S Tests/PackageSmoke -B package-smoke-build -G "Visual Studio 17 2022" -A x64 -T v143 -DSparkEngine_DIR="$packageRoot/lib/cmake/SparkEngine" -DSPARK_EXPECTED_ENGINE_VERSION="$env:NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         cmake --build package-smoke-build --config ${{ matrix.config }} --parallel
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -615,6 +624,8 @@ jobs:
           -DSPARK_CMAKE_GENERATOR_TOOLSET=v143 `
           -P cmake/VerifyInstalledTemplates.cmake
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      env:
+        NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION: ${{ needs.prepare.outputs.cmake_version }}
 
     - name: Upload CPack failure diagnostics
       if: failure()
@@ -633,10 +644,11 @@ jobs:
       env:
         SPARK_RELEASE_SIGNER_THUMBPRINT: ${{ vars.SPARK_RELEASE_SIGNER_THUMBPRINT }}
         SPARK_RELEASE_TRUST_MODEL: ${{ vars.SPARK_RELEASE_TRUST_MODEL }}
+        NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION: ${{ needs.prepare.outputs.cmake_version }}
       run: |
         python .github/scripts/verify-windows-package-signatures.py --check-hashes `
           --packages "${{ github.workspace }}/${{ matrix.build_dir }}/packages" `
-          --version "${{ needs.prepare.outputs.cmake_version }}" --source-sha "${{ github.sha }}" `
+          --version "$env:NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION" --source-sha "${{ github.sha }}" `
           --report "${{ github.workspace }}/signature-verification/result.json"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -695,12 +707,14 @@ jobs:
       run: |
         python tools/release_build_provenance.py record `
           --source-root "${{ github.workspace }}" --source-sha "${{ github.sha }}" `
-          --version "${{ needs.prepare.outputs.cmake_version }}" --profile "${{ matrix.profile }}" `
+          --version "$env:NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION" --profile "${{ matrix.profile }}" `
           --platform Windows --configuration "${{ matrix.config }}" `
           --build-dir "${{ github.workspace }}/${{ matrix.build_dir }}" `
           --packages "${{ github.workspace }}/${{ matrix.build_dir }}/packages" `
           --out "${{ github.workspace }}/build-provenance/build-provenance-Windows-${{ matrix.config }}.json"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      env:
+        NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION: ${{ needs.prepare.outputs.cmake_version }}
 
     - name: Upload build provenance record
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -738,6 +752,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
 
     - name: Install dependencies
       run: |
@@ -747,13 +762,16 @@ jobs:
     - name: Configure CMake
       run: |
         cmake -B build \
-          -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
+          -DCMAKE_BUILD_TYPE=${MATRIX_CONFIG} \
           -DBUILD_TESTS=ON \
           -DSPARK_STRICT_DEPS=ON \
-          -DSPARK_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}" \
+          -DSPARK_ENGINE_VERSION="${NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION}" \
           -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/stage" \
           -DCMAKE_C_COMPILER=gcc-14 \
           -DCMAKE_CXX_COMPILER=g++-14
+      env:
+        MATRIX_CONFIG: ${{ matrix.config }}
+        NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION: ${{ needs.prepare.outputs.cmake_version }}
 
     - name: Build
       run: cmake --build build --parallel $(nproc)
@@ -774,13 +792,16 @@ jobs:
       run: |
         cmake --install build
         cmake -S Tests/PackageSmoke -B smoke-build \
-          -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
+          -DCMAKE_BUILD_TYPE=${MATRIX_CONFIG} \
           -DCMAKE_C_COMPILER=gcc-14 \
           -DCMAKE_CXX_COMPILER=g++-14 \
           -DSparkEngine_DIR="${{ github.workspace }}/stage/lib/cmake/SparkEngine" \
-          -DSPARK_EXPECTED_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}"
+          -DSPARK_EXPECTED_ENGINE_VERSION="${NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION}"
         cmake --build smoke-build --parallel $(nproc)
         ctest --test-dir smoke-build --output-on-failure --no-tests=error
+      env:
+        MATRIX_CONFIG: ${{ matrix.config }}
+        NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION: ${{ needs.prepare.outputs.cmake_version }}
 
     - name: Build every template against the installed SDK
       run: |
@@ -790,11 +811,13 @@ jobs:
           -DSPARK_TEMPLATE_BUILD_ROOT="${{ github.workspace }}/template-smoke-build" \
           -DSPARK_ENGINE_DIR="${{ github.workspace }}/stage/lib/cmake/SparkEngine" \
           -DSPARK_ENGINE_EXECUTABLE="${{ github.workspace }}/stage/bin/SparkEngine" \
-          -DSPARK_TEMPLATE_CONFIG=${{ matrix.config }} \
+          -DSPARK_TEMPLATE_CONFIG=${MATRIX_CONFIG} \
           "-DSPARK_CMAKE_GENERATOR=Unix Makefiles" \
           -DSPARK_C_COMPILER=gcc-14 \
           -DSPARK_CXX_COMPILER=g++-14 \
           -P cmake/VerifyInstalledTemplates.cmake
+      env:
+        MATRIX_CONFIG: ${{ matrix.config }}
 
     - name: Validate staged package executable BOM
       run: |
@@ -809,12 +832,16 @@ jobs:
         set -euo pipefail
         mkdir -p package-reconciliation
         python3 tools/generate-sbom.py reconcile --install-manifest build/install_manifest.txt \
-          --json-report "package-reconciliation/reconcile-Linux-${{ matrix.config }}.json"
-        test -f "package-reconciliation/reconcile-Linux-${{ matrix.config }}.json"
+          --json-report "package-reconciliation/reconcile-Linux-${MATRIX_CONFIG}.json"
+        test -f "package-reconciliation/reconcile-Linux-${MATRIX_CONFIG}.json"
+      env:
+        MATRIX_CONFIG: ${{ matrix.config }}
 
     - name: Generate CPack packages
       run: |
-        cpack --config build/CPackConfig.cmake -C ${{ matrix.config }} -B build/packages
+        cpack --config build/CPackConfig.cmake -C ${MATRIX_CONFIG} -B build/packages
+      env:
+        MATRIX_CONFIG: ${{ matrix.config }}
 
     - name: Extract and smoke-test portable package
       run: |
@@ -843,7 +870,7 @@ jobs:
           --stage-root "${{ github.workspace }}/stage" \
           --archive "$archive"
         cmake -DSPARK_PACKAGE_ROOT="$package_root" -P cmake/ValidateStagedPackageExecutables.cmake
-        cmake -S Tests/PackageSmoke -B package-smoke-build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 -DSparkEngine_DIR="$package_root/lib/cmake/SparkEngine" -DSPARK_EXPECTED_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}"
+        cmake -S Tests/PackageSmoke -B package-smoke-build -DCMAKE_BUILD_TYPE=${MATRIX_CONFIG} -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 -DSparkEngine_DIR="$package_root/lib/cmake/SparkEngine" -DSPARK_EXPECTED_ENGINE_VERSION="${NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION}"
         cmake --build package-smoke-build --parallel $(nproc)
         ctest --test-dir package-smoke-build --output-on-failure --no-tests=error
         cmake \
@@ -852,19 +879,24 @@ jobs:
           -DSPARK_TEMPLATE_BUILD_ROOT="${{ github.workspace }}/package-template-smoke-build" \
           -DSPARK_ENGINE_DIR="$package_root/lib/cmake/SparkEngine" \
           -DSPARK_ENGINE_EXECUTABLE="$package_root/bin/SparkEngine" \
-          -DSPARK_TEMPLATE_CONFIG=${{ matrix.config }} \
+          -DSPARK_TEMPLATE_CONFIG=${MATRIX_CONFIG} \
           "-DSPARK_CMAKE_GENERATOR=Unix Makefiles" \
           -DSPARK_C_COMPILER=gcc-14 \
           -DSPARK_CXX_COMPILER=g++-14 \
           -P cmake/VerifyInstalledTemplates.cmake
+      env:
+        MATRIX_CONFIG: ${{ matrix.config }}
+        NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION: ${{ needs.prepare.outputs.cmake_version }}
 
     - name: Reconcile final package inventories with the source lock
       run: |
         set -euo pipefail
         python3 tools/release_package_reconciliation.py record \
           --packages build/packages --source-root . --source-sha "${{ github.sha }}" \
-          --platform Linux --configuration "${{ matrix.config }}" \
-          --report "final-package-reconciliation/reconcile-Linux-${{ matrix.config }}.json"
+          --platform Linux --configuration "${MATRIX_CONFIG}" \
+          --report "final-package-reconciliation/reconcile-Linux-${MATRIX_CONFIG}.json"
+      env:
+        MATRIX_CONFIG: ${{ matrix.config }}
 
     - name: Upload package reconciliation report
       if: always()
@@ -879,10 +911,13 @@ jobs:
       run: |
         python3 tools/release_build_provenance.py record \
           --source-root . --source-sha "${{ github.sha }}" \
-          --version "${{ needs.prepare.outputs.cmake_version }}" --profile default \
-          --platform Linux --configuration "${{ matrix.config }}" \
+          --version "${NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION}" --profile default \
+          --platform Linux --configuration "${MATRIX_CONFIG}" \
           --build-dir build --packages build/packages \
-          --out "build-provenance/build-provenance-Linux-${{ matrix.config }}.json"
+          --out "build-provenance/build-provenance-Linux-${MATRIX_CONFIG}.json"
+      env:
+        NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION: ${{ needs.prepare.outputs.cmake_version }}
+        MATRIX_CONFIG: ${{ matrix.config }}
 
     - name: Upload build provenance record
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -918,6 +953,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
 
     - name: Install dependencies
       run: |
@@ -927,7 +963,7 @@ jobs:
     - name: Configure CMake
       run: |
         cmake -B build \
-          -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
+          -DCMAKE_BUILD_TYPE=${MATRIX_CONFIG} \
           -DBUILD_TESTS=ON \
           -DSPARK_STRICT_DEPS=ON \
           -DENABLE_LTO=OFF \
@@ -936,9 +972,12 @@ jobs:
           -DENABLE_OPENGL=ON \
           -DENABLE_METAL=OFF \
           -DENABLE_DXR=OFF \
-          -DSPARK_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}" \
+          -DSPARK_ENGINE_VERSION="${NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION}" \
           -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/stage" \
           -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3
+      env:
+        MATRIX_CONFIG: ${{ matrix.config }}
+        NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION: ${{ needs.prepare.outputs.cmake_version }}
 
     - name: Build
       run: cmake --build build --parallel $(sysctl -n hw.logicalcpu)
@@ -950,11 +989,14 @@ jobs:
       run: |
         cmake --install build
         cmake -S Tests/PackageSmoke -B smoke-build \
-          -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
+          -DCMAKE_BUILD_TYPE=${MATRIX_CONFIG} \
           -DSparkEngine_DIR="${{ github.workspace }}/stage/lib/cmake/SparkEngine" \
-          -DSPARK_EXPECTED_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}"
+          -DSPARK_EXPECTED_ENGINE_VERSION="${NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION}"
         cmake --build smoke-build --parallel $(sysctl -n hw.logicalcpu)
         ctest --test-dir smoke-build --output-on-failure --no-tests=error
+      env:
+        MATRIX_CONFIG: ${{ matrix.config }}
+        NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION: ${{ needs.prepare.outputs.cmake_version }}
 
     - name: Build every template against the installed SDK
       run: |
@@ -964,9 +1006,11 @@ jobs:
           -DSPARK_TEMPLATE_BUILD_ROOT="${{ github.workspace }}/template-smoke-build" \
           -DSPARK_ENGINE_DIR="${{ github.workspace }}/stage/lib/cmake/SparkEngine" \
           -DSPARK_ENGINE_EXECUTABLE="${{ github.workspace }}/stage/bin/SparkEngine" \
-          -DSPARK_TEMPLATE_CONFIG=${{ matrix.config }} \
+          -DSPARK_TEMPLATE_CONFIG=${MATRIX_CONFIG} \
           "-DSPARK_CMAKE_GENERATOR=Unix Makefiles" \
           -P cmake/VerifyInstalledTemplates.cmake
+      env:
+        MATRIX_CONFIG: ${{ matrix.config }}
 
     - name: Validate staged package executable BOM
       run: |
@@ -981,11 +1025,15 @@ jobs:
         set -euo pipefail
         mkdir -p package-reconciliation
         python3 tools/generate-sbom.py reconcile --install-manifest build/install_manifest.txt \
-          --json-report "package-reconciliation/reconcile-macOS-${{ matrix.config }}.json"
-        test -f "package-reconciliation/reconcile-macOS-${{ matrix.config }}.json"
+          --json-report "package-reconciliation/reconcile-macOS-${MATRIX_CONFIG}.json"
+        test -f "package-reconciliation/reconcile-macOS-${MATRIX_CONFIG}.json"
+      env:
+        MATRIX_CONFIG: ${{ matrix.config }}
 
     - name: Generate CPack packages
-      run: cpack --config build/CPackConfig.cmake -C ${{ matrix.config }} -B build/packages
+      run: cpack --config build/CPackConfig.cmake -C ${MATRIX_CONFIG} -B build/packages
+      env:
+        MATRIX_CONFIG: ${{ matrix.config }}
 
     - name: Extract and smoke-test portable package
       run: |
@@ -1014,7 +1062,7 @@ jobs:
           --stage-root "${{ github.workspace }}/stage" \
           --archive "$archive"
         cmake -DSPARK_PACKAGE_ROOT="$package_root" -P cmake/ValidateStagedPackageExecutables.cmake
-        cmake -S Tests/PackageSmoke -B package-smoke-build -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DSparkEngine_DIR="$package_root/lib/cmake/SparkEngine" -DSPARK_EXPECTED_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}"
+        cmake -S Tests/PackageSmoke -B package-smoke-build -DCMAKE_BUILD_TYPE=${MATRIX_CONFIG} -DSparkEngine_DIR="$package_root/lib/cmake/SparkEngine" -DSPARK_EXPECTED_ENGINE_VERSION="${NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION}"
         cmake --build package-smoke-build --parallel $(sysctl -n hw.logicalcpu)
         ctest --test-dir package-smoke-build --output-on-failure --no-tests=error
         cmake \
@@ -1023,17 +1071,22 @@ jobs:
           -DSPARK_TEMPLATE_BUILD_ROOT="${{ github.workspace }}/package-template-smoke-build" \
           -DSPARK_ENGINE_DIR="$package_root/lib/cmake/SparkEngine" \
           -DSPARK_ENGINE_EXECUTABLE="$package_root/bin/SparkEngine" \
-          -DSPARK_TEMPLATE_CONFIG=${{ matrix.config }} \
+          -DSPARK_TEMPLATE_CONFIG=${MATRIX_CONFIG} \
           "-DSPARK_CMAKE_GENERATOR=Unix Makefiles" \
           -P cmake/VerifyInstalledTemplates.cmake
+      env:
+        MATRIX_CONFIG: ${{ matrix.config }}
+        NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION: ${{ needs.prepare.outputs.cmake_version }}
 
     - name: Reconcile final package inventories with the source lock
       run: |
         set -euo pipefail
         python3 tools/release_package_reconciliation.py record \
           --packages build/packages --source-root . --source-sha "${{ github.sha }}" \
-          --platform macOS --configuration "${{ matrix.config }}" \
-          --report "final-package-reconciliation/reconcile-macOS-${{ matrix.config }}.json"
+          --platform macOS --configuration "${MATRIX_CONFIG}" \
+          --report "final-package-reconciliation/reconcile-macOS-${MATRIX_CONFIG}.json"
+      env:
+        MATRIX_CONFIG: ${{ matrix.config }}
 
     - name: Upload package reconciliation report
       if: always()
@@ -1048,10 +1101,13 @@ jobs:
       run: |
         python3 tools/release_build_provenance.py record \
           --source-root . --source-sha "${{ github.sha }}" \
-          --version "${{ needs.prepare.outputs.cmake_version }}" --profile default \
-          --platform macOS --configuration "${{ matrix.config }}" \
+          --version "${NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION}" --profile default \
+          --platform macOS --configuration "${MATRIX_CONFIG}" \
           --build-dir build --packages build/packages \
-          --out "build-provenance/build-provenance-macOS-${{ matrix.config }}.json"
+          --out "build-provenance/build-provenance-macOS-${MATRIX_CONFIG}.json"
+      env:
+        NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION: ${{ needs.prepare.outputs.cmake_version }}
+        MATRIX_CONFIG: ${{ matrix.config }}
 
     - name: Upload build provenance record
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -1096,6 +1152,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Configure SparkBuild + SparkInstaller (standalone)
         shell: bash
@@ -1110,9 +1168,11 @@ jobs:
           EOF
           cmake -S build-installer -B build-installer/build \
                 -DCMAKE_BUILD_TYPE=Release \
-                -DSPARK_ENGINE_VERSION="${{ needs.prepare.outputs.cmake_version }}" \
+                -DSPARK_ENGINE_VERSION="${NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION}" \
                 -DSPARKINSTALLER_ENABLE_GUI=OFF \
                 -DSPARKINSTALLER_BUILD_TESTS=ON
+        env:
+          NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION: ${{ needs.prepare.outputs.cmake_version }}
 
       - name: Build SparkInstaller and registered contract tests
         shell: bash
@@ -1171,10 +1231,12 @@ jobs:
         run: |
           ${{ runner.os == 'Windows' && 'python' || 'python3' }} tools/release_build_provenance.py record \
             --source-root . --source-sha "${{ github.sha }}" \
-            --version "${{ needs.prepare.outputs.cmake_version }}" --profile default \
+            --version "${NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION}" --profile default \
             --platform "Installer-${{ matrix.platform_name }}" --configuration Release \
             --build-dir build-installer/build --packages staging \
             --out "build-provenance/build-provenance-Installer-${{ matrix.platform_name }}.json"
+        env:
+          NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION: ${{ needs.prepare.outputs.cmake_version }}
 
       - name: Upload build provenance record
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -1233,11 +1295,13 @@ jobs:
       # waiver was retired once the contract validated strictly; never
       # reintroduce it to make a versioned publication green.
       run: |
-        if [[ "${{ needs.prepare.outputs.version }}" == "0.9.0" ]]; then
+        if [[ "${NEEDS_PREPARE_OUTPUTS_VERSION}" == "0.9.0" ]]; then
           python3 tools/site-data/validate.py --require-predecessor-candidate
         else
           python3 tools/site-data/validate.py --require-candidate-ready
         fi
+      env:
+        NEEDS_PREPARE_OUTPUTS_VERSION: ${{ needs.prepare.outputs.version }}
 
     - name: Verify SEC-120 parser fuzz-policy closure
       # SEC-120 is release-blocking: publication must fail while any inventoried
@@ -1254,8 +1318,9 @@ jobs:
       shell: bash
       env:
         CANDIDATE_SHA: ${{ github.sha }}
+        NEEDS_PREPARE_OUTPUTS_VERSION: ${{ needs.prepare.outputs.version }}
       run: |
-        if [[ "${{ needs.prepare.outputs.version }}" == "0.9.0" ]]; then
+        if [[ "${NEEDS_PREPARE_OUTPUTS_VERSION}" == "0.9.0" ]]; then
           stage=predecessor
         else
           stage=stable-v1
@@ -1745,7 +1810,7 @@ jobs:
         # are present. Direct links cannot target a moving `nightly` tag;
         # README points users at the releases page, where the newest immutable
         # prerelease and its exact assets are discoverable.
-        if [[ "${{ needs.prepare.outputs.is_versioned }}" == "false" ]]; then
+        if [[ "$IS_VERSIONED" == "false" ]]; then
           readme_nightly_assets=(
             "SparkEngine-Windows-x64-Debug.zip"
             "SparkEngine-Windows-x64-Debug-Installer.exe"
@@ -2043,6 +2108,9 @@ jobs:
         STATE_REF: refs/tags/generated-release-counters
         EXPECTED_REMOTE_OBJECT: ${{ steps.badge-state.outputs.remote_object }}
         EXPECTED_STATE_COMMIT: ${{ steps.badge-state.outputs.state_commit }}
+        STEPS_BADGE_PREPARE_OUTPUTS_NEW_TOTAL: ${{ steps.badge-prepare.outputs.new_total }}
+        STEPS_BADGE_PREPARE_OUTPUTS_INSTALLER_TOTAL: ${{ steps.badge-prepare.outputs.installer_total }}
+        STEPS_BADGE_PREPARE_OUTPUTS_OPERATION_ID: ${{ steps.badge-prepare.outputs.operation_id }}
       run: |
         set -euo pipefail
         AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
@@ -2069,7 +2137,7 @@ jobs:
           exit 1
         fi
 
-        git commit -s -m "chore: prepare download counters (lifetime: ${{ steps.badge-prepare.outputs.new_total }}, installer: ${{ steps.badge-prepare.outputs.installer_total }}, operation: ${{ steps.badge-prepare.outputs.operation_id }}) [skip ci]"
+        git commit -s -m "chore: prepare download counters (lifetime: ${STEPS_BADGE_PREPARE_OUTPUTS_NEW_TOTAL}, installer: ${STEPS_BADGE_PREPARE_OUTPUTS_INSTALLER_TOTAL}, operation: ${STEPS_BADGE_PREPARE_OUTPUTS_OPERATION_ID}) [skip ci]"
         PENDING_COMMIT="$(git rev-parse HEAD)"
         python3 "$GITHUB_WORKSPACE/.github/scripts/guard_release_mutation.py" -- git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
           --force-with-lease="${STATE_REF}:${EXPECTED_REMOTE_OBJECT}" origin \
@@ -2555,8 +2623,8 @@ jobs:
     - name: Determine release title suffix
       id: suffix
       run: |
-        BUILD_TYPE="${{ needs.prepare.outputs.build_type }}"
-        if [[ "${{ needs.prepare.outputs.is_versioned }}" == "true" ]]; then
+        BUILD_TYPE="${NEEDS_PREPARE_OUTPUTS_BUILD_TYPE}"
+        if [[ "${NEEDS_PREPARE_OUTPUTS_IS_VERSIONED}" == "true" ]]; then
           echo "label= (Windows Shipping)" >> "$GITHUB_OUTPUT"
         elif [[ "$BUILD_TYPE" == "debug" ]]; then
           echo "label= (Debug)" >> "$GITHUB_OUTPUT"
@@ -2565,6 +2633,9 @@ jobs:
         else
           echo "label=" >> "$GITHUB_OUTPUT"
         fi
+      env:
+        NEEDS_PREPARE_OUTPUTS_BUILD_TYPE: ${{ needs.prepare.outputs.build_type }}
+        NEEDS_PREPARE_OUTPUTS_IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
 
     - name: Bind stable release tag to workflow commit
       if: needs.prepare.outputs.is_versioned == 'true'
@@ -2759,10 +2830,13 @@ jobs:
         RELEASE_POLICY_READ_TOKEN: ${{ secrets.RELEASE_POLICY_READ_TOKEN }}
         GH_TOKEN: ${{ github.token }}
         STATE_REF: refs/tags/generated-release-counters
+        STEPS_BADGE_STAGE_OUTPUTS_NEW_TOTAL: ${{ steps.badge-stage.outputs.new_total }}
+        STEPS_BADGE_STAGE_OUTPUTS_INSTALLER_TOTAL: ${{ steps.badge-stage.outputs.installer_total }}
+        SPARK_EXPECTED_PENDING_COMMIT: ${{ steps.badge-replacement-commit.outputs.pending_commit || steps.badge-cleanup-commit.outputs.pending_commit || steps.badge-pending-commit.outputs.pending_commit }}
       run: |
         set -euo pipefail
         AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
-        EXPECTED_PENDING="${{ steps.badge-replacement-commit.outputs.pending_commit || steps.badge-cleanup-commit.outputs.pending_commit || steps.badge-pending-commit.outputs.pending_commit }}"
+        EXPECTED_PENDING="${SPARK_EXPECTED_PENDING_COMMIT}"
         LOCAL_PENDING="$(git rev-parse HEAD)"
         if test "$LOCAL_PENDING" != "$EXPECTED_PENDING"; then
           echo "Badge checkout no longer points to this run's pending commit." >&2
@@ -2782,7 +2856,7 @@ jobs:
           exit 1
         fi
 
-        git commit -s -m "chore: checkpoint staged download counters (lifetime: ${{ steps.badge-stage.outputs.new_total }}, installer: ${{ steps.badge-stage.outputs.installer_total }}) [skip ci]"
+        git commit -s -m "chore: checkpoint staged download counters (lifetime: ${STEPS_BADGE_STAGE_OUTPUTS_NEW_TOTAL}, installer: ${STEPS_BADGE_STAGE_OUTPUTS_INSTALLER_TOTAL}) [skip ci]"
         STAGED_COMMIT="$(git rev-parse HEAD)"
         python3 "$GITHUB_WORKSPACE/.github/scripts/guard_release_mutation.py" -- git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
           --force-with-lease="${STATE_REF}:${EXPECTED_PENDING}" origin \
@@ -3005,6 +3079,7 @@ jobs:
         EXPECTED_ASSETS_FILE: expected-release-assets.txt
         EXPECTED_DIGESTS_FILE: expected-release-digests.txt
         SIGNATURE_BUNDLE_PATH: ${{ runner.temp }}/spark-release-signature-bundle.tar.gz
+        NEEDS_PREPARE_OUTPUTS_VERSION: ${{ needs.prepare.outputs.version }}
       run: |
         set -euo pipefail
         test -n "$RELEASE_ID"
@@ -3083,7 +3158,7 @@ jobs:
         # Re-read the release contract at the final stable publication boundary.
         # Candidate qualification preserves every technical gate without
         # claiming that publication and its independent verification are done.
-        if [[ "${{ needs.prepare.outputs.version }}" == "0.9.0" ]]; then
+        if [[ "${NEEDS_PREPARE_OUTPUTS_VERSION}" == "0.9.0" ]]; then
           BASELINE_COMMIT="$(python3 - <<'PY'
           import json
           import os
@@ -3282,10 +3357,13 @@ jobs:
         GH_TOKEN: ${{ github.token }}
         IS_VERSIONED: ${{ needs.prepare.outputs.is_versioned }}
         STATE_REF: refs/tags/generated-release-counters
+        STEPS_BADGE_STAGED_COMMIT_OUTPUTS_STAGED_COMMIT: ${{ steps.badge-staged-commit.outputs.staged_commit }}
+        STEPS_BADGE_COMPLETE_OUTPUTS_NEW_TOTAL: ${{ steps.badge-complete.outputs.new_total }}
+        STEPS_BADGE_COMPLETE_OUTPUTS_INSTALLER_TOTAL: ${{ steps.badge-complete.outputs.installer_total }}
       run: |
         set -euo pipefail
         AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
-        EXPECTED_STAGED="${{ steps.badge-staged-commit.outputs.staged_commit }}"
+        EXPECTED_STAGED="${STEPS_BADGE_STAGED_COMMIT_OUTPUTS_STAGED_COMMIT}"
         LOCAL_STAGED="$(git rev-parse HEAD)"
         if test "$LOCAL_STAGED" != "$EXPECTED_STAGED"; then
           echo "Badge checkout no longer points to this run's staged checkpoint." >&2
@@ -3314,7 +3392,7 @@ jobs:
           exit 1
         fi
 
-        git commit -s -m "chore: complete download counters (lifetime: ${{ steps.badge-complete.outputs.new_total }}, installer: ${{ steps.badge-complete.outputs.installer_total }}) [skip ci]"
+        git commit -s -m "chore: complete download counters (lifetime: ${STEPS_BADGE_COMPLETE_OUTPUTS_NEW_TOTAL}, installer: ${STEPS_BADGE_COMPLETE_OUTPUTS_INSTALLER_TOTAL}) [skip ci]"
         FINAL_COMMIT="$(git rev-parse HEAD)"
         python3 "$GITHUB_WORKSPACE/.github/scripts/guard_release_mutation.py" -- git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" push \
           --force-with-lease="${STATE_REF}:${EXPECTED_STAGED}" origin \
@@ -3336,10 +3414,11 @@ jobs:
         GH_TOKEN: ${{ github.token }}
         TRUSTED_WORKING_SHA: ${{ steps.required-ci-final.outputs.verifier_sha }}
         STATE_REF: refs/tags/generated-release-counters
+        STEPS_BADGE_FINAL_COMMIT_OUTPUTS_FINAL_COMMIT: ${{ steps.badge-final-commit.outputs.final_commit }}
       run: |
         set -euo pipefail
         AUTH_HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
-        FINAL_COMMIT="${{ steps.badge-final-commit.outputs.final_commit }}"
+        FINAL_COMMIT="${STEPS_BADGE_FINAL_COMMIT_OUTPUTS_FINAL_COMMIT}"
         if test "$(git rev-parse HEAD)" != "$FINAL_COMMIT"; then
           echo "Badge checkout no longer points to this run's finalized commit." >&2
           exit 1
@@ -3406,9 +3485,10 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
         TARGET_SHA: ${{ github.sha }}
+        NEEDS_PREPARE_OUTPUTS_VERSION: ${{ needs.prepare.outputs.version }}
       run: |
         set -euo pipefail
-        if [[ "${{ needs.prepare.outputs.version }}" == "0.9.0" ]]; then
+        if [[ "${NEEDS_PREPARE_OUTPUTS_VERSION}" == "0.9.0" ]]; then
           python3 tools/site-data/validate.py --require-predecessor-candidate
         else
           python3 tools/site-data/validate.py --require-candidate-ready

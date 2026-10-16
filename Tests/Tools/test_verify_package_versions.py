@@ -349,8 +349,11 @@ class WorkflowWiringTests(unittest.TestCase):
                     if step.get("name") == "Extract and smoke-test portable package")
         self.assertNotIn("if", step)
         self.assertNotIn("continue-on-error", step)
-        command = ('python tools/verify_package_versions.py --version "${{ needs.prepare.outputs.cmake_version }}" '
+        command = ('python tools/verify_package_versions.py --version "$env:NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION" '
                    '"$($archives[0].FullName)"\nif ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }')
+        self.assertEqual(step["env"]["NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION"],
+                         "${{ needs.prepare.outputs.cmake_version }}")
+        self.assertNotIn("${{ needs.", step["run"])
         self.assertIn(command, step["run"])
         self.assertLess(step["run"].index(command), step["run"].index("Expand-Archive"))
 

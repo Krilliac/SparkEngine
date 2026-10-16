@@ -25,6 +25,7 @@ sys.path.insert(0, str(REPO_ROOT / "tools" / "ci"))
 import run_controlled_failure_rehearsal as controlled_failure_driver  # noqa: E402
 BUILD_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "build.yml"
 RELEASE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release.yml"
+WORKFLOWS_DIR = REPO_ROOT / ".github" / "workflows"
 RELEASE_RECOVERY_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release-recovery.yml"
 LOC_COUNTER_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "loc-counter.yml"
 SITE_DATA_PUBLISH_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "site-data-publish.yml"
@@ -633,7 +634,7 @@ PROFILE_GATES_FUZZ_STEP = "Verify SEC-120 parser fuzz-policy closure"
 PROFILE_GATES_QUALIFY_STEP = "Qualify candidate and record the release qualification report"
 PROFILE_GATES_REPORT_STEP = "Retain the release qualification report"
 PROFILE_GATES_QUALIFY_RUN = (
-    'if [[ "${{ needs.prepare.outputs.version }}" == "0.9.0" ]]; then',
+    'if [[ "${NEEDS_PREPARE_OUTPUTS_VERSION}" == "0.9.0" ]]; then',
     "stage=predecessor",
     "else",
     "stage=stable-v1",
@@ -646,7 +647,7 @@ PROFILE_GATES_QUALIFY_RUN = (
 # exact validators and the version branch so neither path can be weakened by a
 # waiver, a swapped selector, or a successful no-op.
 PROFILE_GATES_READINESS_RUN = (
-    'if [[ "${{ needs.prepare.outputs.version }}" == "0.9.0" ]]; then',
+    'if [[ "${NEEDS_PREPARE_OUTPUTS_VERSION}" == "0.9.0" ]]; then',
     "python3 tools/site-data/validate.py --require-predecessor-candidate",
     "else",
     "python3 tools/site-data/validate.py --require-candidate-ready",
@@ -769,9 +770,10 @@ def profile_required_gates_job_errors(workflow: str) -> list[str]:
 
     readiness = by_name.get(PROFILE_GATES_READINESS_STEP, {})
     if (
-        set(readiness) != {"name", "if", "shell", "run"}
+        set(readiness) != {"name", "if", "shell", "env", "run"}
         or readiness.get("if") != "needs.prepare.outputs.is_versioned == 'true'"
         or readiness.get("shell") != "bash"
+        or readiness.get("env") != {"NEEDS_PREPARE_OUTPUTS_VERSION": "${{ needs.prepare.outputs.version }}"}
         or normalized_run_lines(readiness.get("run")) != list(PROFILE_GATES_READINESS_RUN)
     ):
         errors.append("profile-required-gates readiness gate must be the exact versioned-only bash step")
@@ -787,7 +789,10 @@ def profile_required_gates_job_errors(workflow: str) -> list[str]:
         set(qualify) != {"name", "if", "shell", "env", "run"}
         or qualify.get("if") != "${{ !cancelled() && needs.prepare.outputs.is_versioned == 'true' }}"
         or qualify.get("shell") != "bash"
-        or qualify.get("env") != {"CANDIDATE_SHA": "${{ github.sha }}"}
+        or qualify.get("env") != {
+            "CANDIDATE_SHA": "${{ github.sha }}",
+            "NEEDS_PREPARE_OUTPUTS_VERSION": "${{ needs.prepare.outputs.version }}",
+        }
         or normalized_run_lines(qualify.get("run")) != list(PROFILE_GATES_QUALIFY_RUN)
     ):
         errors.append("profile-required-gates must run the exact versioned-only release qualification step")
@@ -3709,6 +3714,23 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
             with self.subTest(workflow=path.name):
                 self.assertEqual(unprotected_tee_steps(workflow), [])
 
+    def test_release_and_publish_run_bodies_do_not_expand_untrusted_contexts(self) -> None:
+        # zizmor template-injection: a job output, step output, input or variable
+        # expanded inside a run script is spliced into the shell source. Each value
+        # must reach the script through a step-level env: mapping instead. Step
+        # outcome/conclusion and job result are fixed status enums, so they are exempt.
+        forbidden = re.compile(
+            r"\$\{\{\s*(?:needs|steps|inputs|vars)\.(?![\w-]+\.(?:outcome|conclusion|result)\s*\}\})"
+        )
+        for path in (RELEASE_WORKFLOW, BUILD_WORKFLOW, WORKFLOWS_DIR / "msvc.yml", WORKFLOWS_DIR / "site-data-publish.yml"):
+            document = yaml.load(path.read_text(encoding="utf-8"), Loader=UniqueKeyLoader)
+            for job_name, job in document["jobs"].items():
+                for step in job.get("steps") or []:
+                    run = step.get("run")
+                    if isinstance(run, str):
+                        with self.subTest(workflow=path.name, job=job_name, step=step.get("name")):
+                            self.assertIsNone(forbidden.search(run))
+
     def test_versioned_publication_requires_ready_release_profile(self) -> None:
         self.assertEqual(versioned_publication_gate_errors(self.release), [])
 
@@ -5401,7 +5423,10 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         for name in ("Validate external package consumption", "Extract and smoke-test portable package",
                      "Validate Windows stable runtime component layout"):
             block = named_step(windows, name)
-            lines = textwrap.dedent(block.split("run: |\n", 1)[1]).splitlines()
+            # The step-level env: mapping follows the run body, so cut the body at the
+            # next 6-space step key before dedenting.
+            body = re.split(r"(?m)^      [A-Za-z_-]+:", block.split("run: |\n", 1)[1], maxsplit=1)[0]
+            lines = textwrap.dedent(body).splitlines()
             native_ends = []
             in_native = False
             for index, line in enumerate(lines):
@@ -5608,7 +5633,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
     def test_stable_collection_excludes_nonshipping_artifacts_and_requires_complete_packages(self) -> None:
         block = named_step(self.release, "Collect release assets")
         script = textwrap.dedent(block.split("run: |\n", 1)[1])
-        script = script.replace("${{ needs.prepare.outputs.is_versioned }}", "true")
+        self.assertNotIn("${{ needs.", script)
         names = (
             "SparkEngine-7.8.9-Windows-AMD64-MinSizeRel.zip",
             "SparkEngine-7.8.9-Windows-AMD64-MinSizeRel-Runtime.exe",

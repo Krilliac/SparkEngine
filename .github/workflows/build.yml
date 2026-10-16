@@ -76,6 +76,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         fetch-depth: 0 # fixed_commit verification needs the historical fix objects
+        persist-credentials: false
 
     - name: Install Clang C++23 libc++ toolchain
       run: |
@@ -119,6 +120,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
 
     - name: Test JUnit statistics parser
       run: python3 .github/scripts/test-summarize-test-results.py
@@ -432,6 +435,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         fetch-depth: 0
+        persist-credentials: false
 
     - name: Install clang-format
       run: |
@@ -476,6 +480,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
 
     - name: Validate prompt system
       run: ./tools/validate-prompts.sh --ci
@@ -491,6 +497,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
 
     - name: Run OPS-100 policy and SDK package adversarial tests
       env:
@@ -543,6 +551,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
 
     - name: Secret-scan adversarial tests
       env:
@@ -561,6 +571,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         fetch-depth: 0
+        persist-credentials: false
 
     - name: Check ThirdParty manifest sync
       run: ./tools/check-thirdparty-manifest-sync.sh --ci
@@ -572,6 +583,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         fetch-depth: 0
+        persist-credentials: false
 
     # The checker parses workflows with a real YAML parser and expands the
     # dependency manifest through CMake. Both are hard requirements: it exits 2
@@ -621,6 +633,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
 
     # generate-sbom.py expands the dependency manifest through CMake.
     - name: Install SBOM generator dependencies
@@ -657,6 +671,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
 
     - name: Run legal contract validator
       run: |
@@ -698,6 +714,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
 
     - name: Install dependencies
       run: |
@@ -705,7 +722,7 @@ jobs:
         sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers vulkan-validationlayers
 
     - name: Setup ccache
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6 # zizmor: ignore[cache-poisoning] -- build-speed cache in a CI test lane; release.yml builds its own packages and consumes only this job's pass/fail through the Required CI Gate
       with:
         path: ~/.ccache
         key: ccache-linux-asan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -714,7 +731,7 @@ jobs:
           ccache-linux-asan-
 
     - name: Restore build directory
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6 # zizmor: ignore[cache-poisoning] -- build-speed cache in a CI test lane; release.yml builds its own packages and consumes only this job's pass/fail through the Required CI Gate
       with:
         path: build
         key: build-linux-asan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -858,6 +875,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
 
     - name: Install dependencies
       run: |
@@ -865,7 +883,7 @@ jobs:
         sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers vulkan-validationlayers
 
     - name: Setup ccache
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6 # zizmor: ignore[cache-poisoning] -- build-speed cache in a CI test lane; release.yml builds its own packages and consumes only this job's pass/fail through the Required CI Gate
       with:
         path: ~/.ccache
         key: ccache-linux-tsan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -874,7 +892,7 @@ jobs:
           ccache-linux-tsan-
 
     - name: Restore build directory
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6 # zizmor: ignore[cache-poisoning] -- build-speed cache in a CI test lane; release.yml builds its own packages and consumes only this job's pass/fail through the Required CI Gate
       with:
         path: build
         key: build-linux-tsan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -1005,6 +1023,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
 
     - name: Install dependencies
       run: |
@@ -1089,6 +1108,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
 
     - name: Install dependencies
       run: |
@@ -1140,6 +1160,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
 
     - name: Install dependencies
       run: |
@@ -1215,6 +1236,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
 
     - name: Install dependencies
       run: |
@@ -1275,6 +1297,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
 
     - name: Install dependencies
       run: |
@@ -1376,6 +1399,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
 
     # No libc++-dev/libc++abi-dev: the only libc++ on this runner is the
     # instrumented one, so a lost -L/-isystem fails the link instead of
@@ -1445,8 +1469,10 @@ jobs:
           -DCMAKE_INSTALL_PREFIX="$MSAN_LIBCXX_PREFIX"
         cmake --build "$MSAN_LLVM_SRC/build-msan" --parallel "$(nproc)" --target cxx cxxabi
         cmake --build "$MSAN_LLVM_SRC/build-msan" --target install-cxx install-cxxabi
-        printf '%s\n' "${{ steps.msan-libcxx-restore.outputs.cache-primary-key }}" > "$MSAN_LIBCXX_PREFIX/.spark-msan-recipe"
+        printf '%s\n' "${STEPS_MSAN_LIBCXX_RESTORE_OUTPUTS_CACHE_PRIMARY_KEY}" > "$MSAN_LIBCXX_PREFIX/.spark-msan-recipe"
         du -sh "$MSAN_LIBCXX_PREFIX"
+      env:
+        STEPS_MSAN_LIBCXX_RESTORE_OUTPUTS_CACHE_PRIMARY_KEY: ${{ steps.msan-libcxx-restore.outputs.cache-primary-key }}
 
     # Runs on cache hit and miss alike: a truncated or foreign prefix fails RED
     # here, and a bad build is never saved (the save step needs success()).
@@ -1465,13 +1491,15 @@ jobs:
             exit 1
           fi
         done
-        expected_key="${{ steps.msan-libcxx-restore.outputs.cache-primary-key }}"
+        expected_key="${STEPS_MSAN_LIBCXX_RESTORE_OUTPUTS_CACHE_PRIMARY_KEY}"
         actual_key="$(cat "$MSAN_LIBCXX_PREFIX/.spark-msan-recipe" 2>/dev/null || echo '<missing>')"
         if [ "$actual_key" != "$expected_key" ]; then
           echo "::error::runtime prefix stamp '${actual_key}' does not match cache key '${expected_key}'"
           exit 1
         fi
         du -sh "$MSAN_LIBCXX_PREFIX"
+      env:
+        STEPS_MSAN_LIBCXX_RESTORE_OUTPUTS_CACHE_PRIMARY_KEY: ${{ steps.msan-libcxx-restore.outputs.cache-primary-key }}
 
     - name: Save MSan-instrumented libc++
       if: steps.msan-libcxx-restore.outputs.cache-hit != 'true'
@@ -1675,6 +1703,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
 
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
@@ -2160,6 +2189,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
 
     - name: Pin CMake and CPack for per-user Shipping MSI
       shell: pwsh
@@ -2547,12 +2577,14 @@ jobs:
       if: always() && steps.build-matrix-parity.outputs.status != ''
       shell: bash
       run: |
-        status="${{ steps.build-matrix-parity.outputs.status }}"
+        status="${STEPS_BUILD_MATRIX_PARITY_OUTPUTS_STATUS}"
         if test "$status" -ne 0 && test "$status" -ne 1; then
           echo "::error::build-matrix evidence was not recorded (analyzer exit $status)"
           exit 1
         fi
         echo "Build-matrix evidence recorded for ${{ github.sha }}; the Build Matrix Verifier attests it from the Working checkout."
+      env:
+        STEPS_BUILD_MATRIX_PARITY_OUTPUTS_STATUS: ${{ steps.build-matrix-parity.outputs.status }}
 
   # BLD-100: two clean windows-shipping builds of this commit, from two
   # independent checkouts staged sequentially at the same compiler-visible
@@ -2577,12 +2609,14 @@ jobs:
       with:
         path: tree-a
         submodules: recursive
+        persist-credentials: false
 
     - name: Checkout the second tree
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         path: tree-b
         submodules: recursive
+        persist-credentials: false
 
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
@@ -2684,6 +2718,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
 
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
@@ -2982,6 +3017,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
 
     - name: Install dependencies
       run: |
@@ -2991,7 +3027,7 @@ jobs:
         sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers vulkan-validationlayers
 
     - name: Setup ccache
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6 # zizmor: ignore[cache-poisoning] -- build-speed cache in a CI test lane; release.yml builds its own packages and consumes only this job's pass/fail through the Required CI Gate
       with:
         path: ~/.ccache
         key: ccache-linux-gcc-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -3000,7 +3036,7 @@ jobs:
           ccache-linux-gcc-${{ matrix.config }}-
 
     - name: Restore build directory
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6 # zizmor: ignore[cache-poisoning] -- build-speed cache in a CI test lane; release.yml builds its own packages and consumes only this job's pass/fail through the Required CI Gate
       with:
         path: build
         key: build-linux-gcc-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -3209,6 +3245,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
 
     - name: Install dependencies
       run: |
@@ -3218,7 +3255,7 @@ jobs:
         sudo apt-get install -y clang cmake ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers libc++-dev libc++abi-dev vulkan-validationlayers
 
     - name: Setup ccache
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6 # zizmor: ignore[cache-poisoning] -- build-speed cache in a CI test lane; release.yml builds its own packages and consumes only this job's pass/fail through the Required CI Gate
       with:
         path: ~/.ccache
         key: ccache-linux-clang-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -3227,7 +3264,7 @@ jobs:
           ccache-linux-clang-${{ matrix.config }}-
 
     - name: Restore build directory
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6 # zizmor: ignore[cache-poisoning] -- build-speed cache in a CI test lane; release.yml builds its own packages and consumes only this job's pass/fail through the Required CI Gate
       with:
         path: build
         key: build-linux-clang-${{ matrix.config }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -3396,6 +3433,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
 
     - name: Install dependencies
       run: |
@@ -3442,7 +3480,7 @@ jobs:
         fi
 
     - name: Setup ccache
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6 # zizmor: ignore[cache-poisoning] -- build-speed cache in a CI test lane; release.yml builds its own packages and consumes only this job's pass/fail through the Required CI Gate
       with:
         path: ~/.ccache
         key: ccache-golden-linux-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -3518,6 +3556,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
 
     - name: Install MinGW, Wine, and Mesa Lavapipe
       run: |
@@ -3529,7 +3568,7 @@ jobs:
           mesa-vulkan-drivers
 
     - name: Setup ccache
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6 # zizmor: ignore[cache-poisoning] -- build-speed cache in a CI test lane; release.yml builds its own packages and consumes only this job's pass/fail through the Required CI Gate
       with:
         path: ~/.ccache
         key: ccache-linux-mingw-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -3686,6 +3725,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
 
     - name: Install dependencies
       run: |
@@ -3697,7 +3737,7 @@ jobs:
         brew install molten-vk || echo "::warning::MoltenVK install failed — Vulkan path will be disabled"
 
     - name: Setup ccache
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6 # zizmor: ignore[cache-poisoning] -- build-speed cache in a CI test lane; release.yml builds its own packages and consumes only this job's pass/fail through the Required CI Gate
       with:
         path: ~/Library/Caches/ccache
         key: ccache-macos-${{ matrix.config }}-${{ matrix.backend }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -3706,7 +3746,7 @@ jobs:
           ccache-macos-${{ matrix.config }}-${{ matrix.backend }}-
 
     - name: Restore build directory
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6 # zizmor: ignore[cache-poisoning] -- build-speed cache in a CI test lane; release.yml builds its own packages and consumes only this job's pass/fail through the Required CI Gate
       with:
         path: build
         key: build-macos-${{ matrix.config }}-${{ matrix.backend }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -3906,6 +3946,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
 
     - name: Install dependencies
       run: |
@@ -3941,6 +3982,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
+          persist-credentials: false
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y gcc-14 g++-14 lcov ccache libgl-dev libsdl2-dev libfreetype-dev
       # restore/save are split so a run that later times out or fails in Test
@@ -4279,6 +4321,7 @@ jobs:
         with:
           # The golden review gate diffs the manifest against the base revision.
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Run performance budget governance tests
         run: >-
@@ -4425,6 +4468,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
+          persist-credentials: false
       - name: Install dependencies
         # Azure's apt mirrors occasionally return 403 on
         # packages.microsoft.com. Retry with exponential backoff and
@@ -4441,7 +4485,7 @@ jobs:
           done
           sudo apt-get install -y clang-tidy ccache libgl-dev libsdl2-dev libfreetype-dev libc++-dev libc++abi-dev
       - name: Setup ccache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6 # zizmor: ignore[cache-poisoning] -- build-speed cache in a CI test lane; release.yml builds its own packages and consumes only this job's pass/fail through the Required CI Gate
         with:
           path: ~/.ccache
           key: ccache-clang-tidy-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -4449,7 +4493,7 @@ jobs:
             ccache-clang-tidy-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-
             ccache-clang-tidy-
       - name: Restore build directory
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6 # zizmor: ignore[cache-poisoning] -- build-speed cache in a CI test lane; release.yml builds its own packages and consumes only this job's pass/fail through the Required CI Gate
         with:
           path: build
           key: build-clang-tidy-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -4602,6 +4646,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Download primary-lane test evidence
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -4752,6 +4798,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Count TODO/FIXME/HACK comments
         id: todo-count-run
         run: |
@@ -4812,6 +4860,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Configure SparkBuild + SparkInstaller (standalone, no engine)
         shell: bash
@@ -4884,6 +4934,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
+          persist-credentials: false
 
       - name: Download exact Windows Shipping package artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -4967,6 +5018,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
+          persist-credentials: false
 
       - name: Install configure dependencies
         run: |
@@ -5071,6 +5123,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
+          persist-credentials: false
 
       - name: Download exact Windows Release runtime artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -5144,6 +5197,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
+          persist-credentials: false
 
       - name: Install configure dependencies
         run: |
@@ -5266,6 +5320,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
+          persist-credentials: false
 
       - name: Install dependencies
         run: |
@@ -5273,7 +5328,7 @@ jobs:
           sudo apt-get install -y build-essential gcc-14 g++-14 cmake ccache libgl-dev libvulkan-dev glslang-tools libsdl2-dev libfreetype-dev mesa-vulkan-drivers
 
       - name: Setup ccache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6 # zizmor: ignore[cache-poisoning] -- build-speed cache in a CI test lane; release.yml builds its own packages and consumes only this job's pass/fail through the Required CI Gate
         with:
           path: ~/.ccache
           key: ccache-experimental-module-lifecycle-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}-${{ github.sha }}
@@ -5378,6 +5433,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
     - name: Install Linux dependencies
       if: runner.os == 'Linux'
       run: |
@@ -5426,6 +5482,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -5489,6 +5546,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
     - name: Configure Windows package consumer tree
@@ -5534,6 +5592,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -5594,6 +5653,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -5646,6 +5706,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
     - name: Configure windows-shipping with tests
@@ -5713,6 +5774,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
     - name: Configure FPS single-player tree
@@ -5762,6 +5824,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -5817,6 +5880,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -5871,6 +5935,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
     - name: Configure ARPG package run tree
@@ -5918,6 +5983,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
     - name: Configure Platformer package run tree
@@ -5965,6 +6031,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
     - name: Configure RPG package run tree
@@ -6012,6 +6079,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
     - name: Configure RTS package run tree
@@ -6059,6 +6127,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
     - name: Configure Racing package run tree
@@ -6106,6 +6175,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
     - name: Configure OpenWorld package run tree
@@ -6148,6 +6218,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -6192,6 +6263,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -6242,6 +6314,7 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         submodules: recursive
+        persist-credentials: false
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -6284,6 +6357,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Generate and validate exact-commit API documentation
         env:
@@ -6326,6 +6400,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Compare two clean independently generated bundles
         run: |
@@ -6376,6 +6451,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Verify every required job succeeded
         env:

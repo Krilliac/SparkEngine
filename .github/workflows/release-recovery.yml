@@ -1,7 +1,7 @@
 name: Recover Failed Release Publication
 
 on:
-  workflow_run:
+  workflow_run: # zizmor: ignore[dangerous-triggers] -- checks out only Working (SHA attested); the triggering run is read as validated metadata, never executed
     workflows: ["Publish Builds"]
     types: [completed]
 

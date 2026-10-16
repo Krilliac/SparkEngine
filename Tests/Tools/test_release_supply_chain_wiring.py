@@ -88,8 +88,13 @@ def wiring_errors(workflow: str) -> list[str]:
         if "tools/generate-sbom.py reconcile" not in body:
             errors.append(f"{job_name}: reconcile step does not run generate-sbom.py reconcile")
         report = f"reconcile-{platform}-${{{{ matrix.config }}}}.json"
-        if "--json-report" not in body or report not in body:
+        # Linux and macOS reach the shell through the MATRIX_CONFIG env mapping, so the
+        # matrix expression never expands inside the run script.
+        body_report = report if platform == "Windows" else f"reconcile-{platform}-${{MATRIX_CONFIG}}.json"
+        if "--json-report" not in body or body_report not in body:
             errors.append(f"{job_name}: reconcile step does not write {report}")
+        if platform != "Windows" and "MATRIX_CONFIG: ${{ matrix.config }}" not in body:
+            errors.append(f"{job_name}: reconcile step does not map matrix.config through env")
         if "continue-on-error" in body or "|| true" in body:
             errors.append(f"{job_name}: reconcile step suppresses failure")
         if platform == "Windows":
@@ -195,8 +200,8 @@ class ReleaseSupplyChainWiringTests(unittest.TestCase):
     def test_suppressed_reconcile_failure_is_detected(self) -> None:
         job = job_section(self.workflow, "build-linux")
         step = dict(steps_of(job))[INSTALLED_RECONCILE_STEP]
-        suppressed = step.replace('reconcile-Linux-${{ matrix.config }}.json"\n',
-                                  'reconcile-Linux-${{ matrix.config }}.json" || true\n', 1)
+        suppressed = step.replace('reconcile-Linux-${MATRIX_CONFIG}.json"\n',
+                                  'reconcile-Linux-${MATRIX_CONFIG}.json" || true\n', 1)
         self.assertNotEqual(step, suppressed)
         mutated = self.workflow.replace(job, job.replace(step, suppressed), 1)
         self.assertIn("build-linux: reconcile step suppresses failure", wiring_errors(mutated))

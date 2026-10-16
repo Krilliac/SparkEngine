@@ -16,6 +16,8 @@ updates:
       - "dependencies"
       - "github-actions"
     open-pull-requests-limit: 0
+    cooldown:
+      default-days: 7
 
   # Keep git submodules (ThirdParty dependencies) up to date
   - package-ecosystem: "gitsubmodule"
@@ -29,3 +31,5 @@ updates:
       - "dependencies"
       - "submodules"
     open-pull-requests-limit: 0
+    cooldown:
+      default-days: 7

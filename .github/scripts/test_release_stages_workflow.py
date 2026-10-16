@@ -186,13 +186,19 @@ class WorkflowTests(unittest.TestCase):
         scripts = "\n".join(step.get("run", "") for step in release["steps"])
         self.assertEqual(scripts.count("--require-predecessor-candidate"), 1)
         self.assertEqual(scripts.count("--require-candidate-ready"), 1)
-        self.assertIn('needs.prepare.outputs.version }}" == "0.9.0"', scripts)
+        self.assertIn('[[ "${NEEDS_PREPARE_OUTPUTS_VERSION}" == "0.9.0" ]]', scripts)
+        self.assertNotIn("${{ needs.", scripts)
 
         gates = self.workflow["jobs"]["profile-required-gates"]
         gate_scripts = "\n".join(step.get("run", "") for step in gates["steps"])
         self.assertEqual(gate_scripts.count("--require-predecessor-candidate"), 1)
         self.assertEqual(gate_scripts.count("--require-candidate-ready"), 1)
-        self.assertIn('needs.prepare.outputs.version }}" == "0.9.0"', gate_scripts)
+        self.assertIn('[[ "${NEEDS_PREPARE_OUTPUTS_VERSION}" == "0.9.0" ]]', gate_scripts)
+        self.assertNotIn("${{ needs.", gate_scripts)
+        for gate_step in gates["steps"]:
+            if 'NEEDS_PREPARE_OUTPUTS_VERSION' in gate_step.get("run", ""):
+                self.assertEqual(gate_step["env"]["NEEDS_PREPARE_OUTPUTS_VERSION"],
+                                 "${{ needs.prepare.outputs.version }}")
 
         consumer = self.workflow["jobs"]["verify-stable-publication"]
         consumer_scripts = "\n".join(step.get("run", "") for step in consumer["steps"])

@@ -26,6 +26,7 @@ jobs:
           # The contract only reads the checked-out commit timestamp; fetching
           # the full repository history can exhaust this job's 10-minute budget.
           fetch-depth: 1
+          persist-credentials: false
 
       # Windows collapses Tools/ and tools/ into one directory; a case-sensitive
       # runner does not. Every site-data module is tracked at the lowercase
@@ -91,6 +92,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Generate exact-commit API documentation
         env:
@@ -152,6 +154,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Generate exact-commit API documentation
         env:
@@ -184,6 +187,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
+          persist-credentials: false
 
       # The runner image's preinstalled Node.js; the module needs WebCrypto and
       # node:test (package.json engines >=20) and has no dependencies to install.
@@ -227,6 +231,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Validate asset package manifests
         run: |

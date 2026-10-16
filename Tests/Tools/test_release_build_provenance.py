@@ -672,7 +672,10 @@ class WorkflowWiringTests(unittest.TestCase):
                 run = steps[record]["run"]
                 self.assertIn("--source-sha", run)
                 self.assertIn("${{ github.sha }}", run)
-                self.assertIn("needs.prepare.outputs.cmake_version", run)
+                self.assertIn("NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION", run)
+                self.assertEqual(steps[record]["env"]["NEEDS_PREPARE_OUTPUTS_CMAKE_VERSION"],
+                                 "${{ needs.prepare.outputs.cmake_version }}")
+                self.assertNotIn("${{ needs.", run)
                 upload = _step_index(
                     steps, lambda s: str(s.get("uses", "")).startswith("actions/upload-artifact@")
                     and "build-provenance" in str(s.get("with", {}).get("name", "")))
