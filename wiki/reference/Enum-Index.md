@@ -456,10 +456,10 @@
 | `LODQualityTier` | enum | SparkEditor | [AssetPipelineTypes.h:L53](../../SparkEditor/Source/AssetPipeline/AssetPipelineTypes.h#L53) |  |
 | `LODTargetPlatform` | enum | SparkEditor | [AssetPipelineTypes.h:L46](../../SparkEditor/Source/AssetPipeline/AssetPipelineTypes.h#L46) |  |
 | `LogCategory` | enum | SparkEditor | [EditorLogger.h:L43](../../SparkEditor/Source/Core/EditorLogger.h#L43) | Log categories for classification |
-| `LogCategory` | enum | SparkEngine | [Logger.h:L165](../../SparkEngine/Source/Utils/Logger.h#L165) |  |
+| `LogCategory` | enum | SparkEngine | [Logger.h:L167](../../SparkEngine/Source/Utils/Logger.h#L167) |  |
 | `LoginUIState` | enum | GameModules | [MMOLoginUI.h:L33](../../GameModules/SparkGameMMO/Source/UI/MMOLoginUI.h#L33) | UI flow state machine |
 | `LogLevel` | enum | SparkEditor | [EditorLogger.h:L30](../../SparkEditor/Source/Core/EditorLogger.h#L30) | Log severity levels |
-| `LogLevel` | enum | SparkEngine | [Logger.h:L93](../../SparkEngine/Source/Utils/Logger.h#L93) |  |
+| `LogLevel` | enum | SparkEngine | [Logger.h:L95](../../SparkEngine/Source/Utils/Logger.h#L95) |  |
 | `LoopMode` | enum | SparkEngine | [TweenSystem.h:L65](../../SparkEngine/Source/Engine/Tween/TweenSystem.h#L65) | Loop behavior for a tween. |
 | `LoopMode` | enum | Tests | [TestSplineMath.cpp:L121](../../Tests/TestSplineMath.cpp#L121) |  |
 | `LoopType` | enum | SparkEngine | [Tween.h:L247](../../SparkEngine/Source/Utils/Tween.h#L247) | How a tween behaves when it reaches the end. |

@@ -571,7 +571,7 @@
 | `CacheStats` | struct | SparkEngine | [ShaderCrossCompiler.h:L282](../../SparkEngine/Source/Graphics/ShaderCrossCompiler.h#L282) | Get cache hit statistics. |
 | `CacheStats` | struct | SparkEngine | [CacheDebugger.h:L42](../../SparkEngine/Source/Utils/CacheDebugger.h#L42) | Aggregated statistics for a single named cache |
 | `CacheStats` | struct | Tests | [TestShaderDiskCache.cpp:L151](../../Tests/TestShaderDiskCache.cpp#L151) |  |
-| `CallbackSink` | class | SparkEngine | [Logger.h:L392](../../SparkEngine/Source/Utils/Logger.h#L392) | Calls a user-provided callback for each log message |
+| `CallbackSink` | class | SparkEngine | [Logger.h:L394](../../SparkEngine/Source/Utils/Logger.h#L394) | Calls a user-provided callback for each log message |
 | `CamDrawMask` | struct | Tests | [TestExtendedSystems.cpp:L334](../../Tests/TestExtendedSystems.cpp#L334) |  |
 | `Camera` | struct | SparkEditor | [SceneFileTypes.h:L146](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L146) | Camera component data |
 | `Camera` | struct | SparkEngine | [CoreComponents.h:L114](../../SparkEngine/Source/Engine/ECS/Components/CoreComponents.h#L114) | Perspective camera parameters used to build the projection matrix. |
@@ -866,8 +866,8 @@
 | `ConditionSystem` | class | Tests | [TestConditionSystem.cpp:L67](../../Tests/TestConditionSystem.cpp#L67) |  |
 | `ConeGenerator` | class | SparkEngine | [EnvironmentQuery.h:L160](../../SparkEngine/Source/Engine/AI/EnvironmentQuery.h#L160) | Generates points along a cone (arc) from agent toward a direction |
 | `Config` | struct | SparkEngine | [AIComponents.h:L68](../../SparkEngine/Source/Engine/ECS/Components/AIComponents.h#L68) |  |
-| `Config` | struct | SparkEngine | [Logger.h:L355](../../SparkEngine/Source/Utils/Logger.h#L355) | Writes log messages to a file with automatic rotation |
-| `Config` | struct | SparkEngine | [Logger.h:L634](../../SparkEngine/Source/Utils/Logger.h#L634) | Configuration struct for loading logging settings from config files |
+| `Config` | struct | SparkEngine | [Logger.h:L357](../../SparkEngine/Source/Utils/Logger.h#L357) | Writes log messages to a file with automatic rotation |
+| `Config` | struct | SparkEngine | [Logger.h:L636](../../SparkEngine/Source/Utils/Logger.h#L636) | Configuration struct for loading logging settings from config files |
 | `ConfigManager` | class | SparkBuild | [Config.h:L86](../../SparkBuild/src/Config.h#L86) |  |
 | `ConfigParser` | class | SparkEngine | [ConfigParser.h:L57](../../SparkEngine/Source/Utils/ConfigParser.h#L57) |  |
 | `ConfinedMaterialReader` | class | SparkEngine | [OBJStaticMeshLoader.cpp:L113](../../SparkEngine/Source/Graphics/OBJStaticMeshLoader.cpp#L113) |  |
@@ -1560,7 +1560,7 @@
 | `FileChangeEvent` | struct | SparkEngine | [FileWatcher.h:L54](../../SparkEngine/Source/Utils/FileWatcher/FileWatcher.h#L54) | Event data for a file change notification |
 | `FileChangeEvent` | struct | Tests | [TestScriptHotReload.cpp:L28](../../Tests/TestScriptHotReload.cpp#L28) |  |
 | `FileLogTarget` | class | SparkEditor | [EditorLogger.h:L136](../../SparkEditor/Source/Core/EditorLogger.h#L136) | File output target |
-| `FileSink` | class | SparkEngine | [Logger.h:L352](../../SparkEngine/Source/Utils/Logger.h#L352) | Writes log messages to a file with automatic rotation |
+| `FileSink` | class | SparkEngine | [Logger.h:L354](../../SparkEngine/Source/Utils/Logger.h#L354) | Writes log messages to a file with automatic rotation |
 | `fileStat` | struct | SparkEngine | [AssetMetadataLinux.cpp:L206](../../SparkEngine/Source/Graphics/AssetMetadataLinux.cpp#L206) |  |
 | `FileState` | struct | SparkEngine | [ScriptHotReload.h:L152](../../SparkEngine/Source/Engine/Scripting/ScriptHotReload.h#L152) |  |
 | `FILETIME` | struct | SparkSDK | [PlatformD3DStubs.h:L83](../../SparkSDK/Include/Spark/Detail/PlatformD3DStubs.h#L83) |  |
@@ -2096,7 +2096,7 @@
 | `IKChain` | struct | SparkEngine | [IKSolver.h:L44](../../SparkEngine/Source/Engine/Animation/IKSolver.h#L44) |  |
 | `ILogger` | class | SparkSDK | [IEngineContext.h:L79](../../SparkSDK/Include/Spark/IEngineContext.h#L79) |  |
 | `ILogger` | class | SparkSDK | [ILogger.h:L39](../../SparkSDK/Include/Spark/ILogger.h#L39) | Abstract logging interface for game modules |
-| `ILogSink` | class | SparkEngine | [Logger.h:L319](../../SparkEngine/Source/Utils/Logger.h#L319) | Interface for log output destinations |
+| `ILogSink` | class | SparkEngine | [Logger.h:L321](../../SparkEngine/Source/Utils/Logger.h#L321) | Interface for log output destinations |
 | `ImageComparisonResult` | struct | SparkEngine | [GoldenImageTest.h:L91](../../SparkEngine/Source/Utils/GoldenImageTest.h#L91) | Result of comparing a captured screenshot against a golden image. |
 | `ImGuiStyle` | struct | SparkEditor | [EditorTheme.h:L37](../../SparkEditor/Source/Core/EditorTheme.h#L37) |  |
 | `IMigrationStep` | class | SparkEngine | [AssetMigration.h:L116](../../SparkEngine/Source/Core/AssetMigration.h#L116) | One step in a migration chain that transforms data between versions. |
@@ -2514,12 +2514,12 @@
 | `LogEntry` | struct | SparkEditor | [EditorLogger.h:L95](../../SparkEditor/Source/Core/EditorLogger.h#L95) | Log entry structure |
 | `LogEntry` | struct | SparkEngine | [SparkConsole.h:L80](../../SparkEngine/Source/Utils/SparkConsole.h#L80) |  |
 | `LoggedErrors` | class | Tests | [TestSDK240ModuleDiagnostics.cpp:L32](../../Tests/TestSDK240ModuleDiagnostics.cpp#L32) |  |
-| `Logger` | class | SparkEngine | [Logger.h:L423](../../SparkEngine/Source/Utils/Logger.h#L423) | Unified logging system with async writing and runtime filtering |
+| `Logger` | class | SparkEngine | [Logger.h:L425](../../SparkEngine/Source/Utils/Logger.h#L425) | Unified logging system with async writing and runtime filtering |
 | `LoggerOnlyContext` | class | Tests | [TestPrototypeModuleKitReal.cpp:L131](../../Tests/TestPrototypeModuleKitReal.cpp#L131) |  |
 | `LoggingSettings` | struct | SparkEngine | [EngineSettings.h:L644](../../SparkEngine/Source/Core/EngineSettings.h#L644) |  |
 | `LoginRecord` | struct | GameModules | [MMOAccountSystem.h:L52](../../GameModules/SparkGameMMO/Source/Account/MMOAccountSystem.h#L52) | A single login history entry |
 | `LoginTranscript` | struct | Tests | [TestTFOnboarding.cpp:L1363](../../Tests/TestTFOnboarding.cpp#L1363) |  |
-| `LogMessage` | struct | SparkEngine | [Logger.h:L299](../../SparkEngine/Source/Utils/Logger.h#L299) | A single log message with all associated metadata |
+| `LogMessage` | struct | SparkEngine | [Logger.h:L301](../../SparkEngine/Source/Utils/Logger.h#L301) | A single log message with all associated metadata |
 | `LogStatistics` | struct | SparkEditor | [EditorLogger.h:L173](../../SparkEditor/Source/Core/EditorLogger.h#L173) | Log statistics |
 | `LogTarget` | class | SparkEditor | [EditorLogger.h:L116](../../SparkEditor/Source/Core/EditorLogger.h#L116) | Log output target interface |
 | `LookAtModifier` | class | SparkEngine | [PoseModifier.h:L115](../../SparkEngine/Source/Engine/Animation/PoseModifier.h#L115) | Rotates head/spine bones to face a world-space target. |
@@ -3071,7 +3071,7 @@
 | `OWGatheringSystem` | class | GameModules | [OWGatheringSystem.h:L102](../../GameModules/SparkGameOpenWorld/Source/Gathering/OWGatheringSystem.h#L102) | Resource gathering and crafting system |
 | `OWGatheringSystem` | class | GameModules | [OWPlayerController.h:L23](../../GameModules/SparkGameOpenWorld/Source/Player/OWPlayerController.h#L23) |  |
 | `OwnedEditorProcess` | class | SparkEditor | [EditorProcessLaunch.h:L117](../../SparkEditor/Source/Utils/EditorProcessLaunch.h#L117) | Single-process-tree RAII owner for editor-launched children. |
-| `OwnedSceneDirectory` | class | Tests | [TestFPSGameCameraReloadReal.cpp:L53](../../Tests/TestFPSGameCameraReloadReal.cpp#L53) |  |
+| `OwnedSceneDirectory` | class | Tests | [TestFPSGameCameraReloadReal.cpp:L57](../../Tests/TestFPSGameCameraReloadReal.cpp#L57) |  |
 | `OwnerOnlySecurity` | class | SparkDaemon | [DaemonServer.cpp:L117](../../SparkDaemon/src/DaemonServer.cpp#L117) |  |
 | `OWPlayerController` | class | GameModules | [SparkGameOpenWorld.h:L26](../../GameModules/SparkGameOpenWorld/Source/Core/SparkGameOpenWorld.h#L26) |  |
 | `OWPlayerController` | class | GameModules | [OWPlayerController.h:L50](../../GameModules/SparkGameOpenWorld/Source/Player/OWPlayerController.h#L50) | Player movement and interaction controller for the open world |
@@ -4080,7 +4080,7 @@
 | `RuntimeState` | struct | SparkUI | [RuntimeState.h:L26](../../SparkUI/Source/RuntimeState.h#L26) | Everything Spark UI remembers about one ImGui context. |
 | `RuntimeTerrain` | struct | SparkEngine | [TerrainAssetFormat.h:L152](../../SparkEngine/Source/Graphics/TerrainAssetFormat.h#L152) | The runtime's view of a .sparkterrain asset: the fields TerrainRenderer publishes on a |
 | `sa` | struct | SparkEditor | [EditorCrashHandler.cpp:L254](../../SparkEditor/Source/Core/EditorCrashHandler.cpp#L254) |  |
-| `sa` | struct | SparkEngine | [CrashHandler.cpp:L2741](../../SparkEngine/Source/Utils/CrashHandler.cpp#L2741) |  |
+| `sa` | struct | SparkEngine | [CrashHandler.cpp:L2742](../../SparkEngine/Source/Utils/CrashHandler.cpp#L2742) |  |
 | `SafeArea` | struct | SparkEngine | [MobilePlatform.h:L137](../../SparkEngine/Source/Engine/Mobile/MobilePlatform.h#L137) | Screen safe area (avoiding notches, home indicators). |
 | `SAHBucket` | struct | SparkEngine | [BVHAccelerator.h:L178](../../SparkEngine/Source/Graphics/BVHAccelerator.h#L178) |  |
 | `Sample` | struct | SparkEngine | [InterpolationBuffer.h:L192](../../SparkEngine/Source/Engine/Networking/InterpolationBuffer.h#L192) |  |
@@ -4520,7 +4520,7 @@
 | `SimplificationResult` | struct | SparkEngine | [MeshLOD.h:L82](../../SparkEngine/Source/Graphics/MeshLOD.h#L82) |  |
 | `SimplificationVertex` | struct | SparkEngine | [MeshLOD.h:L75](../../SparkEngine/Source/Graphics/MeshLOD.h#L75) |  |
 | `SimScoreEntry` | struct | SparkEditor | [GameViewPanel.h:L198](../../SparkEditor/Source/Panels/GameViewPanel.h#L198) |  |
-| `SinkSetup` | struct | SparkEngine | [Logger.h:L474](../../SparkEngine/Source/Utils/Logger.h#L474) | Which destinations InstallDefaultSinks() should install |
+| `SinkSetup` | struct | SparkEngine | [Logger.h:L476](../../SparkEngine/Source/Utils/Logger.h#L476) | Which destinations InstallDefaultSinks() should install |
 | `Size` | struct | Tests | [TestRHI210D3D11DeviceLossReal.cpp:L192](../../Tests/TestRHI210D3D11DeviceLossReal.cpp#L192) |  |
 | `SizeBudgetReport` | struct | SparkEditor | [AssetAuditGraph.h:L90](../../SparkEditor/Source/Panels/AssetAuditGraph.h#L90) | Size budget for a level/scene |
 | `Skeleton` | struct | SparkEngine | [Skeleton.h:L90](../../SparkEngine/Source/Engine/Animation/Skeleton.h#L90) |  |
@@ -4696,7 +4696,7 @@
 | `StackEntry` | struct | SparkEngine | [UICompositor.h:L230](../../SparkEngine/Source/Graphics/UICompositor.h#L230) |  |
 | `StackFrame` | struct | SparkEngine | [StackTrace.h:L54](../../SparkEngine/Source/Utils/StackTrace.h#L54) | Single frame in a captured stack trace |
 | `StackRemoval` | struct | SparkEngine | [MiniDumpWithoutStacks.cpp:L19](../../SparkEngine/Source/Utils/MiniDumpWithoutStacks.cpp#L19) |  |
-| `StackTrace` | class | SparkEngine | [Logger.h:L83](../../SparkEngine/Source/Utils/Logger.h#L83) |  |
+| `StackTrace` | class | SparkEngine | [Logger.h:L85](../../SparkEngine/Source/Utils/Logger.h#L85) |  |
 | `StackTrace` | class | SparkEngine | [StackTrace.h:L92](../../SparkEngine/Source/Utils/StackTrace.h#L92) | Captured stack trace with symbol resolution |
 | `StagedFile` | struct | SparkEngine | [SparkPakWriter.h:L57](../../SparkEngine/Source/Core/SparkPakWriter.h#L57) | Number of files staged for writing. |
 | `StagedStorage` | struct | SparkEngine | [SaveSystem.cpp:L1333](../../SparkEngine/Source/Engine/SaveSystem/SaveSystem.cpp#L1333) |  |
@@ -4729,7 +4729,7 @@
 | `std` | struct | SparkEngine | [ContainerUtils.h:L53](../../SparkEngine/Source/Utils/ContainerUtils.h#L53) |  |
 | `std` | struct | SparkEngine | [ContainerUtils.h:L64](../../SparkEngine/Source/Utils/ContainerUtils.h#L64) |  |
 | `std` | struct | Tests | [TestContainerUtils.cpp:L24](../../Tests/TestContainerUtils.cpp#L24) |  |
-| `StderrSink` | class | SparkEngine | [Logger.h:L342](../../SparkEngine/Source/Utils/Logger.h#L342) | Writes log messages to stderr (and OutputDebugStringA on Windows) |
+| `StderrSink` | class | SparkEngine | [Logger.h:L344](../../SparkEngine/Source/Utils/Logger.h#L344) | Writes log messages to stderr (and OutputDebugStringA on Windows) |
 | `SteamPlatform` | class | SparkEngine | [OnlineServices.h:L478](../../SparkEngine/Source/Engine/OnlineServices/OnlineServices.h#L478) |  |
 | `SteamTransport` | class | SparkEngine | [SteamTransport.h:L48](../../SparkEngine/Source/Engine/Networking/SteamTransport.h#L48) | Stub transport for Steam Networking Sockets (not yet implemented). |
 | `SteeringAgent` | struct | Tests | [TestAIStress.cpp:L256](../../Tests/TestAIStress.cpp#L256) |  |

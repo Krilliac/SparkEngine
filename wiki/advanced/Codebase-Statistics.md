@@ -11,15 +11,15 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 351840 |
+| **SparkEngine/Source** | 351843 |
 | **SparkEditor/Source** | 110961 |
-| **GameModules** | 164632 |
+| **GameModules** | 164709 |
 | **External services** | 12926 |
 | **Asset pipeline** | 3231 |
-| **Tests** | 282963 |
+| **Tests** | 283011 |
 | **SparkConsole/src** | 1866 |
 | **SparkShaderCompiler/src** | 847 |
-| **Total C++ (excl. ThirdParty)** | **~954664** |
+| **Total C++ (excl. ThirdParty)** | **~954792** |
 
 ### File Counts
 
@@ -45,7 +45,7 @@ Graphics contains 125771 lines, or 35% of `SparkEngine/Source`. This is a source
 |-----------|------:|:----------:|
 | Graphics | 125771 | 35.7% |
 | Engine (all subsystems) | 100268 | 28.4% |
-| Utils | 48776 | 13.8% |
+| Utils | 48779 | 13.8% |
 | Core | 32251 | 9.1% |
 | Physics | 11142 | 3.1% |
 | Audio | 6961 | 1.9% |
@@ -157,7 +157,7 @@ inventory is implementation evidence, not support certification.
 
 | File | Lines |
 |------|------:|
-| `CrashHandler.cpp` | 2918 |
+| `CrashHandler.cpp` | 2919 |
 | `OpenGLDevice.cpp` | 2588 |
 | `NetworkConnection.cpp` | 2500 |
 | `ModuleManager.cpp` | 2223 |
