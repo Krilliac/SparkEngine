@@ -16939,7 +16939,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 8,
+        "stepCount": 9,
         "steps": [
           {
             "index": 0,
@@ -17027,6 +17027,18 @@
           },
           {
             "index": 7,
+            "name": "Collect installed package run evidence",
+            "id": "",
+            "uses": "",
+            "shell": "",
+            "if": "failure()",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "f12c66fa704b6949"
+          },
+          {
+            "index": 8,
             "name": "Upload module FPS package logs",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
