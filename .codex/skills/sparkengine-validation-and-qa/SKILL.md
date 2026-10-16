@@ -272,7 +272,9 @@ Verified fine print — checks whose advertised threshold is **not actually enfo
 Load-bearing extra gates worth knowing: `build-linux-gcc` Release **greps the test log**
 for `VulkanParity_ShaderCompilePath_Asserted` and `VulkanParity_D3D11MilestoneSnapshot` and
 asserts `ENABLE_VULKAN:BOOL=ON` in the CMake cache — renaming those tests breaks CI.
-`msvc.yml` (MSVC Code Analysis → SARIF) and `codeql.yml` run separately from build.yml.
+`msvc.yml` (MSVC Code Analysis → SARIF) and `codeql.yml` run separately from build.yml, as do
+`dependency-review.yml` (PRs), `workflow-security.yml` (zizmor over `.github/`) and
+`scorecard.yml` (OpenSSF Scorecard); the last two report to code scanning.
 
 `candidate` improvements (unproven, do not claim as done): wire
 `check-test-registration.sh` into `validate-all.sh`/CI; extend its glob to `harden/` and
