@@ -133,7 +133,12 @@ sys.exit(3 if fault == "exit_nonzero" else 0)
 # test_never_ready_fails).
 FAST = soak_tool.SoakConfig(duration_s=3.0, warmup_s=0.5, sample_interval_s=0.1, status_interval_ms=100,
                             startup_timeout_s=60.0, stall_timeout_s=3.0, stop_timeout_s=3.0,
-                            max_rss_growth_bytes=64 * 1024 * 1024)
+                            max_rss_growth_bytes=64 * 1024 * 1024,
+                            # A 2.5 s fit window extrapolates interpreter RSS jitter to an
+                            # hour: a healthy stand-in measured 0.9 GiB/h on CI against the
+                            # production 64 MiB/h. 16 GiB/h clears that noise ~18x and stays
+                            # ~3x under the leak stand-in (256 KiB per 60 Hz tick, ~50 GiB/h).
+                            max_rss_slope_bytes_per_hour=16 * 1024 ** 3)
 
 
 def _record(**overrides: object) -> str:
@@ -279,8 +284,9 @@ class BudgetFileTests(unittest.TestCase):
         self.assertEqual(document["budgetFile"]["version"], budgets.version)
         self.assertEqual(document["budgetFile"]["sha256"], budgets.sha256)
         self.assertEqual(document["budgetFile"]["path"], "tools/ops/server-soak-budgets.json")
-        # FAST loosens only rssGrowthBytes; the summary must say so.
-        self.assertEqual(document["budgetFile"]["overrides"], {"rssGrowthBytes": 64 * 1024 * 1024})
+        # FAST loosens exactly the two RSS budgets; the summary must say so.
+        self.assertEqual(document["budgetFile"]["overrides"],
+                         {"rssGrowthBytes": 64 * 1024 * 1024, "rssSlopeBytesPerHour": 16 * 1024 ** 3})
         self.assertEqual(soak_tool.build_summary(outcome, soak_tool.SoakConfig(), SHA, "t")["budgetFile"]["overrides"],
                          {})
 
