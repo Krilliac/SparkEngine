@@ -929,7 +929,10 @@ jobs:
 
     - name: Run Tests under TSan
       env:
-        TSAN_OPTIONS: halt_on_error=0:second_deadlock_stack=1:print_suppressions=1:suppressions=${{ github.workspace }}/Tests/tsan_suppressions.txt
+        # print_suppressions=0: a matched suppression writes a 'Matched N suppressions'
+        # line into the private runtime log, which carries no sanitizer signature and
+        # fails the evidence verifier (the ASan/LSan lane avoids it the same way).
+        TSAN_OPTIONS: halt_on_error=0:second_deadlock_stack=1:print_suppressions=0:suppressions=${{ github.workspace }}/Tests/tsan_suppressions.txt
       run: |
         bash .github/scripts/run-sanitizer-tests.sh \
           --evidence-root "${{ runner.temp }}" \
@@ -1992,9 +1995,10 @@ jobs:
     # CI-110: run each documented windows-release CTest command against this tree.
     # The full Release run takes about 17 minutes at --parallel 2; the documented
     # subset is smaller and SparkTests children are capped by SPARK_TEST_LIMIT.
+    # The -L unit selection alone ran ~20 minutes on linux-gcc (lock-serialized site-data suites).
     - name: Execute documented subsystem commands
       if: matrix.config == 'Release'
-      timeout-minutes: 40
+      timeout-minutes: 60
       shell: bash
       run: |
         python tools/site-data/check_documented_selectors.py --build-dir build \
@@ -3124,9 +3128,10 @@ jobs:
     # The full Release run takes about 20 minutes at --parallel 2; the documented
     # subset is smaller and SparkTests children are capped by SPARK_TEST_LIMIT.
     # The advisory experimental-modules label stays out of this required lane.
+    # The -L unit selection alone runs ~20 minutes (lock-serialized site-data suites).
     - name: Execute documented subsystem commands
       if: matrix.config == 'Release'
-      timeout-minutes: 40
+      timeout-minutes: 60
       shell: bash
       run: |
         python3 tools/site-data/check_documented_selectors.py --build-dir build \

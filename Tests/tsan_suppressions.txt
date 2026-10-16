@@ -8,3 +8,11 @@
 # Jolt Physics internal job system (benign races in job scheduling)
 race:JPH::JobSystemThreadPool
 race:JPH::JobSystem
+
+# Khronos Vulkan validation layer: its submit thread still unlocks a rwlock the
+# layer itself frees during vkFreeCommandBuffers, after the engine has waited on
+# the command list's fence (VulkanCommandList::~VulkanCommandList). Both racing
+# frames are inside the layer (VulkanValidation_DeferredListDestroyedAfterExecuteClean).
+# race_top, not race: engine code runs under layer frames (VulkanDebugCallback logs),
+# and a race there must still be reported.
+race_top:libVkLayer_khronos_validation.so

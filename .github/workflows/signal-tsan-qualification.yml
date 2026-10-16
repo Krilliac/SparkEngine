@@ -87,7 +87,10 @@ jobs:
 
     - name: Run Tests under TSan
       env:
-        TSAN_OPTIONS: halt_on_error=0:second_deadlock_stack=1:print_suppressions=1:suppressions=${{ github.workspace }}/Tests/tsan_suppressions.txt
+        # print_suppressions=0: a matched suppression writes a 'Matched N suppressions'
+        # line into the private runtime log, which carries no sanitizer signature and
+        # fails the evidence verifier (the ASan/LSan lane avoids it the same way).
+        TSAN_OPTIONS: halt_on_error=0:second_deadlock_stack=1:print_suppressions=0:suppressions=${{ github.workspace }}/Tests/tsan_suppressions.txt
       run: |
         bash .github/scripts/run-sanitizer-tests.sh \
           --evidence-root "${{ runner.temp }}" \

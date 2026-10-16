@@ -2674,9 +2674,10 @@ static void HandleLinuxCrash(int sig, siginfo_t* info, void* context)
 #ifdef SPARK_PLATFORM_LINUX
     WriteBoundedSignalArtifacts(fd, sig, reportSequence);
 
-    // The engine log tail is not async-signal-safe to flush (bounded lock
-    // waits, heap), so it runs only after the signal-safe report is on disk.
-    Spark::Logger::Get().FlushForCrash();
+    // No Logger::FlushForCrash() here: it takes locks and allocates, which this
+    // handler's async-signal-safety contract forbids (TSan reports it as a
+    // signal-unsafe call). Warn and above are flushed when logged, and the
+    // Logger's 100 ms flush thread bounds what an Info-only tail can lose.
 #else
     // The macOS best-effort path is unchanged by the Linux signal-safety fix.
     // Engine log tail first (bounded lock waits, never throws).

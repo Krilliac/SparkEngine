@@ -68,7 +68,12 @@ SELECTION_FLAGS = {
 }
 FENCE = re.compile(r"^\s*(```|~~~)")
 CTEST_TIMEOUT_SECONDS = 120
+# A selection's wall-clock budget: the sum of the selected tests' own CTest timeouts
+# (CTest kills each test at its limit), floored for small selections and capped below
+# the 60-minute CI step limit so a hung or slow selection still fails here, with its
+# per-test progress, instead of the runner killing the whole step.
 CTEST_EXECUTION_TIMEOUT_SECONDS = 900
+CTEST_EXECUTION_TIMEOUT_CAP_SECONDS = 3000
 CTEST_EXECUTION_PARALLEL = 2  # matches the required lanes' full "Run Tests" ctest invocation
 DEFAULT_TEST_LIMIT = 50
 CMAKE_TOOL = re.compile(r"^(?:.*[/\\])?cmake(?:\.exe)?$", re.IGNORECASE)
@@ -253,8 +258,24 @@ def show_only(ctest: str, build_dir: Path, config: str | None, selection: list[s
     return tests
 
 
+def execution_budget_seconds(tests: list[dict]) -> int:
+    """Wall-clock budget for running @p tests: their summed CTest timeouts, floored and capped."""
+    total = 0
+    for test in tests:
+        timeout = CTEST_TIMEOUT_SECONDS  # the --timeout default for tests without TIMEOUT
+        for prop in test.get("properties") or []:
+            if isinstance(prop, dict) and prop.get("name") == "TIMEOUT":
+                try:
+                    timeout = max(1, int(float(prop.get("value"))))
+                except (TypeError, ValueError):
+                    pass
+        total += timeout
+    return min(CTEST_EXECUTION_TIMEOUT_CAP_SECONDS, max(CTEST_EXECUTION_TIMEOUT_SECONDS, total))
+
+
 def execute_selected(ctest: str, build_dir: Path, config: str | None, selection: list[str],
-                     test_limit: int, label_exclude: frozenset[str] = frozenset()) -> None:
+                     test_limit: int, label_exclude: frozenset[str] = frozenset(),
+                     timeout_seconds: int = CTEST_EXECUTION_TIMEOUT_SECONDS) -> None:
     """Run one documented selection and fail on CTest or timeout failure."""
     argv = [ctest, "--test-dir", str(build_dir)]
     if config:
@@ -270,7 +291,7 @@ def execute_selected(ctest: str, build_dir: Path, config: str | None, selection:
         environment.pop(variable, None)
     environment["SPARK_TEST_LIMIT"] = str(test_limit)
     try:
-        completed = subprocess.run(argv, capture_output=True, text=True, timeout=CTEST_EXECUTION_TIMEOUT_SECONDS,
+        completed = subprocess.run(argv, capture_output=True, text=True, timeout=timeout_seconds,
                                    check=False, env=environment)
     except subprocess.TimeoutExpired as error:
         # Keep CTest's per-test completion lines: without them a timed-out
@@ -278,7 +299,7 @@ def execute_selected(ctest: str, build_dir: Path, config: str | None, selection:
         partial = error.stdout or ""
         if isinstance(partial, bytes):
             partial = partial.decode("utf-8", errors="replace")
-        raise RuntimeError(f"timed out after {CTEST_EXECUTION_TIMEOUT_SECONDS} seconds; CTest output so far:\n"
+        raise RuntimeError(f"timed out after {timeout_seconds} seconds; CTest output so far:\n"
                            f"{partial.strip()[-4000:]}") from error
     if completed.returncode != 0:
         detail = (completed.stdout.strip() + "\n" + completed.stderr.strip()).strip()
@@ -389,7 +410,8 @@ def evaluate(command: DocumentedCommand, ctest: str, build_dir: Path, config: st
             return Outcome(command, previous.status, f"same selection as {previous.command.source}: {previous.detail}")
         try:
             limit = effective_test_limit(enabled, test_limit)
-            execute_selected(ctest, build_dir, config, selection, limit, label_exclude)
+            execute_selected(ctest, build_dir, config, selection, limit, label_exclude,
+                             execution_budget_seconds(enabled))
             outcome = Outcome(command, "pass", f"selects and executed {len(enabled)} enabled test(s)")
         except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as error:
             outcome = Outcome(command, "fail", f"selection execution failed: {error}")

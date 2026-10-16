@@ -22,7 +22,9 @@
  *   still gets its last Info lines out. Per-line flushing was measured at
  *   ~3.5 us/line against ~0.5 us buffered (one WriteFile per line on Windows),
  *   too much for a per-frame log site; the interval check costs the caller nothing.
- * - The crash handler calls Logger::FlushForCrash() before writing the dump.
+ * - The Windows SEH/assert and macOS crash paths call Logger::FlushForCrash()
+ *   before writing the dump. The Linux signal handler does not (it locks and
+ *   allocates, which is not async-signal-safe) and relies on the two rules above.
  * - Shutdown() flushes every sink.
  * Data handed to the OS survives TerminateProcess/_exit; only the in-process
  * buffer is lost, so the bounded loss on a force-kill is the last interval of

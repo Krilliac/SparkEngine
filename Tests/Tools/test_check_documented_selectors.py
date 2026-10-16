@@ -246,6 +246,24 @@ class DocumentedCommandInventoryTests(unittest.TestCase):
         self.assertNotIn("SPARK_TEST_NAME_PREFIX", options["env"])
         self.assertEqual(options["timeout"], checker.CTEST_EXECUTION_TIMEOUT_SECONDS)
 
+    def test_execution_budget_covers_every_selected_test_timeout(self) -> None:
+        def test(timeout: object | None) -> dict:
+            return {"properties": [] if timeout is None else [{"name": "TIMEOUT", "value": timeout}]}
+
+        # A slow lock-serialized selection outgrows the floor: 600 + 180 + 120 default + 1000.
+        self.assertEqual(checker.execution_budget_seconds([test(600), test(180.0), test(None), test("1000")]), 1900)
+        self.assertEqual(checker.execution_budget_seconds([test(10)]), checker.CTEST_EXECUTION_TIMEOUT_SECONDS)
+        self.assertEqual(checker.execution_budget_seconds([test("bad")] * 10), 10 * checker.CTEST_TIMEOUT_SECONDS)
+        # A 307-test unit selection sums to hours; the cap keeps it inside the CI step limit.
+        self.assertEqual(checker.execution_budget_seconds([test(None)] * 307),
+                         checker.CTEST_EXECUTION_TIMEOUT_CAP_SECONDS)
+
+    def test_selection_runs_with_its_budget(self) -> None:
+        completed = type("Completed", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+        with patch.object(checker.subprocess, "run", return_value=completed) as run:
+            checker.execute_selected("ctest", Path("build"), None, ["-L", "unit"], 7, timeout_seconds=4321)
+        self.assertEqual(run.call_args[1]["timeout"], 4321)
+
     def test_execute_timeout_reports_the_tests_ctest_completed(self) -> None:
         progress = "1/3 Test #7: SlowOne ....   Passed  600.01 sec\n"
         timeout = subprocess.TimeoutExpired(["ctest"], checker.CTEST_EXECUTION_TIMEOUT_SECONDS, output=progress)
@@ -293,6 +311,22 @@ class DocumentedCommandInventoryTests(unittest.TestCase):
             outcome = checker.evaluate(command, "ctest", Path("build"), None,
                                        documented_tree="build/linux-gcc-release")
         self.assertEqual(outcome.status, "pass", outcome.detail)
+
+    def test_execution_uses_the_selection_budget(self) -> None:
+        command = checker.DocumentedCommand(
+            "fixture[budget]", "ctest --test-dir build/linux-gcc-release -L unit",
+            ["--test-dir", "build/linux-gcc-release", "-L", "unit"]
+        )
+        selected = [{"name": f"slow{index}", "command": ["python"], "properties": [{"name": "TIMEOUT", "value": 600}]}
+                    for index in range(3)]
+        completed = type("Completed", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+        with patch.object(checker, "show_only", return_value=selected), \
+                patch.object(checker, "_executable_exists", return_value=True), \
+                patch.object(checker.subprocess, "run", return_value=completed) as run:
+            outcome = checker.evaluate(command, "ctest", Path("build"), None,
+                                       documented_tree="build/linux-gcc-release", execute=True)
+        self.assertEqual(outcome.status, "pass", outcome.detail)
+        self.assertEqual(run.call_args[1]["timeout"], 1800)
 
 
 class ShellSegmentTests(unittest.TestCase):
