@@ -345,7 +345,7 @@ namespace Spark
             }
         };
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) || defined(_LIBCPP_VERSION)
         // Internal-linkage types (anonymous namespaces, function-local classes) are
         // distinct even when their mangled names match, so they never match by name.
         static bool IsSharedTypeName(const char* name) noexcept
@@ -360,10 +360,11 @@ namespace Spark
             const auto it = m_channels.find(std::type_index(typeid(E)));
             if (it != m_channels.end())
                 return it->second.get();
-#if defined(__APPLE__)
-            // Apple's arm64 libc++ compares a unique type_info (host) and a non-unique
-            // one (a hidden-visibility module) by address only, so the same SDK event
+#if defined(__APPLE__) || defined(_LIBCPP_VERSION)
+            // libc++ compares type_info by address on ELF and Apple arm64 (unique RTTI),
+            // and a hidden-visibility module carries its own copy, so the same SDK event
             // type misses across the module boundary. Fall back to the mangled name.
+            // libstdc++ already compares names, so it never reaches this path.
             const char* name = typeid(E).name();
             if (IsSharedTypeName(name))
             {
