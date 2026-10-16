@@ -1104,7 +1104,7 @@ extents; this does not change plane order or clip-space calculations.
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*745 test-bearing `.cpp`/`.mm` files, 8646 source-level test definitions*
+*745 test-bearing `.cpp`/`.mm` files, 8649 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -1327,7 +1327,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestEntityPresetManager` | 10 |
 | `TestEntityPresetManagerPhaseEE` | 7 |
 | `TestEnvironmentQuery` | 12 |
-| `TestEventBus` | 15 |
+| `TestEventBus` | 18 |
 | `TestEventBusReal` | 8 |
 | `TestEventResponseSystem` | 15 |
 | `TestEventResponseSystemPhaseEE` | 17 |
