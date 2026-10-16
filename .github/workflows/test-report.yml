@@ -6,8 +6,8 @@
 # files are untrusted data, read only by the digest-pinned publisher image.
 name: Test report
 
-on: # zizmor: ignore[dangerous-triggers] -- reads artifacts only, never checks out or runs PR code
-  workflow_run:
+on:
+  workflow_run: # zizmor: ignore[dangerous-triggers] -- reads artifacts only through the digest-pinned publisher image; never checks out or runs PR code
     workflows: ["Build SparkEngine"]
     types: [completed]
 
