@@ -65,8 +65,10 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <string_view>
 #include <thread>
 #include <typeindex>
+#include <typeinfo>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -345,37 +347,57 @@ namespace Spark
             }
         };
 
-#if defined(__APPLE__) || defined(_LIBCPP_VERSION)
-        // Internal-linkage types (anonymous namespaces, function-local classes) are
-        // distinct even when their mangled names match, so they never match by name.
+#if defined(__APPLE__) || (defined(_LIBCPP_VERSION) && !defined(_WIN32))
+        // libc++ compares type_info by address on ELF (and for unique RTTI on Apple
+        // arm64), and a hidden-visibility module carries its own copy, so the same SDK
+        // event type would miss across the module boundary. Channels are therefore
+        // hashed by mangled name and match by name for external-linkage types; the
+        // lookup stays O(1) in both directions. libstdc++ and MSVC already compare
+        // names, so they keep std::type_index.
         static bool IsSharedTypeName(const char* name) noexcept
         {
-            return name[0] != 'Z' && std::strstr(name, "_GLOBAL__N") == nullptr;
+            // Internal-linkage types are distinct even when their mangled names match:
+            // function-local classes (Z..., or IZ... as a template argument), anonymous
+            // namespaces (_GLOBAL__N) and clang's unnamed $_N types. Rejecting a shared
+            // type here only loses the cross-module match, which is safe.
+            return name[0] != 'Z' && std::strstr(name, "_GLOBAL__N") == nullptr && std::strstr(name, "IZ") == nullptr &&
+                   std::strchr(name, '$') == nullptr;
         }
+
+        struct ChannelKey
+        {
+            const std::type_info* type;
+        };
+        struct ChannelKeyHash
+        {
+            // Equal keys always have equal names, so hashing the name is consistent.
+            size_t operator()(const ChannelKey& key) const noexcept
+            {
+                return std::hash<std::string_view>{}(key.type->name());
+            }
+        };
+        struct ChannelKeyEqual
+        {
+            bool operator()(const ChannelKey& a, const ChannelKey& b) const noexcept
+            {
+                const char* aName = a.type->name();
+                const char* bName = b.type->name();
+                return *a.type == *b.type ||
+                       (IsSharedTypeName(aName) && IsSharedTypeName(bName) && std::strcmp(aName, bName) == 0);
+            }
+        };
+        using ChannelMap = std::unordered_map<ChannelKey, std::unique_ptr<IChannel>, ChannelKeyHash, ChannelKeyEqual>;
+        template <typename E> static ChannelKey KeyOf() noexcept { return ChannelKey{&typeid(E)}; }
+#else
+        using ChannelMap = std::unordered_map<std::type_index, std::unique_ptr<IChannel>>;
+        template <typename E> static std::type_index KeyOf() noexcept { return std::type_index(typeid(E)); }
 #endif
 
         // Find the channel for E. The caller holds m_channelsMutex.
         template <typename E> IChannel* FindChannelLocked() const
         {
-            const auto it = m_channels.find(std::type_index(typeid(E)));
-            if (it != m_channels.end())
-                return it->second.get();
-#if defined(__APPLE__) || defined(_LIBCPP_VERSION)
-            // libc++ compares type_info by address on ELF and Apple arm64 (unique RTTI),
-            // and a hidden-visibility module carries its own copy, so the same SDK event
-            // type misses across the module boundary. Fall back to the mangled name.
-            // libstdc++ already compares names, so it never reaches this path.
-            const char* name = typeid(E).name();
-            if (IsSharedTypeName(name))
-            {
-                for (const auto& [key, channel] : m_channels)
-                {
-                    if (std::strcmp(key.name(), name) == 0)
-                        return channel.get();
-                }
-            }
-#endif
-            return nullptr;
+            const auto it = m_channels.find(KeyOf<E>());
+            return it != m_channels.end() ? it->second.get() : nullptr;
         }
 
         // Get or create the channel for E (acquires m_channelsMutex)
@@ -386,7 +408,7 @@ namespace Spark
                 return *static_cast<ChannelOf<E>*>(existing);
             auto ch = std::make_unique<ChannelOf<E>>();
             auto* raw = ch.get();
-            m_channels.emplace(std::type_index(typeid(E)), std::move(ch));
+            m_channels.emplace(KeyOf<E>(), std::move(ch));
             return *raw;
         }
 
@@ -411,7 +433,7 @@ namespace Spark
         }
 
         mutable std::mutex m_channelsMutex;
-        std::unordered_map<std::type_index, std::unique_ptr<IChannel>> m_channels;
+        ChannelMap m_channels;
         std::mutex m_publishingMutex;
         std::vector<PublishingEntry> m_publishing;
         std::atomic<uint64_t> m_nextId{0};
