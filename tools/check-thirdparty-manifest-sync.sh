@@ -79,9 +79,8 @@ is_pointer_only_submodule_diff() {
         fi
         path="${BASH_REMATCH[1]}"
         [[ "$path" == ThirdParty/* ]] || return 1
-        git config --file .gitmodules --get-regexp '^submodule\..*\.path$' \
-            | awk '{print $2}' \
-            | grep -Fxq "$path" || return 1
+        grep -Fxq "$path" <<< "$(git config --file .gitmodules --get-regexp '^submodule\..*\.path$' \
+            | awk '{print $2}')" || return 1
         grep -Fq "|$path|" "$MANIFEST" || return 1
         pointer_count=$((pointer_count + 1))
     done <<< "$raw_diff"
@@ -132,7 +131,10 @@ if [ -z "$CHANGED_FILES" ]; then
 fi
 
 manifest_changed=false
-if echo "$CHANGED_FILES" | grep -Fxq "$MANIFEST"; then
+# Here-string, not `echo | grep -q`: grep -q exits at the first match, and once
+# the list outgrows the pipe buffer echo dies of SIGPIPE, which pipefail turns
+# into a false "manifest not updated" on large diffs.
+if grep -Fxq "$MANIFEST" <<< "$CHANGED_FILES"; then
     manifest_changed=true
 fi
 
@@ -184,8 +186,11 @@ done <<< "$CHANGED_FILES"
 # new third-party dep without matching one of these patterns, bump the
 # manifest manually.
 wiring_changed=false
-if "${WIRING_DIFF_CMD[@]}" \
-    | grep -Eq '^[+-].*(ThirdParty/|https://|\.git|SPARK_HAS_|SPARK_RECAST_AVAILABLE|SPARK_JOLT_PHYSICS_AVAILABLE)'; then
+# Capture first (see manifest_changed above): piping a large diff into grep -q
+# would SIGPIPE git on an early match and silently report no wiring change.
+wiring_diff="$("${WIRING_DIFF_CMD[@]}")"
+if grep -Eq '^[+-].*(ThirdParty/|https://|\.git|SPARK_HAS_|SPARK_RECAST_AVAILABLE|SPARK_JOLT_PHYSICS_AVAILABLE)' \
+    <<< "$wiring_diff"; then
     wiring_changed=true
 fi
 

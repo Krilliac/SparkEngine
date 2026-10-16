@@ -259,6 +259,41 @@ class PayloadDriftStillBlockedTests(ManifestSyncHarness):
         self.assert_passes(self.run_check(ci=True))
 
 
+class LargeDiffTests(ManifestSyncHarness):
+    """A diff bigger than a pipe buffer must not race grep -q against its writer.
+
+    `echo "$list" | grep -q` under pipefail reports failure when grep exits at
+    an early match while echo is still writing (SIGPIPE), so a lock bump in the
+    middle of a large PR read as "manifest not updated".
+    """
+
+    def write_bulk(self, prefix: str, count: int) -> None:
+        for index in range(count):
+            self.write(f"{prefix}/generated-evidence-file-with-a-long-name-{index:05d}.txt", f"{index}\n")
+
+    def test_lock_bump_inside_large_diff_passes(self) -> None:
+        # Sorted git output puts ThirdParty/ between these two blocks, so the
+        # match lands mid-list with well over 64 KiB still unwritten.
+        self.write_bulk("AAA-docs", 1500)
+        self.write_bulk("zzz-docs", 1500)
+        self.write("ThirdParty/Utils/stb/stb_image.h", "/* updated */\n")
+        manifest = self.repo / MANIFEST_REL
+        manifest.write_text(manifest.read_text(encoding="utf-8") + "\n# resynced\n", encoding="utf-8", newline="\n")
+        self.commit("large diff with manifest bump")
+        self.assert_passes(self.run_check(ci=True))
+
+    def test_large_wiring_diff_with_early_match_still_blocks(self) -> None:
+        # The first wiring token appears near the top of a large CMakeLists diff;
+        # an early grep -q exit must not turn into "no wiring change".
+        cmake = self.repo / "CMakeLists.txt"
+        body = 'set(SPARK_EXTRA_DEP "ThirdParty/New/dep")\n' + "".join(
+            f"set(SPARK_FILLER_{index:05d} \"plain configuration value number {index}\")\n" for index in range(4000)
+        )
+        cmake.write_text(cmake.read_text(encoding="utf-8") + body, encoding="utf-8", newline="\n")
+        self.commit("large wiring diff")
+        self.assert_blocks(self.run_check(ci=True))
+
+
 class GovernanceListContractTests(unittest.TestCase):
     """The allowlist itself is part of the security contract."""
 
