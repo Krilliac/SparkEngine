@@ -5993,10 +5993,11 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_CROSSCOMPILING AND MINIZ_FOU
     # -fno-lto: an LTO-compiled unit reports its DWARF file as <artificial>.
     target_compile_options(SparkCrashSymbolicationProbe PRIVATE -g -O0 -fno-omit-frame-pointer -fno-lto)
     target_link_options(SparkCrashSymbolicationProbe PRIVATE -Wl,--build-id=sha1)
-    # Shipping presets strip every link (-s); the probe must keep its DWARF so
+    # Shipping presets strip every link (-s on MinGW; -g0 and --strip-all on
+    # ELF, see the top-level CMakeLists.txt); the probe must keep its DWARF so
     # the canary can split it into the symbol store.
     get_target_property(_spark_probe_link_options SparkCrashSymbolicationProbe LINK_OPTIONS)
-    list(FILTER _spark_probe_link_options EXCLUDE REGEX ":-s>$")
+    list(FILTER _spark_probe_link_options EXCLUDE REGEX ":(-s|-g0|-Wl,--strip-all)>$")
     set_property(TARGET SparkCrashSymbolicationProbe PROPERTY LINK_OPTIONS ${_spark_probe_link_options})
     target_link_libraries(SparkCrashSymbolicationProbe PRIVATE SparkEngineLib)
     add_dependencies(SparkTests SparkCrashSymbolicationProbe)
