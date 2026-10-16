@@ -2387,7 +2387,7 @@
 | `AsyncWriterThread` | function | SparkEngine | [Logger.h:L665](../../SparkEngine/Source/Utils/Logger.h#L665) | Background thread function that drains the message queue |
 | `at` | function | GameModules | [TFOpticsSystem.cpp:L343](../../GameModules/SparkGameMMOFPS/Source/Game/TFOpticsSystem.cpp#L343) |  |
 | `At` | function | SparkEngine | [LagCompensation.h:L109](../../SparkEngine/Source/Engine/Networking/LagCompensation.h#L109) |  |
-| `At` | function | SparkSDK | [EventBus.h:L106](../../SparkSDK/Include/Spark/EventBus.h#L106) |  |
+| `At` | function | SparkSDK | [EventBus.h:L107](../../SparkSDK/Include/Spark/EventBus.h#L107) |  |
 | `At` | function | SparkUI | [Tokens.cpp:L89](../../SparkUI/Source/Tokens.cpp#L89) |  |
 | `At` | function | Tests | [RHI210D3D11EngineFixture.h:L99](../../Tests/RHI210D3D11EngineFixture.h#L99) |  |
 | `At` | function | Tests | [RHI210D3D11GoldenSupport.h:L729](../../Tests/RHI210D3D11GoldenSupport.h#L729) |  |
@@ -4319,11 +4319,11 @@
 | `ChannelDistance` | function | Tests | [TestRHI225D3D12ParityReal.cpp:L1084](../../Tests/TestRHI225D3D12ParityReal.cpp#L1084) |  |
 | `ChannelError` | function | Tests | [RHI210D3D11GoldenSupport.h:L164](../../Tests/RHI210D3D11GoldenSupport.h#L164) |  |
 | `channelIn` | function | SparkEngine | [BilateralUpsample.h:L157](../../SparkEngine/Source/Graphics/BilateralUpsample.h#L157) |  |
-| `ChannelKey` | struct | SparkSDK | [EventBus.h:L543](../../SparkSDK/Include/Spark/EventBus.h#L543) |  |
-| `ChannelKeyEqual` | struct | SparkSDK | [EventBus.h:L556](../../SparkSDK/Include/Spark/EventBus.h#L556) |  |
-| `ChannelKeyHash` | struct | SparkSDK | [EventBus.h:L548](../../SparkSDK/Include/Spark/EventBus.h#L548) |  |
-| `ChannelMap` | alias | SparkSDK | [EventBus.h:L563](../../SparkSDK/Include/Spark/EventBus.h#L563) |  |
-| `ChannelMap` | alias | SparkSDK | [EventBus.h:L571](../../SparkSDK/Include/Spark/EventBus.h#L571) |  |
+| `ChannelKey` | struct | SparkSDK | [EventBus.h:L545](../../SparkSDK/Include/Spark/EventBus.h#L545) |  |
+| `ChannelKeyEqual` | struct | SparkSDK | [EventBus.h:L558](../../SparkSDK/Include/Spark/EventBus.h#L558) |  |
+| `ChannelKeyHash` | struct | SparkSDK | [EventBus.h:L550](../../SparkSDK/Include/Spark/EventBus.h#L550) |  |
+| `ChannelMap` | alias | SparkSDK | [EventBus.h:L565](../../SparkSDK/Include/Spark/EventBus.h#L565) |  |
+| `ChannelMap` | alias | SparkSDK | [EventBus.h:L573](../../SparkSDK/Include/Spark/EventBus.h#L573) |  |
 | `channelOut` | function | SparkEngine | [BilateralUpsample.h:L158](../../SparkEngine/Source/Graphics/BilateralUpsample.h#L158) |  |
 | `ChannelRole` | enum | SparkEngine | [NetworkEncryption.h:L200](../../SparkEngine/Source/Engine/Networking/NetworkEncryption.h#L200) | Which end of the connection a SecureChannel represents (selects key direction). |
 | `ChannelStyle` | struct | GameModules | [TFChatWindow.cpp:L39](../../GameModules/SparkGameMMOFPS/Source/UI/TFChatWindow.cpp#L39) |  |
@@ -4769,7 +4769,7 @@
 | `ClearAll` | function | SparkEngine | [BitFlags.h:L152](../../SparkEngine/Source/Utils/BitFlags.h#L152) | Clear all flags. |
 | `ClearAll` | function | SparkEngine | [EntityEventBus.h:L238](../../SparkEngine/Source/Utils/EntityEventBus.h#L238) | Remove all subscriptions for all entities and all event types. |
 | `ClearAll` | function | SparkEngine | [ScheduledCallback.h:L173](../../SparkEngine/Source/Utils/ScheduledCallback.h#L173) | Cancel all pending callbacks. |
-| `ClearAll` | function | SparkSDK | [EventBus.h:L474](../../SparkSDK/Include/Spark/EventBus.h#L474) | Remove all subscriptions for every event type. |
+| `ClearAll` | function | SparkSDK | [EventBus.h:L476](../../SparkSDK/Include/Spark/EventBus.h#L476) | Remove all subscriptions for every event type. |
 | `ClearAll` | function | Tests | [TestEventSystem.cpp:L73](../../Tests/TestEventSystem.cpp#L73) |  |
 | `ClearAll` | function | Tests | [TestMovementSystem.cpp:L155](../../Tests/TestMovementSystem.cpp#L155) |  |
 | `ClearAll` | function | Tests | [TestScheduledCallback.cpp:L71](../../Tests/TestScheduledCallback.cpp#L71) |  |
@@ -4903,7 +4903,7 @@
 | `clearState` | function | GameModules | [TFCrypto.cpp:L114](../../GameModules/SparkGameMMOFPS/Source/Account/TFCrypto.cpp#L114) |  |
 | `ClearStateScope` | class | SparkEngine | [OpenGLDevice.cpp:L124](../../SparkEngine/Source/Graphics/RHI/OpenGL/OpenGLDevice.cpp#L124) |  |
 | `ClearStatus` | function | SparkLauncher | [LauncherApp.h:L81](../../SparkLauncher/src/LauncherApp.h#L81) | Remove the status banner. |
-| `ClearSubscribers` | function | SparkSDK | [EventBus.h:L462](../../SparkSDK/Include/Spark/EventBus.h#L462) | Remove all subscriptions for event type `E`. |
+| `ClearSubscribers` | function | SparkSDK | [EventBus.h:L464](../../SparkSDK/Include/Spark/EventBus.h#L464) | Remove all subscriptions for event type `E`. |
 | `ClearSubscriptions` | function | Tests | [TestEventSystem.cpp:L67](../../Tests/TestEventSystem.cpp#L67) |  |
 | `clearT` | function | GameModules | [TFCrypto.cpp:L168](../../GameModules/SparkGameMMOFPS/Source/Account/TFCrypto.cpp#L168) |  |
 | `ClearTimer` | function | SparkEngine | [TimerManager.h:L152](../../SparkEngine/Source/Utils/TimerManager.h#L152) | Remove a timer |
@@ -5758,8 +5758,8 @@
 | `CompletionCallback` | alias | SparkBuild | [ProcessRunner.h:L23](../../SparkBuild/src/ProcessRunner.h#L23) |  |
 | `CompletionState` | struct | Tests | [TestDirectStorageLoader.cpp:L246](../../Tests/TestDirectStorageLoader.cpp#L246) |  |
 | `Component` | struct | SparkEditor | [SceneFileTypes.h:L1022](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L1022) | Generic component wrapper |
-| `Component` | function | SparkSDK | [EventBus.h:L139](../../SparkSDK/Include/Spark/EventBus.h#L139) |  |
-| `Component` | function | SparkSDK | [EventBus.h:L202](../../SparkSDK/Include/Spark/EventBus.h#L202) |  |
+| `Component` | function | SparkSDK | [EventBus.h:L141](../../SparkSDK/Include/Spark/EventBus.h#L141) |  |
+| `Component` | function | SparkSDK | [EventBus.h:L204](../../SparkSDK/Include/Spark/EventBus.h#L204) |  |
 | `Component` | struct | Tests | [TestReflection.cpp:L165](../../Tests/TestReflection.cpp#L165) |  |
 | `Component::GetData` | method | SparkEditor | [SceneFileTypes.h:L1125](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L1125) |  |
 | `Component::GetData` | method | SparkEditor | [SceneFileTypes.h:L1130](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L1130) |  |
@@ -9721,7 +9721,7 @@
 | `double` | function | Tests | [RHI210D3D11EngineFixture.h:L269](../../Tests/RHI210D3D11EngineFixture.h#L269) |  |
 | `DoubleUnsub` | struct | Tests | [TestAdversarialEngine.cpp:L198](../../Tests/TestAdversarialEngine.cpp#L198) |  |
 | `DoUnsubscribe` | function | SparkEngine | [EntityEventBus.h:L319](../../SparkEngine/Source/Utils/EntityEventBus.h#L319) |  |
-| `DoUnsubscribe` | function | SparkSDK | [EventBus.h:L602](../../SparkSDK/Include/Spark/EventBus.h#L602) |  |
+| `DoUnsubscribe` | function | SparkSDK | [EventBus.h:L604](../../SparkSDK/Include/Spark/EventBus.h#L604) |  |
 | `DownloadAndExtract` | function | SparkBuild | [Downloader.h:L52](../../SparkBuild/src/Downloader.h#L52) |  |
 | `DownloadCMake` | function | SparkBuild | [SparkBuild.h:L34](../../SparkBuild/src/SparkBuild.h#L34) |  |
 | `Downloader` | class | SparkBuild | [Downloader.h:L19](../../SparkBuild/src/Downloader.h#L19) |  |
@@ -10119,7 +10119,7 @@
 | `EaseOutQuad` | function | Tests | [TestExtendedSystems.cpp:L963](../../Tests/TestExtendedSystems.cpp#L963) |  |
 | `EaseType` | enum | SparkEngine | [TweenSystem.h:L41](../../SparkEngine/Source/Engine/Tween/TweenSystem.h#L41) | Easing function type for tween interpolation. |
 | `Eat` | function | GameModules | [OWPlayerSystem.h:L90](../../GameModules/SparkGameOpenWorld/Source/Player/OWPlayerSystem.h#L90) |  |
-| `EBAnonymousEvent` | struct | Tests | [TestEventBus.cpp:L277](../../Tests/TestEventBus.cpp#L277) |  |
+| `EBAnonymousEvent` | struct | Tests | [TestEventBus.cpp:L279](../../Tests/TestEventBus.cpp#L279) |  |
 | `EBCounterEvent` | struct | Tests | [TestEventBus.cpp:L11](../../Tests/TestEventBus.cpp#L11) |  |
 | `EBEmptyEvent` | struct | Tests | [TestEventBus.cpp:L21](../../Tests/TestEventBus.cpp#L21) |  |
 | `EBStringEvent` | struct | Tests | [TestEventBus.cpp:L16](../../Tests/TestEventBus.cpp#L16) |  |
@@ -11152,7 +11152,7 @@
 | `Entry` | struct | SparkEngine | [EntityEventBus.h:L278](../../SparkEngine/Source/Utils/EntityEventBus.h#L278) |  |
 | `Entry` | struct | SparkEngine | [Octree.h:L192](../../SparkEngine/Source/Utils/Octree.h#L192) |  |
 | `Entry` | struct | SparkEngine | [ScheduledCallback.h:L176](../../SparkEngine/Source/Utils/ScheduledCallback.h#L176) | Cancel all pending callbacks. |
-| `Entry` | struct | SparkSDK | [EventBus.h:L508](../../SparkSDK/Include/Spark/EventBus.h#L508) |  |
+| `Entry` | struct | SparkSDK | [EventBus.h:L510](../../SparkSDK/Include/Spark/EventBus.h#L510) |  |
 | `Entry` | struct | Tests | [TestAdversarialEngine.cpp:L1246](../../Tests/TestAdversarialEngine.cpp#L1246) |  |
 | `Entry` | struct | Tests | [TestScheduledCallback.cpp:L74](../../Tests/TestScheduledCallback.cpp#L74) |  |
 | `Entry` | struct | Tests | [TestSparkPak.cpp:L148](../../Tests/TestSparkPak.cpp#L148) |  |
@@ -11417,7 +11417,7 @@
 | `EventBus` | class | SparkEngine | [AbilitySystem.h:L41](../../SparkEngine/Source/Engine/Gameplay/AbilitySystem.h#L41) |  |
 | `EventBus` | class | SparkEngine | [PhysicsSystem.h:L38](../../SparkEngine/Source/Physics/PhysicsSystem.h#L38) |  |
 | `EventBus` | class | SparkSDK | [EventBus.h:L80](../../SparkSDK/Include/Spark/EventBus.h#L80) |  |
-| `EventBus` | class | SparkSDK | [EventBus.h:L352](../../SparkSDK/Include/Spark/EventBus.h#L352) | Type-safe publish/subscribe event bus. |
+| `EventBus` | class | SparkSDK | [EventBus.h:L354](../../SparkSDK/Include/Spark/EventBus.h#L354) | Type-safe publish/subscribe event bus. |
 | `EventBus` | class | SparkSDK | [IEngineContext.h:L37](../../SparkSDK/Include/Spark/IEngineContext.h#L37) |  |
 | `EventBus` | class | SparkServer | [ServerApplication.h:L29](../../SparkServer/src/ServerApplication.h#L29) |  |
 | `EventBus` | class | Tests | [TestEventSystem.cpp:L19](../../Tests/TestEventSystem.cpp#L19) |  |
@@ -12799,10 +12799,10 @@
 | `FindChannel` | function | SparkEngine | [AnimationClip.h:L187](../../SparkEngine/Source/Engine/Animation/AnimationClip.h#L187) | Find the animation channel for the named bone. |
 | `FindChannel` | function | SparkEngine | [AnimationTypes.h:L206](../../SparkEngine/Source/Engine/Animation/AnimationTypes.h#L206) | Find the animation channel for the named bone. |
 | `FindChannel` | function | SparkEngine | [EntityEventBus.h:L309](../../SparkEngine/Source/Utils/EntityEventBus.h#L309) |  |
-| `FindChannel` | function | SparkSDK | [EventBus.h:L595](../../SparkSDK/Include/Spark/EventBus.h#L595) |  |
+| `FindChannel` | function | SparkSDK | [EventBus.h:L597](../../SparkSDK/Include/Spark/EventBus.h#L597) |  |
 | `FindChannel` | function | Tests | [TestAnimationStress.cpp:L167](../../Tests/TestAnimationStress.cpp#L167) |  |
 | `FindChannel` | function | Tests | [TestAnimationSystem.cpp:L246](../../Tests/TestAnimationSystem.cpp#L246) |  |
-| `FindChannelLocked` | function | SparkSDK | [EventBus.h:L576](../../SparkSDK/Include/Spark/EventBus.h#L576) |  |
+| `FindChannelLocked` | function | SparkSDK | [EventBus.h:L578](../../SparkSDK/Include/Spark/EventBus.h#L578) |  |
 | `FindCharacter` | function | GameModules | [TFDatabase.h:L276](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.h#L276) |  |
 | `FindCharacterByName` | function | GameModules | [TFDatabase.h:L274](../../GameModules/SparkGameMMOFPS/Source/Persistence/TFDatabase.h#L274) |  |
 | `FindChild` | function | SparkEngine | [SceneGraph2D.h:L165](../../SparkEngine/Source/Engine/2D/SceneGraph2D.h#L165) |  |
@@ -17571,7 +17571,7 @@
 | `GetOrCreateCell` | function | SparkEngine | [SpatialGrid.h:L201](../../SparkEngine/Source/Engine/World/SpatialGrid.h#L201) | Clear all cells and entity tracking |
 | `GetOrCreateCell` | function | Tests | [TestSpatialGrid.cpp:L205](../../Tests/TestSpatialGrid.cpp#L205) |  |
 | `GetOrCreateChannel` | function | SparkEngine | [EntityEventBus.h:L294](../../SparkEngine/Source/Utils/EntityEventBus.h#L294) |  |
-| `GetOrCreateChannel` | function | SparkSDK | [EventBus.h:L583](../../SparkSDK/Include/Spark/EventBus.h#L583) |  |
+| `GetOrCreateChannel` | function | SparkSDK | [EventBus.h:L585](../../SparkSDK/Include/Spark/EventBus.h#L585) |  |
 | `GetOrCreateController` | function | SparkEngine | [MovementSystem.h:L413](../../SparkEngine/Source/Engine/AI/MovementSystem.h#L413) | Get the active movement type for an entity. |
 | `GetOrCreateLayout` | function | SparkEngine | [VulkanDescriptorCache.h:L75](../../SparkEngine/Source/Graphics/RHI/Vulkan/VulkanDescriptorCache.h#L75) | Get or create a descriptor set layout. |
 | `GetOrCreateScalarRoughnessSRV` | function | SparkEngine | [GraphicsEngine.h:L1342](../../SparkEngine/Source/Graphics/GraphicsEngine.h#L1342) |  |
@@ -19596,7 +19596,7 @@
 | `Global` | function | SparkEngine | [RandomEngine.h:L199](../../SparkEngine/Source/Utils/RandomEngine.h#L199) | Access the shared, thread-safe global random engine. |
 | `Global` | function | SparkEngine | [RandomEngine.h:L252](../../SparkEngine/Source/Utils/RandomEngine.h#L252) |  |
 | `Global` | function | SparkEngine | [StringPool.h:L141](../../SparkEngine/Source/Utils/StringPool.h#L141) | Access the engine-wide global string pool. |
-| `Global` | function | SparkSDK | [EventBus.h:L372](../../SparkSDK/Include/Spark/EventBus.h#L372) | Access the default event bus. |
+| `Global` | function | SparkSDK | [EventBus.h:L374](../../SparkSDK/Include/Spark/EventBus.h#L374) | Access the default event bus. |
 | `global` | function | Tests | [Test_tests_inversekinematics.cpp:L88](../../Tests/harden/Test_tests_inversekinematics.cpp#L88) |  |
 | `GlobalLocaleGuard` | class | Tests | [TestSceneSerializerReal.cpp:L62](../../Tests/TestSceneSerializerReal.cpp#L62) |  |
 | `GlobalLocaleGuard` | function | Tests | [TestSceneSerializerReal.cpp:L65](../../Tests/TestSceneSerializerReal.cpp#L65) |  |
@@ -21227,7 +21227,7 @@
 | `IAuthority` | class | GameModules | [TFHandoffParticipant.h:L22](../../GameModules/SparkGameMMOFPS/Source/Net/TFHandoffParticipant.h#L22) | Game-thread pawn operations supplied by the live authoritative simulation. |
 | `IBenchmarkScenario` | class | SparkEngine | [BenchmarkFramework.h:L60](../../SparkEngine/Source/Utils/BenchmarkFramework.h#L60) |  |
 | `IChannel` | struct | SparkEngine | [EntityEventBus.h:L269](../../SparkEngine/Source/Utils/EntityEventBus.h#L269) |  |
-| `IChannel` | struct | SparkSDK | [EventBus.h:L500](../../SparkSDK/Include/Spark/EventBus.h#L500) |  |
+| `IChannel` | struct | SparkSDK | [EventBus.h:L502](../../SparkSDK/Include/Spark/EventBus.h#L502) |  |
 | `ICommand` | class | SparkEditor | [CommandHistory.h:L60](../../SparkEditor/Source/CommandHistory.h#L60) | Interface for a reversible editor command. |
 | `ICommand` | class | Tests | [TestCommandHistory.cpp:L19](../../Tests/TestCommandHistory.cpp#L19) |  |
 | `ICON_FA_ADJUST` | macro | SparkEditor | [EditorIcons.h:L200](../../SparkEditor/Source/Core/EditorIcons.h#L200) |  |
@@ -21475,7 +21475,7 @@
 | `IDD_ABOUTBOX` | macro | SparkEngine | [resource.h:L21](../../SparkEngine/Source/Core/resource.h#L21) |  |
 | `IDD_SparkEngine_DIALOG` | macro | SparkEngine | [resource.h:L20](../../SparkEngine/Source/Core/resource.h#L20) |  |
 | `IDenoiser` | class | SparkEngine | [DenoiserInterface.h:L91](../../SparkEngine/Source/Graphics/DenoiserInterface.h#L91) | Abstract denoiser interface |
-| `identifier` | function | SparkSDK | [EventBus.h:L129](../../SparkSDK/Include/Spark/EventBus.h#L129) |  |
+| `identifier` | function | SparkSDK | [EventBus.h:L130](../../SparkSDK/Include/Spark/EventBus.h#L130) |  |
 | `identifier` | function | Tests | [TestAssetManifestReal.cpp:L177](../../Tests/TestAssetManifestReal.cpp#L177) |  |
 | `Identify` | function | Tests | [TestRHI225D3D12ParityReal.cpp:L95](../../Tests/TestRHI225D3D12ParityReal.cpp#L95) |  |
 | `Identify` | function | Tests | [TestRHI225D3D12ParityReal.cpp:L146](../../Tests/TestRHI225D3D12ParityReal.cpp#L146) |  |
@@ -23357,7 +23357,7 @@
 | `IsDeviceLost` | function | SparkEngine | [AudioEngine.h:L416](../../SparkEngine/Source/Audio/AudioEngine.h#L416) | True once a voice call reported the output device was invalidated. |
 | `IsDeviceLostResult` | function | SparkEngine | [AudioEngine.h:L413](../../SparkEngine/Source/Audio/AudioEngine.h#L413) | Whether an XAudio2 HRESULT means the output device went away |
 | `IsDigit` | function | SparkEngine | [ExecScriptParse.cpp:L20](../../SparkEngine/Source/Core/ExecScriptParse.cpp#L20) |  |
-| `IsDigit` | function | SparkSDK | [EventBus.h:L105](../../SparkSDK/Include/Spark/EventBus.h#L105) |  |
+| `IsDigit` | function | SparkSDK | [EventBus.h:L106](../../SparkSDK/Include/Spark/EventBus.h#L106) |  |
 | `IsDigits` | function | SparkEngine | [VisualScriptCodegen.cpp:L18](../../SparkEngine/Source/Engine/Scripting/VisualScriptCodegen.cpp#L18) |  |
 | `IsDigits` | function | SparkEngine | [VisualScriptCodegen.cpp:L194](../../SparkEngine/Source/Engine/Scripting/VisualScriptCodegen.cpp#L194) |  |
 | `IsDigits` | function | SparkEngine | [VisualScriptCodegen.cpp:L196](../../SparkEngine/Source/Engine/Scripting/VisualScriptCodegen.cpp#L196) |  |
@@ -23954,7 +23954,7 @@
 | `IsSettlementVisited` | function | GameModules | [OWSettlementSystem.h:L103](../../GameModules/SparkGameOpenWorld/Source/Settlement/OWSettlementSystem.h#L103) | Record that the player entered and interacted with a settlement. |
 | `IsSha256Hex` | function | SparkInstaller | [GitBootstrap.cpp:L31](../../SparkInstaller/src/GitBootstrap.cpp#L31) |  |
 | `IsShaderFile` | function | SparkEngine | [ShaderHotReload.h:L365](../../SparkEngine/Source/Graphics/ShaderHotReload.h#L365) | Return true if the file extension looks like a shader. |
-| `IsShared` | function | SparkSDK | [EventBus.h:L96](../../SparkSDK/Include/Spark/EventBus.h#L96) |  |
+| `IsShared` | function | SparkSDK | [EventBus.h:L97](../../SparkSDK/Include/Spark/EventBus.h#L97) |  |
 | `IsSharedLibraryExtension` | function | SparkLauncher | [LauncherProcess.cpp:L126](../../SparkLauncher/src/LauncherProcess.cpp#L126) |  |
 | `IsSiblingSharedLibrary` | function | SparkEngine | [ModuleManager.cpp:L350](../../SparkEngine/Source/Core/ModuleManager.cpp#L350) |  |
 | `IsSimulating` | function | SparkEngine | [PlayModeManager.h:L289](../../SparkEngine/Source/Engine/Editor/PlayModeManager.h#L289) |  |
@@ -24395,8 +24395,8 @@
 | `KeyHint` | function | SparkUI | [Widgets.cpp:L308](../../SparkUI/Source/Widgets.cpp#L308) |  |
 | `KeyModifier` | enum | SparkEngine | [InputEnums.h:L78](../../SparkEngine/Source/Enums/InputEnums.h#L78) | Key modifier flags |
 | `KeyNameToVirtualKey` | function | SparkEngine | [InputManager.h:L493](../../SparkEngine/Source/Input/InputManager.h#L493) | Convert key name to virtual key code |
-| `KeyOf` | function | SparkSDK | [EventBus.h:L564](../../SparkSDK/Include/Spark/EventBus.h#L564) |  |
-| `KeyOf` | function | SparkSDK | [EventBus.h:L572](../../SparkSDK/Include/Spark/EventBus.h#L572) |  |
+| `KeyOf` | function | SparkSDK | [EventBus.h:L566](../../SparkSDK/Include/Spark/EventBus.h#L566) |  |
+| `KeyOf` | function | SparkSDK | [EventBus.h:L574](../../SparkSDK/Include/Spark/EventBus.h#L574) |  |
 | `KeyPressedProvider` | alias | SparkEngine | [InputActionSystem.h:L117](../../SparkEngine/Source/Input/InputActionSystem.h#L117) | Callback for action state queries (used by external key state provider) |
 | `KeyReleasedProvider` | alias | SparkEngine | [InputActionSystem.h:L118](../../SparkEngine/Source/Input/InputActionSystem.h#L118) | Callback for action state queries (used by external key state provider) |
 | `KeySet` | alias | GameModules | [MMOPersistenceSystem.h:L268](../../GameModules/SparkGameMMO/Source/Persistence/MMOPersistenceSystem.h#L268) |  |
@@ -24858,7 +24858,7 @@
 | `LifecycleSystem` | class | Tests | [TestECSystemOrdering.cpp:L153](../../Tests/TestECSystemOrdering.cpp#L153) |  |
 | `LifecycleSystem::Update` | method | SparkEngine | [ECSystems.cpp:L352](../../SparkEngine/Source/Engine/ECS/Systems/ECSystems.cpp#L352) |  |
 | `LifecycleThreadAffinity` | enum | SparkEngine | [LifecycleStage.h:L13](../../SparkEngine/Source/Core/Lifecycle/LifecycleStage.h#L13) |  |
-| `LifetimeToken` | struct | SparkSDK | [EventBus.h:L495](../../SparkSDK/Include/Spark/EventBus.h#L495) |  |
+| `LifetimeToken` | struct | SparkSDK | [EventBus.h:L497](../../SparkSDK/Include/Spark/EventBus.h#L497) |  |
 | `Lift` | function | SparkUI | [Tokens.cpp:L119](../../SparkUI/Source/Tokens.cpp#L119) |  |
 | `LiftOnSurfaces` | function | SparkUI | [Tokens.cpp:L131](../../SparkUI/Source/Tokens.cpp#L131) |  |
 | `light` | function | SparkEditor | [PrefabManager.cpp:L461](../../SparkEditor/Source/Prefabs/PrefabManager.cpp#L461) |  |
@@ -25072,7 +25072,7 @@
 | `ListZipMembers` | function | SparkBuild | [ArchiveExtraction.cpp:L334](../../SparkBuild/src/ArchiveExtraction.cpp#L334) |  |
 | `LitCamera` | function | Tests | [TestRHI210D3D11FrameGoldenReal.cpp:L298](../../Tests/TestRHI210D3D11FrameGoldenReal.cpp#L298) |  |
 | `Literal` | function | SparkEditor | [PrefabTextFormat.cpp:L111](../../SparkEditor/Source/Prefabs/PrefabTextFormat.cpp#L111) |  |
-| `Literal` | function | SparkSDK | [EventBus.h:L206](../../SparkSDK/Include/Spark/EventBus.h#L206) |  |
+| `Literal` | function | SparkSDK | [EventBus.h:L208](../../SparkSDK/Include/Spark/EventBus.h#L208) |  |
 | `LitScene` | struct | Tests | [TestRHI210D3D11FrameGoldenReal.cpp:L266](../../Tests/TestRHI210D3D11FrameGoldenReal.cpp#L266) |  |
 | `LitVertex` | struct | Tests | [TestRHI240OpenGLGoldenReal.cpp:L658](../../Tests/TestRHI240OpenGLGoldenReal.cpp#L658) |  |
 | `LiveEditBridge` | class | SparkEditor | [LiveEditBridge.h:L55](../../SparkEditor/Source/Communication/LiveEditBridge.h#L55) |  |
@@ -25490,7 +25490,7 @@
 | `LocalDeterministicPlacement` | class | SparkGateway | [GatewayLocalAdapters.h:L90](../../SparkGateway/src/GatewayLocalAdapters.h#L90) |  |
 | `LocalDeterministicPlacement::Place` | method | SparkGateway | [GatewayLocalAdapters.cpp:L191](../../SparkGateway/src/GatewayLocalAdapters.cpp#L191) |  |
 | `localeGuard` | function | Tests | [TestSceneSerializerReal.cpp:L263](../../Tests/TestSceneSerializerReal.cpp#L263) |  |
-| `LocalEvent` | struct | Tests | [TestEventBus.cpp:L292](../../Tests/TestEventBus.cpp#L292) |  |
+| `LocalEvent` | struct | Tests | [TestEventBus.cpp:L295](../../Tests/TestEventBus.cpp#L295) |  |
 | `LocalEye` | function | GameModules | [TFCommandsHarness.cpp:L287](../../GameModules/SparkGameMMOFPS/Source/Console/TFCommandsHarness.cpp#L287) |  |
 | `localFile` | function | Tests | [TestEngineSettingsReal.cpp:L260](../../Tests/TestEngineSettingsReal.cpp#L260) |  |
 | `localFile` | function | Tests | [TestEngineSettingsReal.cpp:L317](../../Tests/TestEngineSettingsReal.cpp#L317) |  |
@@ -26816,16 +26816,16 @@
 | `lock` | function | SparkInstaller | [WizardGui.cpp:L370](../../SparkInstaller/src/gui/WizardGui.cpp#L370) |  |
 | `lock` | function | SparkInstaller | [WizardGui.cpp:L392](../../SparkInstaller/src/gui/WizardGui.cpp#L392) |  |
 | `lock` | function | SparkInstaller | [WizardGui.cpp:L844](../../SparkInstaller/src/gui/WizardGui.cpp#L844) |  |
-| `lock` | function | SparkSDK | [EventBus.h:L388](../../SparkSDK/Include/Spark/EventBus.h#L388) |  |
-| `lock` | function | SparkSDK | [EventBus.h:L424](../../SparkSDK/Include/Spark/EventBus.h#L424) |  |
-| `lock` | function | SparkSDK | [EventBus.h:L433](../../SparkSDK/Include/Spark/EventBus.h#L433) |  |
-| `lock` | function | SparkSDK | [EventBus.h:L467](../../SparkSDK/Include/Spark/EventBus.h#L467) |  |
-| `lock` | function | SparkSDK | [EventBus.h:L476](../../SparkSDK/Include/Spark/EventBus.h#L476) | Remove all subscriptions for every event type. |
-| `lock` | function | SparkSDK | [EventBus.h:L490](../../SparkSDK/Include/Spark/EventBus.h#L490) |  |
-| `lock` | function | SparkSDK | [EventBus.h:L529](../../SparkSDK/Include/Spark/EventBus.h#L529) |  |
-| `lock` | function | SparkSDK | [EventBus.h:L585](../../SparkSDK/Include/Spark/EventBus.h#L585) |  |
-| `lock` | function | SparkSDK | [EventBus.h:L597](../../SparkSDK/Include/Spark/EventBus.h#L597) |  |
-| `lock` | function | SparkSDK | [EventBus.h:L607](../../SparkSDK/Include/Spark/EventBus.h#L607) |  |
+| `lock` | function | SparkSDK | [EventBus.h:L390](../../SparkSDK/Include/Spark/EventBus.h#L390) |  |
+| `lock` | function | SparkSDK | [EventBus.h:L426](../../SparkSDK/Include/Spark/EventBus.h#L426) |  |
+| `lock` | function | SparkSDK | [EventBus.h:L435](../../SparkSDK/Include/Spark/EventBus.h#L435) |  |
+| `lock` | function | SparkSDK | [EventBus.h:L469](../../SparkSDK/Include/Spark/EventBus.h#L469) |  |
+| `lock` | function | SparkSDK | [EventBus.h:L478](../../SparkSDK/Include/Spark/EventBus.h#L478) | Remove all subscriptions for every event type. |
+| `lock` | function | SparkSDK | [EventBus.h:L492](../../SparkSDK/Include/Spark/EventBus.h#L492) |  |
+| `lock` | function | SparkSDK | [EventBus.h:L531](../../SparkSDK/Include/Spark/EventBus.h#L531) |  |
+| `lock` | function | SparkSDK | [EventBus.h:L587](../../SparkSDK/Include/Spark/EventBus.h#L587) |  |
+| `lock` | function | SparkSDK | [EventBus.h:L599](../../SparkSDK/Include/Spark/EventBus.h#L599) |  |
+| `lock` | function | SparkSDK | [EventBus.h:L609](../../SparkSDK/Include/Spark/EventBus.h#L609) |  |
 | `lock` | function | SparkSDK | [EventSystem.h:L359](../../SparkSDK/Include/Spark/EventSystem.h#L359) | Queue an event for deferred dispatch at a specific priority. Thread-safe. |
 | `lock` | function | SparkSDK | [EventSystem.h:L384](../../SparkSDK/Include/Spark/EventSystem.h#L384) |  |
 | `lock` | function | SparkSDK | [EventSystem.h:L402](../../SparkSDK/Include/Spark/EventSystem.h#L402) | Total number of events currently waiting across all priority tiers. |
@@ -30872,8 +30872,8 @@
 | `operator` | function | SparkEngine | [SceneManager.cpp:L247](../../SparkEngine/Source/SceneManager/SceneManager.cpp#L247) |  |
 | `operator` | function | SparkEngine | [StringPool.h:L159](../../SparkEngine/Source/Utils/StringPool.h#L159) |  |
 | `operator` | function | SparkEngine | [UUID.h:L120](../../SparkEngine/Source/Utils/UUID.h#L120) |  |
-| `operator` | function | SparkSDK | [EventBus.h:L551](../../SparkSDK/Include/Spark/EventBus.h#L551) |  |
-| `operator` | function | SparkSDK | [EventBus.h:L558](../../SparkSDK/Include/Spark/EventBus.h#L558) |  |
+| `operator` | function | SparkSDK | [EventBus.h:L553](../../SparkSDK/Include/Spark/EventBus.h#L553) |  |
+| `operator` | function | SparkSDK | [EventBus.h:L560](../../SparkSDK/Include/Spark/EventBus.h#L560) |  |
 | `operator` | function | Tests | [TestCrossSystemIntegration.cpp:L77](../../Tests/TestCrossSystemIntegration.cpp#L77) |  |
 | `operator` | function | Tests | [TestExtendedSystems.cpp:L916](../../Tests/TestExtendedSystems.cpp#L916) |  |
 | `operator` | function | Tests | [TestSpatialGrid.cpp:L30](../../Tests/TestSpatialGrid.cpp#L30) |  |
@@ -34510,7 +34510,7 @@
 | `Publish` | function | SparkEngine | [SaveFileDurability.cpp:L311](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L311) |  |
 | `Publish` | function | SparkEngine | [SaveFileDurability.cpp:L450](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L450) |  |
 | `Publish` | function | SparkEngine | [SaveFileDurability.cpp:L488](../../SparkEngine/Source/Utils/SaveFileDurability.cpp#L488) |  |
-| `Publish` | function | SparkSDK | [EventBus.h:L412](../../SparkSDK/Include/Spark/EventBus.h#L412) | Publish an event, invoking all registered handlers synchronously. |
+| `Publish` | function | SparkSDK | [EventBus.h:L414](../../SparkSDK/Include/Spark/EventBus.h#L414) | Publish an event, invoking all registered handlers synchronously. |
 | `Publish` | function | Tests | [TestCrossSystemIntegration.cpp:L140](../../Tests/TestCrossSystemIntegration.cpp#L140) |  |
 | `Publish` | function | Tests | [TestEventSystem.cpp:L45](../../Tests/TestEventSystem.cpp#L45) |  |
 | `PublishCrashManifest` | function | SparkEngine | [CrashHandler.cpp:L614](../../SparkEngine/Source/Utils/CrashHandler.cpp#L614) |  |
@@ -34519,8 +34519,8 @@
 | `PublishGeneration` | function | SparkAssetPipelineCore | [AssetCooker.cpp:L979](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L979) |  |
 | `PublishHealth` | function | SparkGateway | [GatewayApplication.h:L97](../../SparkGateway/src/GatewayApplication.h#L97) |  |
 | `PublishHealth` | function | SparkServer | [ServerApplication.h:L96](../../SparkServer/src/ServerApplication.h#L96) |  |
-| `PublishingEntry` | alias | SparkSDK | [EventBus.h:L519](../../SparkSDK/Include/Spark/EventBus.h#L519) |  |
-| `PublishingScope` | struct | SparkSDK | [EventBus.h:L522](../../SparkSDK/Include/Spark/EventBus.h#L522) |  |
+| `PublishingEntry` | alias | SparkSDK | [EventBus.h:L521](../../SparkSDK/Include/Spark/EventBus.h#L521) |  |
+| `PublishingScope` | struct | SparkSDK | [EventBus.h:L524](../../SparkSDK/Include/Spark/EventBus.h#L524) |  |
 | `PublishLifecycleEvidence` | function | SparkEngine | [ModuleManager.h:L303](../../SparkEngine/Source/Core/ModuleManager.h#L303) | Publish this manager's evidence as the last-teardown snapshot now. |
 | `PublishRuntimeBlock` | function | SparkEngine | [GameImGuiLayer.cpp:L95](../../SparkEngine/Source/Core/GameImGuiLayer.cpp#L95) |  |
 | `PublishScannedMods` | function | SparkEngine | [ModSystem.cpp:L355](../../SparkEngine/Source/Engine/Modding/ModSystem.cpp#L355) |  |
@@ -43794,8 +43794,8 @@
 | `ShapeType` | enum | SparkEngine | [JoltPhysicsInterface.h:L97](../../SparkEngine/Source/Engine/Physics/JoltPhysicsInterface.h#L97) |  |
 | `ShapeType` | enum | SparkEngine | [IPhysicsBackend.h:L35](../../SparkEngine/Source/Physics/IPhysicsBackend.h#L35) |  |
 | `ShapeType` | enum | Tests | [TestPhysicsSystem.cpp:L24](../../Tests/TestPhysicsSystem.cpp#L24) |  |
-| `SharedTypeNameParser` | class | SparkSDK | [EventBus.h:L93](../../SparkSDK/Include/Spark/EventBus.h#L93) | Recognises the Itanium-mangled name (typeid(T).name()) of an external-linkage event type. |
-| `SharedTypeNameParser` | function | SparkSDK | [EventBus.h:L103](../../SparkSDK/Include/Spark/EventBus.h#L103) |  |
+| `SharedTypeNameParser` | class | SparkSDK | [EventBus.h:L94](../../SparkSDK/Include/Spark/EventBus.h#L94) |  |
+| `SharedTypeNameParser` | function | SparkSDK | [EventBus.h:L104](../../SparkSDK/Include/Spark/EventBus.h#L104) |  |
 | `SharpenSettings` | struct | SparkEngine | [PostProcessingTypes.h:L198](../../SparkEngine/Source/Graphics/PostProcessingTypes.h#L198) | Contrast-adaptive sharpening settings |
 | `SharpenSettings` | struct | Tests | [TestPostProcessingPipeline.cpp:L71](../../Tests/TestPostProcessingPipeline.cpp#L71) |  |
 | `SHCoefficients` | struct | SparkEngine | [SHLighting.h:L45](../../SparkEngine/Source/Graphics/SHLighting.h#L45) | RGB SH coefficient set (9 coefficients, 3 channels each) |
@@ -44923,7 +44923,7 @@
 | `SourceEntry` | struct | SparkAssetPipelineCore | [AssetCooker.cpp:L1396](../../SparkAssetPipelineCore/src/AssetCooker.cpp#L1396) |  |
 | `SourceFontDirectory` | function | Tests | [TestSparkUIKit.cpp:L313](../../Tests/TestSparkUIKit.cpp#L313) |  |
 | `SourceLinkPolicy` | enum | SparkEditor | [BuildPipeline.cpp:L370](../../SparkEditor/Source/Panels/BuildPipeline.cpp#L370) |  |
-| `SourceName` | function | SparkSDK | [EventBus.h:L109](../../SparkSDK/Include/Spark/EventBus.h#L109) |  |
+| `SourceName` | function | SparkSDK | [EventBus.h:L110](../../SparkSDK/Include/Spark/EventBus.h#L110) |  |
 | `sourcePath` | function | SparkEditor | [AssetProcessors.cpp:L256](../../SparkEditor/Source/AssetPipeline/AssetProcessors.cpp#L256) |  |
 | `sourcePath` | function | SparkEditor | [AssetProcessors.cpp:L359](../../SparkEditor/Source/AssetPipeline/AssetProcessors.cpp#L359) |  |
 | `sourcePath` | function | SparkEditor | [AssetProcessors.cpp:L407](../../SparkEditor/Source/AssetPipeline/AssetProcessors.cpp#L407) |  |
@@ -47934,8 +47934,8 @@
 | `SubscribeToEvents` | function | SparkEngine | [EventResponseSystem.h:L284](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.h#L284) |  |
 | `Subscription` | struct | Tests | [TestEventSystem.cpp:L80](../../Tests/TestEventSystem.cpp#L80) |  |
 | `SubscriptionHandle` | class | GameModules | [Game.h:L44](../../GameModules/SparkGameFPS/Source/Game/Game.h#L44) |  |
-| `SubscriptionHandle` | class | SparkSDK | [EventBus.h:L279](../../SparkSDK/Include/Spark/EventBus.h#L279) | RAII handle that automatically unsubscribes from the event bus on destruction. |
-| `SubscriptionHandle` | function | SparkSDK | [EventBus.h:L394](../../SparkSDK/Include/Spark/EventBus.h#L394) |  |
+| `SubscriptionHandle` | class | SparkSDK | [EventBus.h:L281](../../SparkSDK/Include/Spark/EventBus.h#L281) | RAII handle that automatically unsubscribes from the event bus on destruction. |
+| `SubscriptionHandle` | function | SparkSDK | [EventBus.h:L396](../../SparkSDK/Include/Spark/EventBus.h#L396) |  |
 | `SubscriptionID` | alias | SparkSDK | [EventSystem.h:L61](../../SparkSDK/Include/Spark/EventSystem.h#L61) | Legacy subscription ID type for code that uses manual unsubscription. |
 | `SubscriptionID` | alias | Tests | [TestEventSystem.cpp:L17](../../Tests/TestEventSystem.cpp#L17) |  |
 | `SubsystemDescriptor` | struct | SparkEngine | [EngineBootstrap.h:L43](../../SparkEngine/Source/Core/EngineBootstrap.h#L43) | Describes a single engine subsystem for bootstrap registration |
@@ -48395,8 +48395,8 @@
 | `tempDirectory` | function | SparkBuild | [Downloader.cpp:L455](../../SparkBuild/src/Downloader.cpp#L455) |  |
 | `tempDirectory` | function | SparkBuild | [DownloaderTests.cpp:L42](../../SparkBuild/tests/DownloaderTests.cpp#L42) |  |
 | `TemperatureZone` | enum | GameModules | [OpenWorldEnums.h:L191](../../GameModules/SparkGameOpenWorld/Source/Enums/OpenWorldEnums.h#L191) | Temperature range affecting survival |
-| `TemplateArg` | function | SparkSDK | [EventBus.h:L234](../../SparkSDK/Include/Spark/EventBus.h#L234) |  |
-| `TemplateArgs` | function | SparkSDK | [EventBus.h:L237](../../SparkSDK/Include/Spark/EventBus.h#L237) |  |
+| `TemplateArg` | function | SparkSDK | [EventBus.h:L236](../../SparkSDK/Include/Spark/EventBus.h#L236) |  |
+| `TemplateArgs` | function | SparkSDK | [EventBus.h:L239](../../SparkSDK/Include/Spark/EventBus.h#L239) |  |
 | `TemplateCardSize` | function | SparkEditor | [ProjectBrowserPanel.cpp:L36](../../SparkEditor/Source/Panels/ProjectBrowserPanel.cpp#L36) | Template card size: an icon row, a name row and three description rows, so the |
 | `TemplateEntry` | struct | SparkLauncher | [LauncherTemplates.h:L15](../../SparkLauncher/src/LauncherTemplates.h#L15) |  |
 | `TemplateLoadResult` | enum | SparkEngine | [TemplateRuntime.h:L68](../../SparkEngine/Source/Game/TemplateRuntime.h#L68) |  |
@@ -51882,8 +51882,8 @@
 | `Type` | enum | SparkEngine | [ClothSimulation.h:L99](../../SparkEngine/Source/Physics/ClothSimulation.h#L99) | A simple collider for cloth-to-rigid-body interaction. |
 | `Type` | enum | SparkEngine | [JsonUtils.h:L85](../../SparkEngine/Source/Utils/JsonUtils.h#L85) | JSON value type discriminator. |
 | `type` | alias | SparkEngine | [TypeTraits.h:L213](../../SparkEngine/Source/Utils/TypeTraits.h#L213) |  |
-| `Type` | function | SparkSDK | [EventBus.h:L177](../../SparkSDK/Include/Spark/EventBus.h#L177) |  |
-| `Type` | function | SparkSDK | [EventBus.h:L187](../../SparkSDK/Include/Spark/EventBus.h#L187) |  |
+| `Type` | function | SparkSDK | [EventBus.h:L179](../../SparkSDK/Include/Spark/EventBus.h#L179) |  |
+| `Type` | function | SparkSDK | [EventBus.h:L189](../../SparkSDK/Include/Spark/EventBus.h#L189) |  |
 | `Type` | enum | Tests | [TestCoroutineScheduler.cpp:L121](../../Tests/TestCoroutineScheduler.cpp#L121) |  |
 | `Type` | enum | Tests | [TestECSIntegration.cpp:L33](../../Tests/TestECSIntegration.cpp#L33) |  |
 | `TypeCheckResult` | struct | Tests | [TestShaderGraphCompiler.cpp:L225](../../Tests/TestShaderGraphCompiler.cpp#L225) |  |
@@ -52412,10 +52412,10 @@
 | `Unsigned` | alias | SparkDaemon | [BoundedWireCodec.h:L73](../../SparkDaemon/src/BoundedWireCodec.h#L73) |  |
 | `UnstageFiles` | function | SparkEditor | [VersionControlSystem.h:L140](../../SparkEditor/Source/VersionControl/VersionControlSystem.h#L140) | Unstage files |
 | `Unsubscribe` | function | SparkEngine | [EntityEventBus.h:L84](../../SparkEngine/Source/Utils/EntityEventBus.h#L84) |  |
-| `Unsubscribe` | function | SparkSDK | [EventBus.h:L313](../../SparkSDK/Include/Spark/EventBus.h#L313) | Manually unsubscribe from the event bus. |
+| `Unsubscribe` | function | SparkSDK | [EventBus.h:L315](../../SparkSDK/Include/Spark/EventBus.h#L315) | Manually unsubscribe from the event bus. |
 | `Unsubscribe` | function | Tests | [TestEventSystem.cpp:L31](../../Tests/TestEventSystem.cpp#L31) |  |
 | `UnsubscribeFn` | alias | SparkEngine | [EntityEventBus.h:L99](../../SparkEngine/Source/Utils/EntityEventBus.h#L99) |  |
-| `UnsubscribeFn` | alias | SparkSDK | [EventBus.h:L332](../../SparkSDK/Include/Spark/EventBus.h#L332) | Return whether this handle is currently subscribed. |
+| `UnsubscribeFn` | alias | SparkSDK | [EventBus.h:L334](../../SparkSDK/Include/Spark/EventBus.h#L334) | Return whether this handle is currently subscribed. |
 | `UnsubscribeFromEvents` | function | SparkEngine | [EventResponseSystem.h:L285](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.h#L285) |  |
 | `UntrackResource` | function | SparkEngine | [RHIValidationLayer.h:L113](../../SparkEngine/Source/Graphics/RHI/RHIValidationLayer.h#L113) | Stop tracking a resource (called from the backend resource destructor). |
 | `UntrackResource` | function | SparkEngine | [RHIValidationLayer.h:L200](../../SparkEngine/Source/Graphics/RHI/RHIValidationLayer.h#L200) |  |
