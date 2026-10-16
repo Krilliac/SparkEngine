@@ -306,7 +306,7 @@ class WorkflowPrivilegeBoundaryTests(unittest.TestCase):
 
         self.assertIn('workflows: ["Build SparkEngine"]', text)
         self.assertIn("types: [completed]", text)
-        self.assertNotIn("pull_request", text)
+        self.assertIsNone(re.search(r"^\s*pull_request(?:_target)?:", text, flags=re.MULTILINE))
         self.assertIn("\npermissions: {}\n", text)
         self.assertIn("github.event.workflow_run.path == '.github/workflows/build.yml'", report)
         self.assertEqual(
@@ -318,6 +318,10 @@ class WorkflowPrivilegeBoundaryTests(unittest.TestCase):
         self.assertIsNone(re.search(r"^\s*-?\s*run:", report, flags=re.MULTILINE))
         self.assertIn("run-id: ${{ github.event.workflow_run.id }}", report)
         self.assertIn("repository: ${{ github.repository }}", report)
+        # Fork PRs are only found by search, and the base delta needs the head commit build mode.
+        self.assertIn("search_pull_requests: true", report)
+        self.assertIn("pull_request_build: commit", report)
+        self.assertIn("commit: ${{ github.event.workflow_run.head_sha }}", report)
         self.assertRegex(
             report,
             r"uses: docker://ghcr\.io/enricomi/publish-unit-test-result-action@sha256:[0-9a-f]{64}\n",

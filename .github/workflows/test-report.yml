@@ -46,9 +46,16 @@ jobs:
       with:
         github_token: ${{ github.token }}
         commit: ${{ github.event.workflow_run.head_sha }}
-        junit_files: results/**/*junit*.xml
+        # commit is the PR head, not a merge commit, so compare against the
+        # merge base; the default (merge) yields no base delta on workflow_run.
+        pull_request_build: commit
+        # A fork PR is not listed under its head commit, so find the PR by search.
+        search_pull_requests: true
+        # The macOS and VS2026 lanes are advisory (continue-on-error); their
+        # failures must not paint this check red under a green required gate.
+        junit_files: |
+          results/**/*junit*.xml
+          !results/test-results-macos-*/**
+          !results/test-results-windows-vs2026-*/**
         check_name: Test results
         comment_mode: always
-        # Every lane runs the same suites; list each test once, not per lane.
-        report_individual_runs: false
-        json_suite_details: false
