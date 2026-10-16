@@ -303,7 +303,8 @@ def execute_selected(ctest: str, build_dir: Path, config: str | None, selection:
                            f"{partial.strip()[-4000:]}") from error
     if completed.returncode != 0:
         detail = (completed.stdout.strip() + "\n" + completed.stderr.strip()).strip()
-        raise RuntimeError(f"ctest exited {completed.returncode}: {detail[-600:]}")
+        # --output-on-failure text precedes the summary; 600 chars kept only the summary.
+        raise RuntimeError(f"ctest exited {completed.returncode}: {detail[-4000:]}")
 
 
 def _labels(test: dict) -> set[str]:

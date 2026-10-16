@@ -13,6 +13,8 @@ race:JPH::JobSystem
 # layer itself frees during vkFreeCommandBuffers, after the engine has waited on
 # the command list's fence (VulkanCommandList::~VulkanCommandList). Both racing
 # frames are inside the layer (VulkanValidation_DeferredListDestroyedAfterExecuteClean).
-# race_top, not race: engine code runs under layer frames (VulkanDebugCallback logs),
-# and a race there must still be reported.
-race_top:libVkLayer_khronos_validation.so
+# race_top cannot work: frame #0 of both stacks is a libtsan interceptor (operator
+# delete, pthread_rwlock_unlock), so the layer is frame #1. Accepted exposure: a
+# race in engine code reached through the layer (VulkanDebugCallback, which logs)
+# is hidden too; the Logger's own races are covered by the non-Vulkan tests.
+race:libVkLayer_khronos_validation.so
