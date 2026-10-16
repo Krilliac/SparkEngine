@@ -26,6 +26,7 @@ RELEASE = ROOT / ".github" / "workflows" / "release.yml"
 MSVC = ROOT / ".github" / "workflows" / "msvc.yml"
 OPERATIONS = ROOT / ".github" / "workflows" / "operations-scheduled.yml"
 GPU_CERTIFICATION = ROOT / ".github" / "workflows" / "gpu-certification.yml"
+SCORECARD = ROOT / ".github" / "workflows" / "scorecard.yml"
 CODEQL_ACTION_SHA = "cdf488f595d80d6e07e03d4674febd5ab45fa938"
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 
@@ -134,7 +135,7 @@ class WorkflowPrivilegeBoundaryTests(unittest.TestCase):
 
     def test_codeql_action_family_uses_one_reviewed_revision(self) -> None:
         revisions: set[str] = set()
-        for workflow in (CODEQL, CODACY_REPORT, MSVC):
+        for workflow in (CODEQL, CODACY_REPORT, MSVC, SCORECARD):
             text = workflow.read_text(encoding="utf-8")
             revisions.update(
                 re.findall(

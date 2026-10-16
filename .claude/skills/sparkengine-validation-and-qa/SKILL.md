@@ -308,7 +308,9 @@ Load-bearing extra gates worth knowing: `build-linux-gcc` Release **greps the te
 for `VulkanShaderToolchain_RejectsMalformedSpirv` and `VulkanGolden_FullscreenTriangleReadback`
 (compiled only with `SPARK_VULKAN_SUPPORT`) and asserts `ENABLE_VULKAN:BOOL=ON` in the CMake
 cache — renaming those tests breaks CI.
-`msvc.yml` (MSVC Code Analysis → SARIF) and `codeql.yml` run separately from build.yml.
+`msvc.yml` (MSVC Code Analysis → SARIF) and `codeql.yml` run separately from build.yml, as do
+`dependency-review.yml` (PRs), `workflow-security.yml` (zizmor over `.github/`) and
+`scorecard.yml` (OpenSSF Scorecard); the last two report to code scanning.
 
 `candidate` improvements (unproven, do not claim as done): wire
 `check-test-registration.sh` into `validate-all.sh`/CI; extend its glob to `harden/` and
