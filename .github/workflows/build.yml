@@ -978,11 +978,15 @@ jobs:
       id: configure
       run: |
         command -v ccache >/dev/null && ccache --zero-stats || echo "::warning::ccache not installed, proceeding without cache"
+        # FreeType is off: the distro libfreetype is not MSan-instrumented, so
+        # FT_New_Memory_Face reading ImGui's font heap reports use-of-uninitialized-value
+        # on every editor font build. ImGui falls back to stb_truetype here.
         cmake -B build \
           -DCMAKE_BUILD_TYPE=Debug \
           -DBUILD_TESTS=ON \
           -DENABLE_SDL2=OFF \
           -DENABLE_VULKAN=OFF \
+          -DCMAKE_DISABLE_FIND_PACKAGE_Freetype=ON \
           -DCMAKE_C_COMPILER=clang \
           -DCMAKE_CXX_COMPILER=clang++ \
           -DCMAKE_C_COMPILER_LAUNCHER=ccache \
