@@ -121,6 +121,10 @@ def run_save_reload(args: argparse.Namespace, package_root: Path, output_dir: Pa
         f"-DSPARK_PACKAGE_ROOT={package_root}",
         f"-DSPARK_FORBIDDEN_ROOTS={args.source_root}|{args.build_root}",
         f"-DSPARK_TEST_ROOT={output_dir / 'save-reload'}",
+        # The release MSI is plain Shipping, which must not register FPS developer
+        # commands (FPSConsolePolicy.h). The OFF profile requires `xp` to be refused,
+        # so an MSI that leaks developer commands fails qualification.
+        "-DSPARK_FPS_DEVELOPER_COMMANDS=OFF",
         "-P", str(args.source_root / "cmake/RunSparkHeadlessFPSSaveReload.cmake"),
     ]
     result = run_command(command, timeout=360)

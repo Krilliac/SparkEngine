@@ -10,12 +10,17 @@
  * command prints text byte-identical to its windowed counterpart, so the
  * installed-package save/reload audit validator accepts both hosts.
  *
+ * Registration follows SparkFPS::ConsolePolicy like the windowed host: xp is a
+ * developer command, so plain Shipping registers only level, quicksave and
+ * quickload and `xp` answers "Unknown command".
+ *
  * Thread affinity: game thread (console dispatch runs from the host loop).
  * Ownership: the commands capture `this`; Shutdown() unregisters them before
  * ShutdownHeadlessArena() releases the state they read.
  */
 
 #include "SparkGameFPS.h"
+#include "Console/FPSConsolePolicy.h"
 #include "Engine/SaveSystem/SaveSystem.h"
 #include "Game/FPSLocalProfile.h"
 #include "Game/FPSQuickLoad.h"
@@ -46,6 +51,10 @@ void SparkGameModule::RegisterHeadlessPersistenceCommands()
     const auto registerTracked = [console, this](const std::string& name, Spark::IConsole::CommandHandler handler,
                                                  const std::string& description)
     {
+        if (!SparkFPS::ConsolePolicy::ShouldRegister(name, SparkFPS::ConsolePolicy::kDeveloperCommandsEnabled))
+        {
+            return;
+        }
         if (console->RegisterCommand(name, std::move(handler), description, "General", ""))
         {
             m_registeredConsoleCommands.push_back(name);

@@ -3,7 +3,9 @@ cmake_minimum_required(VERSION 3.25)
 # HEAD-220: source-tree NullRHI save/reload persistence of the production
 # headless FPS host. Two fresh `-headless` processes share one isolated user
 # root: the writer awards 37 XP and quicksaves, the reader proves it starts from
-# 0 XP, quickloads and reads 37 XP back. Each process must pass the strict
+# 0 XP, quickloads and reads 37 XP back. Plain Shipping
+# (-DSPARK_FPS_DEVELOPER_COMMANDS=OFF) registers no `xp`: the writer must be refused with
+# "Unknown command" and the reader restores 0 XP. Each process must pass the strict
 # NullRHI lifecycle parser (one module, rendered=0, faults=0, no D3D11 device)
 # and the same writer/reader audit validator as the installed-package WARP run
 # (Tests/PackageSmoke/RunInstalledFPSSaveReload.cmake). The reader must leave
@@ -128,6 +130,15 @@ if(SPARK_REPOSITORY_ISOLATION_SELF_TEST)
     endforeach()
     message(STATUS "Repository isolation detection self-test passed ${_case_count} cases")
     return()
+endif()
+
+# SPARK_FPS_DEVELOPER_COMMANDS (ON by default, OFF for plain Shipping) selects the audit
+# profile of the shared validator: Shipping must refuse the writer's `xp 37` and save 0 XP.
+_spark_fps_developer_commands_enabled(_dev_commands)
+if(_dev_commands)
+    set(_profile_name ON)
+else()
+    set(_profile_name OFF)
 endif()
 
 set(_package_mode FALSE)
@@ -343,4 +354,5 @@ endif()
 
 message(STATUS
     "Headless FPS NullRHI save/reload passed across two fresh processes "
-    "(${_save_size}-byte save ${_writer_save_sha256}, ${CMAKE_HOST_SYSTEM_NAME} host)")
+    "(${_save_size}-byte save ${_writer_save_sha256}, ${CMAKE_HOST_SYSTEM_NAME} host, "
+    "developer-commands ${_profile_name} profile validated)")

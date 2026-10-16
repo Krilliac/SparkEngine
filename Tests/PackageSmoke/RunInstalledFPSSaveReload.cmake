@@ -62,9 +62,52 @@ function(_spark_validate_progression_lines lines_var expected_xp out_ok out_reas
     set(${out_reason} "${_reason}" PARENT_SCOPE)
 endfunction()
 
+# SPARK_FPS_DEVELOPER_COMMANDS says whether the build under test registers the FPS developer
+# commands (Console/FPSConsolePolicy.h): ON for every build but plain Shipping, OFF for
+# MinSizeRel without ENABLE_DEVCOMMANDS_IN_SHIPPING. Undefined means ON. The result is
+# TRUE or FALSE; any other spelling fails the run rather than silently picking a profile.
+function(_spark_fps_developer_commands_enabled out_var)
+    if(NOT DEFINED SPARK_FPS_DEVELOPER_COMMANDS)
+        set(${out_var} TRUE PARENT_SCOPE)
+        return()
+    endif()
+    string(TOUPPER "${SPARK_FPS_DEVELOPER_COMMANDS}" _value)
+    if(_value MATCHES "^(ON|TRUE|1)$")
+        set(${out_var} TRUE PARENT_SCOPE)
+    elseif(_value MATCHES "^(OFF|FALSE|0)$")
+        set(${out_var} FALSE PARENT_SCOPE)
+    else()
+        message(FATAL_ERROR
+            "SPARK_FPS_DEVELOPER_COMMANDS must be ON, OFF, TRUE, FALSE, 1 or 0, got '${SPARK_FPS_DEVELOPER_COMMANDS}'")
+    endif()
+endfunction()
+
+# Counts the lines of lines_var that start with prefix.
+function(_spark_count_prefix_lines lines_var prefix out_count)
+    set(_count 0)
+    foreach(_line IN LISTS ${lines_var})
+        string(FIND "${_line}" "${prefix}" _position)
+        if(_position EQUAL 0)
+            math(EXPR _count "${_count} + 1")
+        endif()
+    endforeach()
+    set(${out_count} "${_count}" PARENT_SCOPE)
+endfunction()
+
+# Plain Shipping drops the developer commands, so the writer's `xp 37` must be refused: its
+# header is ERR, the console answers "Unknown command: 'xp'." and nothing is awarded. An
+# unregistered command with arguments is shown redacted in the audit (fail closed), hence
+# the header and marker name `xp <arguments-redacted>`. Value persistence of non-zero XP is
+# proven by the Release/Debug lanes, which run with developer commands.
 function(_spark_validate_fps_audit phase child_result audit_fresh audit out_ok out_reason)
     set(_ok TRUE)
     set(_reason "")
+    _spark_fps_developer_commands_enabled(_dev_commands)
+    if(_dev_commands)
+        set(_saved_xp 37)
+    else()
+        set(_saved_xp 0)
+    endif()
 
     if(NOT "${child_result}" STREQUAL "0")
         set(_ok FALSE)
@@ -85,7 +128,11 @@ function(_spark_validate_fps_audit phase child_result audit_fresh audit out_ok o
         string(REPLACE "\n" ";" _lines "${_escaped}")
 
         if(phase STREQUAL "writer")
-            set(_expected_commands "level" "xp 37" "level" "quicksave")
+            if(_dev_commands)
+                set(_expected_commands "level" "xp 37" "level" "quicksave")
+            else()
+                set(_expected_commands "level" "xp <arguments-redacted>" "level" "quicksave")
+            endif()
         elseif(phase STREQUAL "reader")
             set(_expected_commands "level" "quickload" "level")
         else()
@@ -131,9 +178,13 @@ function(_spark_validate_fps_audit phase child_result audit_fresh audit out_ok o
             set(_time "${CMAKE_MATCH_2}")
             set(_status "${CMAKE_MATCH_3}")
             set(_command "${CMAKE_MATCH_4}")
-            if(NOT _status STREQUAL "ok ")
+            set(_expected_status "ok ")
+            if(NOT _dev_commands AND phase STREQUAL "writer" AND _header_position EQUAL 1)
+                set(_expected_status "ERR")
+            endif()
+            if(NOT _status STREQUAL _expected_status)
                 set(_ok FALSE)
-                set(_reason "command '${_command}' did not have an ok dispatch header")
+                set(_reason "command '${_command}' had dispatch header '${_status}', expected '${_expected_status}'")
                 break()
             elseif(NOT _command STREQUAL _expected_command)
                 set(_ok FALSE)
@@ -184,21 +235,30 @@ function(_spark_validate_fps_audit phase child_result audit_fresh audit out_ok o
                 if(_header_position EQUAL 0)
                     set(_expected_xp 0)
                 else()
-                    set(_expected_xp 37)
+                    set(_expected_xp ${_saved_xp})
                 endif()
                 _spark_validate_progression_lines(_suffix_lines "${_expected_xp}" _semantic_ok _semantic_reason)
             elseif(phase STREQUAL "reader" AND (_header_position EQUAL 0 OR _header_position EQUAL 2))
                 if(_header_position EQUAL 0)
                     set(_expected_xp 0)
                 else()
-                    set(_expected_xp 37)
+                    set(_expected_xp ${_saved_xp})
                 endif()
                 _spark_validate_progression_lines(_suffix_lines "${_expected_xp}" _semantic_ok _semantic_reason)
-            elseif(phase STREQUAL "writer" AND _header_position EQUAL 1)
+            elseif(phase STREQUAL "writer" AND _header_position EQUAL 1 AND _dev_commands)
                 _spark_count_exact_line(_suffix_lines "    > Awarded 37 XP (level 1)" _result_count)
                 if(NOT _result_count EQUAL 1)
                     set(_semantic_ok FALSE)
                     set(_semantic_reason "XP award result count was ${_result_count}, expected 1")
+                endif()
+            elseif(phase STREQUAL "writer" AND _header_position EQUAL 1)
+                _spark_count_prefix_lines(_suffix_lines "    > Unknown command: 'xp'." _unknown_count)
+                _spark_count_prefix_lines(_suffix_lines "    > Awarded" _awarded_count)
+                if(NOT _unknown_count EQUAL 1 OR NOT _awarded_count EQUAL 0)
+                    set(_semantic_ok FALSE)
+                    set(_semantic_reason
+                        "developer-command gate leaked: unknown-command/award line counts were "
+                        "${_unknown_count}/${_awarded_count}, expected 1/0")
                 endif()
             elseif(phase STREQUAL "writer" AND _header_position EQUAL 3)
                 _spark_count_exact_line(_suffix_lines
@@ -212,7 +272,7 @@ function(_spark_validate_fps_audit phase child_result audit_fresh audit out_ok o
                 endif()
             elseif(phase STREQUAL "reader" AND _header_position EQUAL 1)
                 _spark_count_exact_line(_suffix_lines
-                    "    > Quick load restored level 1 (37 XP)" _result_count)
+                    "    > Quick load restored level 1 (${_saved_xp} XP)" _result_count)
                 _spark_count_exact_line(_suffix_lines
                     "    > Quick load FAILED for slot 'fps_quicksave'" _failure_count)
                 if(NOT _result_count EQUAL 1 OR NOT _failure_count EQUAL 0)
@@ -234,6 +294,12 @@ function(_spark_validate_fps_audit phase child_result audit_fresh audit out_ok o
     set(${out_reason} "${_reason}" PARENT_SCOPE)
 endfunction()
 
+# Lets the parser self-test prove that an invalid profile spelling is a hard error.
+if(SPARK_FPS_PROFILE_PROBE)
+    _spark_fps_developer_commands_enabled(_probe_profile)
+    return()
+endif()
+
 # cmake/RunSparkHeadlessFPSSaveReload.cmake reuses the exact writer/reader audit
 # validator above for the source-tree NullRHI save/reload run.
 if(SPARK_FPS_SAVE_RELOAD_PARSER_ONLY)
@@ -241,7 +307,13 @@ if(SPARK_FPS_SAVE_RELOAD_PARSER_ONLY)
 endif()
 
 if(SPARK_FPS_SAVE_RELOAD_PARSER_SELF_TEST)
+    # The optional seventh argument is the SPARK_FPS_DEVELOPER_COMMANDS profile; the default is ON.
     function(_spark_expect_fps_audit_case name phase result fresh audit expected_ok)
+        if(ARGC GREATER 6)
+            set(SPARK_FPS_DEVELOPER_COMMANDS "${ARGV6}")
+        else()
+            set(SPARK_FPS_DEVELOPER_COMMANDS ON)
+        endif()
         _spark_validate_fps_audit("${phase}" "${result}" "${fresh}" "${audit}" _actual_ok _reason)
         if(expected_ok AND NOT _actual_ok)
             message(FATAL_ERROR "FPS audit parser case '${name}' unexpectedly failed: ${_reason}")
@@ -314,7 +386,88 @@ XP: 37/282
     string(REPLACE "Quick load restored level 1 (37 XP)"
         "Quick load FAILED for slot 'fps_quicksave'" _load_failure "${_reader_valid}")
     _spark_expect_fps_audit_case(load-failure reader 0 TRUE "${_load_failure}" FALSE)
-    message(STATUS "Installed FPS save/reload audit parser contract passed")
+
+    # Plain Shipping profile (developer commands OFF): the writer's xp is refused, the saved
+    # state is level 1 with 0 XP, and the same audits must fail the developer profile.
+    set(_xp_ok_block "frame 2 t=0.0s | ok  | xp 37
+    > [exec] frame 2 (t=0.0s, entry=1): xp 37
+    > Awarded 37 XP (level 1)
+")
+    set(_xp_refused_block "frame 2 t=0.0s | ERR | xp <arguments-redacted>
+    > [exec] frame 2 (t=0.0s, entry=1): xp <arguments-redacted>
+    > Unknown command: 'xp'. Type 'help' for available commands.
+")
+    string(REPLACE "${_xp_ok_block}" "${_xp_refused_block}" _writer_shipping "${_writer_valid}")
+    string(REPLACE "XP: 37/282" "XP: 0/282" _writer_shipping "${_writer_shipping}")
+    string(REPLACE "Quick load restored level 1 (37 XP)" "Quick load restored level 1 (0 XP)"
+        _reader_shipping "${_reader_valid}")
+    string(REPLACE "XP: 37/282" "XP: 0/282" _reader_shipping "${_reader_shipping}")
+    if(_writer_shipping STREQUAL _writer_valid OR _reader_shipping STREQUAL _reader_valid)
+        message(FATAL_ERROR "FPS audit parser self-test could not derive the Shipping fixtures")
+    endif()
+
+    _spark_expect_fps_audit_case(shipping-writer-valid writer 0 TRUE "${_writer_shipping}" TRUE OFF)
+    _spark_expect_fps_audit_case(shipping-reader-valid reader 0 TRUE "${_reader_shipping}" TRUE OFF)
+    _spark_expect_fps_audit_case(shipping-profile-spelled-false writer 0 TRUE "${_writer_shipping}" TRUE false)
+    _spark_expect_fps_audit_case(shipping-profile-spelled-zero reader 0 TRUE "${_reader_shipping}" TRUE 0)
+    string(REPLACE "\n" "\r\n" _writer_shipping_crlf "${_writer_shipping}")
+    _spark_expect_fps_audit_case(shipping-writer-crlf writer 0 TRUE "${_writer_shipping_crlf}" TRUE OFF)
+    _spark_expect_fps_audit_case(shipping-writer-not-fresh writer 0 FALSE "${_writer_shipping}" FALSE OFF)
+
+    # Gate leak: a developer audit (xp registered and awarded) must fail the Shipping profile.
+    _spark_expect_fps_audit_case(gate-leak-writer writer 0 TRUE "${_writer_valid}" FALSE OFF)
+    _spark_expect_fps_audit_case(gate-leak-reader reader 0 TRUE "${_reader_valid}" FALSE OFF)
+    string(REPLACE "xp <arguments-redacted>" "xp 37" _shipping_unredacted "${_writer_shipping}")
+    _spark_expect_fps_audit_case(shipping-xp-unredacted-command writer 0 TRUE "${_shipping_unredacted}" FALSE OFF)
+    string(REPLACE "| ERR | xp" "| ok  | xp" _shipping_ok_header "${_writer_shipping}")
+    _spark_expect_fps_audit_case(shipping-xp-ok-header writer 0 TRUE "${_shipping_ok_header}" FALSE OFF)
+    string(REPLACE "    > Unknown command: 'xp'. Type 'help' for available commands.\n"
+        "    > Unknown command: 'xp'. Type 'help' for available commands.\n    > Awarded 37 XP (level 1)\n"
+        _shipping_award "${_writer_shipping}")
+    _spark_expect_fps_audit_case(shipping-xp-awarded writer 0 TRUE "${_shipping_award}" FALSE OFF)
+    string(REPLACE "    > Unknown command: 'xp'. Type 'help' for available commands.\n" ""
+        _shipping_no_unknown "${_writer_shipping}")
+    _spark_expect_fps_audit_case(shipping-xp-no-unknown-line writer 0 TRUE "${_shipping_no_unknown}" FALSE OFF)
+    string(REPLACE "    > Unknown command: 'xp'. Type 'help' for available commands.\n"
+        "    > Unknown command: 'xp'. Type 'help' for available commands.\n    > Unknown command: 'xp'.\n"
+        _shipping_two_unknown "${_writer_shipping}")
+    _spark_expect_fps_audit_case(shipping-xp-two-unknown-lines writer 0 TRUE "${_shipping_two_unknown}" FALSE OFF)
+    string(REPLACE "    > [exec] frame 2 (t=0.0s, entry=1): xp <arguments-redacted>\n" ""
+        _shipping_no_marker "${_writer_shipping}")
+    _spark_expect_fps_audit_case(shipping-xp-missing-marker writer 0 TRUE "${_shipping_no_marker}" FALSE OFF)
+    string(REPLACE "Unknown command: 'xp'." "Unknown command: 'god'." _shipping_other_unknown "${_writer_shipping}")
+    _spark_expect_fps_audit_case(shipping-xp-wrong-unknown-name writer 0 TRUE
+        "${_shipping_other_unknown}" FALSE OFF)
+    string(REPLACE "XP: 0/282\nProgress: 13%" "XP: 37/282\nProgress: 13%" _shipping_xp_grew "${_writer_shipping}")
+    _spark_expect_fps_audit_case(shipping-writer-xp-grew writer 0 TRUE "${_shipping_xp_grew}" FALSE OFF)
+    string(REPLACE "Quick load restored level 1 (0 XP)" "Quick load restored level 1 (37 XP)"
+        _shipping_restored_37 "${_reader_shipping}")
+    _spark_expect_fps_audit_case(shipping-reader-restored-37 reader 0 TRUE "${_shipping_restored_37}" FALSE OFF)
+    string(REPLACE "Quick load restored level 1 (0 XP)" "Quick load FAILED for slot 'fps_quicksave'"
+        _shipping_load_failure "${_reader_shipping}")
+    _spark_expect_fps_audit_case(shipping-reader-load-failure reader 0 TRUE "${_shipping_load_failure}" FALSE OFF)
+    string(REPLACE "    > Quick save written to slot 'fps_quicksave'" "" _shipping_dispatch_only "${_writer_shipping}")
+    _spark_expect_fps_audit_case(shipping-dispatch-only writer 0 TRUE "${_shipping_dispatch_only}" FALSE OFF)
+
+    # The developer profile rejects a Shipping audit: nothing was awarded, so nothing proves xp.
+    _spark_expect_fps_audit_case(developer-rejects-shipping-writer writer 0 TRUE "${_writer_shipping}" FALSE ON)
+    _spark_expect_fps_audit_case(developer-rejects-shipping-reader reader 0 TRUE "${_reader_shipping}" FALSE ON)
+    _spark_expect_fps_audit_case(developer-profile-spelled-true writer 0 TRUE "${_writer_valid}" TRUE TRUE)
+    _spark_expect_fps_audit_case(developer-profile-spelled-one reader 0 TRUE "${_reader_valid}" TRUE 1)
+
+    # Any other profile spelling is a hard error, not a silent default.
+    foreach(_bad_profile IN ITEMS "" "maybe" "2" "ONN")
+        execute_process(
+            COMMAND "${CMAKE_COMMAND}" "-DSPARK_SOURCE_ROOT=${SPARK_SOURCE_ROOT}"
+                "-DSPARK_FPS_SAVE_RELOAD_PARSER_ONLY=ON" "-DSPARK_FPS_DEVELOPER_COMMANDS=${_bad_profile}"
+                "-DSPARK_FPS_PROFILE_PROBE=ON" -P "${CMAKE_CURRENT_LIST_FILE}"
+            RESULT_VARIABLE _bad_profile_result
+            OUTPUT_QUIET ERROR_QUIET)
+        if(_bad_profile_result EQUAL 0)
+            message(FATAL_ERROR "FPS audit parser accepted the invalid developer-command profile '${_bad_profile}'")
+        endif()
+    endforeach()
+    message(STATUS "Installed FPS save/reload audit parser contract passed (developer-commands ON and OFF profiles)")
     return()
 endif()
 
@@ -346,6 +499,14 @@ if(NOT SPARK_SOURCE_TREE_STATE MATCHES "^(clean|dirty)$")
 endif()
 if(NOT SPARK_BUILD_CONFIG MATCHES "^[A-Za-z0-9_.+-]+$")
     message(FATAL_ERROR "SPARK_BUILD_CONFIG has an invalid token")
+endif()
+_spark_fps_developer_commands_enabled(_dev_commands)
+if(_dev_commands)
+    set(_profile_name ON)
+    set(_saved_xp 37)
+else()
+    set(_profile_name OFF)
+    set(_saved_xp 0)
 endif()
 
 set(_bin "${SPARK_INSTALLED_ROOT}/bin")
@@ -482,8 +643,9 @@ file(WRITE "${SPARK_FPS_SAVE_TEST_ROOT}/evidence.txt"
     "runner_sha256=${_runner_sha256}\n"
     "save_sha256=${_writer_save_sha256}\n"
     "save_bytes=${_save_size}\n"
-    "writer_xp=37\nreader_restored_xp=37\n"
+    "developer_commands=${_profile_name}\n"
+    "writer_xp=${_saved_xp}\nreader_restored_xp=${_saved_xp}\n"
     "backend=d3d11-warp\n")
 message(STATUS
     "Installed FPS save/reload persistence passed across two fresh WARP processes "
-    "(save ${_writer_save_sha256})")
+    "(save ${_writer_save_sha256}; developer-commands ${_profile_name} profile validated)")

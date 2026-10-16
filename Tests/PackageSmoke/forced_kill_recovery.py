@@ -17,6 +17,11 @@ NullRHI twice against one private user-data tree:
    a successful quickload that restores level 1 with 37 XP, and no fatal log line: the next
    boot after the kill is clean and the saved state survived.
 
+``--developer-commands OFF`` is the plain Shipping profile (FPSConsolePolicy.h drops ``xp``): the
+writer's ``xp 37`` must be refused (``ERR`` header, ``Unknown command: 'xp'.``, no ``Awarded`` line),
+so the save holds 0 XP and the restart must restore level 1 with 0 XP. The default ON profile is the
+behaviour above. Non-zero XP persistence is proven by the ON (Release/Debug) lanes.
+
 Every wait is wall-clock bounded; a hang is a failure, never a retry. ``--self-test`` runs the
 pure validators on canned host output and needs neither a build nor Windows.
 
@@ -48,11 +53,16 @@ WRITER_SCRIPT = "1 level\n2 xp 37\n3 level\n4 quicksave\n5 level\n"
 READER_SCRIPT = "1 level\n2 quickload\n3 level\n"
 WRITER_COMMANDS = ["level", "xp 37", "level", "quicksave", "level"]
 READER_COMMANDS = ["level", "quickload", "level"]
+# An unregistered command that has arguments is shown redacted in the audit (fail closed).
+XP_REFUSED_COMMAND = "xp <arguments-redacted>"
+XP_UNKNOWN_PREFIX = "    > Unknown command: 'xp'."
+XP_AWARDED_PREFIX = "    > Awarded"
 
 AUDIT_HEADER = re.compile(r"^frame (\d+) t=(\d+\.\d)s \| (ok |ERR) \| (.+)$")
 SAVE_WRITTEN = f"    > Quick save written to slot '{SAVE_SLOT}'"
 SAVE_FAILED = f"    > Quick save FAILED to write slot '{SAVE_SLOT}'"
 LOAD_RESTORED = "    > Quick load restored level 1 (37 XP)"
+LOAD_RESTORED_SHIPPING = "    > Quick load restored level 1 (0 XP)"
 LOAD_FAILED = f"    > Quick load FAILED for slot '{SAVE_SLOT}'"
 LIVE_RESOURCES = re.compile(r"^SPARK_HEADLESS_NULLRHI_RESOURCES live=(\d+)$", re.M)
 
@@ -104,8 +114,33 @@ def command_output(entry: Entry) -> list[str]:
     return []
 
 
-def require_writer_saved(audit: str) -> None:
-    """The writer's audit must show the quicksave command succeeded, exactly once, without a failure line."""
+def require_xp_refused(entries: list[Entry]) -> None:
+    """Plain Shipping registers no `xp`: exactly one refused entry, nothing awarded."""
+    xp_entries = [entry for entry in entries if entry[2] == "xp" or entry[2].startswith("xp ")]
+    if len(xp_entries) != 1 or xp_entries[0][2] != XP_REFUSED_COMMAND:
+        raise HarnessFailure(
+            f"writer xp entries were {[entry[2] for entry in xp_entries]}, expected ['{XP_REFUSED_COMMAND}']"
+            " (developer-command gate leaked)"
+        )
+    frame, status, command, lines = xp_entries[0]
+    marker = f"    > [exec] frame {frame} (t="
+    if sum(1 for line in lines if line.startswith(marker) and line.endswith(f"): {command}")) != 1:
+        raise HarnessFailure(f"writer command '{command}' has no single [exec] marker")
+    output = command_output(xp_entries[0])
+    unknown = sum(1 for line in output if line.startswith(XP_UNKNOWN_PREFIX))
+    awarded = sum(1 for line in output if line.startswith(XP_AWARDED_PREFIX))
+    if status != "ERR" or unknown != 1 or awarded != 0:
+        raise HarnessFailure(
+            f"writer xp was not refused: status {status}, unknown-command lines {unknown}, "
+            f"award lines {awarded} (developer-command gate leaked)"
+        )
+
+
+def require_writer_saved(audit: str, developer_commands: bool = True) -> None:
+    """The writer's audit must show the quicksave command succeeded, exactly once, without a failure line.
+
+    With developer commands OFF (plain Shipping) it must also show the `xp` command refused.
+    """
     entries = parse_audit(audit)
     saves = [entry for entry in entries if entry[2] == "quicksave"]
     if len(saves) != 1:
@@ -113,6 +148,8 @@ def require_writer_saved(audit: str) -> None:
     output = command_output(saves[0])
     if saves[0][1] != "ok" or output.count(SAVE_WRITTEN) != 1 or SAVE_FAILED in output:
         raise HarnessFailure(f"writer quicksave did not report success: {output}")
+    if not developer_commands:
+        require_xp_refused(entries)
 
 
 def writer_saved(audit: str) -> bool:
@@ -137,14 +174,17 @@ def classify_save_state(primary_size: int | None, backup_size: int | None) -> st
     )
 
 
-def require_restart_audit(audit: str) -> None:
-    """The restart's quickload must restore level 1 / 37 XP and the following level must show it."""
+def require_restart_audit(audit: str, developer_commands: bool = True) -> None:
+    """The restart's quickload must restore level 1 / 37 XP (0 XP without developer commands) and the
+    following level must show it."""
     entries = parse_audit(audit)
     require_commands(entries, READER_COMMANDS, "restart")
+    saved_xp = 37 if developer_commands else 0
+    restored = LOAD_RESTORED if developer_commands else LOAD_RESTORED_SHIPPING
     load_output = command_output(entries[1])
-    if load_output.count(LOAD_RESTORED) != 1 or LOAD_FAILED in load_output:
+    if load_output.count(restored) != 1 or LOAD_FAILED in load_output:
         raise HarnessFailure(f"restart quickload did not restore the saved state: {load_output}")
-    for position, expected_xp in ((0, 0), (2, 37)):
+    for position, expected_xp in ((0, 0), (2, saved_xp)):
         output = command_output(entries[position])
         if output.count("Level: 1/50") != 1 or output.count(f"XP: {expected_xp}/282") != 1:
             raise HarnessFailure(f"restart 'level' #{position} did not show level 1 with {expected_xp} XP: {output}")
@@ -213,6 +253,7 @@ class Harness:
         self.engine = args.engine.resolve(strict=True)
         self.module = args.module.resolve(strict=True)
         self.cmake = args.cmake
+        self.developer_commands = args.developer_commands == "ON"
         self.parser_script = (args.source_root / "cmake" / "RunSparkHeadlessNullRHILifecycle.cmake").resolve(
             strict=True
         )
@@ -298,7 +339,7 @@ class Harness:
         combined = f"{read_text(out_path)}\n{read_text(err_path)}"
         if "SPARK_HEADLESS_LIFECYCLE" in combined:
             raise HarnessFailure("killed writer published lifecycle records: the kill landed after teardown")
-        require_writer_saved(read_text(audit))
+        require_writer_saved(read_text(audit), self.developer_commands)
         return [f"writer: quicksave written after {saved_after:.2f}s, TerminateProcess exit={process.returncode:#x}"]
 
     def run_restart(self) -> list[str]:
@@ -317,7 +358,7 @@ class Harness:
         self.require_strict_records(process.returncode, stdout, stderr)
         require_live_resources_zero(stdout)
         require_no_fatal(f"{stdout}\n{stderr}", "restart")
-        require_restart_audit(read_text(audit))
+        require_restart_audit(read_text(audit), self.developer_commands)
         after = sha256(primary) if file_size(primary) else "n/a"
         if state == "intact" and before != after:
             raise HarnessFailure(f"restart mutated the intact quicksave: {before} -> {after}")
@@ -399,8 +440,74 @@ def self_test() -> int:
     )
     _expect_failure("live-embedded", lambda: require_live_resources_zero("x SPARK_HEADLESS_NULLRHI_RESOURCES live=0\n"))
 
+    # Plain Shipping profile (developer commands OFF): xp refused, 0 XP saved and restored.
+    refused = "frame 2 t=0.0s | ERR | xp <arguments-redacted>\n    > [exec] frame 2 (t=0.0s, entry=1): xp <arguments-redacted>\n"
+    awarded = "frame 2 t=0.0s | ok  | xp 37\n    > [exec] frame 2 (t=0.0s, entry=1): xp 37\n    > Awarded 37 XP (level 1)\n"
+    unknown = "    > Unknown command: 'xp'. Type 'help' for available commands.\n"
+    shipping_writer = (_WRITER_AUDIT.replace(awarded, refused + unknown)).replace("XP: 37/282", "XP: 0/282")
+    shipping_reader = _READER_AUDIT.replace(LOAD_RESTORED, LOAD_RESTORED_SHIPPING).replace("XP: 37/282", "XP: 0/282")
+    _check("shipping-fixtures-differ", shipping_writer != _WRITER_AUDIT and shipping_reader != _READER_AUDIT)
+    require_writer_saved(shipping_writer, False)
+    require_writer_saved(shipping_writer.replace("\n", "\r\n"), False)
+    require_restart_audit(shipping_reader, False)
+    require_restart_audit(shipping_reader.replace("\n", "\r\n"), False)
+    _check("shipping-writer-saved", writer_saved(shipping_writer))
+    # The developer profile must not accept the Shipping audits (nothing proves xp or 37 XP).
+    _expect_failure("developer-restart-rejects-shipping", lambda: require_restart_audit(shipping_reader, True))
+    _expect_failure("shipping-restart-rejects-developer", lambda: require_restart_audit(_READER_AUDIT, False))
+    # Gate leak: a developer audit (xp registered and awarded) fails the Shipping profile.
+    _expect_failure("gate-leak-writer", lambda: require_writer_saved(_WRITER_AUDIT, False))
+    _expect_failure(
+        "gate-leak-ok-header",
+        lambda: require_writer_saved(shipping_writer.replace("| ERR | xp", "| ok  | xp"), False),
+    )
+    _expect_failure(
+        "gate-leak-award-line",
+        lambda: require_writer_saved(shipping_writer.replace(unknown, unknown + "    > Awarded 37 XP (level 1)\n"), False),
+    )
+    _expect_failure("gate-no-unknown-line", lambda: require_writer_saved(shipping_writer.replace(unknown, ""), False))
+    _expect_failure(
+        "gate-two-unknown-lines",
+        lambda: require_writer_saved(shipping_writer.replace(unknown, unknown + "    > Unknown command: 'xp'.\n"), False),
+    )
+    _expect_failure(
+        "gate-missing-marker",
+        lambda: require_writer_saved(
+            shipping_writer.replace("    > [exec] frame 2 (t=0.0s, entry=1): xp <arguments-redacted>\n", ""), False
+        ),
+    )
+    _expect_failure(
+        "gate-wrong-unknown-name",
+        lambda: require_writer_saved(shipping_writer.replace("Unknown command: 'xp'.", "Unknown command: 'god'."), False),
+    )
+    _expect_failure(
+        "gate-xp-entry-absent",
+        lambda: require_writer_saved(shipping_writer.replace(refused + unknown, ""), False),
+    )
+    _expect_failure(
+        "shipping-restart-restored-37",
+        lambda: require_restart_audit(shipping_reader.replace(LOAD_RESTORED_SHIPPING, LOAD_RESTORED), False),
+    )
+    head, _, tail = shipping_reader.rpartition("XP: 0/282")
+    _expect_failure(
+        "shipping-restart-final-xp-37",
+        lambda: require_restart_audit(f"{head}XP: 37/282{tail}", False),
+    )
+
     require_no_fatal("[INFO] fine\n", "restart")
     _expect_failure("fatal", lambda: require_no_fatal("[FATAL] boom\n", "restart"))
+
+    # The --developer-commands profile must reach the harness the validators read it from.
+    with tempfile.TemporaryDirectory() as scratch:
+        root = Path(scratch)
+        (root / "cmake").mkdir()
+        for name in ("SparkEngine.exe", "SparkGameFPS.dll", "cmake/RunSparkHeadlessNullRHILifecycle.cmake"):
+            (root / name).write_text("", encoding="utf-8")
+        for profile, expected in (("ON", True), ("OFF", False)):
+            harness_args = argparse.Namespace(engine=root / "SparkEngine.exe", module=root / "SparkGameFPS.dll",
+                                              cmake="cmake", developer_commands=profile, source_root=root,
+                                              workdir=root / f"work-{profile}")
+            _check(f"harness-profile-{profile}", Harness(harness_args).developer_commands is expected)
     print("forced_kill_recovery: parser self-test passed")
     return 0
 
@@ -412,6 +519,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--module", type=Path, help="installed SparkGameFPS.dll")
     parser.add_argument("--source-root", type=Path, help="repository root (strict lifecycle parser)")
     parser.add_argument("--cmake", default="cmake", help="cmake executable used to run the strict parser")
+    parser.add_argument(
+        "--developer-commands",
+        choices=("ON", "OFF"),
+        default="ON",
+        help="OFF is plain Shipping: `xp` is not registered, so it must be refused and the save holds 0 XP",
+    )
     parser.add_argument("--workdir", type=Path, help="fresh directory for runs, logs and the private user tree")
     args = parser.parse_args(argv)
     if args.self_test:
@@ -431,6 +544,7 @@ def main(argv: list[str] | None = None) -> int:
     except HarnessFailure as failure:
         print(f"forced_kill_recovery: FAIL {failure}", file=sys.stderr)
         return 1
+    print(f"forced_kill_recovery: developer-commands {args.developer_commands} profile")
     for note in notes:
         print(f"forced_kill_recovery: {note}")
     print("forced_kill_recovery: PASS")

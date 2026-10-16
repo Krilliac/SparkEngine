@@ -2877,6 +2877,17 @@ set_tests_properties(ModuleVersionCompatibility PROPERTIES
     RUN_SERIAL TRUE
     TIMEOUT 120)
 
+# Whether the SparkGameFPS under test registers the FPS developer commands (xp, god, ...).
+# FPSConsolePolicy.h drops them from plain Shipping (MinSizeRel without
+# ENABLE_DEVCOMMANDS_IN_SHIPPING), so the FPS save/reload tests below pass this profile on
+# to the audit validator: Shipping lanes prove the save/load round trip and that `xp` is
+# refused; value persistence of non-zero XP is proven by the Release/Debug lanes.
+if(ENABLE_DEVCOMMANDS_IN_SHIPPING)
+    set(_spark_fps_developer_commands ON)
+else()
+    set(_spark_fps_developer_commands "$<IF:$<CONFIG:MinSizeRel>,OFF,ON>")
+endif()
+
 # Windows game modules link the engine's in-tree ImGui and define
 # SPARK_HAS_IMGUI (spark_configure_module_imgui). Each built image must carry a
 # string only its guarded in-game UI references; a module whose UI is compiled
@@ -3718,6 +3729,7 @@ if(UNIX AND NOT APPLE AND SPARK_HEADLESS_SUPPORT AND BUILD_GAME_MODULES AND
             "-DSPARK_ENGINE_EXECUTABLE=$<TARGET_FILE:SparkEngine>"
             "-DSPARK_GAME_MODULE=$<TARGET_FILE:SparkGameFPS>"
             "-DSPARK_WORKING_DIRECTORY=$<TARGET_FILE_DIR:SparkEngine>"
+            "-DSPARK_FPS_DEVELOPER_COMMANDS=${_spark_fps_developer_commands}"
             "-DSPARK_TEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/headless-save-reload/$<CONFIG>"
             -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkHeadlessFPSSaveReload.cmake
     )
@@ -4239,6 +4251,7 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
             "-DSPARK_ENGINE_EXECUTABLE=$<TARGET_FILE:SparkEngine>"
             "-DSPARK_GAME_MODULE=$<TARGET_FILE:SparkGameFPS>"
             "-DSPARK_WORKING_DIRECTORY=$<TARGET_FILE_DIR:SparkEngine>"
+            "-DSPARK_FPS_DEVELOPER_COMMANDS=${_spark_fps_developer_commands}"
             "-DSPARK_TEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/headless-save-reload/$<CONFIG>"
             -P ${CMAKE_SOURCE_DIR}/cmake/RunSparkHeadlessFPSSaveReload.cmake
     )
@@ -4348,6 +4361,7 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
                 "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
                 "-DSPARK_CONFIG=$<CONFIG>"
                 "-DSPARK_TEST_ROOT=${_spark_mod310_test_root}/p/$<CONFIG>"
+                "-DSPARK_FPS_DEVELOPER_COMMANDS=${_spark_fps_developer_commands}"
                 -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledFPSPackage.cmake)
         set_tests_properties(FPSPackage_InstalledRuntime PROPERTIES
             LABELS "module;stable-v1;fps;package;integration;save;d3d11"
@@ -4388,6 +4402,7 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
                 "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
                 "-DSPARK_CONFIG=$<CONFIG>"
                 "-DSPARK_TEST_ROOT=${_spark_mod310_test_root}/h/$<CONFIG>"
+                "-DSPARK_FPS_DEVELOPER_COMMANDS=${_spark_fps_developer_commands}"
                 -DSPARK_FPS_PACKAGE_MODE=headless-save-reload
                 -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledFPSPackage.cmake)
         set_tests_properties(FPSHeadlessPackage_NullRHISaveReload PROPERTIES
@@ -4423,6 +4438,7 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
                 "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
                 "-DSPARK_CONFIG=$<CONFIG>"
                 "-DSPARK_TEST_ROOT=${_spark_mod310_test_root}/k/$<CONFIG>"
+                "-DSPARK_FPS_DEVELOPER_COMMANDS=${_spark_fps_developer_commands}"
                 -DSPARK_FPS_PACKAGE_MODE=forced-kill-recovery
                 -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/RunInstalledFPSPackage.cmake)
         set_tests_properties(FPSHeadlessPackage_ForcedKillRecovery PROPERTIES

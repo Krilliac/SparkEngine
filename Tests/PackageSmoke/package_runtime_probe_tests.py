@@ -60,6 +60,15 @@ class PackageRuntimeProbeTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     probe_call(args, Path("package"), Path("logs"))
 
+    def test_save_reload_validates_the_shipping_profile(self) -> None:
+        args = argparse.Namespace(cmake=Path("cmake"), source_root=Path("source"), build_root=Path("build"))
+        with mock.patch.object(Path, "write_text"), \
+                mock.patch.object(probe, "run_command", return_value=probe.CommandResult(0, "", "")) as run:
+            probe.run_save_reload(args, Path("package"), Path("logs"))
+        command = run.call_args.args[0]
+        profiles = [arg for arg in command if arg.startswith("-DSPARK_FPS_DEVELOPER_COMMANDS=")]
+        self.assertEqual(profiles, ["-DSPARK_FPS_DEVELOPER_COMMANDS=OFF"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -29,6 +29,13 @@ endif()
 if(NOT SPARK_FPS_PACKAGE_MODE MATCHES "^(full|headless-save-reload|forced-kill-recovery|malformed-content|arena-loop|repository-isolation)$")
     message(FATAL_ERROR "Unknown SPARK_FPS_PACKAGE_MODE '${SPARK_FPS_PACKAGE_MODE}'")
 endif()
+# SPARK_FPS_DEVELOPER_COMMANDS (default ON) says whether this package registers the FPS
+# developer commands. Plain Shipping (MinSizeRel without ENABLE_DEVCOMMANDS_IN_SHIPPING)
+# does not, so its save/reload phases expect `xp` to be refused; the runners validate
+# the spelling and reject an empty value.
+if(NOT DEFINED SPARK_FPS_DEVELOPER_COMMANDS)
+    set(SPARK_FPS_DEVELOPER_COMMANDS ON)
+endif()
 # fps_autoplay is a developer command, and a Shipping (MinSizeRel) build never
 # registers developer commands, so that package has nothing to play the loop with.
 if(SPARK_FPS_PACKAGE_MODE STREQUAL "arena-loop" AND SPARK_CONFIG STREQUAL "MinSizeRel")
@@ -203,6 +210,7 @@ if(SPARK_FPS_PACKAGE_MODE STREQUAL "headless-save-reload")
         "-DSPARK_GAME_MODULE=${_install_root}/bin/SparkGameFPS.dll"
         "-DSPARK_PACKAGE_ROOT=${_install_root}"
         "-DSPARK_FORBIDDEN_ROOTS=${SPARK_SOURCE_ROOT}|${SPARK_ENGINE_BUILD_DIR}"
+        "-DSPARK_FPS_DEVELOPER_COMMANDS=${SPARK_FPS_DEVELOPER_COMMANDS}"
         "-DSPARK_TEST_ROOT=${_run_root}/headless-save-reload"
         -P "${SPARK_SOURCE_ROOT}/cmake/RunSparkHeadlessFPSSaveReload.cmake")
     message(STATUS
@@ -216,6 +224,7 @@ if(SPARK_FPS_PACKAGE_MODE STREQUAL "forced-kill-recovery")
         "${CMAKE_COMMAND}"
         "-DSPARK_INSTALLED_ROOT=${_install_root}"
         "-DSPARK_SOURCE_ROOT=${SPARK_SOURCE_ROOT}"
+        "-DSPARK_FPS_DEVELOPER_COMMANDS=${SPARK_FPS_DEVELOPER_COMMANDS}"
         "-DSPARK_TEST_ROOT=${_run_root}/forced-kill-recovery"
         -P "${SPARK_SOURCE_ROOT}/Tests/PackageSmoke/RunInstalledFPSForcedKillRecovery.cmake")
     message(STATUS
@@ -364,6 +373,7 @@ _run_checked("Validate installed FPS save/reload persistence" 210
     "-DSPARK_INSTALLED_ROOT=${_install_root}"
     "-DSPARK_SOURCE_ROOT=${SPARK_SOURCE_ROOT}"
     "-DSPARK_FPS_SAVE_TEST_ROOT=${_run_root}/save-reload"
+    "-DSPARK_FPS_DEVELOPER_COMMANDS=${SPARK_FPS_DEVELOPER_COMMANDS}"
     -DSPARK_FPS_PACKAGE_PREVALIDATED=ON
     "-DSPARK_SOURCE_SHA=${_source_sha}"
     "-DSPARK_SOURCE_TREE_STATE=${_source_tree_state}"

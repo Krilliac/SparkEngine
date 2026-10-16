@@ -65,12 +65,28 @@ if(EXISTS "${SPARK_TEST_ROOT}" OR IS_SYMLINK "${SPARK_TEST_ROOT}")
 endif()
 file(MAKE_DIRECTORY "${SPARK_TEST_ROOT}")
 
+# SPARK_FPS_DEVELOPER_COMMANDS (default ON): plain Shipping registers no `xp`, so the helper
+# expects the writer's `xp 37` to be refused and the restart to restore 0 XP.
+if(NOT DEFINED SPARK_FPS_DEVELOPER_COMMANDS)
+    set(SPARK_FPS_DEVELOPER_COMMANDS ON)
+endif()
+string(TOUPPER "${SPARK_FPS_DEVELOPER_COMMANDS}" _developer_commands)
+if(_developer_commands MATCHES "^(ON|TRUE|1)$")
+    set(_developer_commands ON)
+elseif(_developer_commands MATCHES "^(OFF|FALSE|0)$")
+    set(_developer_commands OFF)
+else()
+    message(FATAL_ERROR
+        "SPARK_FPS_DEVELOPER_COMMANDS must be ON, OFF, TRUE, FALSE, 1 or 0, got '${SPARK_FPS_DEVELOPER_COMMANDS}'")
+endif()
+
 execute_process(
     COMMAND "${Python3_EXECUTABLE}" -B "${_helper}"
         --engine "${_bin}/SparkEngine.exe"
         --module "${_bin}/SparkGameFPS.dll"
         --source-root "${SPARK_SOURCE_ROOT}"
         --cmake "${CMAKE_COMMAND}"
+        --developer-commands "${_developer_commands}"
         --workdir "${SPARK_TEST_ROOT}/run"
     RESULT_VARIABLE _kill_result
     OUTPUT_VARIABLE _kill_output
