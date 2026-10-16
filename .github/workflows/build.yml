@@ -5861,6 +5861,23 @@ jobs:
         ctest --test-dir build/windows-release -C Release -R '^FPSSinglePlayerSlice_' \
           -E 'InstalledArenaLoop' --no-tests=error --output-on-failure \
           2>&1 | tee module-fps-singleplayer-slice.log
+    # The package runs live under %TEMP%/m310-* (short paths for nested MSVC builds), outside
+    # the workspace; copy their logs, screenshots and reports so a failure ships its evidence.
+    - name: Collect installed package run evidence
+      if: failure()
+      run: |
+        python - <<'PY'
+        import os, pathlib, shutil
+
+        out = pathlib.Path("module-fps-singleplayer-evidence")
+        for root in pathlib.Path(os.environ["TEMP"]).glob("m310-*"):
+            for path in root.rglob("*"):
+                if path.is_file() and path.suffix.lower() in {".log", ".png", ".json", ".txt"} and "CMakeFiles" not in path.parts:
+                    target = out / path.relative_to(root.parent)
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(path, target)
+        print(sum(1 for p in out.rglob("*") if p.is_file()) if out.exists() else 0, "evidence files collected")
+        PY
     - name: Upload module FPS single-player logs
       if: always()
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -5868,6 +5885,7 @@ jobs:
         name: module-fps-singleplayer-${{ github.sha }}-${{ github.run_attempt }}
         path: |
           module-fps-singleplayer-*.log
+          module-fps-singleplayer-evidence/**
         retention-days: ${{ env.ERROR_RETENTION_DAYS }}
         if-no-files-found: ignore
 
