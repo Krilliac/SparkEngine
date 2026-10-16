@@ -264,6 +264,8 @@ TEST(UtilEventBus_SharedTypeName_RefusesInternalLinkageNames)
     EXPECT_FALSE(SharedTypeNameParser::IsShared("N5SparkUt_E"));
     EXPECT_FALSE(SharedTypeNameParser::IsShared("N5SparkUlvE_E"));
     EXPECT_FALSE(SharedTypeNameParser::IsShared("3$_0"));
+    EXPECT_FALSE(SharedTypeNameParser::IsShared("10._anon_195"));
+    EXPECT_FALSE(SharedTypeNameParser::IsShared("1WI8._anon_3E"));
     // Malformed or truncated input.
     EXPECT_FALSE(SharedTypeNameParser::IsShared(""));
     EXPECT_FALSE(SharedTypeNameParser::IsShared("9Short"));
@@ -285,8 +287,9 @@ template <typename... Ts> struct EBTemplateEvent
 
 TEST(UtilEventBus_SharedTypeName_ClassifiesRealTypeNames)
 {
-#if defined(_MSC_VER) && !defined(__clang__)
-    SKIP_TEST("typeid().name() is not an Itanium mangled name under MSVC");
+#if defined(_MSC_VER)
+    // MSVC and clang-cl both use the MSVC ABI's readable names ("struct X").
+    SKIP_TEST("typeid().name() is not an Itanium mangled name under the MSVC ABI");
 #else
     using Spark::Detail::SharedTypeNameParser;
     struct LocalEvent

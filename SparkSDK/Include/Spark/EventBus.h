@@ -87,8 +87,9 @@ namespace Spark
          * Accepts class names, nested names, std substitutions and template arguments made of those,
          * builtins, cv/pointer/reference types and integral literals. Everything else is refused:
          * function-local types (Z), anonymous namespaces (_GLOBAL__N), unnamed and lambda types (Ut, Ul),
-         * clang's $_N types, expressions. Refusing a shared type only loses the cross-module name match;
-         * accepting an internal one would alias two distinct event types. Pure and allocation-free.
+         * clang's $_N and GCC's ._anon_N types, expressions. Refusing a shared type only loses the
+         * cross-module name match; accepting an internal one would alias two distinct event types.
+         * Pure and allocation-free; recursion depth follows the nesting of compiler-generated names.
          */
         class SharedTypeNameParser
         {
@@ -127,7 +128,8 @@ namespace Spark
                     return false;
                 }
                 const std::string_view identifier(m_cursor, length);
-                if (identifier.starts_with("_GLOBAL__N") || identifier.find('$') != std::string_view::npos)
+                // No C++ identifier contains '$' or '.': those are compiler names for unnamed types.
+                if (identifier.starts_with("_GLOBAL__N") || identifier.find_first_of("$.") != std::string_view::npos)
                 {
                     return false;
                 }
