@@ -1104,7 +1104,7 @@ extents; this does not change plane order or clip-space calculations.
 ## Test File Inventory
 
 <!-- AUTO:test_inventory -->
-*745 test-bearing `.cpp`/`.mm` files, 8645 source-level test definitions*
+*745 test-bearing `.cpp`/`.mm` files, 8646 source-level test definitions*
 
 | Test File | Test Definitions |
 |-----------|------------------|
@@ -1246,7 +1246,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestDayNightCycle` | 10 |
 | `TestDeadlockDetector` | 8 |
 | `TestDebugHookManager` | 29 |
-| `TestDebugTools` | 37 |
+| `TestDebugTools` | 35 |
 | `TestDebugUtilities` | 28 |
 | `TestDecalSystem` | 7 |
 | `TestDedicatedServer` | 27 |
@@ -1447,7 +1447,7 @@ extents; this does not change plane order or clip-space calculations.
 | `TestLockFreeRingAllocator` | 8 |
 | `TestLockFreeRingAllocatorReal` | 10 |
 | `TestLogger` | 20 |
-| `TestLoggerSinksReal` | 4 |
+| `TestLoggerSinksReal` | 7 |
 | `TestLootAndCrafting` | 11 |
 | `TestMMOAssetImport` | 16 |
 | `TestMMOAuthHardening` | 5 |
