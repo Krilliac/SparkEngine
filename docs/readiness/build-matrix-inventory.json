@@ -16612,7 +16612,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 6,
+        "stepCount": 7,
         "steps": [
           {
             "index": 0,
@@ -16664,6 +16664,18 @@
           },
           {
             "index": 4,
+            "name": "Enter Visual Studio 2022 developer environment (x64)",
+            "id": "",
+            "uses": "",
+            "shell": "pwsh",
+            "if": "absent",
+            "continueOnError": "absent",
+            "hasRun": true,
+            "env": [],
+            "runDigest": "10a11d7ffd45c458"
+          },
+          {
+            "index": 5,
             "name": "Run installed empty-project template",
             "id": "",
             "uses": "",
@@ -16675,7 +16687,7 @@
             "runDigest": "7a4c2a2ce4cf1345"
           },
           {
-            "index": 5,
+            "index": 6,
             "name": "Upload package consumer Windows logs",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -22615,8 +22627,27 @@
       },
       {
         "job": "package-consumer-windows",
-        "step": "Run installed empty-project template",
+        "step": "Enter Visual Studio 2022 developer environment (x64)",
         "stepIndex": 4,
+        "matrix": {},
+        "matrixResolved": true,
+        "runnerOs": "windows",
+        "shell": "pwsh",
+        "jobIf": "absent",
+        "jobContinueOnError": true,
+        "stepIf": "absent",
+        "stepContinueOnError": "absent",
+        "gating": "advisory",
+        "tool": "cmake",
+        "kind": "other",
+        "command": "cmake --version",
+        "commandProvenance": "literal",
+        "commandIndex": 0
+      },
+      {
+        "job": "package-consumer-windows",
+        "step": "Run installed empty-project template",
+        "stepIndex": 5,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
@@ -28416,7 +28447,7 @@
       {
         "job": "package-consumer-windows",
         "step": "Run installed empty-project template",
-        "stepIndex": 4,
+        "stepIndex": 5,
         "matrix": {},
         "matrixResolved": true,
         "runnerOs": "windows",
