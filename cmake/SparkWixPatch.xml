@@ -8,16 +8,26 @@
   leave by their registered key paths, but the RemoveFolder rows point at the default tree,
   so a custom install root and its empty subdirectories stay behind.
 
+  CPack already declares <Property Id="INSTALL_ROOT"> with a RegistrySearch of
+  HKLM\...\Uninstall\[WIX_UPGRADE_DETECTED]\InstallLocation (properties.wxi). A per-user
+  product registers under HKCU, so that search never finds anything here, and a second
+  INSTALL_ROOT property would be a duplicate symbol (LGHT0091). The remembered root is
+  therefore read into its own property and copied into the INSTALL_ROOT directory by a
+  conditioned type-51 action that runs before CostFinalize in both sequences.
+
   The registry value is the key path of a per-user (HKCU) component in the root feature,
-  so it is written on install and removed with the product. AppSearch reads it back into
-  INSTALL_ROOT before CostFinalize resolves the directory table.
+  so it is written on install and removed with the product (and by rollback). Once a root
+  is remembered it wins over an INSTALL_ROOT passed to a later install of a patched version:
+  an upgrade stays in the tree the user chose first.
 -->
 <CPackWiXPatch>
   <CPackWiXFragment Id="#PRODUCT">
-    <Property Id="INSTALL_ROOT" Secure="yes">
+    <Property Id="SPARK_REMEMBERED_INSTALL_ROOT" Secure="yes">
       <RegistrySearch Id="SparkRememberedInstallRoot" Root="HKCU"
                       Key="Software\Spark Engine Team\SparkEngine" Name="InstallRoot" Type="raw"/>
     </Property>
+    <SetDirectory Id="INSTALL_ROOT" Value="[SPARK_REMEMBERED_INSTALL_ROOT]"
+                  Sequence="both">SPARK_REMEMBERED_INSTALL_ROOT</SetDirectory>
   </CPackWiXFragment>
   <CPackWiXFragment Id="#PRODUCTFEATURE">
     <Component Id="SparkRememberInstallRoot" Directory="INSTALL_ROOT"

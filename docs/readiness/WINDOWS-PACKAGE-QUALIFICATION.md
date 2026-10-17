@@ -36,7 +36,11 @@ run, and no hosted evidence or readiness state was promoted.
   `%LOCALAPPDATA%\SparkEngine` and left the chosen tree's empty directories
   behind (the first hosted repeatability drill caught this). `cmake/SparkWixPatch.xml`
   (`CPACK_WIX_PATCH_FILE`) stores the root as the HKCU key path of a root-feature
-  component and reads it back through AppSearch before costing.
+  component; AppSearch reads it into `SPARK_REMEMBERED_INSTALL_ROOT` and a
+  conditioned `SetDirectory` applies it before costing. (CPack's own
+  `INSTALL_ROOT` search looks in HKLM, where a per-user product never registers.)
+  A remembered root wins over a different `INSTALL_ROOT` passed to a later
+  upgrade between patched versions.
 - `Tests/PackageSmoke/package_runtime_probe.py` verifies installed stable-v1
   asset hashes, runs the authored camera/material pixel checks, installed
   NullRHI save/reload, and AppContainer source/build denial with scene-less and

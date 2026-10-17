@@ -682,9 +682,21 @@ class WindowsMSILifecycleTests(unittest.TestCase):
         self.assertEqual(patch.resolve(), (repo / "cmake" / "SparkWixPatch.xml").resolve())
         fragments = {fragment.get("Id"): fragment for fragment in ET.parse(patch).getroot()}
         self.assertEqual(set(fragments), {"#PRODUCT", "#PRODUCTFEATURE"})
+        # CPack's properties.wxi already declares <Property Id="INSTALL_ROOT"> (unless
+        # CPACK_WIX_PROPERTY_ARPINSTALLLOCATION is set); a second one is LGHT0091 at link time.
+        # This is a static guard only: the hosted cpack -G WIX run is the compile proof.
+        declared = {prop.get("Id") for fragment in fragments.values() for prop in fragment.iter("Property")}
+        self.assertNotIn("INSTALL_ROOT", declared)
+        self.assertNotIn("CPACK_WIX_PROPERTY_ARPINSTALLLOCATION", options.read_text(encoding="utf-8"))
         prop = fragments["#PRODUCT"].find("Property")
-        self.assertEqual(prop.get("Id"), "INSTALL_ROOT")
+        remembered = prop.get("Id")
         search = prop.find("RegistrySearch")
+        set_directory = fragments["#PRODUCT"].find("SetDirectory")
+        self.assertEqual(set_directory.get("Id"), "INSTALL_ROOT")
+        self.assertEqual(set_directory.get("Value"), f"[{remembered}]")
+        self.assertEqual(set_directory.get("Sequence"), "both")
+        # Only a found value may redirect the root; otherwise the command line / default stands.
+        self.assertEqual((set_directory.text or "").strip(), remembered)
         component = fragments["#PRODUCTFEATURE"].find("Component")
         self.assertEqual(component.get("Directory"), "INSTALL_ROOT")
         value = component.find("RegistryValue")
