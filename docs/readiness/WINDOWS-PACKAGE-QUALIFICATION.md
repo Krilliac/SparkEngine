@@ -20,6 +20,17 @@ run, and no hosted evidence or readiness state was promoted.
   There is no elevation fallback. WiX packages are explicitly per-user;
   MSI generation requires CMake 3.29+, while the engine's general CMake minimum
   and ZIP support are unchanged.
+- Windows Server images default the `DisableMsi` machine policy to 1, which
+  blocks exactly these non-elevated per-user installs (`msiexec` exit 1625,
+  "Non-assigned apps are disabled for non-admin users"); Windows 10/11 clients
+  allow them. Before every `qualify-windows-msi.py` call, CI runs
+  `.github/scripts/set-hosted-msi-client-policy.ps1`, which sets `DisableMsi`
+  to 0 only on a GitHub-hosted Windows Server runner (discarded after the job)
+  and leaves self-hosted runners and client editions untouched. The original
+  and effective values go to `msi-install-policy/install-policy.json`, uploaded
+  as its own artifact so the evidence artifacts keep their layout. This aligns
+  the hosted runner with the product's client target; it is still not Windows
+  11 certification.
 - `Tests/PackageSmoke/package_runtime_probe.py` verifies installed stable-v1
   asset hashes, runs the authored camera/material pixel checks, installed
   NullRHI save/reload, and AppContainer source/build denial with scene-less and

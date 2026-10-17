@@ -5513,8 +5513,7 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn("shipping-package-manifest.json", upload)
         logs = named_step(windows, "Upload native MSI qualification diagnostics")
         self.assertIn("if: always()", logs)
-        self.assertIn("          msi-qualification/\n", logs)
-        self.assertIn("          msi-install-policy/\n", logs)
+        self.assertIn("path: msi-qualification/\n", logs)
         self.assertIn("test_qualify_windows_msi.py", self.build)
 
     def test_msi_qualification_aligns_hosted_server_install_policy_first(self) -> None:
@@ -5533,10 +5532,19 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         for block in blocks:
             self.assertEqual(block.count(policy), 1, block)
             self.assertLess(block.index(policy), block.index("python .github/scripts/qualify-windows-msi.py"))
+        # The policy evidence has its own artifact. Adding it to an existing upload would move that
+        # artifact's root above msi-qualification/ (least common ancestor), and module-evidence
+        # reads package-smoke.log from the root of the package smoke evidence artifact.
         evidence = named_step(smoke, "Upload package smoke evidence")
-        self.assertIn("msi-install-policy/install-policy.json", evidence)
-        diagnostics = named_step(smoke, "Upload package smoke diagnostics")
-        self.assertIn("msi-install-policy/", diagnostics)
+        evidence_paths = [line.strip() for line in evidence.splitlines()
+                          if line.strip().startswith("msi-") and line.strip().endswith((".log", ".json"))]
+        self.assertIn("msi-qualification/package-smoke.log", evidence_paths)
+        self.assertTrue(all(path.startswith("msi-qualification/") for path in evidence_paths), evidence_paths)
+        self.assertIn("path: msi-qualification/\n", named_step(smoke, "Upload package smoke diagnostics"))
+        for workflow in (smoke, windows):
+            upload = named_step(workflow, "Upload MSI install-policy evidence")
+            self.assertIn("if: always()", upload)
+            self.assertIn("path: msi-install-policy/install-policy.json\n", upload)
         script = (REPO_ROOT / ".github/scripts/set-hosted-msi-client-policy.ps1").read_text(encoding="utf-8")
         # Only GitHub-hosted Server runners are changed; self-hosted and client policy is never touched.
         self.assertIn("$isHosted = $runnerEnvironment -eq 'github-hosted'", script)

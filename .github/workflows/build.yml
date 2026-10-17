@@ -4998,7 +4998,6 @@ jobs:
             msi-qualification/repair-drill.json
             msi-qualification/repeatability-drill.json
             msi-qualification/runtime-result.json
-            msi-install-policy/install-policy.json
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           if-no-files-found: error
 
@@ -5007,10 +5006,19 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: module-profile-package-smoke-diagnostics-${{ github.sha }}-${{ github.run_attempt }}
-          path: |
-            msi-qualification/
-            msi-install-policy/
+          path: msi-qualification/
           retention-days: ${{ env.ERROR_RETENTION_DAYS }}
+          if-no-files-found: ignore
+
+      # A separate artifact, so the evidence and diagnostics artifacts keep msi-qualification/
+      # as their root (module-evidence reads package-smoke.log from the evidence root).
+      - name: Upload MSI install-policy evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: module-profile-package-smoke-install-policy-${{ github.sha }}-${{ github.run_attempt }}
+          path: msi-install-policy/install-policy.json
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           if-no-files-found: ignore
 
   # ENG-200[3] advisory package proof.  This lane intentionally stays outside

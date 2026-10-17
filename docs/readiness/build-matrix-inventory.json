@@ -15729,7 +15729,7 @@
         "permissions": {
           "contents": "read"
         },
-        "stepCount": 6,
+        "stepCount": 7,
         "steps": [
           {
             "index": 0,
@@ -15794,6 +15794,18 @@
           {
             "index": 5,
             "name": "Upload package smoke diagnostics",
+            "id": "",
+            "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            "shell": "",
+            "if": "always()",
+            "continueOnError": "absent",
+            "hasRun": false,
+            "env": [],
+            "runDigest": ""
+          },
+          {
+            "index": 6,
+            "name": "Upload MSI install-policy evidence",
             "id": "",
             "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
             "shell": "",
