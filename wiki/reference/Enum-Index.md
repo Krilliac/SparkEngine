@@ -128,7 +128,7 @@
 | `CaptureMode` | enum | SparkEditor | [ProfilerEnums.h:L105](../../SparkEditor/Source/Enums/ProfilerEnums.h#L105) | Profiler capture modes |
 | `CastPhase` | enum | SparkEngine | [AbilitySystem.h:L242](../../SparkEngine/Source/Engine/Gameplay/AbilitySystem.h#L242) |  |
 | `CastPhase` | enum | Tests | [TestAbilitySystem.cpp:L46](../../Tests/TestAbilitySystem.cpp#L46) |  |
-| `CategorySlot` | enum | SparkEditor | [VisualScriptPanel.cpp:L61](../../SparkEditor/Source/Panels/VisualScriptPanel.cpp#L61) |  |
+| `CategorySlot` | enum | SparkEditor | [VisualScriptPanel.cpp:L62](../../SparkEditor/Source/Panels/VisualScriptPanel.cpp#L62) |  |
 | `CellLoadState` | enum | SparkEngine | [HLODSystem.h:L195](../../SparkEngine/Source/Engine/HLOD/HLODSystem.h#L195) | Load state for a world partition cell |
 | `CellState` | enum | SparkEngine | [SpatialGrid.h:L69](../../SparkEngine/Source/Engine/World/SpatialGrid.h#L69) |  |
 | `CellState` | enum | Tests | [TestSpatialGrid.cpp:L38](../../Tests/TestSpatialGrid.cpp#L38) |  |
@@ -794,7 +794,7 @@
 | `SquadWpOp` | enum | GameModules | [TFSquadTypes.h:L29](../../GameModules/SparkGameMMOFPS/Source/Game/TFSquadTypes.h#L29) |  |
 | `SSAOQuality` | enum | SparkEngine | [ScreenSpaceEffects.h:L51](../../SparkEngine/Source/Graphics/ScreenSpaceEffects.h#L51) |  |
 | `SSRQuality` | enum | SparkEngine | [ScreenSpaceEffects.h:L101](../../SparkEngine/Source/Graphics/ScreenSpaceEffects.h#L101) |  |
-| `StartPageAction` | enum | SparkEditor | [EditorStartPage.h:L28](../../SparkEditor/Source/Core/EditorStartPage.h#L28) | What the user picked on the Start page this frame. |
+| `StartPageAction` | enum | SparkEditor | [EditorStartPage.h:L29](../../SparkEditor/Source/Core/EditorStartPage.h#L29) | What the user picked on the Start page this frame. |
 | `State` | enum | SparkEngine | [DynamicPluginHost.h:L25](../../SparkEngine/Source/Core/DynamicPluginHost.h#L25) |  |
 | `State` | enum | SparkEngine | [AISystem.h:L131](../../SparkEngine/Source/Engine/AI/AISystem.h#L131) | High-level AI state broadcasted to other game systems. |
 | `State` | enum | SparkEngine | [AIComponents.h:L36](../../SparkEngine/Source/Engine/ECS/Components/AIComponents.h#L36) | AI agent state, perception data, and pathfinding for an NPC entity. |
@@ -809,7 +809,7 @@
 | `Status` | enum | SparkUI | [Enums.h:L32](../../SparkUI/Include/SparkUI/Enums.h#L32) | Semantic status. Rendered as glyph + word + colour, never by colour alone. |
 | `StencilOperation` | enum | SparkEngine | [GraphicsEnums.h:L104](../../SparkEngine/Source/Enums/GraphicsEnums.h#L104) | Stencil operations |
 | `Step` | enum | GameModules | [TFTutorial.h:L76](../../GameModules/SparkGameMMOFPS/Source/Game/TFTutorial.h#L76) |  |
-| `StepState` | enum | SparkInstaller | [WizardGui.cpp:L410](../../SparkInstaller/src/gui/WizardGui.cpp#L410) |  |
+| `StepState` | enum | SparkInstaller | [WizardGui.cpp:L452](../../SparkInstaller/src/gui/WizardGui.cpp#L452) |  |
 | `StoreLoadStatus` | enum | GameModules | [TFSocialSystem.h:L151](../../GameModules/SparkGameMMOFPS/Source/Game/TFSocialSystem.h#L151) |  |
 | `StreamingMethod` | enum | SparkEditor | [LevelStreamingEnums.h:L43](../../SparkEditor/Source/Enums/LevelStreamingEnums.h#L43) | Streaming methods |
 | `StreamingQuality` | enum | SparkEditor | [LevelStreamingEnums.h:L116](../../SparkEditor/Source/Enums/LevelStreamingEnums.h#L116) | Streaming quality settings |

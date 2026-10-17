@@ -11,15 +11,15 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 | Section | Lines |
 |---------|------:|
-| **SparkEngine/Source** | 352047 |
-| **SparkEditor/Source** | 110961 |
-| **GameModules** | 164718 |
+| **SparkEngine/Source** | 352133 |
+| **SparkEditor/Source** | 111945 |
+| **GameModules** | 166028 |
 | **External services** | 12926 |
 | **Asset pipeline** | 3231 |
 | **Tests** | 283090 |
 | **SparkConsole/src** | 1866 |
 | **SparkShaderCompiler/src** | 847 |
-| **Total C++ (excl. ThirdParty)** | **~955084** |
+| **Total C++ (excl. ThirdParty)** | **~957572** |
 
 ### File Counts
 
@@ -35,7 +35,7 @@ x64 profile remains blocked and uncertified in `docs/site/readiness.json`.
 
 ### Largest Top-Level Source Section
 
-Graphics contains 125771 lines, or 35% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
+Graphics contains 125853 lines, or 35% of `SparkEngine/Source`. This is a source-inventory measurement, not runtime coverage or support evidence.
 
 ## SparkEngine/Source Breakdown
 
@@ -43,9 +43,9 @@ Graphics contains 125771 lines, or 35% of `SparkEngine/Source`. This is a source
 
 | Subsystem | Lines | % of Source |
 |-----------|------:|:----------:|
-| Graphics | 125771 | 35.7% |
+| Graphics | 125853 | 35.7% |
 | Engine (all subsystems) | 100268 | 28.4% |
-| Utils | 48779 | 13.8% |
+| Utils | 48782 | 13.8% |
 | Core | 32251 | 9.1% |
 | Physics | 11142 | 3.1% |
 | Audio | 6961 | 1.9% |
@@ -104,7 +104,7 @@ It does not measure registration, runtime use, support, or readiness.
 | Metric | Count |
 |--------|------:|
 | `*Panel.h` class inventory | 64 |
-| Total editor lines | 110961 |
+| Total editor lines | 111945 |
 
 ## Testing Metrics
 
@@ -187,12 +187,12 @@ inventory is implementation evidence, not support certification.
 
 | File | Lines |
 |------|------:|
-| `EditorUI.cpp` | 3028 |
+| `EditorUI.cpp` | 3270 |
 | `ProjectManager.cpp` | 2490 |
 | `BuildPipeline.cpp` | 1881 |
 | `CollaborativeEditSession.cpp` | 1773 |
 | `ProjectSettingsPanel.cpp` | 1726 |
-| `VisualScriptPanel.cpp` | 1702 |
+| `VisualScriptPanel.cpp` | 1703 |
 | `PerformanceProfiler.cpp` | 1688 |
 | `GameViewPanel.cpp` | 1616 |
 | `HierarchyPanel.cpp` | 1567 |

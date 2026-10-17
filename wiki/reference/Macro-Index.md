@@ -751,7 +751,7 @@
 | `MAKEINTRESOURCEW` | macro | SparkSDK | [PlatformTypes.h:L288](../../SparkSDK/Include/Spark/Detail/PlatformTypes.h#L288) |  |
 | `Mat4` | alias | Tests | [TestRHI240OpenGLGoldenReal.cpp:L566](../../Tests/TestRHI240OpenGLGoldenReal.cpp#L566) |  |
 | `Matrix` | alias | Tests | [TestGLTFSkinnedMeshLoader.cpp:L29](../../Tests/TestGLTFSkinnedMeshLoader.cpp#L29) |  |
-| `Matrix3` | alias | SparkUI | [Color.cpp:L19](../../SparkUI/Source/Color.cpp#L19) |  |
+| `Matrix3` | alias | SparkUI | [Color.cpp:L20](../../SparkUI/Source/Color.cpp#L20) |  |
 | `MAX_KNOWN_TEBS` | macro | tools | [gvisor-wine-shim.c:L152](../../tools/gvisor-wine-shim.c#L152) |  |
 | `MAX_LOADSTRING` | macro | SparkSDK | [PlatformTypes.h:L410](../../SparkSDK/Include/Spark/Detail/PlatformTypes.h#L410) |  |
 | `MAX_PATH` | macro | SparkSDK | [PlatformTypes.h:L226](../../SparkSDK/Include/Spark/Detail/PlatformTypes.h#L226) |  |
@@ -1603,7 +1603,7 @@
 | `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [CrashArtifactRetention.h:L36](../../SparkEngine/Source/Utils/CrashArtifactRetention.h#L36) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [CrashHandlerSupport.h:L26](../../SparkEngine/Source/Utils/CrashHandlerSupport.h#L26) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [CrashRedactionContext.h:L20](../../SparkEngine/Source/Utils/CrashRedactionContext.h#L20) |  |
-| `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [Logger.cpp:L28](../../SparkEngine/Source/Utils/Logger.cpp#L28) |  |
+| `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [Logger.cpp:L29](../../SparkEngine/Source/Utils/Logger.cpp#L29) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [TelemetrySpool.cpp:L19](../../SparkEngine/Source/Utils/TelemetrySpool.cpp#L19) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkEngine | [TelemetrySpoolIO.cpp:L16](../../SparkEngine/Source/Utils/TelemetrySpoolIO.cpp#L16) |  |
 | `WIN32_LEAN_AND_MEAN` | macro | SparkGateway | [GatewayAreaControl.cpp:L2](../../SparkGateway/src/GatewayAreaControl.cpp#L2) |  |

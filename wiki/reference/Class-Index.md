@@ -193,7 +193,7 @@
 | `AnimNotifyTrack` | struct | SparkEngine | [AnimNotify.h:L118](../../SparkEngine/Source/Engine/Animation/AnimNotify.h#L118) | Track of notifies associated with an animation clip |
 | `AnimNotifyTrigger` | struct | SparkEngine | [AnimNotify.h:L98](../../SparkEngine/Source/Engine/Animation/AnimNotify.h#L98) | Data passed to notify handlers when a notify fires |
 | `APIFunction` | struct | SparkEngine | [ScriptHotReload.h:L222](../../SparkEngine/Source/Engine/Scripting/ScriptHotReload.h#L222) | Describes a registered API function |
-| `AppearanceCommand` | struct | SparkEditor | [EditorCommandRegistry.cpp:L172](../../SparkEditor/Source/Core/EditorCommandRegistry.cpp#L172) |  |
+| `AppearanceCommand` | struct | SparkEditor | [EditorCommandRegistry.cpp:L174](../../SparkEditor/Source/Core/EditorCommandRegistry.cpp#L174) |  |
 | `AppearanceOptions` | struct | GameModules | [MMOCharacterSystem.h:L90](../../GameModules/SparkGameMMO/Source/Character/MMOCharacterSystem.h#L90) | Appearance customization options |
 | `AppendMarkerStep` | class | Tests | [TestAssetMigration.cpp:L316](../../Tests/TestAssetMigration.cpp#L316) |  |
 | `APVBrick` | struct | SparkEngine | [AdaptiveProbeVolumes.h:L110](../../SparkEngine/Source/Graphics/AdaptiveProbeVolumes.h#L110) | A brick containing 4x4x4 = 64 probes |
@@ -402,7 +402,7 @@
 | `AxisBinding` | struct | Tests | [TestInputSystem.cpp:L40](../../Tests/TestInputSystem.cpp#L40) |  |
 | `AxisIntersectResult` | struct | Tests | [TestGizmoMath.cpp:L69](../../Tests/TestGizmoMath.cpp#L69) |  |
 | `b` | struct | SparkEngine | [SceneManager.cpp:L449](../../SparkEngine/Source/SceneManager/SceneManager.cpp#L449) |  |
-| `BackendSession` | struct | SparkInstaller | [WizardGui.cpp:L137](../../SparkInstaller/src/gui/WizardGui.cpp#L137) |  |
+| `BackendSession` | struct | SparkInstaller | [WizardGui.cpp:L139](../../SparkInstaller/src/gui/WizardGui.cpp#L139) |  |
 | `BackendState` | struct | Tests | [TestTelemetrySpool.cpp:L60](../../Tests/TestTelemetrySpool.cpp#L60) |  |
 | `BackendWindowSpec` | struct | SparkLauncher | [LauncherBackend.h:L17](../../SparkLauncher/src/LauncherBackend.h#L17) | Launcher window geometry in logical (100 %) pixels; the backend multiplies by the DPI scale. |
 | `BakeLight` | struct | SparkEngine | [LightmapBaker.h:L85](../../SparkEngine/Source/Graphics/LightmapBaker.h#L85) | A light source for baking |
@@ -591,7 +591,7 @@
 | `CancellationToken` | class | SparkEngine | [CancellationToken.h:L19](../../SparkEngine/Source/Engine/Coroutine/CancellationToken.h#L19) | Cooperative cancellation token (thread-safe, shared ownership) |
 | `Candidate` | struct | GameModules | [TFLoadoutScreen.cpp:L33](../../GameModules/SparkGameMMOFPS/Source/UI/TFLoadoutScreen.cpp#L33) |  |
 | `Candidate` | struct | SparkEngine | [SeamlessAreaManagerStreaming.cpp:L170](../../SparkEngine/Source/Engine/Streaming/SeamlessAreaManagerStreaming.cpp#L170) |  |
-| `Candidate` | struct | SparkUI | [Color.cpp:L214](../../SparkUI/Source/Color.cpp#L214) |  |
+| `Candidate` | struct | SparkUI | [Color.cpp:L215](../../SparkUI/Source/Color.cpp#L215) |  |
 | `Candidate` | struct | Tests | [TestSeamlessAreaManager.cpp:L152](../../Tests/TestSeamlessAreaManager.cpp#L152) |  |
 | `CandidateExtraComponentProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L453](../../Tests/harden/Test_persistence_SaveSystem.cpp#L453) |  |
 | `CandidateGhostProbe` | struct | Tests | [Test_persistence_SaveSystem.cpp:L448](../../Tests/harden/Test_persistence_SaveSystem.cpp#L448) |  |
@@ -612,7 +612,7 @@
 | `Case` | struct | Tests | [TestSDK240ModuleDiagnostics.cpp:L151](../../Tests/TestSDK240ModuleDiagnostics.cpp#L151) |  |
 | `CastState` | struct | Tests | [TestAbilitySystem.cpp:L88](../../Tests/TestAbilitySystem.cpp#L88) |  |
 | `CategoryEntry` | struct | SparkEngine | [MemoryMonitor.h:L86](../../SparkEngine/Source/Utils/MemoryMonitor.h#L86) |  |
-| `CategoryInfo` | struct | SparkEditor | [EditorMenuBar.cpp:L512](../../SparkEditor/Source/Core/EditorMenuBar.cpp#L512) |  |
+| `CategoryInfo` | struct | SparkEditor | [EditorMenuBar.cpp:L624](../../SparkEditor/Source/Core/EditorMenuBar.cpp#L624) |  |
 | `CatOverride` | struct | SparkEngine | [GameplayLifecycleShared.cpp:L386](../../SparkEngine/Source/Core/Lifecycle/GameplayLifecycleShared.cpp#L386) |  |
 | `CBAllocation` | struct | SparkEngine | [ConstantBufferRing.h:L55](../../SparkEngine/Source/Graphics/ConstantBufferRing.h#L55) | Result of a constant buffer sub-allocation |
 | `CBRingMetrics` | struct | SparkEngine | [ConstantBufferRing.h:L68](../../SparkEngine/Source/Graphics/ConstantBufferRing.h#L68) | Metrics for constant buffer ring usage |
@@ -1019,7 +1019,7 @@
 | `CullSettings` | struct | SparkEngine | [GPUDrivenRenderer.h:L42](../../SparkEngine/Source/Graphics/GPUDrivenRenderer.h#L42) | Configuration for the GPU culling pass |
 | `CullStatistics` | struct | SparkEngine | [GPUDrivenRenderer.h:L54](../../SparkEngine/Source/Graphics/GPUDrivenRenderer.h#L54) | Per-frame statistics from the GPU culling pass |
 | `current` | struct | SparkDaemon | [DaemonServer.cpp:L109](../../SparkDaemon/src/DaemonServer.cpp#L109) |  |
-| `Cursor` | struct | SparkEditor | [EditorLayoutManager.cpp:L341](../../SparkEditor/Source/Core/EditorLayoutManager.cpp#L341) |  |
+| `Cursor` | struct | SparkEditor | [EditorLayoutManager.cpp:L363](../../SparkEditor/Source/Core/EditorLayoutManager.cpp#L363) |  |
 | `CustomEventDef` | struct | SparkEngine | [VisualScriptGraphTypes.h:L103](../../SparkEngine/Source/Engine/Scripting/VisualScriptGraphTypes.h#L103) | A custom event definition |
 | `CVarRegistry` | class | SparkEngine | [ConsoleVariable.h:L135](../../SparkEngine/Source/Utils/ConsoleVariable.h#L135) | Check if current value differs from default |
 | `CVarRegistry` | class | Tests | [TestConsoleVariables.cpp:L191](../../Tests/TestConsoleVariables.cpp#L191) |  |
@@ -1138,7 +1138,7 @@
 | `DeferredEntry` | struct | SparkEngine | [DeferredDeletionQueue.h:L109](../../SparkEngine/Source/Graphics/RHI/DeferredDeletionQueue.h#L109) | Get the current internal frame counter. |
 | `DeferredLightingState` | struct | SparkEngine | [DeferredLightingState.h:L17](../../SparkEngine/Source/Graphics/DeferredLightingState.h#L17) |  |
 | `DeferredResolveConstants` | struct | SparkEngine | [GraphicsDeferredLightingWindows.cpp:L32](../../SparkEngine/Source/Graphics/GraphicsDeferredLightingWindows.cpp#L32) |  |
-| `Defined` | struct | SparkEditor | [EditorThemeDocument.cpp:L193](../../SparkEditor/Source/Core/EditorThemeDocument.cpp#L193) |  |
+| `Defined` | struct | SparkEditor | [EditorThemeDocument.cpp:L192](../../SparkEditor/Source/Core/EditorThemeDocument.cpp#L192) |  |
 | `DelayedActionBatch` | struct | SparkEngine | [EventResponseSystem.h:L152](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.h#L152) |  |
 | `DelayedPacket` | struct | SparkEngine | [InstabilitySimulator.h:L82](../../SparkEngine/Source/Engine/Networking/InstabilitySimulator.h#L82) |  |
 | `DeltaField` | struct | Tests | [TestNetworkReplicationIntegration.cpp:L51](../../Tests/TestNetworkReplicationIntegration.cpp#L51) |  |
@@ -1158,7 +1158,7 @@
 | `DepthScope` | class | SparkEditor | [SceneJSONReader.cpp:L258](../../SparkEditor/Source/SceneSystem/SceneJSONReader.cpp#L258) |  |
 | `DepthScope` | struct | SparkEngine | [EventResponseSystem.cpp:L609](../../SparkEngine/Source/Engine/Gameplay/EventResponseSystem.cpp#L609) |  |
 | `Derived` | struct | Tests | [TestSafetyCoreUtils.cpp:L144](../../Tests/TestSafetyCoreUtils.cpp#L144) |  |
-| `DerivedColourRole` | struct | SparkEditor | [EditorThemeDocument.cpp:L229](../../SparkEditor/Source/Core/EditorThemeDocument.cpp#L229) |  |
+| `DerivedColourRole` | struct | SparkEditor | [EditorThemeDocument.cpp:L228](../../SparkEditor/Source/Core/EditorThemeDocument.cpp#L228) |  |
 | `Descriptor` | struct | SparkEngine | [D3D12Types.h:L229](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Types.h#L229) |  |
 | `DescriptorAllocation` | struct | SparkEngine | [D3D12Types.h:L108](../../SparkEngine/Source/Graphics/RHI/D3D12/D3D12Types.h#L108) | Manages a contiguous ID3D12DescriptorHeap with free-list allocation. |
 | `DescriptorCloser` | struct | SparkEditor | [ProjectManager.cpp:L439](../../SparkEditor/Source/Core/ProjectManager.cpp#L439) |  |
@@ -1303,8 +1303,8 @@
 | `EditorConsoleBridge` | class | SparkEditor | [EditorConsoleBridge.h:L54](../../SparkEditor/Source/Utils/EditorConsoleBridge.h#L54) | Singleton bridge connecting editor logging/commands to the engine console. |
 | `EditorCrashHandler` | class | SparkEditor | [EditorCrashHandler.h:L63](../../SparkEditor/Source/Core/EditorCrashHandler.h#L63) | Enhanced crash handling system for Spark Engine Editor |
 | `EditorDockExtent` | struct | SparkEditor | [EditorDockLayout.h:L39](../../SparkEditor/Source/Core/EditorDockLayout.h#L39) |  |
-| `EditorDockNodes` | struct | SparkEditor | [EditorDockLayout.h:L77](../../SparkEditor/Source/Core/EditorDockLayout.h#L77) |  |
-| `EditorDockPanelWindows` | struct | SparkEditor | [EditorDockLayout.h:L217](../../SparkEditor/Source/Core/EditorDockLayout.h#L217) |  |
+| `EditorDockNodes` | struct | SparkEditor | [EditorDockLayout.h:L79](../../SparkEditor/Source/Core/EditorDockLayout.h#L79) |  |
+| `EditorDockPanelWindows` | struct | SparkEditor | [EditorDockLayout.h:L229](../../SparkEditor/Source/Core/EditorDockLayout.h#L229) |  |
 | `EditorDocument` | class | SparkEditor | [EditorDocument.h:L37](../../SparkEditor/Source/Core/EditorDocument.h#L37) |  |
 | `EditorDocument` | struct | Tests | [TestEDT210InspectorEditCommitReal.cpp:L46](../../Tests/TestEDT210InspectorEditCommitReal.cpp#L46) |  |
 | `EditorDocument` | struct | Tests | [TestEditorAssetDropWorldReal.cpp:L53](../../Tests/TestEditorAssetDropWorldReal.cpp#L53) |  |
@@ -1331,7 +1331,7 @@
 | `EditorSceneData` | struct | SparkEditor | [IntegrationTypes.h:L87](../../SparkEditor/Source/Integration/IntegrationTypes.h#L87) | Scene data for editor/engine synchronization |
 | `EditorSceneData` | struct | SparkEditor | [SparkEngineIntegration.h:L97](../../SparkEditor/Source/Integration/SparkEngineIntegration.h#L97) | Scene data for editor/engine synchronization |
 | `EditorSettings` | struct | SparkEngine | [EngineSettings.h:L438](../../SparkEngine/Source/Core/EngineSettings.h#L438) |  |
-| `EditorStartPage` | class | SparkEditor | [EditorStartPage.h:L51](../../SparkEditor/Source/Core/EditorStartPage.h#L51) | The Start tab. |
+| `EditorStartPage` | class | SparkEditor | [EditorStartPage.h:L52](../../SparkEditor/Source/Core/EditorStartPage.h#L52) | The Start tab. |
 | `EditorState` | struct | Tests | [TestUndoRedoManager.cpp:L151](../../Tests/TestUndoRedoManager.cpp#L151) |  |
 | `EditorTheme` | class | SparkEditor | [EditorTheme.h:L293](../../SparkEditor/Source/Core/EditorTheme.h#L293) | Theme registry and the EditorThemeData to Spark UI token / ImGui style adapter. |
 | `EditorThemeData` | struct | SparkEditor | [EditorTheme.h:L116](../../SparkEditor/Source/Core/EditorTheme.h#L116) | Complete theme data: semantic colours, metrics and typography. |
@@ -1628,7 +1628,7 @@
 | `FontSet` | struct | SparkUI | [Fonts.h:L32](../../SparkUI/Include/SparkUI/Fonts.h#L32) | Faces loaded by LoadFontSet. Every pointer is non-null after a successful load. |
 | `FontSystem` | class | SparkEngine | [FontSystem.h:L153](../../SparkEngine/Source/Engine/Text/FontSystem.h#L153) | Runtime font rendering system |
 | `Foo` | struct | Tests | [TestSafetyCoreUtils.cpp:L36](../../Tests/TestSafetyCoreUtils.cpp#L36) |  |
-| `FooterAction` | struct | SparkInstaller | [WizardGui.cpp:L885](../../SparkInstaller/src/gui/WizardGui.cpp#L885) |  |
+| `FooterAction` | struct | SparkInstaller | [WizardGui.cpp:L967](../../SparkInstaller/src/gui/WizardGui.cpp#L967) |  |
 | `FootPlacementModifier` | class | SparkEngine | [PoseModifier.h:L175](../../SparkEngine/Source/Engine/Animation/PoseModifier.h#L175) | Adjusts foot and pelvis bones to match ground height. |
 | `ForceRegionComponent` | struct | SparkEngine | [AdvancedPlacementComponents.h:L180](../../SparkEngine/Source/Engine/ECS/Components/AdvancedPlacementComponents.h#L180) | A volume that applies physics forces to bodies inside it. |
 | `ForceRegionData` | struct | SparkEditor | [SceneFileTypes.h:L898](../../SparkEditor/Source/SceneSystem/SceneFileTypes.h#L898) |  |
@@ -2350,7 +2350,7 @@
 | `KitPlacement` | struct | GameModules | [GameConsoleOps.cpp:L889](../../GameModules/SparkGameFPS/Source/Game/GameConsoleOps.cpp#L889) |  |
 | `KitPlacement` | struct | GameModules | [RTSDemoPresentation.cpp:L46](../../GameModules/SparkGameRTS/Source/Demo/RTSDemoPresentation.cpp#L46) |  |
 | `KitPlacement` | struct | GameModules | [VisualScriptDemoWorld.cpp:L376](../../GameModules/SparkGameVisualScript/Source/Core/VisualScriptDemoWorld.cpp#L376) |  |
-| `KitProp` | struct | GameModules | [ARPGDungeonSystem.cpp:L65](../../GameModules/SparkGameARPG/Source/Dungeon/ARPGDungeonSystem.cpp#L65) |  |
+| `KitProp` | struct | GameModules | [ARPGDungeonSystem.cpp:L67](../../GameModules/SparkGameARPG/Source/Dungeon/ARPGDungeonSystem.cpp#L67) |  |
 | `KitProp` | struct | GameModules | [MMOEngineSystems.cpp:L104](../../GameModules/SparkGameMMO/Source/Core/MMOEngineSystems.cpp#L104) |  |
 | `kSignalCount` | struct | Tests | [TestCrashHandlerGatingReal.cpp:L207](../../Tests/TestCrashHandlerGatingReal.cpp#L207) |  |
 | `LagCompensation` | class | SparkEngine | [LagCompensation.h:L57](../../SparkEngine/Source/Engine/Networking/LagCompensation.h#L57) | Ring buffer of pose snapshots with lag-compensated raycasts. |
@@ -3109,7 +3109,7 @@
 | `PakEntry` | struct | SparkEngine | [SparkPak.h:L78](../../SparkEngine/Source/Core/SparkPak.h#L78) | In-memory TOC entry (deserialized from archive). |
 | `PakHeader` | struct | SparkEngine | [SparkPak.h:L63](../../SparkEngine/Source/Core/SparkPak.h#L63) | 32-byte file header at offset 0. |
 | `PaletteAction` | struct | SparkEditor | [CommandPalette.h:L24](../../SparkEditor/Source/Search/CommandPalette.h#L24) | A registered action in the command palette |
-| `PaletteCategory` | struct | SparkEditor | [VisualScriptPanel.cpp:L35](../../SparkEditor/Source/Panels/VisualScriptPanel.cpp#L35) |  |
+| `PaletteCategory` | struct | SparkEditor | [VisualScriptPanel.cpp:L36](../../SparkEditor/Source/Panels/VisualScriptPanel.cpp#L36) |  |
 | `PaletteSeed` | struct | SparkUI | [Tokens.h:L115](../../SparkUI/Include/SparkUI/Tokens.h#L115) | Palette seed: the eight colours a family is generated from (spec section 2.1). |
 | `PanelCat` | struct | SparkEditor | [EditorPanelFactoryMetadata.cpp:L95](../../SparkEditor/Source/Core/EditorPanelFactoryMetadata.cpp#L95) |  |
 | `PanelConfig` | struct | SparkEditor | [EditorLayoutManager.h:L50](../../SparkEditor/Source/Core/EditorLayoutManager.h#L50) | Configuration for a single editor panel. |
@@ -4003,7 +4003,7 @@
 | `RPGItemStack` | struct | GameModules | [RPGInventorySystem.h:L48](../../GameModules/SparkGameRPG/Source/Inventory/RPGInventorySystem.h#L48) | A single inventory slot holding stacked items |
 | `RPGNPCSystem` | class | GameModules | [SparkGameRPG.h:L33](../../GameModules/SparkGameRPG/Source/Core/SparkGameRPG.h#L33) |  |
 | `RPGNPCSystem` | class | GameModules | [RPGDemoSession.h:L18](../../GameModules/SparkGameRPG/Source/Gameplay/RPGDemoSession.h#L18) |  |
-| `RPGNPCSystem` | struct | GameModules | [RPGNPCSystem.cpp:L56](../../GameModules/SparkGameRPG/Source/NPC/RPGNPCSystem.cpp#L56) |  |
+| `RPGNPCSystem` | struct | GameModules | [RPGNPCSystem.cpp:L58](../../GameModules/SparkGameRPG/Source/NPC/RPGNPCSystem.cpp#L58) |  |
 | `RPGNPCSystem` | class | GameModules | [RPGNPCSystem.h:L125](../../GameModules/SparkGameRPG/Source/NPC/RPGNPCSystem.h#L125) | NPC registry, AI behavior, schedules, and disposition tracking |
 | `RPGQuestAutopilot` | class | GameModules | [SparkGameRPG.h:L31](../../GameModules/SparkGameRPG/Source/Core/SparkGameRPG.h#L31) |  |
 | `RPGQuestAutopilot` | class | GameModules | [RPGQuestAutopilot.h:L27](../../GameModules/SparkGameRPG/Source/Gameplay/RPGQuestAutopilot.h#L27) | Hunts in Thornwood through RPGDemoSession until a quest completes, the hero falls, or the trip cap. |
@@ -4272,7 +4272,7 @@
 | `ScopeTracer` | class | SparkEngine | [Validate.h:L126](../../SparkEngine/Source/Utils/Validate.h#L126) | RAII scope tracer that logs function/scope entry and exit |
 | `ScoreboardEntry` | struct | GameModules | [HUDSystem.h:L213](../../GameModules/SparkGameFPS/Source/Game/HUDSystem.h#L213) | Scoreboard entry for multiplayer/game mode display |
 | `ScoredCover` | struct | SparkEngine | [CoverSystem.cpp:L216](../../SparkEngine/Source/Engine/AI/CoverSystem.cpp#L216) |  |
-| `ScoredIndex` | struct | SparkEditor | [CommandPalette.cpp:L300](../../SparkEditor/Source/Search/CommandPalette.cpp#L300) |  |
+| `ScoredIndex` | struct | SparkEditor | [CommandPalette.cpp:L310](../../SparkEditor/Source/Search/CommandPalette.cpp#L310) |  |
 | `ScoredPoint` | struct | SparkEngine | [TacticalPointSystem.cpp:L115](../../SparkEngine/Source/Engine/AI/TacticalPointSystem.cpp#L115) |  |
 | `ScramFixture` | struct | Tests | [TestTFOnboarding.cpp:L1328](../../Tests/TestTFOnboarding.cpp#L1328) |  |
 | `ScramKeys` | struct | GameModules | [TFCrypto.h:L62](../../GameModules/SparkGameMMOFPS/Source/Account/TFCrypto.h#L62) |  |
@@ -4715,7 +4715,7 @@
 | `StandaloneServiceLocator` | class | Tests | [TestAdversarialEngine.cpp:L1126](../../Tests/TestAdversarialEngine.cpp#L1126) |  |
 | `StandardPipelineBuilder` | class | SparkEngine | [RenderGraphBuilder.h:L220](../../SparkEngine/Source/Graphics/RenderGraph/RenderGraphBuilder.h#L220) |  |
 | `StarThresholds` | struct | GameModules | [PlatformerLevelSystem.h:L101](../../GameModules/SparkGamePlatformer/Source/Level/PlatformerLevelSystem.h#L101) | Star rating thresholds for a level |
-| `StartPageResult` | struct | SparkEditor | [EditorStartPage.h:L41](../../SparkEditor/Source/Core/EditorStartPage.h#L41) | Outcome of one EditorStartPage::Draw() call. |
+| `StartPageResult` | struct | SparkEditor | [EditorStartPage.h:L42](../../SparkEditor/Source/Core/EditorStartPage.h#L42) | Outcome of one EditorStartPage::Draw() call. |
 | `StartupSplashBitmap` | struct | SparkEngine | [StartupSplash.h:L23](../../SparkEngine/Source/Core/StartupSplash.h#L23) |  |
 | `StartupSplashConfig` | struct | SparkEngine | [StartupSplash.h:L36](../../SparkEngine/Source/Core/StartupSplash.h#L36) |  |
 | `StartupSplashContext` | struct | SparkEngine | [StartupSplash.h:L46](../../SparkEngine/Source/Core/StartupSplash.h#L46) |  |
