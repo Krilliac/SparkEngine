@@ -4297,6 +4297,7 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING AND BUILD_GAME_MODULES)
             "-DSPARK_PACKAGE_BIN=$<TARGET_FILE_DIR:SparkEngine>"
             "-DSPARK_TEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/fps-authored/$<CONFIG>"
             "-DSPARK_SOURCE_ROOT=${CMAKE_SOURCE_DIR}"
+            "-DSPARK_FPS_DEVELOPER_COMMANDS=${_spark_fps_developer_commands}"
             -P ${CMAKE_SOURCE_DIR}/Tests/PackageSmoke/VerifyFPSAuthoredScene.cmake)
     set_tests_properties(FPSAuthoredScene_PackageLayoutEdit PROPERTIES
         LABELS "module;fps;d3d11;scene;integration"

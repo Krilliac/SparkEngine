@@ -44,7 +44,11 @@ run, and no hosted evidence or readiness state was promoted.
 - `Tests/PackageSmoke/package_runtime_probe.py` verifies installed stable-v1
   asset hashes, runs the authored camera/material pixel checks, installed
   NullRHI save/reload, and AppContainer source/build denial with scene-less and
-  asset-less controls. Runtime scratch is outside the checkout. The fresh CI
+  asset-less controls. The MSI is plain Shipping, so both the authored-scene and
+  save/reload contracts run with `SPARK_FPS_DEVELOPER_COMMANDS=OFF`: every scripted
+  `scene_load` must be refused as an unknown command, and the scene reload path
+  policy and same-process material reload are proven by the Release/Debug
+  lanes instead. Runtime scratch is outside the checkout. The fresh CI
   consumer downloads the producer's real `CMakeCache.txt` as its build canary.
 - The canonical smoke log is published only after runtime qualification and
   uninstall checks. The module-evidence consumer requires the new runtime

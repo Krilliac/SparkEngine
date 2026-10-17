@@ -141,6 +141,9 @@ def run_authored_scene(args: argparse.Namespace, package_root: Path, output_dir:
         f"-DSPARK_PACKAGE_BIN={package_root / 'bin'}",
         f"-DSPARK_TEST_ROOT={output_dir / 'authored-scene'}",
         f"-DSPARK_SOURCE_ROOT={args.source_root}",
+        # Plain Shipping registers no scene_load (FPSConsolePolicy.h): the OFF profile
+        # requires every scripted reload to be refused instead of dispatched.
+        "-DSPARK_FPS_DEVELOPER_COMMANDS=OFF",
         "-P", str(args.source_root / "Tests/PackageSmoke/VerifyFPSAuthoredScene.cmake"),
     ]
     result = run_command(command, timeout=360)
