@@ -1333,7 +1333,7 @@
       "description": "Build SparkInstaller focused regression tests",
       "default": "${_sparkinstaller_tests_default}",
       "file": "SparkInstaller/CMakeLists.txt",
-      "line": 155,
+      "line": 153,
       "conditionFrames": [],
       "definitionScope": []
     },
@@ -4099,10 +4099,10 @@
       "target": "SparkInstallerGitTests",
       "kind": "executable",
       "file": "SparkInstaller/CMakeLists.txt",
-      "line": 161,
+      "line": 159,
       "conditionFrames": [
         {
-          "id": "SparkInstaller/CMakeLists.txt:159",
+          "id": "SparkInstaller/CMakeLists.txt:157",
           "branch": 0,
           "branches": [
             "SPARKINSTALLER_BUILD_TESTS"
@@ -4117,10 +4117,10 @@
       "target": "SparkInstallerInstallStateTests",
       "kind": "executable",
       "file": "SparkInstaller/CMakeLists.txt",
-      "line": 181,
+      "line": 179,
       "conditionFrames": [
         {
-          "id": "SparkInstaller/CMakeLists.txt:159",
+          "id": "SparkInstaller/CMakeLists.txt:157",
           "branch": 0,
           "branches": [
             "SPARKINSTALLER_BUILD_TESTS"
@@ -4135,10 +4135,10 @@
       "target": "SparkInstallerTransactionTests",
       "kind": "executable",
       "file": "SparkInstaller/CMakeLists.txt",
-      "line": 198,
+      "line": 196,
       "conditionFrames": [
         {
-          "id": "SparkInstaller/CMakeLists.txt:159",
+          "id": "SparkInstaller/CMakeLists.txt:157",
           "branch": 0,
           "branches": [
             "SPARKINSTALLER_BUILD_TESTS"
@@ -7818,7 +7818,7 @@
       "declarations": [
         {
           "file": "SparkInstaller/CMakeLists.txt",
-          "line": 161,
+          "line": 159,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7836,7 +7836,7 @@
       "declarations": [
         {
           "file": "SparkInstaller/CMakeLists.txt",
-          "line": 181,
+          "line": 179,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
@@ -7854,7 +7854,7 @@
       "declarations": [
         {
           "file": "SparkInstaller/CMakeLists.txt",
-          "line": 198,
+          "line": 196,
           "kind": "executable",
           "origin": "declaration",
           "definitionScope": [],
