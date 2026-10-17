@@ -12,8 +12,10 @@
 #
 # which installs the same tree to bin/EditorAssets/Fonts under <component>. Every executable that
 # loads the fonts (SparkEngine's game overlay, SparkEditor, SparkLauncher, SparkInstaller's GUI)
-# calls both, so a package without the editor still ships the faces and their licences. The
-# install rule is registered once per component however many consumers request it.
+# stages them; the ones in the required runtime component also install them, so every package
+# ships the faces and their licences. The install rule is registered once per install tree, and
+# a request for a second component is a configure error: two components installing the same
+# file break the MSI (WiX ICE30, one target file owned by two components).
 #
 # Script mode (the POST_BUILD step itself) performs the copy:
 #
@@ -81,11 +83,16 @@ function(spark_install_ui_fonts component)
                         "installed UIs fall back to the embedded default font")
         return()
     endif()
-    get_property(_spark_installed GLOBAL PROPERTY SPARK_UI_FONTS_INSTALL_COMPONENTS)
-    if("${component}" IN_LIST _spark_installed)
+    get_property(_spark_installed GLOBAL PROPERTY SPARK_UI_FONTS_INSTALL_COMPONENT)
+    if(_spark_installed)
+        if(NOT "${component}" STREQUAL "${_spark_installed}")
+            message(FATAL_ERROR "spark_install_ui_fonts(${component}): the fonts are already installed "
+                                "by component '${_spark_installed}'; a second component installing the same "
+                                "files fails MSI validation (ICE30)")
+        endif()
         return()
     endif()
-    set_property(GLOBAL APPEND PROPERTY SPARK_UI_FONTS_INSTALL_COMPONENTS "${component}")
+    set_property(GLOBAL PROPERTY SPARK_UI_FONTS_INSTALL_COMPONENT "${component}")
     install(DIRECTORY "${_spark_font_source}/"
         DESTINATION bin/EditorAssets/Fonts
         COMPONENT ${component})
