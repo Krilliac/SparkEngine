@@ -68,7 +68,9 @@ namespace SparkEditor
     inline float EditorDockSplitRatio(const EditorDockExtent& extent, float available, float scale)
     {
         if (!(available > 0.0f))
+        {
             return extent.defaultRatio;
+        }
         const float needed = extent.minExtent * SaneEditorDockScale(scale) / available;
         return ImClamp(needed, extent.defaultRatio, extent.maxRatio);
     }
@@ -185,21 +187,31 @@ namespace SparkEditor
     {
         ImGuiDockNode* cell = leaf;
         while (cell != nullptr && cell->ParentNode != nullptr && cell->ParentNode->SplitAxis != axis)
+        {
             cell = cell->ParentNode;
+        }
         if (cell == nullptr || cell->ParentNode == nullptr)
+        {
             return false;
+        }
 
         ImGuiDockNode* parent = cell->ParentNode;
         ImGuiDockNode* sibling = parent->ChildNodes[parent->ChildNodes[0] == cell ? 1 : 0];
         if (sibling == nullptr || !cell->IsVisible || !sibling->IsVisible)
+        {
             return false;
+        }
 
         const float available = parent->Size[axis] - ImGui::GetStyle().DockingSeparatorSize;
         if (available <= 2.0f)
+        {
             return false;
+        }
         const float target = ImFloor(ImMin(extent.minExtent * SaneEditorDockScale(scale), available * extent.maxRatio));
         if (cell->Size[axis] + 0.5f >= target)
+        {
             return false;
+        }
         LockEditorDockNodeExtent(cell, axis, target);
         return true;
     }
@@ -227,13 +239,21 @@ namespace SparkEditor
     inline void FitEditorDockTree(const EditorDockPanelWindows& panels, float scale)
     {
         if (ImGuiWindow* toolbar = ImGui::FindWindowByName(EditorToolbarWindowName))
+        {
             FitEditorToolbarNode(toolbar->DockNode, scale);
+        }
         if (panels.hierarchy != nullptr)
+        {
             FitEditorDockExtent(FindEditorDockedWindowNode(panels.hierarchy), ImGuiAxis_X, EditorLeftDockExtent, scale);
+        }
         if (panels.inspector != nullptr)
+        {
             FitEditorDockExtent(FindEditorDockedWindowNode(panels.inspector), ImGuiAxis_X, EditorRightDockExtent,
                                 scale);
+        }
         if (panels.console != nullptr)
+        {
             FitEditorDockExtent(FindEditorDockedWindowNode(panels.console), ImGuiAxis_Y, EditorBottomDockExtent, scale);
+        }
     }
 } // namespace SparkEditor

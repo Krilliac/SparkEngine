@@ -23,9 +23,13 @@ namespace MMO
                                 MMOCharacterSystem* charSys)
     {
         if (!accountSys || !charSys)
+        {
             return false;
+        }
         if (m_accountSys || m_charSys || m_context)
+        {
             Shutdown();
+        }
 
         m_context = context;
         m_accountSys = accountSys;
@@ -43,7 +47,9 @@ namespace MMO
     void MMOLoginUI::Update(float deltaTime)
     {
         if (m_state != LoginUIState::EnteringWorld)
+        {
             return;
+        }
 
         m_enterWorldTimer -= std::max(deltaTime, 0.0f);
         if (m_enterWorldTimer <= 0.0f)
@@ -80,7 +86,9 @@ namespace MMO
     {
         SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Login UI: returning to login screen");
         if (!m_sessionToken.empty() && m_accountSys)
+        {
             m_accountSys->Logout(m_sessionToken);
+        }
         m_sessionToken.clear();
         m_loginPassword.Clear();
         m_loggedInAccountId = 0;
@@ -151,9 +159,13 @@ namespace MMO
         ImGui::Spacing();
 
         if (!m_loginError.empty())
+        {
             ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%s", m_loginError.c_str());
+        }
         if (!m_loginSuccess.empty())
+        {
             ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "%s", m_loginSuccess.c_str());
+        }
 
         ImGui::Spacing();
 
@@ -233,7 +245,9 @@ namespace MMO
     {
 #ifdef SPARK_HAS_IMGUI
         if (!m_charSys || !m_accountSys)
+        {
             return;
+        }
 
         ImGui::SetNextWindowSize(ImVec2(500, 450), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
@@ -294,7 +308,9 @@ namespace MMO
                 SetState(LoginUIState::EnteringWorld);
 
                 if (m_enterWorldCallback)
+                {
                     m_enterWorldCallback(m_loggedInAccountId, ch.characterId);
+                }
 
                 SPARK_LOG_INFO(Spark::LogCategory::Game, "Login UI: entering world as %s", ch.name.c_str());
                 Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Entering world as " + ch.name);
@@ -323,7 +339,9 @@ namespace MMO
             if (!m_confirmDelete)
             {
                 if (ImGui::Button("Delete", ImVec2(80, 35)))
+                {
                     m_confirmDelete = true;
+                }
             }
             else
             {
@@ -338,13 +356,17 @@ namespace MMO
                 ImGui::PopStyleColor();
                 ImGui::SameLine();
                 if (ImGui::Button("Cancel", ImVec2(60, 35)))
+                {
                     m_confirmDelete = false;
+                }
             }
         }
 
         ImGui::SameLine(ImGui::GetWindowWidth() - 100);
         if (ImGui::Button("Logout", ImVec2(80, 35)))
+        {
             ReturnToLogin();
+        }
 
         ImGui::End();
 #endif
@@ -354,7 +376,9 @@ namespace MMO
     {
 #ifdef SPARK_HAS_IMGUI
         if (!m_charSys)
+        {
             return;
+        }
 
         ImGui::SetNextWindowSize(ImVec2(550, 550), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
@@ -379,10 +403,14 @@ namespace MMO
         for (int i = 0; i < static_cast<int>(races.size()); ++i)
         {
             if (i > 0)
+            {
                 ImGui::SameLine();
+            }
             bool selected = (m_selectedRace == i);
             if (selected)
+            {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.6f, 0.9f, 1.0f));
+            }
             if (ImGui::Button(races[i].name.c_str(), ImVec2(80, 30)))
             {
                 m_selectedRace = i;
@@ -391,11 +419,15 @@ namespace MMO
                 if (m_selectedClass < static_cast<int>(classes.size()))
                 {
                     if (!m_charSys->IsValidCombination(races[i].id, classes[m_selectedClass].id))
+                    {
                         m_selectedClass = 0;
+                    }
                 }
             }
             if (selected)
+            {
                 ImGui::PopStyleColor();
+            }
         }
 
         if (m_selectedRace < static_cast<int>(races.size()))
@@ -416,17 +448,27 @@ namespace MMO
             if (m_selectedRace < static_cast<int>(races.size()))
             {
                 if (!m_charSys->IsValidCombination(races[m_selectedRace].id, classes[i].id))
+                {
                     continue;
+                }
             }
             if (btnCount > 0)
+            {
                 ImGui::SameLine();
+            }
             bool selected = (m_selectedClass == i);
             if (selected)
+            {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.6f, 0.9f, 1.0f));
+            }
             if (ImGui::Button(classes[i].name.c_str(), ImVec2(80, 30)))
+            {
                 m_selectedClass = i;
+            }
             if (selected)
+            {
                 ImGui::PopStyleColor();
+            }
             btnCount++;
         }
 
@@ -482,7 +524,9 @@ namespace MMO
 
         // === Error ===
         if (!m_createError.empty())
+        {
             ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%s", m_createError.c_str());
+        }
 
         // === Buttons ===
         if (ImGui::Button("Create Character", ImVec2(140, 35)))
@@ -490,9 +534,13 @@ namespace MMO
             CharacterCreateRequest req;
             req.name = m_createName;
             if (m_selectedRace < static_cast<int>(races.size()))
+            {
                 req.race = races[m_selectedRace].id;
+            }
             if (m_selectedClass < static_cast<int>(classes.size()))
+            {
                 req.classId = classes[m_selectedClass].id;
+            }
             req.appearance.faceIndex = m_faceIndex;
             req.appearance.hairIndex = m_hairIndex;
             req.appearance.hairColorIndex = m_hairColorIndex;
@@ -513,7 +561,9 @@ namespace MMO
         }
         ImGui::SameLine();
         if (ImGui::Button("Back", ImVec2(80, 35)))
+        {
             ReturnToCharacterSelect();
+        }
 
         ImGui::End();
 #endif

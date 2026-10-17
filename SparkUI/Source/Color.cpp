@@ -9,12 +9,13 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <numbers>
 
 namespace Spark::Ui
 {
     namespace
     {
-        constexpr double kPi = 3.14159265358979323846;
+        constexpr double kPi = std::numbers::pi;
 
         using Matrix3 = std::array<std::array<double, 3>, 3>;
 

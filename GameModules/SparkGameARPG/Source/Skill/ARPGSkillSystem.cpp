@@ -22,7 +22,9 @@ namespace ARPG
     bool ARPGSkillSystem::Initialize(Spark::IEngineContext* context, const ARPGHeroSystem* heroSystem)
     {
         if (!heroSystem)
+        {
             return false;
+        }
 
         m_context = context;
         m_heroSystem = heroSystem;
@@ -50,7 +52,9 @@ namespace ARPG
             for (auto& cd : cooldowns)
             {
                 if (cd.remainingCooldown > 0.0f)
+                {
                     cd.remainingCooldown -= deltaTime;
+                }
             }
 
             // Remove expired cooldowns
@@ -138,7 +142,9 @@ namespace ARPG
         for (const auto& skill : m_allSkills)
         {
             if (skill.skillId == skillId)
+            {
                 return &skill;
+            }
         }
         return nullptr;
     }
@@ -149,7 +155,9 @@ namespace ARPG
         for (const auto& skill : m_allSkills)
         {
             if (skill.heroClass == heroClass && skill.requiredLevel <= heroLevel)
+            {
                 result.push_back(&skill);
+            }
         }
         return result;
     }
@@ -159,7 +167,9 @@ namespace ARPG
         const auto* skill = GetSkill(skillId);
         const HeroData* hero = m_heroSystem ? m_heroSystem->GetHero(heroId) : nullptr;
         if (!skill || !hero || hero->heroClass != skill->heroClass || hero->level < skill->requiredLevel)
+        {
             return false;
+        }
 
         auto& learned = m_learnedSkills[heroId];
 
@@ -167,7 +177,9 @@ namespace ARPG
         for (uint32_t id : learned)
         {
             if (id == skillId)
+            {
                 return false;
+            }
         }
 
         learned.push_back(skillId);
@@ -181,12 +193,16 @@ namespace ARPG
         const auto* skill = GetSkill(skillId);
         const HeroData* hero = m_heroSystem ? m_heroSystem->GetHero(heroId) : nullptr;
         if (!skill || !hero || hero->heroClass != skill->heroClass || hero->level < skill->requiredLevel)
+        {
             return false;
+        }
 
         const auto learnedIt = m_learnedSkills.find(heroId);
         if (learnedIt == m_learnedSkills.end() ||
             std::ranges::find(learnedIt->second, skillId) == learnedIt->second.end())
+        {
             return false;
+        }
 
         // Check if on cooldown — bypassing allows instant ability spam
         SPARK_BRANCH_GUARD_BEGIN("arpg_cooldown_check")
@@ -196,7 +212,9 @@ namespace ARPG
             for (const auto& cd : cdIt->second)
             {
                 if (cd.skillId == skillId && cd.remainingCooldown > 0.0f)
+                {
                     return false; // Still on cooldown
+                }
             }
         }
         SPARK_BRANCH_GUARD_END("arpg_cooldown_check")
@@ -217,7 +235,9 @@ namespace ARPG
     {
         auto it = m_learnedSkills.find(heroId);
         if (it != m_learnedSkills.end())
+        {
             return it->second;
+        }
         return {};
     }
 
@@ -225,7 +245,9 @@ namespace ARPG
     {
         const auto it = m_cooldowns.find(heroId);
         if (it != m_cooldowns.end())
+        {
             return it->second;
+        }
         return {};
     }
 
@@ -239,7 +261,9 @@ namespace ARPG
             if (!skill || skill->heroClass != heroClass || skill->requiredLevel > heroLevel ||
                 std::find(learnedSkills.begin() + static_cast<std::ptrdiff_t>(i) + 1, learnedSkills.end(),
                           learnedSkills[i]) != learnedSkills.end())
+            {
                 return false;
+            }
         }
 
         for (size_t i = 0; i < cooldowns.size(); ++i)
@@ -249,11 +273,15 @@ namespace ARPG
             if (!skill || std::ranges::find(learnedSkills, cooldown.skillId) == learnedSkills.end() ||
                 !std::isfinite(cooldown.remainingCooldown) || cooldown.remainingCooldown <= 0.0f ||
                 cooldown.remainingCooldown > skill->cooldown)
+            {
                 return false;
+            }
             for (size_t j = i + 1; j < cooldowns.size(); ++j)
             {
                 if (cooldowns[j].skillId == cooldown.skillId)
+                {
                     return false;
+                }
             }
         }
         return true;
@@ -264,7 +292,9 @@ namespace ARPG
     {
         const HeroData* hero = m_heroSystem ? m_heroSystem->GetHero(heroId) : nullptr;
         if (!hero || !CanRestoreHeroSkills(hero->heroClass, hero->level, learnedSkills, cooldowns))
+        {
             return false;
+        }
 
         m_learnedSkills[heroId] = learnedSkills;
         m_cooldowns[heroId] = cooldowns;
@@ -286,7 +316,9 @@ namespace ARPG
             for (const auto& skill : m_allSkills)
             {
                 if (skill.heroClass != heroClass)
+                {
                     continue;
+                }
 
                 static const char* typeNames[] = {"Active", "Passive", "Aura", "Channeled", "Summon"};
                 auto typeIndex = static_cast<size_t>(skill.type);
@@ -294,11 +326,17 @@ namespace ARPG
 
                 ss << "  [Lv" << skill.requiredLevel << "] " << skill.name << " (" << typeName << ")";
                 if (skill.manaCost > 0.0f)
+                {
                     ss << " MP:" << skill.manaCost;
+                }
                 if (skill.cooldown > 0.0f)
+                {
                     ss << " CD:" << skill.cooldown << "s";
+                }
                 if (skill.baseDamage > 0.0f)
+                {
                     ss << " Dmg:" << skill.baseDamage;
+                }
                 ss << "\n    " << skill.description << "\n";
             }
         }
@@ -322,7 +360,9 @@ namespace ARPG
                     for (const auto& skill : m_allSkills)
                     {
                         if (skill.heroClass != heroClass)
+                        {
                             continue;
+                        }
                         ImGui::Text("[Lv%d] %s - %s", skill.requiredLevel, skill.name.c_str(),
                                     skill.description.c_str());
                     }

@@ -14,19 +14,19 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <numbers>
 
 namespace Spark::Ui
 {
     namespace
     {
-        constexpr float kPi = 3.14159265358979323846f;
+        constexpr float kPi = std::numbers::pi_v<float>;
 
         ImVec4 StopColour(int index, float alpha)
         {
             const std::uint32_t rgb = kBrandGradientStops[index];
-            return ImVec4(static_cast<float>((rgb >> 16u) & 0xFFu) / 255.0f,
-                          static_cast<float>((rgb >> 8u) & 0xFFu) / 255.0f, static_cast<float>(rgb & 0xFFu) / 255.0f,
-                          alpha);
+            return {static_cast<float>((rgb >> 16u) & 0xFFu) / 255.0f, static_cast<float>((rgb >> 8u) & 0xFFu) / 255.0f,
+                    static_cast<float>(rgb & 0xFFu) / 255.0f, alpha};
         }
 
         /// Three-stop gradient at t in [0, 1].

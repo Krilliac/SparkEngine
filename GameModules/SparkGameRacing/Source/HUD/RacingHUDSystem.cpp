@@ -19,7 +19,9 @@ namespace Racing
     bool RacingHUDSystem::Initialize(Spark::IEngineContext* context)
     {
         if (!context)
+        {
             return false;
+        }
 
         m_context = context;
         m_initialized = true;
@@ -54,7 +56,9 @@ namespace Racing
     const char* RacingHUDSystem::GetPositionSuffix(uint32_t position)
     {
         if (position >= 11 && position <= 13)
+        {
             return "th";
+        }
         switch (position % 10)
         {
         case 1:
@@ -99,7 +103,9 @@ namespace Racing
     {
 #ifdef SPARK_HAS_IMGUI
         if (!m_showMinimap || m_minimapEntries.empty())
+        {
             return;
+        }
 
         ImGui::BeginChild("Minimap", ImVec2(150, 150), true);
         ImGui::Text("Minimap");
@@ -152,7 +158,9 @@ namespace Racing
         ImGui::Text("Lap %u / %u", m_data.currentLap, m_data.totalLaps);
         ImGui::Text("Lap Time: %.2f s", m_data.lapTime);
         if (m_data.bestLapTime >= 0.0f)
+        {
             ImGui::Text("Best Lap: %.2f s", m_data.bestLapTime);
+        }
         ImGui::Text("Total: %.2f s", m_data.totalTime);
 #endif
     }
@@ -172,7 +180,9 @@ namespace Racing
     {
 #ifdef SPARK_HAS_IMGUI
         if (m_data.raceState != RaceState::Countdown)
+        {
             return;
+        }
 
         int count = static_cast<int>(std::ceil(m_data.countdown));
         if (count > 0)
@@ -192,7 +202,9 @@ namespace Racing
     {
 #ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Racing HUD"))
+        {
             return;
+        }
 
         RenderCountdown();
         RenderPositionIndicator();

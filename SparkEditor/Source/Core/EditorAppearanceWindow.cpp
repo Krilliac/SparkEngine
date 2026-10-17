@@ -49,8 +49,11 @@ namespace SparkEditor
 #endif
 
         /// Number of fixed scale steps from kMinEditorUiScale to kMaxEditorUiScale inclusive.
-        constexpr int kScaleStepCount =
-            static_cast<int>((kMaxEditorUiScale - kMinEditorUiScale) / kEditorUiScaleStep + 0.5f) + 1;
+        constexpr float kScaleStepSpan = (kMaxEditorUiScale - kMinEditorUiScale) / kEditorUiScaleStep;
+        constexpr int kScaleStepCount = static_cast<int>(kScaleStepSpan) + 1;
+        // The range must be a whole number of steps, so the count needs no rounding.
+        static_assert(static_cast<float>(kScaleStepCount - 1) == kScaleStepSpan,
+                      "UI scale range must be an exact multiple of kEditorUiScaleStep");
 
         /// Small colour sample drawn beside a palette name.
         void Swatch(const ThemeColor& colour)
@@ -74,11 +77,17 @@ namespace SparkEditor
     std::optional<Spark::Ui::Appearance> EditorAppearanceWindow::AppearanceOverrideFor(std::string_view appearance)
     {
         if (appearance == "light")
+        {
             return Spark::Ui::Appearance::Light;
+        }
         if (appearance == "hc")
+        {
             return Spark::Ui::Appearance::HighContrast;
+        }
         if (appearance == "system")
+        {
             return SystemAppearance();
+        }
         return std::nullopt;
     }
 
@@ -133,7 +142,9 @@ namespace SparkEditor
         EditorTheme::SetAppearanceOverride(AppearanceOverrideFor(prefs.appearance));
         EditorTheme::SetDensity(prefs.density);
         if (prefs.palette != EditorTheme::GetCurrentThemeName())
+        {
             EditorTheme::ApplyTheme(prefs.palette);
+        }
 
         // Only the user factor is requested, so a DPI change queued for the same frame survives; requesting
         // the stored value unconditionally also overrides a different user step still pending.
@@ -141,7 +152,9 @@ namespace SparkEditor
 
         Ui::SetReduceMotion(prefs.reduceMotion);
         if (ImGui::GetCurrentContext() != nullptr)
+        {
             ImGui::GetIO().ConfigNavCursorVisibleAlways = prefs.alwaysShowFocus;
+        }
     }
 
     bool EditorAppearanceWindow::Draw(EditorPreferences& prefs)
@@ -153,14 +166,18 @@ namespace SparkEditor
             ImGui::SetNextWindowFocus();
         }
         if (!m_open)
+        {
             return false;
+        }
 
         bool changed = false;
         ImGui::SetNextWindowSize(ImVec2(Ui::Em(30.0f), Ui::Em(34.0f)), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Appearance###SparkAppearance", &m_open, ImGuiWindowFlags_NoCollapse))
         {
             if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && ImGui::IsKeyPressed(ImGuiKey_Escape))
+            {
                 m_open = false;
+            }
 
             changed |= DrawPaletteSection(prefs);
             changed |= DrawAppearanceSection(prefs);
@@ -190,7 +207,9 @@ namespace SparkEditor
     bool EditorAppearanceWindow::DrawPaletteSection(EditorPreferences& prefs)
     {
         if (!Ui::SectionHeader("Palette"))
+        {
             return false;
+        }
 
         bool changed = false;
         for (const std::string_view family : kPaletteFamilies)
@@ -224,20 +243,26 @@ namespace SparkEditor
         const bool isFamily = std::find(std::begin(kPaletteFamilies), std::end(kPaletteFamilies), prefs.palette) !=
                               std::end(kPaletteFamilies);
         if (!isFamily)
+        {
             Ui::SecondaryText("Custom theme in use: %s", prefs.palette.c_str());
+        }
         return changed;
     }
 
     bool EditorAppearanceWindow::DrawAppearanceSection(EditorPreferences& prefs)
     {
         if (!Ui::SectionHeader("Appearance"))
+        {
             return false;
+        }
 
         bool changed = false;
         for (std::size_t i = 0; i < kAppearanceValues.size(); ++i)
         {
             if (i > 0)
+            {
                 ImGui::SameLine();
+            }
             if (ImGui::RadioButton(kAppearanceLabels[i], prefs.appearance == kAppearanceValues[i]) &&
                 prefs.appearance != kAppearanceValues[i])
             {
@@ -262,13 +287,19 @@ namespace SparkEditor
     bool EditorAppearanceWindow::DrawScaleSection(EditorPreferences& prefs)
     {
         if (!Ui::SectionHeader("UI scale"))
+        {
             return false;
+        }
 
         char preview[48];
         if (prefs.uiScale > 0.0f)
+        {
             std::snprintf(preview, sizeof(preview), "%.1f%%", prefs.uiScale * 100.0f);
+        }
         else
+        {
             std::snprintf(preview, sizeof(preview), "Auto (%.0f%%)", Ui::DpiScale() * 100.0f);
+        }
 
         bool changed = false;
         ImGui::SetNextItemWidth(Ui::Em(12.0f));
@@ -291,7 +322,9 @@ namespace SparkEditor
                     changed = true;
                 }
                 if (selected)
+                {
                     ImGui::SetItemDefaultFocus();
+                }
             }
             ImGui::EndCombo();
         }
@@ -303,7 +336,9 @@ namespace SparkEditor
     bool EditorAppearanceWindow::DrawAccessibilitySection(EditorPreferences& prefs)
     {
         if (!Ui::SectionHeader("Accessibility and workspace"))
+        {
             return false;
+        }
 
         bool changed = false;
         changed |= ImGui::Checkbox("Always show keyboard focus", &prefs.alwaysShowFocus);
@@ -345,7 +380,9 @@ namespace SparkEditor
         {
             Ui::Badge("Contrast audit passed", Ui::Status::Success);
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+            {
                 ImGui::SetTooltip("Every text and control colour in this theme meets its contrast minimum.");
+            }
             return;
         }
 
@@ -354,7 +391,9 @@ namespace SparkEditor
                       m_auditFailureCount == 1 ? "" : "s");
         Ui::Badge(label, Ui::Status::Warning);
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+        {
             ImGui::SetTooltip("%s", m_auditSummary.c_str());
+        }
     }
 
 } // namespace SparkEditor

@@ -154,13 +154,12 @@ namespace SparkEditor
         ThemeColor Mix(const ThemeColor& from, const ThemeColor& to, float t)
         {
             const auto channel = [t](float a, float b) { return Unit(a) + (Unit(b) - Unit(a)) * t; };
-            return ThemeColor(channel(from.r, to.r), channel(from.g, to.g), channel(from.b, to.b),
-                              channel(from.a, to.a));
+            return {channel(from.r, to.r), channel(from.g, to.g), channel(from.b, to.b), channel(from.a, to.a)};
         }
 
         ThemeColor Opaque(const ThemeColor& c)
         {
-            return ThemeColor(Unit(c.r), Unit(c.g), Unit(c.b), 1.0f);
+            return {Unit(c.r), Unit(c.g), Unit(c.b), 1.0f};
         }
 
         float LinearChannel(float c)

@@ -49,7 +49,9 @@ namespace SparkEditor
                   [](const Spark::ModInfo& a, const Spark::ModInfo& b)
                   {
                       if (a.loadOrder != b.loadOrder)
+                      {
                           return a.loadOrder < b.loadOrder;
+                      }
                       return a.id < b.id;
                   });
 
@@ -92,7 +94,9 @@ namespace SparkEditor
     void ModdingPanel::Render()
     {
         if (!IsVisible())
+        {
             return;
+        }
 
         if (BeginPanel())
         {
@@ -187,7 +191,9 @@ namespace SparkEditor
 
             const bool selected = (m_selectedMod == i);
             if (ImGui::Selectable(mod.name.c_str(), selected))
+            {
                 m_selectedMod = i;
+            }
 
             if (!dependenciesMet)
             {
@@ -227,18 +233,28 @@ namespace SparkEditor
             Spark::Ui::MonoText("%s", mod.version.c_str());
             Spark::Ui::PropertyLabel("Status");
             if (mod.loaded)
+            {
                 Spark::Ui::StatusText(Spark::Ui::Status::Success, "Active");
+            }
             else if (mod.enabled)
+            {
                 Spark::Ui::StatusText(Spark::Ui::Status::Info, "Enabled");
+            }
             else
+            {
                 Spark::Ui::StatusText(Spark::Ui::Status::Neutral, "Disabled");
+            }
             Spark::Ui::PropertyLabel("Load Order");
             Spark::Ui::MonoText("%d", mod.loadOrder);
             Spark::Ui::PropertyLabel("Dependencies");
             if (dependenciesMet)
+            {
                 Spark::Ui::StatusText(Spark::Ui::Status::Success, "Met");
+            }
             else
+            {
                 Spark::Ui::StatusText(Spark::Ui::Status::Error, "Missing");
+            }
             Spark::Ui::EndPropertyGrid();
         }
 
@@ -256,7 +272,9 @@ namespace SparkEditor
         for (int i = 0; i < static_cast<int>(m_mods.size()); ++i)
         {
             if (!m_mods[i].enabled)
+            {
                 continue;
+            }
 
             ImGui::PushID(i);
             Spark::Ui::MonoText("%d.", m_mods[i].loadOrder);
@@ -264,11 +282,15 @@ namespace SparkEditor
 
             int swapWith = -1;
             if (Spark::Ui::IconButton("up", ICON_FA_ARROW_UP, "Load earlier", false, i > 0))
+            {
                 swapWith = i - 1;
+            }
             ImGui::SameLine();
             if (Spark::Ui::IconButton("down", ICON_FA_ARROW_DOWN, "Load later", false,
                                       i < static_cast<int>(m_mods.size()) - 1))
+            {
                 swapWith = i + 1;
+            }
             ImGui::SameLine();
             ImGui::TextUnformatted(m_mods[i].name.c_str());
             ImGui::PopID();
@@ -278,7 +300,9 @@ namespace SparkEditor
                 std::vector<std::string> orderedIds;
                 orderedIds.reserve(m_mods.size());
                 for (const auto& mod : m_mods)
+                {
                     orderedIds.push_back(mod.id);
+                }
                 std::swap(orderedIds[static_cast<size_t>(i)], orderedIds[static_cast<size_t>(swapWith)]);
                 System().SetLoadOrder(orderedIds);
                 RefreshFromSystem();

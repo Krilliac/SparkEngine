@@ -39,8 +39,9 @@ namespace SparkEditor
     {
         auto RegisterPanelToggle = [this](const std::string& panelKey, const std::string& displayName)
         {
-            m_commandPalette->RegisterAction("Toggle " + displayName, "Panel", [this, panelKey]()
-                                             { SetPanelVisible(panelKey, !IsPanelVisible(panelKey)); });
+            // Init-captures hold non-const strings, so moving the callback into std::function cannot throw.
+            m_commandPalette->RegisterAction("Toggle " + displayName, "Panel",
+                                             [this, key = panelKey]() { SetPanelVisible(key, !IsPanelVisible(key)); });
         };
 
         // Core panels
@@ -161,7 +162,8 @@ namespace SparkEditor
         // Appearance commands edit the same preferences as View > Appearance, so a choice made here persists.
         for (const std::string_view family : EditorAppearanceWindow::kPaletteFamilies)
         {
-            const std::string palette(family);
+            // Not const: a const capture turns the closure's move into a throwing copy.
+            std::string palette(family);
             m_commandPalette->RegisterAction("Theme: " + palette, "Command",
                                              [this, palette]()
                                              {
@@ -180,7 +182,7 @@ namespace SparkEditor
                                                                     {"Appearance: Match System", "system"}};
         for (const AppearanceCommand& command : kAppearanceCommands)
         {
-            const std::string value = command.value;
+            std::string value = command.value; // non-const for the same reason as the palette loop
             m_commandPalette->RegisterAction(command.label, "Command",
                                              [this, value]()
                                              {

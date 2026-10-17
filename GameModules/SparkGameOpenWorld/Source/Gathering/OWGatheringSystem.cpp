@@ -285,7 +285,9 @@ namespace OpenWorld
     void OWGatheringSystem::Update(float deltaTime)
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         UpdateNodeRespawns(deltaTime);
     }
@@ -295,7 +297,9 @@ namespace OpenWorld
         for (auto& [id, node] : m_nodes)
         {
             if (!node.isDepleted)
+            {
                 continue;
+            }
 
             node.respawnTimer += deltaTime;
             if (node.respawnTimer >= node.respawnTime)
@@ -333,7 +337,9 @@ namespace OpenWorld
     {
         auto it = m_nodes.find(nodeId);
         if (it == m_nodes.end() || it->second.isDepleted)
+        {
             return 0;
+        }
 
         auto& node = it->second;
         uint32_t harvested = std::min(node.currentYield, 1u);
@@ -364,12 +370,16 @@ namespace OpenWorld
         for (const auto& recipe : m_recipes)
         {
             if (recipe.recipeId != recipeId)
+            {
                 continue;
+            }
 
             for (const auto& ing : recipe.ingredients)
             {
                 if (m_inventory.Get(ing.resource) < ing.amount)
+                {
                     return false;
+                }
             }
             return true;
         }
@@ -379,15 +389,21 @@ namespace OpenWorld
     bool OWGatheringSystem::Craft(uint32_t recipeId)
     {
         if (!CanCraft(recipeId))
+        {
             return false;
+        }
 
         for (const auto& recipe : m_recipes)
         {
             if (recipe.recipeId != recipeId)
+            {
                 continue;
+            }
 
             for (const auto& ing : recipe.ingredients)
+            {
                 m_inventory.Spend(ing.resource, ing.amount);
+            }
 
             m_totalCrafted++;
             Spark::ModuleLog::Info(m_context, "{}", "[OpenWorld] Crafted: " + recipe.resultName);
@@ -401,7 +417,9 @@ namespace OpenWorld
         GatheringSaveState state;
         state.inventory.reserve(m_inventory.resources.size());
         for (const auto& entry : m_inventory.resources)
+        {
             state.inventory.push_back(entry);
+        }
         std::ranges::sort(state.inventory, {}, [](const auto& entry) { return static_cast<uint8_t>(entry.first); });
         state.nodes.reserve(m_nodes.size());
         for (const auto& [id, node] : m_nodes)
@@ -420,11 +438,15 @@ namespace OpenWorld
         auto fail = [&](const char* message)
         {
             if (error)
+            {
                 *error = message;
+            }
             return false;
         };
         if (state.inventory.size() > static_cast<size_t>(ResourceType::Count) || state.nodes.size() != m_nodes.size())
+        {
             return fail("gathering state does not match this world");
+        }
 
         ResourceInventory inventory;
         std::unordered_set<uint8_t> resourceTypes;
@@ -433,7 +455,9 @@ namespace OpenWorld
             const auto rawType = static_cast<uint8_t>(type);
             if (rawType >= static_cast<uint8_t>(ResourceType::Count) || amount > 1000000000u ||
                 !resourceTypes.insert(rawType).second)
+            {
                 return fail("invalid resource inventory record");
+            }
             inventory.resources.emplace(type, amount);
         }
 
@@ -446,7 +470,9 @@ namespace OpenWorld
                 node.currentYield > existing->second.maxYield || node.respawnTimer < 0.0f ||
                 node.respawnTimer > existing->second.respawnTime || node.isDepleted != (node.currentYield == 0) ||
                 !nodeIds.insert(node.nodeId).second)
+            {
                 return fail("invalid resource node record");
+            }
             auto& restored = nodes.at(node.nodeId);
             restored.currentYield = node.currentYield;
             restored.respawnTimer = node.respawnTimer;
@@ -468,9 +494,13 @@ namespace OpenWorld
         {
             ss << "[" << id << "] " << node.name << " (" << ResourceName(node.resource) << ")";
             if (node.isDepleted)
+            {
                 ss << " [DEPLETED]";
+            }
             else
+            {
                 ss << " [" << node.currentYield << "/" << node.maxYield << "]";
+            }
             ss << "\n";
         }
         return ss.str();
@@ -484,12 +514,16 @@ namespace OpenWorld
         {
             ss << "[" << r.recipeId << "] " << r.resultName;
             if (r.requiresCraftingStation)
+            {
                 ss << " [Station]";
+            }
             ss << " — ";
             for (size_t i = 0; i < r.ingredients.size(); ++i)
             {
                 if (i > 0)
+                {
                     ss << ", ";
+                }
                 ss << r.ingredients[i].amount << "x " << ResourceName(r.ingredients[i].resource);
             }
             ss << "\n";
@@ -504,7 +538,9 @@ namespace OpenWorld
         for (const auto& [type, count] : m_inventory.resources)
         {
             if (count > 0)
+            {
                 ss << ResourceName(type) << ": " << count << "\n";
+            }
         }
         ss << "Total Harvested: " << m_totalHarvested << " | Total Crafted: " << m_totalCrafted << "\n";
         return ss.str();
@@ -513,7 +549,9 @@ namespace OpenWorld
     void OWGatheringSystem::Shutdown()
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         m_nodes.clear();
         m_recipes.clear();
@@ -524,7 +562,9 @@ namespace OpenWorld
     {
 #ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Gathering & Crafting"))
+        {
             return;
+        }
 
         ImGui::Text("Nodes: %zu | Recipes: %zu | Harvested: %u | Crafted: %u", m_nodes.size(), m_recipes.size(),
                     m_totalHarvested, m_totalCrafted);
@@ -535,7 +575,9 @@ namespace OpenWorld
             for (const auto& [type, count] : m_inventory.resources)
             {
                 if (count > 0)
+                {
                     ImGui::Text("%s: %u", ResourceName(type), count);
+                }
             }
             ImGui::TreePop();
         }

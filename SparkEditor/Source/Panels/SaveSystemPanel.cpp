@@ -39,11 +39,15 @@ namespace SparkEditor
                 return "-";
 #else
             if (localtime_r(&raw, &parts) == nullptr)
+            {
                 return "-";
+            }
 #endif
             char buffer[32] = {};
             if (std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M", &parts) == 0)
+            {
                 return "-";
+            }
             return buffer;
         }
     } // namespace
@@ -89,9 +93,13 @@ namespace SparkEditor
         // session's saves. It only writes the directory back when the user has picked
         // a different one through SetSaveDirectory().
         if (m_saveDirectoryOverridden)
+        {
             System().SetSaveDirectory(m_saveDirectory);
+        }
         else
+        {
             m_saveDirectory = System().GetSaveDirectory();
+        }
 
         namespace fs = std::filesystem;
         std::error_code ec;
@@ -103,9 +111,13 @@ namespace SparkEditor
         for (const auto& entry : fs::directory_iterator(m_saveDirectory, ec))
         {
             if (ec)
+            {
                 break;
+            }
             if (!entry.is_regular_file() || entry.path().extension() != ".spark_save")
+            {
                 continue;
+            }
 
             // UTF-8 for ImGui. path::string() throws on Windows for a name the ANSI code
             // page cannot spell, which ended the refresh (and the frame) on a stray file.
@@ -127,7 +139,9 @@ namespace SparkEditor
             std::error_code sizeEc;
             info.fileSizeBytes = fs::file_size(entry.path(), sizeEc);
             if (sizeEc)
+            {
                 info.fileSizeBytes = 0;
+            }
             m_slots.push_back(std::move(info));
         }
 
@@ -220,7 +234,9 @@ namespace SparkEditor
     void SaveSystemPanel::Render()
     {
         if (!IsVisible())
+        {
             return;
+        }
 
         if (BeginPanel())
         {
@@ -257,7 +273,9 @@ namespace SparkEditor
         if (Spark::Ui::BeginPanelToolbar("##SaveSlotsToolbar"))
         {
             if (Spark::Ui::SecondaryButton(ICON_FA_REFRESH " Rescan"))
+            {
                 RefreshSlots();
+            }
             ImGui::SameLine();
             ImGui::AlignTextToFramePadding();
             Spark::Ui::SecondaryText("Directory:");
@@ -344,7 +362,9 @@ namespace SparkEditor
             }
             ImGui::SameLine();
             if (Spark::Ui::SecondaryButton("Cancel"))
+            {
                 m_renaming = false;
+            }
             return;
         }
 
@@ -352,7 +372,9 @@ namespace SparkEditor
         {
             const Spark::Ui::ScopedDisabled disabled(!canLoad, "Needs a running game session.");
             if (Spark::Ui::PrimaryButton(ICON_FA_DOWNLOAD " Load Save"))
+            {
                 LoadSlot(slot.slotName);
+            }
         }
         if (!canLoad)
         {
@@ -370,11 +392,15 @@ namespace SparkEditor
         ImGui::SameLine();
         constexpr const char* kDeletePopupId = "Delete save?##SaveSystemPanel";
         if (Spark::Ui::DangerButton(ICON_FA_TRASH " Delete"))
+        {
             ImGui::OpenPopup(kDeletePopupId);
+        }
         // The delete removes the file from disk, so it is confirmed first.
         if (Spark::Ui::ConfirmDestructive(kDeletePopupId, "Delete save?",
                                           "The save file is removed from disk. This cannot be undone.", "Delete"))
+        {
             DeleteSlot(slot.slotName);
+        }
     }
 
     void SaveSystemPanel::RenderAutosaveSettings()

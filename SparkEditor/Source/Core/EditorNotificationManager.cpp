@@ -95,11 +95,17 @@ namespace SparkEditor
     NotificationSeverity EditorNotificationManager::SeverityFromType(std::string_view type) noexcept
     {
         if (type == "error")
+        {
             return NotificationSeverity::Error;
+        }
         if (type == "warning")
+        {
             return NotificationSeverity::Warning;
+        }
         if (type == "success")
+        {
             return NotificationSeverity::Success;
+        }
         return NotificationSeverity::Info;
     }
 
@@ -114,7 +120,9 @@ namespace SparkEditor
 
         m_history.push_back(entry);
         if (m_history.size() > kMaxHistory)
+        {
             m_history.erase(m_history.begin(), m_history.begin() + (m_history.size() - kMaxHistory));
+        }
         ++m_unread;
 
         Toast toast;
@@ -128,7 +136,9 @@ namespace SparkEditor
 
         // Beyond the visible limit the oldest toast leaves the screen; it is still in the history.
         if (m_toasts.size() > kMaxVisibleToasts)
+        {
             m_toasts.erase(m_toasts.begin(), m_toasts.begin() + (m_toasts.size() - kMaxVisibleToasts));
+        }
     }
 
     void EditorNotificationManager::Show(const std::string& message, const std::string& type, float duration)
@@ -141,7 +151,9 @@ namespace SparkEditor
         for (Toast& toast : m_toasts)
         {
             if (toast.duration > 0.0f && !toast.paused)
+            {
                 toast.timeLeft -= deltaTime;
+            }
         }
         std::erase_if(m_toasts, [](const Toast& toast) { return toast.duration > 0.0f && toast.timeLeft <= 0.0f; });
     }
@@ -156,7 +168,9 @@ namespace SparkEditor
     void EditorNotificationManager::Render(float areaMinX, float areaMinY, float areaWidth, float areaHeight)
     {
         if (m_toasts.empty())
+        {
             return;
+        }
 
         const ImGuiViewport* viewport = ImGui::GetMainViewport();
         if (areaWidth <= 0.0f || areaHeight <= 0.0f)
@@ -187,7 +201,9 @@ namespace SparkEditor
             layout.titleHeight = ImGui::CalcTextSize(entry.title.c_str(), nullptr, false, wrapWidth).y;
             layout.height = padY + closeSide + gap + layout.titleHeight + padY;
             if (!entry.body.empty())
+            {
                 layout.height += gap + ImGui::CalcTextSize(entry.body.c_str(), nullptr, false, wrapWidth).y;
+            }
         }
 
         // Newest toast sits lowest; older ones stack above it, so index 0 (oldest) is on top.
@@ -214,7 +230,9 @@ namespace SparkEditor
 
             float alpha = 1.0f;
             if (!Ui::ReduceMotion() && toast.duration > 0.0f && toast.timeLeft < kFadeSeconds)
+            {
                 alpha = std::max(0.0f, toast.timeLeft / kFadeSeconds);
+            }
 
             ImGui::SetNextWindowPos(ImVec2(left, tops[i]));
             ImGui::SetNextWindowSize(ImVec2(width, layout.height));
@@ -253,7 +271,9 @@ namespace SparkEditor
 
                 ImGui::SetCursorPos(ImVec2(width - padX * 0.5f - closeSide, padY));
                 if (Ui::IconButton("##dismiss", Ui::Glyph::kXmark, "Dismiss"))
+                {
                     dismissedId = toast.id;
+                }
 
                 ImGui::PushTextWrapPos(width - padX);
                 ImGui::SetCursorPos(ImVec2(textLeft, padY + closeSide + gap));
@@ -280,7 +300,9 @@ namespace SparkEditor
         }
 
         if (dismissedId != 0)
+        {
             std::erase_if(m_toasts, [dismissedId](const Toast& toast) { return toast.id == dismissedId; });
+        }
     }
 
     void EditorNotificationManager::RenderHistory()
@@ -310,14 +332,18 @@ namespace SparkEditor
             ImGui::SameLine();
             ImGui::TextUnformatted(it->title.c_str());
             if (!it->body.empty())
+            {
                 Ui::SecondaryText("%s", it->body.c_str());
+            }
             ImGui::PopID();
         }
         ImGui::PopTextWrapPos();
 
         ImGui::Separator();
         if (Ui::SecondaryButton("Dismiss all toasts"))
+        {
             DismissAll();
+        }
     }
 
 } // namespace SparkEditor

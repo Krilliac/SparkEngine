@@ -45,16 +45,24 @@ namespace SparkEditor
         {
             const pid_t pid = fork();
             if (pid == -1)
+            {
                 return false;
+            }
             if (pid == 0)
             {
                 if (setsid() == -1)
+                {
                     _exit(127);
+                }
                 const pid_t detachedPid = fork();
                 if (detachedPid == -1)
+                {
                     _exit(127);
+                }
                 if (detachedPid != 0)
+                {
                     _exit(0);
+                }
 #ifdef __APPLE__
                 execlp("open", "open", "docs/", nullptr);
 #else
@@ -67,7 +75,9 @@ namespace SparkEditor
             while (waitpid(pid, &status, 0) == -1)
             {
                 if (errno == EINTR)
+                {
                     continue;
+                }
                 return errno == ECHILD;
             }
             return WIFEXITED(status) && WEXITSTATUS(status) == 0;
@@ -83,7 +93,9 @@ namespace SparkEditor
             ImGui::MenuItem(label, shortcut);
             ImGui::EndDisabled();
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            {
                 ImGui::SetTooltip("%s", explanation);
+            }
         }
     } // namespace
 
@@ -144,7 +156,9 @@ namespace SparkEditor
             NewScene();
         }
         if (ImGui::MenuItem("Open Scene...", "Ctrl+O"))
+        {
             ShowOpenSceneDialog();
+        }
         if (ImGui::MenuItem("Save Scene", "Ctrl+S"))
         {
             SaveScene();
@@ -181,7 +195,9 @@ namespace SparkEditor
                 {
                     std::string label = rp.name + "  (" + rp.path + ")";
                     if (!rp.valid)
+                    {
                         label += "  [missing]";
+                    }
                     if (ImGui::MenuItem(label.c_str(), nullptr, false, rp.valid))
                     {
                         // The request may be waiting on Save/Discard/Cancel;
@@ -203,7 +219,9 @@ namespace SparkEditor
     void EditorUI::RenderFileMenu()
     {
         if (!ImGui::BeginMenu("File"))
+        {
             return;
+        }
 
         RenderFileSceneItems();
         ImGui::Separator();
@@ -233,7 +251,9 @@ namespace SparkEditor
     void EditorUI::RenderEditMenu()
     {
         if (!ImGui::BeginMenu("Edit"))
+        {
             return;
+        }
 
         // Operates on the process-wide CommandHistory — the same history the
         // edit surfaces execute into and the one SwapWorld() clears.
@@ -295,29 +315,45 @@ namespace SparkEditor
         if (ImGui::BeginMenu("3D Object"))
         {
             if (ImGui::MenuItem("Cube"))
+            {
                 createObject("Cube");
+            }
             if (ImGui::MenuItem("Sphere"))
+            {
                 createObject("Sphere");
+            }
             if (ImGui::MenuItem("Cylinder"))
+            {
                 createObject("Cylinder");
+            }
             if (ImGui::MenuItem("Plane"))
+            {
                 createObject("Plane");
+            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Light"))
         {
             if (ImGui::MenuItem("Directional Light"))
+            {
                 createObject("Directional Light");
+            }
             if (ImGui::MenuItem("Point Light"))
+            {
                 createObject("Point Light");
+            }
             if (ImGui::MenuItem("Spot Light"))
+            {
                 createObject("Spot Light");
+            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Camera"))
         {
             if (ImGui::MenuItem("Camera"))
+            {
                 createObject("Camera");
+            }
             ImGui::EndMenu();
         }
     }
@@ -325,7 +361,9 @@ namespace SparkEditor
     void EditorUI::RenderGameObject2DSubMenu()
     {
         if (!ImGui::BeginMenu("2D Object"))
+        {
             return;
+        }
 
         const char* items[] = {"Sprite",    "Animated Sprite",     "Tilemap",
                                "Camera 2D", "Parallax Background", "Nine-Slice Sprite"};
@@ -346,41 +384,69 @@ namespace SparkEditor
         if (ImGui::BeginMenu("Volume"))
         {
             if (ImGui::MenuItem("Trigger Volume"))
+            {
                 createObject("Trigger Volume");
+            }
             if (ImGui::MenuItem("Post-Process Volume"))
+            {
                 createObject("Post-Process Volume");
+            }
             if (ImGui::MenuItem("Fog Volume"))
+            {
                 createObject("Fog Volume");
+            }
             if (ImGui::MenuItem("Audio Reverb Zone"))
+            {
                 createObject("Audio Reverb Zone");
+            }
             if (ImGui::MenuItem("Wind Zone"))
+            {
                 createObject("Wind Zone");
+            }
             if (ImGui::MenuItem("Cinematic Trigger"))
+            {
                 createObject("Cinematic Trigger");
+            }
             if (ImGui::MenuItem("Area Boundary"))
+            {
                 createObject("Area Boundary");
+            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Probe"))
         {
             if (ImGui::MenuItem("Reflection Probe"))
+            {
                 createObject("Reflection Probe");
+            }
             if (ImGui::MenuItem("Light Probe"))
+            {
                 createObject("Light Probe");
+            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Environment"))
         {
             if (ImGui::MenuItem("Water Plane"))
+            {
                 createObject("Water Plane");
+            }
             if (ImGui::MenuItem("Spawn Point"))
+            {
                 createObject("Spawn Point");
+            }
             if (ImGui::MenuItem("NavMesh Obstacle"))
+            {
                 createObject("NavMesh Obstacle");
+            }
             if (ImGui::MenuItem("Occluder"))
+            {
                 createObject("Occluder");
+            }
             if (ImGui::MenuItem("Billboard"))
+            {
                 createObject("Billboard");
+            }
             ImGui::EndMenu();
         }
     }
@@ -390,59 +456,101 @@ namespace SparkEditor
         if (ImGui::BeginMenu("Gameplay"))
         {
             if (ImGui::MenuItem("Destructible"))
+            {
                 createObject("Destructible");
+            }
             if (ImGui::MenuItem("Dialogue Trigger"))
+            {
                 createObject("Dialogue Trigger");
+            }
             if (ImGui::MenuItem("Physics Joint"))
+            {
                 createObject("Physics Joint");
+            }
             if (ImGui::MenuItem("Character Controller"))
+            {
                 createObject("Character Controller");
+            }
             if (ImGui::MenuItem("Vehicle"))
+            {
                 createObject("Vehicle");
+            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("AI"))
         {
             if (ImGui::MenuItem("Cover Point"))
+            {
                 createObject("Cover Point");
+            }
             if (ImGui::MenuItem("Tactical Point"))
+            {
                 createObject("Tactical Point");
+            }
             if (ImGui::MenuItem("Nav Region"))
+            {
                 createObject("Nav Region");
+            }
             if (ImGui::MenuItem("Nav Link"))
+            {
                 createObject("Nav Link");
+            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Rendering"))
         {
             if (ImGui::MenuItem("Skybox"))
+            {
                 createObject("Skybox");
+            }
             if (ImGui::MenuItem("Line Renderer"))
+            {
                 createObject("Line Renderer");
+            }
             if (ImGui::MenuItem("Trail Renderer"))
+            {
                 createObject("Trail Renderer");
+            }
             if (ImGui::MenuItem("Text 3D"))
+            {
                 createObject("Text 3D");
+            }
             if (ImGui::MenuItem("Billboard"))
+            {
                 createObject("Billboard");
+            }
             if (ImGui::MenuItem("Foliage Volume"))
+            {
                 createObject("Foliage Volume");
+            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Physics"))
         {
             if (ImGui::MenuItem("Ragdoll"))
+            {
                 createObject("Ragdoll");
+            }
             if (ImGui::MenuItem("Soft Body / Cloth"))
+            {
                 createObject("Soft Body");
+            }
             if (ImGui::MenuItem("Constant Force"))
+            {
                 createObject("Constant Force");
+            }
             if (ImGui::MenuItem("Force Region"))
+            {
                 createObject("Force Region");
+            }
             if (ImGui::MenuItem("Buoyancy Volume"))
+            {
                 createObject("Buoyancy Volume");
+            }
             if (ImGui::MenuItem("Spring Arm"))
+            {
                 createObject("Spring Arm");
+            }
             ImGui::EndMenu();
         }
     }
@@ -450,7 +558,9 @@ namespace SparkEditor
     void EditorUI::RenderGameObjectMenu()
     {
         if (!ImGui::BeginMenu("GameObject"))
+        {
             return;
+        }
 
         auto createObject = [this](const std::string& name)
         {
@@ -507,7 +617,9 @@ namespace SparkEditor
     void EditorUI::RenderWindowMenu()
     {
         if (!ImGui::BeginMenu("Window"))
+        {
             return;
+        }
 
         struct CategoryInfo
         {
@@ -530,10 +642,14 @@ namespace SparkEditor
             for (auto& [name, panel] : m_panels)
             {
                 if (panel->GetCategory() == cat && panel->IsVisibleInMenu())
+                {
                     catPanels.emplace_back(name, panel.get());
+                }
             }
             if (catPanels.empty())
+            {
                 continue;
+            }
 
             // Sort alphabetically for consistent ordering
             std::sort(catPanels.begin(), catPanels.end(),
@@ -548,7 +664,9 @@ namespace SparkEditor
                                                   : panel->GetIcon()) +
                         " " + panel->GetName();
                     if (ImGui::MenuItem(menuLabel.c_str(), nullptr, panel->IsVisible()))
+                    {
                         panel->SetVisible(!panel->IsVisible());
+                    }
                 }
                 ImGui::EndMenu();
             }
@@ -575,12 +693,16 @@ namespace SparkEditor
             }
         }
         if (ImGui::MenuItem("Save Layout As..."))
+        {
             m_saveLayoutAsRequested = true;
+        }
         const auto layouts = m_layoutManager ? m_layoutManager->GetSavedLayouts() : std::vector<LayoutInfo>{};
         if (ImGui::BeginMenu("Load Layout"))
         {
             if (layouts.empty())
+            {
                 ImGui::TextDisabled("No saved layouts");
+            }
             for (const LayoutInfo& layout : layouts)
             {
                 if (ImGui::MenuItem(layout.name.c_str()))
@@ -610,18 +732,28 @@ namespace SparkEditor
     void EditorUI::RenderViewMenu()
     {
         if (!ImGui::BeginMenu("View"))
+        {
             return;
+        }
 
         if (ImGui::MenuItem("Appearance..."))
+        {
             OpenAppearanceWindow();
+        }
         if (ImGui::BeginMenu("UI Scale"))
         {
             if (ImGui::MenuItem("Increase", "Ctrl+="))
+            {
                 StepUiScale(1);
+            }
             if (ImGui::MenuItem("Decrease", "Ctrl+-"))
+            {
                 StepUiScale(-1);
+            }
             if (ImGui::MenuItem("Reset to 100%", "Ctrl+0"))
+            {
                 StepUiScale(0);
+            }
             ImGui::EndMenu();
         }
         ImGui::Separator();
@@ -635,29 +767,43 @@ namespace SparkEditor
             const std::size_t unread = m_notificationManager ? m_notificationManager->GetUnreadCount() : 0;
             char notificationsLabel[48];
             if (unread > 0)
+            {
                 std::snprintf(notificationsLabel, sizeof(notificationsLabel), "Notifications (%zu unread)", unread);
+            }
             else
+            {
                 std::snprintf(notificationsLabel, sizeof(notificationsLabel), "Notifications");
+            }
             if (ImGui::MenuItem(notificationsLabel))
+            {
                 OpenNotificationHistory();
+            }
         }
         if (ImGui::MenuItem("Start Page", nullptr, m_startPage.IsOpen()))
         {
             if (m_startPage.IsOpen())
+            {
                 m_startPage.Close();
+            }
             else
+            {
                 OpenStartPage();
+            }
         }
         ImGui::Separator();
         if (ImGui::MenuItem("Command Palette", "Ctrl+P") && m_commandPalette)
+        {
             m_commandPalette->Open();
+        }
         ImGui::EndMenu();
     }
 
     void EditorUI::RenderFPSToolsMenu()
     {
         if (!ImGui::BeginMenu("FPS Tools"))
+        {
             return;
+        }
 
         if (ImGui::MenuItem(ICON_FA_CROSSHAIRS " Weapon Editor", nullptr, IsPanelVisible("WeaponEditor")))
         {
@@ -703,7 +849,9 @@ namespace SparkEditor
     void EditorUI::RenderBuildMenu()
     {
         if (!ImGui::BeginMenu("Build"))
+        {
             return;
+        }
 
         if (ImGui::MenuItem(ICON_FA_COG " Build Settings..."))
         {
@@ -738,17 +886,23 @@ namespace SparkEditor
     void EditorUI::RenderHelpMenu()
     {
         if (!ImGui::BeginMenu("Help"))
+        {
             return;
+        }
 
         if (ImGui::MenuItem("Show Demo Window", nullptr, m_showDemoWindow))
         {
             m_showDemoWindow = !m_showDemoWindow;
         }
         if (ImGui::MenuItem("Welcome..."))
+        {
             OpenStartPage();
+        }
         // Kept where users look for it; themes live in View > Appearance now.
         if (ImGui::MenuItem("Themes..."))
+        {
             OpenAppearanceWindow();
+        }
         ImGui::Separator();
         if (ImGui::MenuItem("About"))
         {
@@ -761,9 +915,13 @@ namespace SparkEditor
             ShowNotification("Opening documentation...", "info", 2.0f);
 #else
             if (LaunchDocumentationViewer())
+            {
                 ShowNotification("Opening documentation...", "info", 2.0f);
+            }
             else
+            {
                 ShowNotification("Could not launch the documentation viewer", "error", 3.0f);
+            }
 #endif
         }
         ImGui::EndMenu();
@@ -778,10 +936,14 @@ namespace SparkEditor
         int tool = static_cast<int>(m_currentTool);
         ImGui::BeginGroup();
         if (Ui::SegmentedControl("##transformTool", kToolLabels, 3, &tool))
+        {
             SetTransformTool(static_cast<TransformTool>(tool));
+        }
         ImGui::EndGroup();
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+        {
             ImGui::SetTooltip("Transform tool: Move (W), Rotate (E), Scale (R)");
+        }
 
         Ui::ToolbarSeparator();
 
@@ -789,10 +951,14 @@ namespace SparkEditor
         int space = m_transformSpace == TransformSpace::Local ? 1 : 0;
         ImGui::BeginGroup();
         if (Ui::SegmentedControl("##transformSpace", kSpaceLabels, 2, &space))
+        {
             m_transformSpace = space == 1 ? TransformSpace::Local : TransformSpace::World;
+        }
         ImGui::EndGroup();
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+        {
             ImGui::SetTooltip("Gizmo space: world axes or the selection's local axes");
+        }
 
         Ui::ToolbarSeparator();
     }
@@ -810,7 +976,9 @@ namespace SparkEditor
         const float clusterWidth = btnSize + previewWidth;
         const float centredX = (ImGui::GetWindowWidth() - clusterWidth) * 0.5f;
         if (centredX > ImGui::GetCursorPosX())
+        {
             ImGui::SetCursorPosX(centredX);
+        }
 
         {
             Ui::ScopedPrimaryButtonColors primary;
@@ -821,7 +989,9 @@ namespace SparkEditor
             }
         }
         if (ImGui::IsItemHovered())
+        {
             ImGui::SetTooltip("Open Play Control; Launch Game runs actual gameplay in SparkEngine.exe");
+        }
 
         // The state preview is not gameplay; say so beside the button while it runs.
         if (previewing)
@@ -852,7 +1022,9 @@ namespace SparkEditor
             ImGui::DragFloat("##SnapVal", &m_snapValue, 0.1f, 0.1f, 100.0f, "%.1f");
         }
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+        {
             ImGui::SetTooltip("Snap increment in world units");
+        }
     }
 
     void EditorUI::RenderToolbarLayoutMenu()
@@ -868,7 +1040,9 @@ namespace SparkEditor
         if (!ImGui::BeginCombo("##layoutMenu", preview, ImGuiComboFlags_HeightLarge))
         {
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+            {
                 ImGui::SetTooltip("Workspace layout");
+            }
             return;
         }
 
@@ -879,7 +1053,9 @@ namespace SparkEditor
 
         const auto layouts = m_layoutManager ? m_layoutManager->GetSavedLayouts() : std::vector<LayoutInfo>{};
         if (!layouts.empty())
+        {
             ImGui::Separator();
+        }
         for (const LayoutInfo& layout : layouts)
         {
             if (ImGui::Selectable(layout.name.c_str(), layout.name == m_preferences.lastLayout))
@@ -895,12 +1071,16 @@ namespace SparkEditor
                 }
             }
             if (!layout.description.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+            {
                 ImGui::SetTooltip("%s", layout.description.c_str());
+            }
         }
 
         ImGui::Separator();
         if (ImGui::Selectable("Save Layout As..."))
+        {
             m_saveLayoutAsRequested = true;
+        }
         if (ImGui::BeginMenu("Delete...", !layouts.empty()))
         {
             for (const LayoutInfo& layout : layouts)
@@ -915,7 +1095,9 @@ namespace SparkEditor
         }
         // The menu item closes only its submenu; close the dropdown too before the confirmation opens.
         if (m_deleteLayoutRequested)
+        {
             ImGui::CloseCurrentPopup();
+        }
         if (ImGui::Selectable("Reset"))
         {
             ResetToDefaultLayout();

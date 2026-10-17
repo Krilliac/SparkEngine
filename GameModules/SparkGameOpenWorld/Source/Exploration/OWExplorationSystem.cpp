@@ -117,7 +117,9 @@ namespace OpenWorld
     void OWExplorationSystem::Update(float deltaTime, float playerX, float playerY, float playerZ)
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         (void)deltaTime;
         CheckDiscovery(playerX, playerY, playerZ);
@@ -129,7 +131,9 @@ namespace OpenWorld
         {
             auto& prog = m_progress[poi.poiId];
             if (prog.state >= DiscoveryState::Visited)
+            {
                 continue;
+            }
 
             float dx = playerX - poi.x;
             float dy = playerY - poi.y;
@@ -148,7 +152,9 @@ namespace OpenWorld
     {
         auto it = m_progress.find(poiId);
         if (it == m_progress.end() || it->second.state >= DiscoveryState::Visited)
+        {
             return;
+        }
 
         it->second.state = DiscoveryState::Visited;
 
@@ -162,7 +168,9 @@ namespace OpenWorld
                                        "[OpenWorld] Discovered: " + poi.name + " (+" + std::to_string(poi.xpReward) +
                                            " XP)");
                 if (m_onDiscovered)
+                {
                     m_onDiscovered(poi);
+                }
                 break;
             }
         }
@@ -172,7 +180,9 @@ namespace OpenWorld
     {
         auto it = m_progress.find(poiId);
         if (it == m_progress.end() || it->second.state >= DiscoveryState::Revealed)
+        {
             return;
+        }
 
         it->second.state = DiscoveryState::Revealed;
     }
@@ -181,7 +191,9 @@ namespace OpenWorld
     {
         auto it = m_progress.find(poiId);
         if (it == m_progress.end())
+        {
             return;
+        }
 
         if (!it->second.secretFound)
         {
@@ -212,11 +224,15 @@ namespace OpenWorld
         auto fail = [&](const char* message)
         {
             if (error)
+            {
                 *error = message;
+            }
             return false;
         };
         if (state.progress.size() != m_progress.size() || state.progress.size() > 4096)
+        {
             return fail("POI progress does not match this world");
+        }
 
         std::unordered_map<uint32_t, POIProgress> restored;
         restored.reserve(state.progress.size());
@@ -226,7 +242,9 @@ namespace OpenWorld
             if (rawState >= static_cast<uint8_t>(DiscoveryState::Count) ||
                 m_progress.find(progress.poiId) == m_progress.end() ||
                 !restored.emplace(progress.poiId, progress).second)
+            {
                 return fail("invalid POI progress record");
+            }
         }
 
         m_progress = std::move(restored);
@@ -240,7 +258,9 @@ namespace OpenWorld
         for (const auto& [id, prog] : m_progress)
         {
             if (prog.state >= DiscoveryState::Visited)
+            {
                 ++count;
+            }
         }
         return count;
     }
@@ -250,7 +270,9 @@ namespace OpenWorld
         for (const auto& poi : m_pois)
         {
             if (poi.poiId == poiId)
+            {
                 return &poi;
+            }
         }
         return nullptr;
     }
@@ -258,15 +280,21 @@ namespace OpenWorld
     float OWExplorationSystem::GetOverallCompletion() const
     {
         if (m_pois.empty())
+        {
             return 0.0f;
+        }
 
         size_t completed = 0;
         for (const auto& [id, prog] : m_progress)
         {
             if (prog.state == DiscoveryState::Completed)
+            {
                 ++completed;
+            }
             else if (prog.state == DiscoveryState::Visited)
+            {
                 ++completed; // Visited counts as partial completion for non-secret POIs
+            }
         }
         return static_cast<float>(completed) / static_cast<float>(m_pois.size()) * 100.0f;
     }
@@ -279,22 +307,30 @@ namespace OpenWorld
         for (const auto& poi : m_pois)
         {
             if (poi.regionId != regionId)
+            {
                 continue;
+            }
 
             result.totalPOIs++;
             auto it = m_progress.find(poi.poiId);
             if (it != m_progress.end())
             {
                 if (it->second.state >= DiscoveryState::Visited)
+                {
                     result.discoveredPOIs++;
+                }
                 if (it->second.state == DiscoveryState::Completed)
+                {
                     result.completedPOIs++;
+                }
             }
         }
 
         if (result.totalPOIs > 0)
+        {
             result.completionPercent =
                 static_cast<float>(result.discoveredPOIs) / static_cast<float>(result.totalPOIs) * 100.0f;
+        }
 
         return result;
     }
@@ -345,7 +381,9 @@ namespace OpenWorld
     void OWExplorationSystem::Shutdown()
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         m_pois.clear();
         m_progress.clear();
@@ -357,7 +395,9 @@ namespace OpenWorld
     {
 #ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Exploration"))
+        {
             return;
+        }
 
         ImGui::Text("POIs: %zu | Discovered: %zu | XP: %u", m_pois.size(), GetDiscoveredCount(), m_totalXPEarned);
         ImGui::Text("Overall Completion: %.1f%%", GetOverallCompletion());
@@ -367,7 +407,9 @@ namespace OpenWorld
         {
             auto it = m_progress.find(poi.poiId);
             if (it == m_progress.end())
+            {
                 continue;
+            }
 
             const char* stateStr = "???";
             switch (it->second.state)

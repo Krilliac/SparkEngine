@@ -148,7 +148,9 @@ namespace Platformer
         for (auto& item : m_collectibles)
         {
             if (item.collected)
+            {
                 continue;
+            }
 
             float dx = item.posX - playerX;
             float dy = item.posY - playerY;
@@ -200,7 +202,9 @@ namespace Platformer
         for (const auto& item : m_collectibles)
         {
             if (item.collected)
+            {
                 progress.collectedIds.push_back(item.id);
+            }
         }
         std::ranges::sort(progress.collectedIds);
         progress.coins = m_coinsCollected;
@@ -213,12 +217,18 @@ namespace Platformer
     bool PlatformerCollectibleSystem::RestoreProgress(const CollectionProgress& progress)
     {
         if (progress.coins < 0 || progress.gems < 0 || progress.stars < 0 || progress.keys < 0)
+        {
             return false;
+        }
         if (!std::ranges::all_of(progress.collectedIds, [this](uint32_t id) { return HasCollectible(id); }))
+        {
             return false;
+        }
 
         for (auto& item : m_collectibles)
+        {
             item.collected = std::ranges::find(progress.collectedIds, item.id) != progress.collectedIds.end();
+        }
         m_coinsCollected = progress.coins;
         m_gemsCollected = progress.gems;
         m_starsCollected = progress.stars;
@@ -233,7 +243,9 @@ namespace Platformer
         // In a full implementation, this would reset only collectibles belonging
         // to the specified level. For the demo, reset all.
         for (auto& item : m_collectibles)
+        {
             item.collected = false;
+        }
     }
 
     LevelCollectionStats PlatformerCollectibleSystem::GetCurrentLevelStats() const
@@ -246,22 +258,30 @@ namespace Platformer
             case CollectibleType::Coin:
                 stats.totalCoins++;
                 if (item.collected)
+                {
                     stats.collectedCoins++;
+                }
                 break;
             case CollectibleType::Gem:
                 stats.totalGems++;
                 if (item.collected)
+                {
                     stats.collectedGems++;
+                }
                 break;
             case CollectibleType::Star:
                 stats.totalStars++;
                 if (item.collected)
+                {
                     stats.collectedStars++;
+                }
                 break;
             case CollectibleType::Key:
                 stats.totalKeys++;
                 if (item.collected)
+                {
                     stats.collectedKeys++;
+                }
                 break;
             default:
                 break;
@@ -273,7 +293,9 @@ namespace Platformer
     void PlatformerCollectibleSystem::Update(float deltaTime)
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         // Update bobbing/spinning animation timer
         m_animationTimer += deltaTime;
@@ -283,7 +305,9 @@ namespace Platformer
     {
         auto* world = m_context ? m_context->GetWorld() : nullptr;
         if (!world)
+        {
             return; // No engine world (the level-flow tests): collectibles work without meshes.
+        }
 
         // coin (tools/blender/author_platformer_kit.py) is a 0.5 m disc, pivot at its bottom edge, face towards +Z.
         // Collectible positions are item centres, so the mesh is lowered by half its height.
@@ -292,7 +316,9 @@ namespace Platformer
         {
             const CollectibleInstance& item = m_collectibles[index];
             if (item.type != CollectibleType::Coin)
+            {
                 continue;
+            }
 
             EntityID entity = world->CreateEntity("Platformer_Coin");
             world->AddComponent<Transform>(
@@ -312,7 +338,9 @@ namespace Platformer
             {
                 const auto entity = static_cast<EntityID>(entityId);
                 if (entityId != 0 && world->GetRegistry().valid(entity))
+                {
                     world->DestroyEntity(entity);
+                }
             }
         }
         m_coinEntities.clear();
@@ -321,7 +349,9 @@ namespace Platformer
     void PlatformerCollectibleSystem::Render()
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         // Coins are drawn by the engine's RenderSystem from the kit meshes PlaceCoinMeshes adds to the world; here
         // they spin, bob and disappear once collected.
@@ -335,11 +365,15 @@ namespace Platformer
             {
                 const auto entity = static_cast<EntityID>(m_coinEntities[index]);
                 if (m_coinEntities[index] == 0 || !world->GetRegistry().valid(entity))
+                {
                     continue;
+                }
                 auto* transform = world->GetComponent<Transform>(entity);
                 auto* renderer = world->GetComponent<MeshRenderer>(entity);
                 if (!transform || !renderer)
+                {
                     continue;
+                }
                 const CollectibleInstance& item = m_collectibles[index];
                 transform->position.y = item.posY - CoinMeshHalfHeight + bob;
                 transform->rotation.y = spin;
@@ -381,7 +415,9 @@ namespace Platformer
     {
 #ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Platformer Collectibles"))
+        {
             return;
+        }
 
         auto stats = GetCurrentLevelStats();
         ImGui::Text("Coins: %d / %d", stats.collectedCoins, stats.totalCoins);

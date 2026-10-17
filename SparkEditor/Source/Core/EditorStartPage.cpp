@@ -53,10 +53,14 @@ namespace SparkEditor
     {
         StartPageResult result;
         if (!m_open)
+        {
             return result;
+        }
 
         if (centreDockId != 0)
+        {
             ImGui::SetNextWindowDockID(centreDockId, ImGuiCond_FirstUseEver);
+        }
         if (m_focusRequested)
         {
             ImGui::SetNextWindowFocus();
@@ -80,7 +84,9 @@ namespace SparkEditor
             {
                 ImGui::TableNextColumn();
                 if (DrawRecentScenes(prefs, result.recentScene))
+                {
                     result.action = StartPageAction::OpenRecentScene;
+                }
                 ImGui::TableNextColumn();
                 DrawShortcutSheet();
                 ImGui::EndTable();
@@ -88,14 +94,18 @@ namespace SparkEditor
             else
             {
                 if (DrawRecentScenes(prefs, result.recentScene))
+                {
                     result.action = StartPageAction::OpenRecentScene;
+                }
                 DrawShortcutSheet();
             }
 
             ImGui::Spacing();
             ImGui::Separator();
             if (ImGui::Checkbox("Show at startup", &prefs.showStartPage))
+            {
                 result.preferencesChanged = true;
+            }
             ImGui::SameLine();
             Ui::SecondaryText("Reopen any time from Help > Welcome.");
         }
@@ -175,20 +185,30 @@ namespace SparkEditor
             const float width = ImGui::CalcTextSize(label, nullptr, true).x + style.FramePadding.x * 2.0f;
             ImGui::SameLine();
             if (ImGui::GetCursorScreenPos().x + width > rowRight)
+            {
                 ImGui::NewLine();
+            }
         };
 
         if (Ui::PrimaryButton(ICON_FA_FOLDER_OPEN "  Open Scene..."))
+        {
             action = StartPageAction::OpenScene;
+        }
         placeNext(ICON_FA_FILE "  New Scene");
         if (Ui::SecondaryButton(ICON_FA_FILE "  New Scene"))
+        {
             action = StartPageAction::NewScene;
+        }
         placeNext(ICON_FA_FOLDER_OPEN "  Open Project Folder");
         if (Ui::SecondaryButton(ICON_FA_FOLDER_OPEN "  Open Project Folder"))
+        {
             action = StartPageAction::OpenProjectFolder;
+        }
         placeNext(ICON_FA_UNDO "  Reset workspace layout");
         if (Ui::SecondaryButton(ICON_FA_UNDO "  Reset workspace layout"))
+        {
             action = StartPageAction::ResetLayout;
+        }
         ImGui::Spacing();
         return action;
     }
@@ -237,7 +257,9 @@ namespace SparkEditor
     {
         Ui::SubHeader("Keyboard shortcuts");
         if (!ImGui::BeginTable("##shortcuts", 2, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings))
+        {
             return;
+        }
         for (const ShortcutRow& row : kShortcuts)
         {
             ImGui::TableNextRow();

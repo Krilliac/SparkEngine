@@ -36,7 +36,7 @@ namespace SparkEditor
         ImVec2 TemplateCardSize()
         {
             const float line = ImGui::GetTextLineHeightWithSpacing();
-            return ImVec2(Spark::Ui::Em(9.0f), Spark::Ui::Px(12.0f) * 2.0f + line * 6.0f);
+            return {Spark::Ui::Em(9.0f), Spark::Ui::Px(12.0f) * 2.0f + line * 6.0f};
         }
     } // namespace
 

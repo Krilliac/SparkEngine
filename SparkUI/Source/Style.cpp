@@ -92,7 +92,7 @@ namespace Spark::Ui
 
     ImVec4 ToImVec4(Rgba c) noexcept
     {
-        return ImVec4(c.r, c.g, c.b, c.a);
+        return {c.r, c.g, c.b, c.a};
     }
 
     float ClampScale(float dpiScale, float userScale) noexcept

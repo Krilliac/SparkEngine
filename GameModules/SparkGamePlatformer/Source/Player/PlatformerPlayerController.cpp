@@ -41,7 +41,9 @@ namespace Platformer
     void PlatformerPlayerController::Update(float deltaTime)
     {
         if (!m_initialized || !std::isfinite(deltaTime) || deltaTime <= 0.0f)
+        {
             return;
+        }
 
         ProcessInput(deltaTime);
         UpdateInvincibility(deltaTime);
@@ -51,14 +53,18 @@ namespace Platformer
     void PlatformerPlayerController::FixedUpdate(float fixedDeltaTime)
     {
         if (!m_initialized || !std::isfinite(fixedDeltaTime) || fixedDeltaTime <= 0.0f)
+        {
             return;
+        }
 
         // Game over: restart at the last checkpoint once the death delay elapses (no R key needed).
         if (m_state == PlayerState::Dead)
         {
             m_deathRestartTimer -= fixedDeltaTime;
             if (m_deathRestartTimer <= 0.0f)
+            {
                 Respawn();
+            }
             return;
         }
 
@@ -79,7 +85,9 @@ namespace Platformer
         ApplyGravity(fixedDeltaTime);
         ApplyMovement(fixedDeltaTime);
         if (HandleKillPlane())
+        {
             return;
+        }
         UpdateState();
     }
 
@@ -89,7 +97,9 @@ namespace Platformer
 
         InputManager* input = m_context ? m_context->GetInput() : nullptr;
         if (!input || m_externalInputDriven)
+        {
             return;
+        }
 
         constexpr int kShift = 0x10;
         constexpr int kControl = 0x11;
@@ -101,11 +111,17 @@ namespace Platformer
         const bool groundPoundHeld = input->IsKeyDown(kControl);
         const bool respawnHeld = input->IsKeyDown('R');
         if (dashHeld && !m_dashInputHeld)
+        {
             RequestDash();
+        }
         if (groundPoundHeld && !m_groundPoundInputHeld)
+        {
             RequestGroundPound();
+        }
         if (respawnHeld && !m_respawnInputHeld)
+        {
             Respawn();
+        }
         m_dashInputHeld = dashHeld;
         m_groundPoundInputHeld = groundPoundHeld;
         m_respawnInputHeld = respawnHeld;
@@ -114,7 +130,9 @@ namespace Platformer
     void PlatformerPlayerController::ApplyGravity(float fixedDeltaTime)
     {
         if (m_state == PlayerState::Dashing)
+        {
             return;
+        }
 
         // Wall slide has reduced gravity
         if (m_state == PlayerState::WallSliding)
@@ -154,7 +172,9 @@ namespace Platformer
         // Apply speed boost if active
         float currentMoveSpeed = m_moveSpeed;
         if (m_speedBoostTimer > 0.0f)
+        {
             currentMoveSpeed *= 1.5f;
+        }
 
         const float maxHorizontalSpeed = currentMoveSpeed * (m_runHeld ? m_runMultiplier : 1.0f);
         const float targetVelocity = m_moveInput * maxHorizontalSpeed;
@@ -186,7 +206,9 @@ namespace Platformer
         }
 
         if (m_coyoteTimer > 0.0f)
+        {
             m_coyoteTimer -= fixedDeltaTime;
+        }
     }
 
     void PlatformerPlayerController::UpdateJumpBuffer(float fixedDeltaTime)
@@ -197,7 +219,9 @@ namespace Platformer
             m_jumpRequested = false;
         }
         else if (m_jumpBufferTimer > 0.0f)
+        {
             m_jumpBufferTimer -= fixedDeltaTime;
+        }
     }
 
     void PlatformerPlayerController::HandleJump()
@@ -242,13 +266,19 @@ namespace Platformer
         (void)fixedDeltaTime;
 
         if (!m_abilities.wallJump)
+        {
             return;
+        }
 
         // Leave wall states once the wall contact or the upward launch ends.
         if (m_state == PlayerState::WallSliding && (m_grounded || !m_touchingWall))
+        {
             TransitionState(m_grounded ? PlayerState::Idle : PlayerState::Falling);
+        }
         if (m_state == PlayerState::WallJumping && (m_grounded || m_velocity.y <= 0.0f))
+        {
             TransitionState(m_grounded ? PlayerState::Idle : PlayerState::Falling);
+        }
 
         // Wall slide: touching wall + falling + holding toward wall
         if (m_touchingWall && !m_grounded && m_velocity.y < 0.0f)
@@ -301,7 +331,9 @@ namespace Platformer
 
         // Dash cooldown
         if (m_dashCooldownTimer > 0.0f)
+        {
             m_dashCooldownTimer -= fixedDeltaTime;
+        }
     }
 
     void PlatformerPlayerController::HandleGroundPound()
@@ -340,18 +372,26 @@ namespace Platformer
         if (m_grounded)
         {
             if (std::abs(m_velocity.x) > 0.5f)
+            {
                 TransitionState(PlayerState::Running);
+            }
             else
+            {
                 TransitionState(PlayerState::Idle);
+            }
         }
         else
         {
             if (m_velocity.y > 0.0f)
             {
                 if (m_hasDoubleJumped)
+                {
                     TransitionState(PlayerState::DoubleJumping);
+                }
                 else
+                {
                     TransitionState(PlayerState::Jumping);
+                }
             }
             else
             {
@@ -363,7 +403,9 @@ namespace Platformer
     void PlatformerPlayerController::TransitionState(PlayerState newState)
     {
         if (m_state == newState)
+        {
             return;
+        }
 
         m_state = newState;
 
@@ -374,7 +416,9 @@ namespace Platformer
     void PlatformerPlayerController::UpdateInvincibility(float deltaTime)
     {
         if (!m_invincible)
+        {
             return;
+        }
 
         m_invincibilityTimer -= deltaTime;
         if (m_invincibilityTimer <= 0.0f)
@@ -387,30 +431,44 @@ namespace Platformer
     void PlatformerPlayerController::UpdatePowerUps(float deltaTime)
     {
         if (m_speedBoostTimer > 0.0f)
+        {
             m_speedBoostTimer -= deltaTime;
+        }
         if (m_magnetTimer > 0.0f)
+        {
             m_magnetTimer -= deltaTime;
+        }
         if (m_shieldTimer > 0.0f)
         {
             m_shieldTimer -= deltaTime;
             if (m_shieldTimer <= 0.0f)
+            {
                 m_hasShield = false;
+            }
         }
         if (m_ghostTimer > 0.0f)
+        {
             m_ghostTimer -= deltaTime;
+        }
     }
 
     bool PlatformerPlayerController::TakeDamage(int amount)
     {
         if (amount <= 0)
+        {
             return false;
+        }
 
         if (m_invincible || m_state == PlayerState::Dead)
+        {
             return false;
+        }
 
         // Ghost mode ignores damage
         if (m_ghostTimer > 0.0f)
+        {
             return false;
+        }
 
         // Shield absorbs hit
         if (m_hasShield)
@@ -467,7 +525,9 @@ namespace Platformer
         m_groundPoundRequested = false;
 
         if (m_lives <= 0)
+        {
             m_lives = DEFAULT_LIVES; // Restart with default lives on game over
+        }
         Spark::ModuleLog::Info(m_context, "[Platformer Player] Respawned at ({:.0f}, {:.0f}, {:.0f})", m_position.x,
                                m_position.y, m_position.z);
     }
@@ -516,7 +576,9 @@ namespace Platformer
     void PlatformerPlayerController::ApplyPowerUp(PowerUpType type, float duration)
     {
         if (!std::isfinite(duration) || duration <= 0.0f)
+        {
             return;
+        }
 
         switch (type)
         {
@@ -547,13 +609,17 @@ namespace Platformer
         m_moveInput = std::clamp(horizontalAxis, -1.0f, 1.0f);
         m_runHeld = runHeld;
         if (std::abs(m_moveInput) > 0.01f)
+        {
             m_facingDirection = std::copysign(1.0f, m_moveInput);
+        }
     }
 
     void PlatformerPlayerController::SetJumpInput(bool held)
     {
         if (held && !m_jumpHeld)
+        {
             m_jumpRequested = true;
+        }
         m_jumpHeld = held;
     }
 
@@ -570,23 +636,31 @@ namespace Platformer
     void PlatformerPlayerController::ApplyImpulse(float horizontal, float vertical)
     {
         if (m_state == PlayerState::Dead)
+        {
             return;
+        }
         m_velocity.x += horizontal;
         m_velocity.y += vertical;
         if (vertical > 0.0f)
+        {
             m_grounded = false;
+        }
     }
 
     void PlatformerPlayerController::GrantLives(int amount)
     {
         if (amount > 0)
+        {
             m_lives = (amount >= MAX_LIVES - m_lives) ? MAX_LIVES : m_lives + amount;
+        }
     }
 
     void PlatformerPlayerController::Render()
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         // In a full implementation, this would render the player model,
         // ability VFX (dash trail, shield bubble, ghost transparency),
@@ -643,18 +717,30 @@ namespace Platformer
 
         status += "Abilities:";
         if (m_abilities.doubleJump)
+        {
             status += " DoubleJump";
+        }
         if (m_abilities.wallJump)
+        {
             status += " WallJump";
+        }
         if (m_abilities.dash)
+        {
             status += " Dash";
+        }
         if (m_abilities.groundPound)
+        {
             status += " GroundPound";
+        }
         if (m_abilities.climb)
+        {
             status += " Climb";
+        }
         if (!m_abilities.doubleJump && !m_abilities.wallJump && !m_abilities.dash && !m_abilities.groundPound &&
             !m_abilities.climb)
+        {
             status += " None";
+        }
         status += "\n";
 
         return status;
@@ -664,7 +750,9 @@ namespace Platformer
     {
 #ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Platformer Player"))
+        {
             return;
+        }
 
         ImGui::Text("State: %s", GetStateString().c_str());
         ImGui::Text("Position: (%.2f, %.2f, %.2f)", m_position.x, m_position.y, m_position.z);
@@ -684,15 +772,25 @@ namespace Platformer
         ImGui::Separator();
 
         if (m_invincible)
+        {
             ImGui::TextColored(ImVec4(1, 1, 0, 1), "INVINCIBLE (%.1fs)", m_invincibilityTimer);
+        }
         if (m_speedBoostTimer > 0.0f)
+        {
             ImGui::TextColored(ImVec4(0, 1, 1, 1), "Speed Boost (%.1fs)", m_speedBoostTimer);
+        }
         if (m_magnetTimer > 0.0f)
+        {
             ImGui::TextColored(ImVec4(1, 0, 1, 1), "Magnet (%.1fs)", m_magnetTimer);
+        }
         if (m_hasShield)
+        {
             ImGui::TextColored(ImVec4(0, 0.5f, 1, 1), "Shield (%.1fs)", m_shieldTimer);
+        }
         if (m_ghostTimer > 0.0f)
+        {
             ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1), "Ghost Mode (%.1fs)", m_ghostTimer);
+        }
 #endif
     }
 

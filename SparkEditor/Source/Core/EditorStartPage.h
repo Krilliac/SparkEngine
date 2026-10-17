@@ -17,6 +17,7 @@
 
 #include "EditorPreferences.h"
 
+#include <cstdint>
 #include <string>
 
 namespace SparkEditor
@@ -25,7 +26,7 @@ namespace SparkEditor
     /**
      * @brief What the user picked on the Start page this frame.
      */
-    enum class StartPageAction
+    enum class StartPageAction : std::uint8_t
     {
         None,
         OpenScene,         ///< "Open Scene..." (file dialog)

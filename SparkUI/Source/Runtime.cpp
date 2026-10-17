@@ -231,7 +231,7 @@ namespace Spark::Ui
 
     ImVec2 Px2(float x, float y)
     {
-        return ImVec2(Px(x), Px(y));
+        return {Px(x), Px(y)};
     }
 
     float Em(float ems)

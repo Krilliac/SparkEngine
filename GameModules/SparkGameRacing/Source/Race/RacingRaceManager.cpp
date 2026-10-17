@@ -30,7 +30,9 @@ namespace Racing
     void RacingRaceManager::Update(float deltaTime)
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         switch (m_state)
         {
@@ -100,7 +102,9 @@ namespace Racing
         for (auto& racer : m_racers)
         {
             if (racer.vehicleId != vehicleId || racer.finished)
+            {
                 continue;
+            }
 
             // Checkpoints must be crossed in order
             uint32_t expectedNext = racer.lastCheckpoint + 1;
@@ -118,14 +122,18 @@ namespace Racing
         for (auto& racer : m_racers)
         {
             if (racer.vehicleId != vehicleId || racer.finished)
+            {
                 continue;
+            }
 
             racer.currentLap++;
             racer.lapTimes.push_back(racer.currentLapTime);
 
             // Update best lap
             if (racer.bestLapTime < 0.0f || racer.currentLapTime < racer.bestLapTime)
+            {
                 racer.bestLapTime = racer.currentLapTime;
+            }
 
             racer.currentLapTime = 0.0f;
             racer.lastCheckpoint = 0;
@@ -149,14 +157,18 @@ namespace Racing
         for (auto& racer : m_racers)
         {
             if (racer.vehicleId != vehicleId || racer.finished || racer.dnf)
+            {
                 continue;
+            }
 
             racer.dnf = true;
             stateChanged = true;
             break;
         }
         if (stateChanged)
+        {
             CheckFinishConditions();
+        }
     }
 
     void RacingRaceManager::UpdateRacerDistance(uint32_t vehicleId, float distance)
@@ -181,7 +193,9 @@ namespace Racing
         for (const auto& racer : m_racers)
         {
             if (racer.vehicleId == vehicleId)
+            {
                 return &racer;
+            }
         }
         return nullptr;
     }
@@ -191,7 +205,9 @@ namespace Racing
         for (const auto& racer : m_racers)
         {
             if (racer.isPlayer)
+            {
                 return racer.position;
+            }
         }
         return 0;
     }
@@ -201,7 +217,9 @@ namespace Racing
         for (const auto& racer : m_racers)
         {
             if (racer.isPlayer)
+            {
                 return racer.bestLapTime;
+            }
         }
         return -1.0f;
     }
@@ -246,13 +264,23 @@ namespace Racing
             }
             playerCount += racer.isPlayer ? 1u : 0u;
             if (playerCount > 1)
+            {
                 return false;
+            }
             for (float split : racer.splitTimes)
+            {
                 if (!std::isfinite(split) || split < 0.0f)
+                {
                     return false;
+                }
+            }
             for (float lap : racer.lapTimes)
+            {
                 if (!std::isfinite(lap) || lap < 0.0f)
+                {
                     return false;
+                }
+            }
 
             // Lap records must be the ones OnLapCompleted produces: one lap time per completed lap, the best lap
             // is the fastest of them (-1 before the first lap), and a racer finishes exactly on the final lap at
@@ -321,11 +349,17 @@ namespace Racing
             result += "  P" + std::to_string(racer.position) + " - " + racer.name;
             result += " | Lap " + std::to_string(racer.currentLap) + "/" + std::to_string(m_totalLaps);
             if (racer.bestLapTime >= 0.0f)
+            {
                 result += " | Best: " + std::to_string(racer.bestLapTime) + "s";
+            }
             if (racer.finished)
+            {
                 result += " [FINISHED]";
+            }
             if (racer.dnf)
+            {
                 result += " [DNF]";
+            }
             result += "\n";
         }
         return result;
@@ -334,7 +368,9 @@ namespace Racing
     std::string RacingRaceManager::GetResultsString() const
     {
         if (m_state != RaceState::Finished)
+        {
             return "Race not finished yet.\n";
+        }
 
         std::string result = "=== Race Results ===\n";
         for (const auto& racer : m_racers)
@@ -342,9 +378,13 @@ namespace Racing
             result += "  P" + std::to_string(racer.position) + " - " + racer.name;
             result += " | Time: " + std::to_string(racer.finishTime) + "s";
             if (racer.bestLapTime >= 0.0f)
+            {
                 result += " | Best Lap: " + std::to_string(racer.bestLapTime) + "s";
+            }
             if (m_mode == RaceMode::Championship)
+            {
                 result += " | Points: " + std::to_string(GetPointsForPosition(racer.position));
+            }
             result += "\n";
         }
         return result;
@@ -383,7 +423,9 @@ namespace Racing
             for (auto& racer : m_racers)
             {
                 if (!racer.finished)
+                {
                     racer.dnf = true;
+                }
             }
             m_state = RaceState::Finished;
             AwardChampionshipPoints();
@@ -395,7 +437,9 @@ namespace Racing
         // Sort by: finished first (by finish time), then by lap count (desc), then by distance along track (desc)
         std::vector<size_t> indices(m_racers.size());
         for (size_t i = 0; i < indices.size(); ++i)
+        {
             indices[i] = i;
+        }
 
         std::sort(indices.begin(), indices.end(),
                   [this](size_t a, size_t b)
@@ -405,30 +449,42 @@ namespace Racing
 
                       // Finished racers first, sorted by finish time
                       if (ra.finished != rb.finished)
+                      {
                           return ra.finished;
+                      }
                       if (ra.finished)
+                      {
                           return ra.finishTime < rb.finishTime;
+                      }
 
                       // DNF last
                       if (ra.dnf != rb.dnf)
+                      {
                           return rb.dnf;
+                      }
 
                       // Higher lap count first
                       if (ra.currentLap != rb.currentLap)
+                      {
                           return ra.currentLap > rb.currentLap;
+                      }
 
                       // Greater distance along track first
                       return ra.distanceAlongTrack > rb.distanceAlongTrack;
                   });
 
         for (size_t i = 0; i < indices.size(); ++i)
+        {
             m_racers[indices[i]].position = static_cast<uint32_t>(i) + 1;
+        }
     }
 
     void RacingRaceManager::CheckFinishConditions()
     {
         if (m_state == RaceState::Finished)
+        {
             return;
+        }
 
         bool allDone = true;
         for (const auto& racer : m_racers)
@@ -453,7 +509,9 @@ namespace Racing
     void RacingRaceManager::AwardChampionshipPoints()
     {
         if (m_mode != RaceMode::Championship)
+        {
             return;
+        }
 
         for (auto& racer : m_racers)
         {
@@ -468,7 +526,9 @@ namespace Racing
                 {
                     entry.totalPoints += points;
                     if (racer.position == 1)
+                    {
                         entry.wins++;
+                    }
                     found = true;
                     break;
                 }
@@ -490,7 +550,9 @@ namespace Racing
     {
         constexpr uint32_t pointsTable[] = {25, 18, 15, 12, 10, 8, 6, 4, 2, 1};
         if (position == 0 || position > 10)
+        {
             return 0;
+        }
         return pointsTable[position - 1];
     }
 
@@ -498,7 +560,9 @@ namespace Racing
     {
 #ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Racing Race Manager"))
+        {
             return;
+        }
 
         const char* stateNames[] = {"Countdown", "Racing", "Paused", "Finished", "DNF"};
         int stateIdx = static_cast<int>(m_state);
@@ -507,7 +571,9 @@ namespace Racing
         ImGui::Text("State: %s", stateName);
 
         if (m_state == RaceState::Countdown)
+        {
             ImGui::Text("Countdown: %.1f", m_countdownTimer);
+        }
 
         ImGui::Text("Race Time: %.2f s", m_raceTime);
         ImGui::Text("Laps: %u", m_totalLaps);

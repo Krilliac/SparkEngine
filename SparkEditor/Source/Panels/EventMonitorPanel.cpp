@@ -38,13 +38,17 @@ namespace SparkEditor
     void EventMonitorPanel::Update(float deltaTime)
     {
         if (!m_paused)
+        {
             m_elapsed += deltaTime;
+        }
     }
 
     void EventMonitorPanel::Render()
     {
         if (!IsVisible())
+        {
             return;
+        }
 
         if (BeginPanel())
         {
@@ -65,11 +69,15 @@ namespace SparkEditor
     void EventMonitorPanel::RenderToolbar()
     {
         if (!Spark::Ui::BeginPanelToolbar("EventMonitorToolbar"))
+        {
             return;
+        }
 
         if (Spark::Ui::IconButton("pause", m_paused ? ICON_FA_PLAY : ICON_FA_PAUSE,
                                   m_paused ? "Resume capture" : "Pause capture", m_paused))
+        {
             m_paused = !m_paused;
+        }
 
         ImGui::SameLine();
         if (Spark::Ui::IconButton("clear", ICON_FA_TRASH, "Clear the event log"))
@@ -133,11 +141,15 @@ namespace SparkEditor
             {
                 // Text filter
                 if (hasFilter && strstr(evt.eventType, m_filterText) == nullptr)
+                {
                     continue;
+                }
 
                 // Category filter
                 if (m_categoryFilter > 0 && static_cast<int>(evt.category) != m_categoryFilter)
+                {
                     continue;
+                }
 
                 ImGui::TableNextRow();
 
@@ -164,14 +176,18 @@ namespace SparkEditor
 
             // The table scrolls itself (ScrollY), so auto-scroll targets its inner window.
             if (m_autoScroll)
+            {
                 ImGui::SetScrollHereY(1.0f);
+            }
 
             ImGui::EndTable();
         }
 
         // Enforce circular buffer cap
         while (static_cast<int>(m_events.size()) > m_maxEntries)
+        {
             m_events.erase(m_events.begin());
+        }
     }
 
     const char* EventMonitorPanel::GetCategoryName(EventCategory category)

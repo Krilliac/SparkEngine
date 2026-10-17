@@ -36,7 +36,9 @@ namespace SparkEditor
         {
             const Spark::Ui::Status status = m_statusIsError ? Spark::Ui::Status::Error : Spark::Ui::Status::Success;
             if (Spark::Ui::Banner(status, m_statusMsg.c_str(), true))
+            {
                 m_statusMsg.clear();
+            }
             ImGui::Separator();
         }
         if (!m_loaded)
@@ -47,9 +49,13 @@ namespace SparkEditor
         }
 
         if (m_selected >= 0 && m_selected < static_cast<int>(m_regions.size()))
+        {
             RenderRegionEditor();
+        }
         else
+        {
             RenderContinentEditor();
+        }
 
         ImGui::Separator();
         RenderValidationAndSave();
@@ -75,9 +81,13 @@ namespace SparkEditor
             markDirty();
         }
         if (ImGui::DragFloat("Size (m)", &m_continent.sizeM, 32.0f, 256.0f, 65536.0f, "%.0f"))
+        {
             markDirty();
+        }
         if (ImGui::DragFloat("Flux tick (s)", &m_continent.fluxTickSec, 1.0f, 1.0f, 3600.0f, "%.0f"))
+        {
             markDirty();
+        }
         ImGui::Spacing();
         ImGui::TextWrapped("Select a region on the map to edit it. Enable Link mode to toggle conduits.");
     }
@@ -109,8 +119,12 @@ namespace SparkEditor
         // Tier dropdown.
         int tierIdx = -1;
         for (int i = 0; i < 4; ++i)
+        {
             if (r.tier == kTierNames[i])
+            {
                 tierIdx = i;
+            }
+        }
         const char* tierPreview = tierIdx >= 0 ? kTierNames[tierIdx] : r.tier.c_str();
         if (ImGui::BeginCombo("Tier", tierPreview))
         {
@@ -169,7 +183,9 @@ namespace SparkEditor
             markDirty();
         }
         if (ImGui::Checkbox("Has hex coords", &r.hasHex))
+        {
             markDirty();
+        }
         if (r.hasHex)
         {
             int hex[2] = {r.hexQ, r.hexR};
@@ -181,9 +197,13 @@ namespace SparkEditor
             }
         }
         if (ImGui::DragFloat("Capture (s)", &r.captureSec, 1.0f, 0.0f, 3600.0f, "%.0f"))
+        {
             markDirty();
+        }
         if (ImGui::DragInt("Flux per tick", &r.fluxPerTick, 0.1f, 0, 100))
+        {
             markDirty();
+        }
 
         // Capture points.
         ImGui::Spacing();
@@ -192,7 +212,9 @@ namespace SparkEditor
         {
             ImGui::PushID(static_cast<int>(j));
             if (ImGui::DragFloat2("##cp", r.capturePoints[j].data(), 2.0f, 0.0f, m_continent.sizeM, "%.0f"))
+            {
                 markDirty();
+            }
             ImGui::SameLine();
             if (ImGui::SmallButton("X##cp"))
             {
@@ -216,7 +238,9 @@ namespace SparkEditor
         {
             ImGui::PushID(1000 + static_cast<int>(j));
             if (ImGui::DragFloat2("##sp", r.spawns[j].data(), 2.0f, 0.0f, m_continent.sizeM, "%.0f"))
+            {
                 markDirty();
+            }
             ImGui::SameLine();
             if (ImGui::SmallButton("X##sp"))
             {
@@ -238,13 +262,17 @@ namespace SparkEditor
         if (ImGui::Checkbox("Vehicle terminal", &r.hasVehicleTerminal))
         {
             if (r.hasVehicleTerminal && r.vehicleTerminal[0] == 0.0f && r.vehicleTerminal[1] == 0.0f)
+            {
                 r.vehicleTerminal = {r.centerX, r.centerZ + 60.0f};
+            }
             markDirty();
         }
         if (r.hasVehicleTerminal)
         {
             if (ImGui::DragFloat2("Terminal X/Z", r.vehicleTerminal.data(), 2.0f, 0.0f, m_continent.sizeM, "%.0f"))
+            {
                 markDirty();
+            }
         }
 
         // Conduits of this region.
@@ -254,7 +282,9 @@ namespace SparkEditor
         {
             const auto& c = m_conduits[i];
             if (c.first != r.id && c.second != r.id)
+            {
                 continue;
+            }
             const int otherId = (c.first == r.id) ? c.second : c.first;
             const char* otherKey = (otherId >= 0 && otherId < static_cast<int>(m_regions.size()))
                                        ? m_regions[static_cast<size_t>(otherId)].key.c_str()
@@ -276,7 +306,9 @@ namespace SparkEditor
     void RegionMapEditorPanel::RenderValidationAndSave()
     {
         if (ImGui::Button("Validate"))
+        {
             RunValidation();
+        }
         ImGui::SameLine();
         const bool blocked = !m_validationRan || !m_violations.empty();
         if (ImGui::Button("Save regions.json"))
@@ -306,7 +338,9 @@ namespace SparkEditor
             }
         }
         if (blocked && ImGui::IsItemHovered())
+        {
             ImGui::SetTooltip("Validation runs automatically on save; violations block it unless overridden.");
+        }
 
         if (m_validationRan)
         {
@@ -320,7 +354,9 @@ namespace SparkEditor
                                       "%d violation(s):", static_cast<int>(m_violations.size()));
                 ImGui::BeginChild("violation_list", Spark::Ui::Px2(0.0f, 140.0f), true);
                 for (const std::string& v : m_violations)
+                {
                     ImGui::TextWrapped("- %s", v.c_str());
+                }
                 ImGui::EndChild();
                 ImGui::Checkbox("I know what I am doing (save despite violations)", &m_overrideSave);
             }

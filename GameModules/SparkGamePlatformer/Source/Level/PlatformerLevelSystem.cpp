@@ -27,7 +27,9 @@ namespace Platformer
         // Initialize progress tracking for each level
         m_progress.resize(m_levels.size());
         if (!m_progress.empty())
+        {
             m_progress[0].unlocked = true; // First level always unlocked
+        }
 
         m_initialized = true;
 
@@ -260,7 +262,9 @@ namespace Platformer
     bool PlatformerLevelSystem::LoadLevel(uint32_t index)
     {
         if (index >= m_levels.size())
+        {
             return false;
+        }
 
         if (index < m_progress.size() && !m_progress[index].unlocked)
         {
@@ -282,7 +286,9 @@ namespace Platformer
     SpawnPoint PlatformerLevelSystem::GetCurrentSpawnPoint() const
     {
         if (m_currentLevel < m_levels.size())
+        {
             return m_levels[m_currentLevel].spawnPoint;
+        }
         return {0.0f, 1.0f, 0.0f};
     }
 
@@ -294,7 +300,9 @@ namespace Platformer
     bool PlatformerLevelSystem::RestoreProgress(const std::vector<LevelProgress>& progress)
     {
         if (progress.size() != m_levels.size())
+        {
             return false;
+        }
 
         m_progress = progress;
         return true;
@@ -304,14 +312,18 @@ namespace Platformer
     {
         int total = 0;
         for (const auto& prog : m_progress)
+        {
             total += prog.starsEarned;
+        }
         return total;
     }
 
     void PlatformerLevelSystem::CompleteLevel(float completionTime, int deaths)
     {
         if (m_currentLevel >= m_levels.size() || m_currentLevel >= m_progress.size())
+        {
             return;
+        }
 
         auto& prog = m_progress[m_currentLevel];
         prog.completed = true;
@@ -320,11 +332,17 @@ namespace Platformer
 
         // Only update if better than previous attempt
         if (stars > prog.starsEarned)
+        {
             prog.starsEarned = stars;
+        }
         if (prog.bestTime <= 0.0f || completionTime < prog.bestTime)
+        {
             prog.bestTime = completionTime;
+        }
         if (prog.bestDeaths < 0 || deaths < prog.bestDeaths)
+        {
             prog.bestDeaths = deaths;
+        }
 
         // Unlock next level if star requirements met
         int totalStars = GetTotalStarsEarned();
@@ -332,7 +350,9 @@ namespace Platformer
         for (size_t i = 0; i < unlockCount; ++i)
         {
             if (static_cast<int>(m_levels[i].requiredStarsToUnlock) <= totalStars)
+            {
                 m_progress[i].unlocked = true;
+            }
         }
 
         m_levelActive = false;
@@ -345,14 +365,18 @@ namespace Platformer
     {
         (void)playerY;
         if (!m_levelActive || m_currentLevel >= m_levels.size())
+        {
             return false;
+        }
 
         const auto& goal = m_levels[m_currentLevel].goalPoint;
         const float dx = playerX - goal.x;
         const float dz = playerZ - goal.z;
         constexpr float kGoalRadius = 3.0f;
         if (dx * dx + dz * dz > kGoalRadius * kGoalRadius)
+        {
             return false;
+        }
 
         CompleteLevel(m_levelTimer, deaths);
         return true;
@@ -361,17 +385,25 @@ namespace Platformer
     int PlatformerLevelSystem::CalculateStars(uint32_t levelIndex, float time, int deaths) const
     {
         if (levelIndex >= m_levels.size())
+        {
             return 0;
+        }
 
         const auto& thresholds = m_levels[levelIndex].starThresholds;
         int stars = 0;
 
         if (time <= thresholds.timeStar3 && deaths <= thresholds.maxDeathsStar)
+        {
             stars = 3;
+        }
         else if (time <= thresholds.timeStar2)
+        {
             stars = 2;
+        }
         else if (time <= thresholds.timeStar1)
+        {
             stars = 1;
+        }
 
         return stars;
     }
@@ -379,16 +411,22 @@ namespace Platformer
     void PlatformerLevelSystem::Update(float deltaTime)
     {
         if (!m_initialized || !m_levelActive)
+        {
             return;
+        }
 
         if (std::isfinite(deltaTime) && deltaTime > 0.0f)
+        {
             m_levelTimer += deltaTime;
+        }
     }
 
     void PlatformerLevelSystem::Render()
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         // In a full implementation, this would render the level geometry:
         // - Platform meshes with theme-appropriate materials
@@ -434,7 +472,9 @@ namespace Platformer
             }
 
             if (i == m_currentLevel && m_levelActive)
+            {
                 list += " *ACTIVE*";
+            }
             list += "\n";
         }
         list += "Total stars: " + std::to_string(GetTotalStarsEarned()) + "\n";
@@ -445,13 +485,17 @@ namespace Platformer
     {
 #ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Platformer Levels"))
+        {
             return;
+        }
 
         ImGui::Text("Levels: %zu", m_levels.size());
         ImGui::Text("Total Stars: %d", GetTotalStarsEarned());
         ImGui::Text("Current Level: %u", m_currentLevel);
         if (m_levelActive)
+        {
             ImGui::Text("Timer: %.1fs", m_levelTimer);
+        }
         ImGui::Separator();
 
         size_t debugCount = std::min(m_levels.size(), m_progress.size());
@@ -463,7 +507,9 @@ namespace Platformer
             ImGui::PushID(static_cast<int>(i));
             std::string label = level.name;
             if (!prog.unlocked)
+            {
                 label += " [LOCKED]";
+            }
 
             if (ImGui::TreeNode(label.c_str()))
             {
@@ -473,7 +519,9 @@ namespace Platformer
                 ImGui::Text("Secret: %s", level.hasSecretArea ? (prog.secretFound ? "Found" : "Hidden") : "None");
 
                 if (prog.unlocked && ImGui::Button("Load"))
+                {
                     LoadLevel(static_cast<uint32_t>(i));
+                }
 
                 ImGui::TreePop();
             }

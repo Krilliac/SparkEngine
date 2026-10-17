@@ -46,7 +46,9 @@ namespace RPG
                                          ? (hour >= entry.startHour && hour < entry.endHour)
                                          : (hour >= entry.startHour || hour < entry.endHour);
                 if (inRange)
+                {
                     return static_cast<int>(index);
+                }
             }
             return -1;
         }
@@ -102,7 +104,9 @@ namespace RPG
         for (const auto& [id, npc] : m_npcs)
         {
             if (std::find(npcAreas.begin(), npcAreas.end(), npc.areaId) == npcAreas.end())
+            {
                 npcAreas.push_back(npc.areaId);
+            }
         }
         std::sort(npcAreas.begin(), npcAreas.end());
 
@@ -182,7 +186,9 @@ namespace RPG
         for (auto& [id, npc] : m_npcs)
         {
             if (npc.areaId != areaId)
+            {
                 continue;
+            }
             npc.route.clear();
             npc.routeIndex = 0;
             npc.activeScheduleEntry = -1;
@@ -227,7 +233,9 @@ namespace RPG
 
         npc.route.reserve(path.path.size());
         for (const Spark::AI::PathPoint& point : path.path)
+        {
             npc.route.push_back(point.position);
+        }
         return true;
     }
 
@@ -387,7 +395,9 @@ namespace RPG
         for (const auto& [id, npc] : m_npcs)
         {
             if (npc.areaId == areaId)
+            {
                 result.push_back(&npc);
+            }
         }
         return result;
     }
@@ -438,7 +448,9 @@ namespace RPG
     {
         const NPCData* npc = GetNPC(npcId);
         if (!npc)
+        {
             return "No NPC with id " + std::to_string(npcId);
+        }
 
         const char* behavior = "Unknown";
         switch (npc->currentBehavior)
@@ -476,15 +488,21 @@ namespace RPG
     {
         auto* npc = GetNPC(npcId);
         if (!npc)
+        {
             return;
+        }
 
         npc->dispositionValue += change;
 
         // Clamp to 0-100
         if (npc->dispositionValue < 0)
+        {
             npc->dispositionValue = 0;
+        }
         if (npc->dispositionValue > 100)
+        {
             npc->dispositionValue = 100;
+        }
 
         npc->disposition = GetDispositionTier(npc->dispositionValue);
 
@@ -497,9 +515,13 @@ namespace RPG
     NPCDisposition RPGNPCSystem::GetDispositionTier(int value) const
     {
         if (value < 25)
+        {
             return NPCDisposition::Hostile;
+        }
         if (value < 60)
+        {
             return NPCDisposition::Neutral;
+        }
         return NPCDisposition::Friendly;
     }
 
@@ -535,7 +557,9 @@ namespace RPG
     {
         if (!std::isfinite(snapshot.worldTime) || snapshot.worldTime < 0.0f || !std::isfinite(snapshot.worldHour) ||
             snapshot.worldHour < 0.0f || snapshot.worldHour >= 24.0f || snapshot.npcs.size() != m_npcs.size())
+        {
             return false;
+        }
 
         std::vector<uint32_t> seen;
         seen.reserve(snapshot.npcs.size());
@@ -543,7 +567,9 @@ namespace RPG
         {
             const auto npc = m_npcs.find(state.npcId);
             if (npc == m_npcs.end() || std::find(seen.begin(), seen.end(), state.npcId) != seen.end())
+            {
                 return false;
+            }
             seen.push_back(state.npcId);
 
             // A patrol index must address the NPC's own path; NPCs without a path always sit at 0.
@@ -552,7 +578,9 @@ namespace RPG
                 !std::isfinite(state.posX) || !std::isfinite(state.posY) || !std::isfinite(state.posZ) ||
                 state.currentWaypointIndex < 0 || state.currentWaypointIndex >= waypointLimit ||
                 !std::isfinite(state.waypointWaitTimer) || state.waypointWaitTimer < 0.0f)
+            {
                 return false;
+            }
         }
         return true;
     }
@@ -560,7 +588,9 @@ namespace RPG
     bool RPGNPCSystem::RestoreState(const NPCSystemSnapshot& snapshot)
     {
         if (!ValidateState(snapshot))
+        {
             return false;
+        }
 
         m_worldTime = snapshot.worldTime;
         m_worldHour = snapshot.worldHour;
@@ -592,7 +622,9 @@ namespace RPG
         {
             const int entryIndex = FindScheduleEntry(npc.schedule, m_worldHour);
             if (entryIndex < 0 || entryIndex == npc.activeScheduleEntry)
+            {
                 continue;
+            }
 
             npc.activeScheduleEntry = entryIndex;
             const NPCScheduleEntry& entry = npc.schedule[static_cast<size_t>(entryIndex)];
@@ -659,7 +691,9 @@ namespace RPG
         for (auto& [id, npc] : m_npcs)
         {
             if (npc.currentBehavior != NPCBehavior::Patrol || npc.patrolPath.empty() || !npc.route.empty())
+            {
                 continue;
+            }
 
             const PatrolWaypoint& waypoint = npc.patrolPath[static_cast<size_t>(npc.currentWaypointIndex)];
             if (HorizontalDistance(npc.posX, npc.posZ, waypoint.x, waypoint.z) < ARRIVAL_DISTANCE)
@@ -736,11 +770,17 @@ namespace RPG
                     ImGui::Text("Behavior: %s | Disposition: %d", behaviorStr, npc.dispositionValue);
 
                     if (!npc.shopItems.empty())
+                    {
                         ImGui::Text("Shop items: %zu", npc.shopItems.size());
+                    }
                     if (npc.dialogueTreeId > 0)
+                    {
                         ImGui::Text("Dialogue tree: %u", npc.dialogueTreeId);
+                    }
                     if (npc.questId > 0)
+                    {
                         ImGui::Text("Quest: %u", npc.questId);
+                    }
 
                     ImGui::TreePop();
                 }

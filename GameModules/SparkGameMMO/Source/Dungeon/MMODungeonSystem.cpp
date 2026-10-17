@@ -22,7 +22,9 @@ namespace MMO
         for (const auto& b : bosses)
         {
             if (!b.defeated)
+            {
                 return false;
+            }
         }
         return !bosses.empty();
     }
@@ -101,11 +103,15 @@ namespace MMO
                                               const std::vector<uint32_t>& playerIds)
     {
         if (static_cast<int>(m_instances.size()) >= MAX_INSTANCES)
+        {
             return 0;
+        }
 
         const auto* def = GetDungeon(dungeonDefId);
         if (!def)
+        {
             return 0;
+        }
 
         // Fail closed: a dungeon without an authored scene has nothing to load the instance into.
         if (!def->IsEnterable())
@@ -133,7 +139,9 @@ namespace MMO
         }
 
         for (uint32_t pid : playerIds)
+        {
             inst.playerIds.insert(pid);
+        }
 
         uint32_t id = inst.instanceId;
         m_instances[id] = std::move(inst);
@@ -149,7 +157,9 @@ namespace MMO
     {
         auto it = m_instances.find(instanceId);
         if (it == m_instances.end() || it->second.state != InstanceState::Active)
+        {
             return false;
+        }
         it->second.playerIds.insert(playerId);
         return true;
     }
@@ -158,7 +168,9 @@ namespace MMO
     {
         auto it = m_instances.find(instanceId);
         if (it == m_instances.end())
+        {
             return false;
+        }
         it->second.playerIds.erase(playerId);
         return true;
     }
@@ -167,7 +179,9 @@ namespace MMO
     {
         auto it = m_instances.find(instanceId);
         if (it == m_instances.end())
+        {
             return false;
+        }
 
         for (auto& boss : it->second.bosses)
         {
@@ -181,7 +195,9 @@ namespace MMO
                 Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Boss defeated: " + boss.name);
 
                 if (it->second.AllBossesDefeated())
+                {
                     it->second.state = InstanceState::Completed;
+                }
                 return true;
             }
         }
@@ -250,7 +266,9 @@ namespace MMO
         for (const auto& lo : ps.lockouts)
         {
             if (lo.dungeonDefId == dungeonId && lo.difficulty == diff && lo.remaining > 0)
+            {
                 return true;
+            }
         }
         return false;
     }
@@ -281,9 +299,13 @@ namespace MMO
         {
             it->remaining -= dt;
             if (it->remaining <= 0.0f)
+            {
                 it = ps.lockouts.erase(it);
+            }
             else
+            {
                 ++it;
+            }
         }
     }
 
@@ -291,7 +313,9 @@ namespace MMO
     {
         const auto* def = GetDungeon(dungeonId);
         if (!def)
+        {
             return 1.0f;
+        }
         switch (diff)
         {
         case DungeonDifficulty::Heroic:
@@ -323,7 +347,9 @@ namespace MMO
     {
         const auto* inst = GetInstance(instanceId);
         if (!inst)
+        {
             return "Instance not found";
+        }
         const auto* def = GetDungeon(inst->dungeonDefId);
         std::ostringstream ss;
         ss << "Instance #" << instanceId << " - " << (def ? def->name : "Unknown") << "\n";
@@ -343,8 +369,10 @@ namespace MMO
         {
             ImGui::Text("Dungeons: %zu | Active Instances: %zu", m_dungeons.size(), m_instances.size());
             for (const auto& [id, d] : m_dungeons)
+            {
                 ImGui::Text("  [%u] %s - Lv%d, %dp, %zu bosses%s", id, d.name.c_str(), d.minLevel, d.recommendedPlayers,
                             d.bosses.size(), d.IsEnterable() ? "" : " [not enterable: no scene authored]");
+            }
             ImGui::TreePop();
         }
 #endif

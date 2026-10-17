@@ -24,11 +24,17 @@ namespace SparkEditor
         Spark::Ui::Status DpsTier(float dps)
         {
             if (dps > 500.0f)
+            {
                 return Spark::Ui::Status::Error;
+            }
             if (dps > 200.0f)
+            {
                 return Spark::Ui::Status::Warning;
+            }
             if (dps > 100.0f)
+            {
                 return Spark::Ui::Status::Success;
+            }
             return Spark::Ui::Status::Info;
         }
 
@@ -36,9 +42,13 @@ namespace SparkEditor
         Spark::Ui::Status TtkTier(float ttk)
         {
             if (ttk < 0.5f)
+            {
                 return Spark::Ui::Status::Error;
+            }
             if (ttk < 1.5f)
+            {
                 return Spark::Ui::Status::Warning;
+            }
             return Spark::Ui::Status::Success;
         }
     } // namespace
@@ -78,7 +88,9 @@ namespace SparkEditor
     void WeaponEditorPanel::Render()
     {
         if (!IsVisible())
+        {
             return;
+        }
 
         if (BeginPanel())
         {
@@ -88,7 +100,9 @@ namespace SparkEditor
                 ResetSelectedWeapon();
             }
             if (ImGui::IsItemHovered())
+            {
                 ImGui::SetTooltip("Restore the selected weapon's starting values");
+            }
             ImGui::SameLine();
             ImGui::Checkbox("Compare", &m_showComparison);
             ImGui::SameLine();
@@ -165,42 +179,58 @@ namespace SparkEditor
         ImGui::Separator();
 
         if (!Spark::Ui::BeginPropertyGrid("WeaponProps"))
+        {
             return;
+        }
 
         // Damage
         Spark::Ui::PropertyLabel("Damage");
         if (ImGui::SliderFloat("##Damage", &w.damage, 1.0f, 500.0f, "%.1f"))
+        {
             w.isModified = true;
+        }
 
         // Fire Rate
         Spark::Ui::PropertyLabel("Fire Rate (RPM)");
         if (ImGui::SliderFloat("##FireRate", &w.fireRate, 10.0f, 5000.0f, "%.0f"))
+        {
             w.isModified = true;
+        }
 
         // Magazine Size
         Spark::Ui::PropertyLabel("Magazine Size");
         if (ImGui::SliderInt("##MagSize", &w.magazineSize, 1, 500))
+        {
             w.isModified = true;
+        }
 
         // Reload Time
         Spark::Ui::PropertyLabel("Reload Time (s)");
         if (ImGui::SliderFloat("##ReloadTime", &w.reloadTime, 0.5f, 10.0f, "%.2f"))
+        {
             w.isModified = true;
+        }
 
         // Muzzle Velocity
         Spark::Ui::PropertyLabel("Muzzle Velocity");
         if (ImGui::SliderFloat("##MuzzleVel", &w.muzzleVelocity, 10.0f, 3000.0f, "%.0f"))
+        {
             w.isModified = true;
+        }
 
         // Accuracy
         Spark::Ui::PropertyLabel("Accuracy");
         if (ImGui::SliderFloat("##Accuracy", &w.accuracy, 0.0f, 1.0f, "%.2f"))
+        {
             w.isModified = true;
+        }
 
         // Range
         Spark::Ui::PropertyLabel("Eff. Range");
         if (ImGui::SliderFloat("##Range", &w.range, 1.0f, 200.0f, "%.1f"))
+        {
             w.isModified = true;
+        }
 
         Spark::Ui::EndPropertyGrid();
 
@@ -215,7 +245,9 @@ namespace SparkEditor
         float sustainedDPS = magDamage / (magDuration + w.reloadTime);
 
         if (!Spark::Ui::BeginPropertyGrid("ComputedStats"))
+        {
             return;
+        }
 
         Spark::Ui::PropertyLabel("Burst DPS");
         Spark::Ui::MonoText("%.1f", dps);
@@ -249,7 +281,9 @@ namespace SparkEditor
         {
             float dps = w.damage * (w.fireRate / 60.0f);
             if (dps > maxDPS)
+            {
                 maxDPS = dps;
+            }
         }
 
         ImVec2 avail = ImGui::GetContentRegionAvail();

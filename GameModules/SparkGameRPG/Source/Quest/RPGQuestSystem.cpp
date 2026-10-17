@@ -152,7 +152,9 @@ namespace RPG
     {
         const auto* def = GetQuestDef(questId);
         if (characterId == 0 || !def || !IsQuestAvailable(characterId, questId, characterLevel))
+        {
             return false;
+        }
 
         auto& charProgress = m_progress[characterId];
 
@@ -172,13 +174,19 @@ namespace RPG
     {
         auto charIt = m_progress.find(characterId);
         if (charIt == m_progress.end())
+        {
             return false;
+        }
 
         auto questIt = charIt->second.find(questId);
         if (questIt == charIt->second.end())
+        {
             return false;
+        }
         if (questIt->second.state != QuestState::InProgress)
+        {
             return false;
+        }
 
         questIt->second.state = QuestState::Failed;
 
@@ -191,16 +199,22 @@ namespace RPG
     void RPGQuestSystem::UpdateObjective(uint32_t characterId, ObjectiveType type, uint32_t targetId, int count)
     {
         if (count <= 0)
+        {
             return;
+        }
 
         auto charIt = m_progress.find(characterId);
         if (charIt == m_progress.end())
+        {
             return;
+        }
 
         for (auto& [questId, progress] : charIt->second)
         {
             if (progress.state != QuestState::InProgress)
+            {
                 continue;
+            }
 
             for (auto& obj : progress.objectives)
             {
@@ -208,7 +222,9 @@ namespace RPG
                 {
                     obj.currentCount += count;
                     if (obj.currentCount > obj.requiredCount)
+                    {
                         obj.currentCount = obj.requiredCount;
+                    }
 
                     if (obj.IsComplete())
                     {
@@ -223,16 +239,24 @@ namespace RPG
     {
         auto charIt = m_progress.find(characterId);
         if (charIt == m_progress.end())
+        {
             return false;
+        }
 
         auto questIt = charIt->second.find(questId);
         if (questIt == charIt->second.end())
+        {
             return false;
+        }
         if (questIt->second.state != QuestState::InProgress)
+        {
             return false;
+        }
 
         if (!AreAllObjectivesComplete(questIt->second))
+        {
             return false;
+        }
 
         questIt->second.state = QuestState::Completed;
 
@@ -249,12 +273,16 @@ namespace RPG
         std::vector<const QuestProgress*> result;
         auto charIt = m_progress.find(characterId);
         if (charIt == m_progress.end())
+        {
             return result;
+        }
 
         for (const auto& [questId, progress] : charIt->second)
         {
             if (progress.state == QuestState::InProgress)
+            {
                 result.push_back(&progress);
+            }
         }
         return result;
     }
@@ -264,12 +292,16 @@ namespace RPG
         std::vector<const QuestProgress*> result;
         auto charIt = m_progress.find(characterId);
         if (charIt == m_progress.end())
+        {
             return result;
+        }
 
         for (const auto& [questId, progress] : charIt->second)
         {
             if (progress.state == QuestState::Completed)
+            {
                 result.push_back(&progress);
+            }
         }
         return result;
     }
@@ -278,7 +310,9 @@ namespace RPG
     {
         auto charIt = m_progress.find(characterId);
         if (charIt == m_progress.end())
+        {
             return nullptr;
+        }
 
         auto questIt = charIt->second.find(questId);
         return questIt != charIt->second.end() ? &questIt->second : nullptr;
@@ -294,17 +328,23 @@ namespace RPG
     {
         const auto* def = GetQuestDef(questId);
         if (!def)
+        {
             return false;
+        }
 
         // Level check
         if (characterLevel < def->requiredLevel)
+        {
             return false;
+        }
 
         // Prerequisite check
         if (def->prerequisiteQuestId != 0)
         {
             if (!IsQuestComplete(characterId, def->prerequisiteQuestId))
+            {
                 return false;
+            }
         }
 
         // Not already accepted or completed
@@ -317,7 +357,9 @@ namespace RPG
         for (const auto& obj : progress.objectives)
         {
             if (!obj.IsComplete())
+            {
                 return false;
+            }
         }
         return true;
     }
@@ -340,7 +382,9 @@ namespace RPG
                         ImGui::Text("Objectives: %zu | XP: %u | Gold: %d", quest.objectives.size(), quest.rewards.xp,
                                     quest.rewards.currency);
                         if (quest.prerequisiteQuestId > 0)
+                        {
                             ImGui::Text("Requires quest: %u", quest.prerequisiteQuestId);
+                        }
                         ImGui::TreePop();
                     }
                 }

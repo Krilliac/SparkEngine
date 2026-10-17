@@ -32,7 +32,7 @@ namespace SparkEditor
     /**
      * @brief How serious a notification is; drives its glyph, colour and lifetime.
      */
-    enum class NotificationSeverity
+    enum class NotificationSeverity : std::uint8_t
     {
         Info,
         Success,

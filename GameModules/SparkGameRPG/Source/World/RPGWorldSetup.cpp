@@ -152,7 +152,9 @@ namespace RPG
     {
         auto* streamingMgr = m_context ? m_context->GetAreaStreaming() : nullptr;
         if (!streamingMgr)
+        {
             streamingMgr = &Spark::Streaming::SeamlessAreaManager::GetInstance();
+        }
 
         for (const auto& area : m_areas)
         {
@@ -189,26 +191,36 @@ namespace RPG
     void RPGWorldSetup::Update(float deltaTime)
     {
         if (!m_initialized || !(deltaTime > 0.0f))
+        {
             return;
+        }
 
         m_worldTime += deltaTime;
 
         // The engine lifecycle owns the host service tick. Standalone tests that
         // use the per-image fallback own that fallback's tick locally.
         if (!m_context || !m_context->GetAreaStreaming())
+        {
             Spark::Streaming::SeamlessAreaManager::GetInstance().Update(deltaTime);
+        }
     }
 
     void RPGWorldSetup::Shutdown()
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         auto* streamingMgr = m_context ? m_context->GetAreaStreaming() : nullptr;
         if (!streamingMgr)
+        {
             streamingMgr = &Spark::Streaming::SeamlessAreaManager::GetInstance();
+        }
         for (const auto& area : m_areas)
+        {
             streamingMgr->UnregisterArea(area.areaId);
+        }
 
         m_areas.clear();
         m_context = nullptr;
@@ -220,7 +232,9 @@ namespace RPG
         for (const auto& area : m_areas)
         {
             if (area.areaId == areaId)
+            {
                 return &area;
+            }
         }
         return nullptr;
     }
@@ -233,14 +247,18 @@ namespace RPG
         {
             ss << "[" << area.areaId << "] " << area.name << " (Lv" << area.suggestedLevel << ")";
             if (area.isSafeZone)
+            {
                 ss << " [Safe]";
+            }
             ss << "\n    " << area.description << "\n";
             ss << "    Encounters: " << area.encounters.size();
             ss << " | Connections: ";
             for (size_t i = 0; i < area.connectedAreas.size(); ++i)
             {
                 if (i > 0)
+                {
                     ss << ", ";
+                }
                 const auto* connected = GetArea(area.connectedAreas[i]);
                 ss << (connected ? connected->name : "?");
             }
@@ -253,7 +271,9 @@ namespace RPG
     {
 #ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("RPG World"))
+        {
             return;
+        }
 
         ImGui::Text("World Time: %.1f s", m_worldTime);
         ImGui::Text("Areas: %zu", m_areas.size());

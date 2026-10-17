@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <fstream>
 #include <iterator>
@@ -58,7 +59,7 @@ namespace SparkEditor
 
     /// Slots of the colour-blind-safe Okabe-Ito categorical palette (Spark::Ui::CategoryColor);
     /// each name is the hue of that slot in every appearance.
-    enum class CategorySlot : int
+    enum class CategorySlot : std::uint8_t
     {
         Orange = 0,
         SkyBlue = 1,

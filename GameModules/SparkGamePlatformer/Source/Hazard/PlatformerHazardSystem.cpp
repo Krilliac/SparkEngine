@@ -147,7 +147,9 @@ namespace Platformer
     void PlatformerHazardSystem::Update(float deltaTime)
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         m_globalTimer += deltaTime;
 
@@ -162,19 +164,27 @@ namespace Platformer
         for (auto& hazard : m_hazards)
         {
             if (hazard.type != HazardType::Crusher)
+            {
                 continue;
+            }
 
             if (hazard.crusherSpeed <= 0.0f)
+            {
                 continue;
+            }
 
             // Simple oscillation between start Y and crusherEndY
             float cycleTime = std::abs(hazard.originY - hazard.crusherEndY) / hazard.crusherSpeed;
             if (cycleTime <= 0.0f)
+            {
                 continue;
+            }
 
             float totalCycle = cycleTime * 2.0f + hazard.crusherPauseTime * 2.0f;
             if (totalCycle <= 0.0f)
+            {
                 continue;
+            }
 
             float t = std::fmod(m_globalTimer, totalCycle);
 
@@ -209,7 +219,9 @@ namespace Platformer
         for (auto& hazard : m_hazards)
         {
             if (hazard.type != HazardType::Sawblade)
+            {
                 continue;
+            }
 
             // Ping-pong between start and end positions
             const float deltaX = hazard.pathEndX - hazard.originX;
@@ -217,7 +229,9 @@ namespace Platformer
             float pathLength = std::sqrt(deltaX * deltaX + deltaY * deltaY);
 
             if (pathLength < 0.01f || hazard.pathSpeed <= 0.0f)
+            {
                 continue;
+            }
 
             float travelTime = pathLength / hazard.pathSpeed;
             float t = std::fmod(m_globalTimer, travelTime * 2.0f) / travelTime;
@@ -236,7 +250,9 @@ namespace Platformer
         for (const auto& hazard : m_hazards)
         {
             if (hazard.type != HazardType::Projectile)
+            {
                 continue;
+            }
 
             // Fire at regular intervals
             float timeSinceLastFire = std::fmod(m_globalTimer, hazard.fireInterval);
@@ -274,7 +290,9 @@ namespace Platformer
         for (auto& hazard : m_hazards)
         {
             if (hazard.type != HazardType::LaserBeam)
+            {
                 continue;
+            }
 
             float cycleTime = hazard.laserOnTime + hazard.laserOffTime;
             float t = std::fmod(m_globalTimer, cycleTime);
@@ -286,7 +304,9 @@ namespace Platformer
     {
         auto* world = m_context ? m_context->GetWorld() : nullptr;
         if (!world)
+        {
             return;
+        }
 
         // spike_hazard (tools/blender/author_platformer_kit.py) is a 1 x 1 m tile whose spike tips stand 0.64 m
         // above its base; metres, pivot at the base centre. Each spike pit's damage box is tiled edge to edge from
@@ -296,7 +316,9 @@ namespace Platformer
         for (const HazardInstance& hazard : m_hazards)
         {
             if (hazard.type != HazardType::Spikes || hazard.width <= 0.0f || hazard.depth <= 0.0f)
+            {
                 continue;
+            }
 
             const int columns = std::max(1, static_cast<int>(std::lround(hazard.width)));
             const int rows = std::max(1, static_cast<int>(std::lround(hazard.depth)));
@@ -330,7 +352,9 @@ namespace Platformer
             {
                 const auto entity = static_cast<EntityID>(entityId);
                 if (world->GetRegistry().valid(entity))
+                {
                     world->DestroyEntity(entity);
+                }
             }
         }
         m_spikeTileEntities.clear();
@@ -355,11 +379,15 @@ namespace Platformer
         for (const auto& hazard : m_hazards)
         {
             if (!hazard.active || hazard.damage <= 0)
+            {
                 continue;
+            }
 
             // Wind zones don't deal damage
             if (hazard.type == HazardType::WindZone)
+            {
                 continue;
+            }
 
             // Sawblades use radius check
             if (hazard.type == HazardType::Sawblade)
@@ -433,7 +461,9 @@ namespace Platformer
         for (const auto& hazard : m_hazards)
         {
             if (hazard.type != HazardType::WindZone || !hazard.active)
+            {
                 continue;
+            }
 
             if (PointInBox(x, y, z, hazard))
             {
@@ -446,7 +476,9 @@ namespace Platformer
     void PlatformerHazardSystem::Render()
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         // Spike pits are drawn by the engine's RenderSystem from the kit tiles PlaceSpikeTiles adds to the world.
         // In a full implementation, this would also render:
@@ -470,7 +502,9 @@ namespace Platformer
     {
 #ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Platformer Hazards"))
+        {
             return;
+        }
 
         ImGui::Text("Hazards: %zu", m_hazards.size());
         ImGui::Text("Active Projectiles: %zu", m_projectiles.size());

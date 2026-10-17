@@ -55,14 +55,20 @@ namespace Racing
     void RacingVehicleSystem::Update(float deltaTime)
     {
         if (!m_initialized || !std::isfinite(deltaTime) || deltaTime <= 0.0f)
+        {
             return;
+        }
 
         for (auto& vehicle : m_vehicles)
         {
             if (!vehicle.isActive)
+            {
                 continue;
+            }
             if (vehicle.boostTimer > 0.0f)
+            {
                 vehicle.boostTimer = std::max(0.0f, vehicle.boostTimer - deltaTime);
+            }
             vehicle.nitro = std::clamp(vehicle.nitro, 0.0f, 1.0f);
         }
     }
@@ -70,26 +76,34 @@ namespace Racing
     void RacingVehicleSystem::FixedUpdate(float fixedDeltaTime)
     {
         if (!m_initialized || !m_physics || !std::isfinite(fixedDeltaTime) || fixedDeltaTime <= 0.0f)
+        {
             return;
+        }
 
         for (auto& vehicle : m_vehicles)
         {
             auto it = m_chassis.find(vehicle.id);
             if (vehicle.isActive && it != m_chassis.end())
+            {
                 DriveChassis(vehicle, it->second);
+            }
         }
 
         // The Racing process's single physics step (module-driven stepping contract): one tick of the
         // engine fixed timestep, so the world advances in lockstep with the module's fixed update.
         if (m_physics->GetTimeStep() != fixedDeltaTime)
+        {
             m_physics->SetTimeStep(fixedDeltaTime);
+        }
         m_stepCount += m_physics->StepFixed(1, 1.0f);
 
         for (auto& vehicle : m_vehicles)
         {
             auto it = m_chassis.find(vehicle.id);
             if (vehicle.isActive && it != m_chassis.end())
+            {
                 ReadBackChassis(vehicle, it->second, fixedDeltaTime);
+            }
         }
     }
 
@@ -100,7 +114,9 @@ namespace Racing
         {
             chassis.vehicle.reset();
             if (m_physics && chassis.body)
+            {
                 m_physics->RemoveBody(chassis.body);
+            }
         }
         m_chassis.clear();
         m_vehicles.clear();
@@ -113,7 +129,9 @@ namespace Racing
                                                 const VehiclePose& pose)
     {
         if (!m_initialized)
+        {
             return 0;
+        }
 
         VehicleInstance vehicle{};
         vehicle.id = m_nextId++;
@@ -138,7 +156,9 @@ namespace Racing
         auto it =
             std::find_if(m_vehicles.begin(), m_vehicles.end(), [id](const VehicleInstance& v) { return v.id == id; });
         if (it != m_vehicles.end())
+        {
             m_vehicles.erase(it);
+        }
     }
 
     void RacingVehicleSystem::ApplyInput(float throttle, float brake, float steer, bool nitroPressed, bool driftPressed,
@@ -146,7 +166,9 @@ namespace Racing
     {
         VehicleInstance* player = GetPlayerVehicle();
         if (!player)
+        {
             return;
+        }
 
         ApplyInputInternal(*player, throttle, brake, steer, nitroPressed, driftPressed, deltaTime);
     }
@@ -156,7 +178,9 @@ namespace Racing
     {
         VehicleInstance* vehicle = GetVehicle(vehicleId);
         if (!vehicle || !vehicle->isActive)
+        {
             return;
+        }
 
         ApplyInputInternal(*vehicle, throttle, brake, steer, nitroPressed, driftPressed, deltaTime);
     }
@@ -165,7 +189,9 @@ namespace Racing
     {
         VehicleInstance* vehicle = GetVehicle(vehicleId);
         if (!vehicle)
+        {
             return;
+        }
 
         DestroyChassis(vehicleId);
         vehicle->speed = 0.0f;
@@ -188,7 +214,9 @@ namespace Racing
                                                  bool nitroPressed, bool driftPressed, float deltaTime)
     {
         if (!std::isfinite(deltaTime) || deltaTime <= 0.0f)
+        {
             return;
+        }
         deltaTime = std::min(deltaTime, 0.1f);
 
         // Latch the command; the next fixed ticks hand it to the Jolt controller.
@@ -269,7 +297,9 @@ namespace Racing
             }
             playerCount += vehicle.isPlayer ? 1u : 0u;
             if (playerCount > 1)
+            {
                 return false;
+            }
         }
         return true;
     }
@@ -277,10 +307,14 @@ namespace Racing
     bool RacingVehicleSystem::RestoreState(const std::vector<VehicleInstance>& vehicles)
     {
         if (!m_initialized || !ValidateSnapshot(vehicles))
+        {
             return false;
+        }
 
         while (!m_chassis.empty())
+        {
             DestroyChassis(m_chassis.begin()->first);
+        }
 
         m_vehicles = vehicles;
         uint32_t nextId = 1;
@@ -291,12 +325,16 @@ namespace Racing
             vehicle.brakeInput = 0.0f;
             vehicle.strandedTime = 0.0f;
             if (!vehicle.isActive)
+            {
                 continue;
+            }
             const VehiclePose pose{vehicle.positionX, vehicle.positionY, vehicle.positionZ, vehicle.heading};
             if (!BuildChassis(vehicle, pose, vehicle.speed))
             {
                 while (!m_chassis.empty())
+                {
                     DestroyChassis(m_chassis.begin()->first);
+                }
                 m_vehicles.clear();
                 return false;
             }
@@ -363,7 +401,9 @@ namespace Racing
             result += " | Speed: " + std::to_string(static_cast<int>(v.speed)) + " km/h";
             result += " | Damage: " + std::to_string(static_cast<int>(v.damage));
             if (v.isPlayer)
+            {
                 result += " (PLAYER)";
+            }
             result += "\n";
         }
         return result;
@@ -377,7 +417,9 @@ namespace Racing
         {
         case DriftState::None:
             if (driftPressed && absSteer > 0.5f && vehicle.speed > 60.0f)
+            {
                 vehicle.driftState = DriftState::Initiating;
+            }
             break;
 
         case DriftState::Initiating:
@@ -408,7 +450,9 @@ namespace Racing
 
         case DriftState::Boosting:
             if (vehicle.boostTimer <= 0.0f)
+            {
                 vehicle.driftState = DriftState::None;
+            }
             break;
 
         case DriftState::Count:
@@ -420,7 +464,9 @@ namespace Racing
     {
 #ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Racing Vehicles"))
+        {
             return;
+        }
 
         ImGui::Text("Active Vehicles: %zu | Jolt chassis: %zu | Physics ticks: %llu", m_vehicles.size(),
                     m_chassis.size(), static_cast<unsigned long long>(m_stepCount));

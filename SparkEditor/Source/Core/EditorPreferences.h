@@ -33,7 +33,7 @@
 namespace SparkEditor
 {
     /// @brief Largest preferences file the reader accepts.
-    inline constexpr std::size_t kMaxEditorPreferencesBytes = 64 * 1024;
+    inline constexpr std::size_t kMaxEditorPreferencesBytes = std::size_t{64} * 1024;
     /// @brief Most recent scenes remembered (newest first).
     inline constexpr std::size_t kMaxEditorRecentScenes = 10;
     /// @brief Longest palette name stored.

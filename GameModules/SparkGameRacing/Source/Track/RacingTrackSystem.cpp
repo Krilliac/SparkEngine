@@ -31,7 +31,9 @@ namespace Racing
 
         // Load the first track by default
         if (!m_tracks.empty())
+        {
             LoadDemoTrack(0);
+        }
 
         m_initialized = true;
 
@@ -75,7 +77,9 @@ namespace Racing
     SurfaceType RacingTrackSystem::GetSurfaceAt(float x, float z) const
     {
         if (m_currentTrack.waypoints.empty())
+        {
             return SurfaceType::Asphalt;
+        }
 
         // Measure against the centerline segment, not the nearest waypoint vertex: waypoints are tens of
         // meters apart, so a car on the centerline between two of them is still on the track.
@@ -84,7 +88,9 @@ namespace Racing
         const TrackWaypoint& to = GetWaypoint(projection.segment + 1);
         const float width = from.width + (to.width - from.width) * projection.t;
         if (projection.lateralDistance > width)
+        {
             return SurfaceType::Grass; // Off-track
+        }
 
         return projection.t < 0.5f ? from.surface : to.surface;
     }
@@ -98,7 +104,9 @@ namespace Racing
             float dz = z - h.z;
             float distSq = dx * dx + dz * dz;
             if (distSq < h.radius * h.radius)
+            {
                 return static_cast<int>(i);
+            }
         }
         return -1;
     }
@@ -127,7 +135,9 @@ namespace Racing
     {
         static const TrackWaypoint empty{};
         if (m_currentTrack.waypoints.empty())
+        {
             return empty;
+        }
         return m_currentTrack.waypoints[index % m_currentTrack.waypoints.size()];
     }
 
@@ -135,7 +145,9 @@ namespace Racing
     {
         const auto waypointCount = static_cast<uint32_t>(m_currentTrack.waypoints.size());
         if (waypointCount < 2)
+        {
             return 0;
+        }
         return m_currentTrack.layout == TrackLayout::PointToPoint ? waypointCount - 1 : waypointCount;
     }
 
@@ -146,7 +158,9 @@ namespace Racing
         if (segmentCount == 0)
         {
             if (!m_currentTrack.waypoints.empty())
+            {
                 best.lateralDistance = std::hypot(x - m_currentTrack.waypoints[0].x, z - m_currentTrack.waypoints[0].z);
+            }
             return best;
         }
 
@@ -164,7 +178,9 @@ namespace Racing
             const float segZ = to.z - from.z;
             const float lengthSq = segX * segX + segZ * segZ;
             if (lengthSq <= 0.0f)
+            {
                 continue;
+            }
 
             const float t = std::clamp(((x - from.x) * segX + (z - from.z) * segZ) / lengthSq, 0.0f, 1.0f);
             const float lateral = std::hypot(x - (from.x + segX * t), z - (from.z + segZ * t));
@@ -214,7 +230,9 @@ namespace Racing
             remaining -= left;
             t = 0.0f;
             if (segment + 1 >= segmentCount && m_currentTrack.layout == TrackLayout::PointToPoint)
+            {
                 break; // Hold the target on the finish rather than wrapping back to the start.
+            }
             segment = (segment + 1) % segmentCount;
         }
 
@@ -226,7 +244,9 @@ namespace Racing
     float RacingTrackSystem::GetCenterlineHeight(const TrackProjection& projection) const
     {
         if (m_currentTrack.waypoints.empty())
+        {
             return 0.0f;
+        }
         const TrackWaypoint& from = GetWaypoint(projection.segment);
         const TrackWaypoint& to = GetWaypoint(projection.segment + 1);
         return from.y + (to.y - from.y) * std::clamp(projection.t, 0.0f, 1.0f);
@@ -235,7 +255,9 @@ namespace Racing
     float RacingTrackSystem::GetCenterlineHeading(const TrackProjection& projection) const
     {
         if (m_currentTrack.waypoints.size() < 2)
+        {
             return 0.0f;
+        }
         const TrackWaypoint& from = GetWaypoint(projection.segment);
         const TrackWaypoint& to = GetWaypoint(projection.segment + 1);
         return std::atan2(to.x - from.x, to.z - from.z);
@@ -250,7 +272,9 @@ namespace Racing
         RemoveTrackKit();
         auto* world = m_context ? m_context->GetWorld() : nullptr;
         if (!world || m_currentTrack.waypoints.empty())
+        {
             return;
+        }
 
         // Meters, pivot at the ground-contact centre, front facing +Z (source Art/Blender/SparkGameRacing/
         // racing_kit.blend). Each prop is posed against the centerline segment under it: yaw 0 faces the driving
@@ -327,7 +351,9 @@ namespace Racing
             {
                 auto entity = static_cast<EntityID>(entityId);
                 if (world->GetRegistry().valid(entity))
+                {
                     world->DestroyEntity(entity);
+                }
             }
         }
         m_kitEntities.clear();
@@ -345,7 +371,9 @@ namespace Racing
             result += "\n";
         }
         if (!m_currentTrack.name.empty())
+        {
             result += "Active: " + m_currentTrack.name + "\n";
+        }
         return result;
     }
 
@@ -521,7 +549,9 @@ namespace Racing
     {
 #ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Racing Track"))
+        {
             return;
+        }
 
         ImGui::Text("Available Tracks: %zu", m_tracks.size());
         ImGui::Text("Current: %s", m_currentTrack.name.c_str());
@@ -539,9 +569,13 @@ namespace Racing
         for (size_t i = 0; i < m_tracks.size(); ++i)
         {
             if (ImGui::Button(m_tracks[i].name.c_str()))
+            {
                 LoadDemoTrack(static_cast<uint32_t>(i));
+            }
             if (i < m_tracks.size() - 1)
+            {
                 ImGui::SameLine();
+            }
         }
 #endif
     }

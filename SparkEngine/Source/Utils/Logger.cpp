@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <iomanip>
@@ -547,7 +548,9 @@ namespace Spark
         }
         catch (...)
         {
-            // A crash handler must keep going to write its dump.
+            // A crash handler must keep going to write its dump, so report the lost
+            // log tail on stderr (no allocation, cannot throw) instead of rethrowing.
+            std::fputs("Logger::FlushForCrash: a log sink threw; the crash log tail may be incomplete\n", stderr);
         }
     }
 

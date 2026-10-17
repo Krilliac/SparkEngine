@@ -41,7 +41,9 @@ namespace MMO
     bool MMOChatSystem::Initialize(Spark::IEngineContext* context)
     {
         if (m_initialized || m_context)
+        {
             Shutdown();
+        }
 
         m_context = context;
         m_time = 0.0f;
@@ -75,7 +77,9 @@ namespace MMO
         // singleton — the module is handed its NetworkManager via Initialize(context).
         auto* netMgr = m_context ? m_context->GetNetwork() : nullptr;
         if (!netMgr)
+        {
             return;
+        }
 
         // Register the module's OWN type, leaving the engine's built-in
         // ChatMessage schema untouched (see kMMOChatMessageType above).
@@ -183,7 +187,9 @@ namespace MMO
 
         m_history.push_back(msg);
         if (m_history.size() > MAX_HISTORY)
+        {
             m_history.pop_front();
+        }
 
         auto& console = Spark::SimpleConsole::GetInstance();
         console.LogInfo("[" + std::string(ChannelToString(msg.channel)) + "] " + msg.senderName + ": " + msg.text);
@@ -199,7 +205,9 @@ namespace MMO
     {
         if (!m_initialized || text.empty() ||
             static_cast<uint8_t>(channel) > static_cast<uint8_t>(ChatChannel::Whisper))
+        {
             return;
+        }
 
 #ifdef ENABLE_NETWORKING
         // Refuse to put a "private" message on the wire when nothing can route it privately.
@@ -224,7 +232,9 @@ namespace MMO
         SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Chat message sent on channel %d", static_cast<int>(channel));
         m_history.push_back(msg);
         if (m_history.size() > MAX_HISTORY)
+        {
             m_history.pop_front();
+        }
 
 #ifdef ENABLE_NETWORKING
         // Send over the network on the reliable ordered channel, using the
@@ -255,10 +265,14 @@ namespace MMO
     void MMOChatSystem::Update(float deltaTime)
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         if (deltaTime > 0.0f)
+        {
             m_time += deltaTime;
+        }
 
 #ifdef ENABLE_NETWORKING
         DrainNetworkChat();
@@ -297,7 +311,9 @@ namespace MMO
     {
 #ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("MMO Chat"))
+        {
             return;
+        }
 
         ImGui::Text("Messages: %zu / %zu", m_history.size(), MAX_HISTORY);
         ImGui::Text("Channels: Area, Global, Party, Whisper");
@@ -330,7 +346,9 @@ namespace MMO
             ImGui::TextColored(color, "[%s] %s: %s", channelTag, msg.senderName.c_str(), msg.text.c_str());
         }
         if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+        {
             ImGui::SetScrollHereY(1.0f);
+        }
         ImGui::EndChild();
 
         // Chat input
@@ -353,13 +371,21 @@ namespace MMO
     ChatChannel MMOChatSystem::ParseChannelName(const std::string& name)
     {
         if (name == "area" || name == "a")
+        {
             return ChatChannel::Area;
+        }
         if (name == "global" || name == "g")
+        {
             return ChatChannel::Global;
+        }
         if (name == "party" || name == "p")
+        {
             return ChatChannel::Party;
+        }
         if (name == "whisper" || name == "w")
+        {
             return ChatChannel::Whisper;
+        }
         return ChatChannel::Area; // Default
     }
 

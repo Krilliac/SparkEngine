@@ -72,7 +72,7 @@ void GameObject::Shutdown()
     SPARK_LOG_INFO(Spark::LogCategory::Game, "GameObject shutdown complete. ID=%u Name=%s", m_id, m_name.c_str());
 }
 
-void GameObject::Update(float dt)
+void GameObject::Update(float deltaTime)
 {
     // **FIXED: Removed per-frame logging that was causing performance issues**
     if (m_worldMatrixDirty)
@@ -181,10 +181,10 @@ void GameObject::SetRotation(const XMFLOAT3& rot)
     m_worldMatrixDirty = true;
 }
 
-void GameObject::SetScale(const XMFLOAT3& scl)
+void GameObject::SetScale(const XMFLOAT3& scale)
 {
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, scl.x > 0 && scl.y > 0 && scl.z > 0, "Scale must be positive");
-    m_scale = scl;
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, scale.x > 0 && scale.y > 0 && scale.z > 0, "Scale must be positive");
+    m_scale = scale;
     m_worldMatrixDirty = true;
 }
 

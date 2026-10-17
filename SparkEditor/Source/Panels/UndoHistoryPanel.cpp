@@ -56,7 +56,9 @@ namespace SparkEditor
     void UndoHistoryPanel::RenderToolbar()
     {
         if (!Spark::Ui::BeginPanelToolbar("##UndoHistoryToolbar"))
+        {
             return;
+        }
 
         bool canUndo = m_undoRedoManager && m_undoRedoManager->CanUndo();
         bool canRedo = m_undoRedoManager && m_undoRedoManager->CanRedo();

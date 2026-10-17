@@ -34,9 +34,13 @@ namespace MMO
     bool MMOWorldSetup::Initialize(Spark::IEngineContext* context)
     {
         if (!context)
+        {
             return false;
+        }
         if (m_initialized || m_context)
+        {
             Shutdown();
+        }
 
         m_context = context;
         m_worldTime = 0.0f;
@@ -158,7 +162,9 @@ namespace MMO
         {
             // Skip instanced areas — they are loaded on-demand, not streamed
             if (area.isInstanced)
+            {
                 continue;
+            }
 
             Spark::Streaming::AreaDefinition def{};
             def.areaId = area.areaId;
@@ -250,10 +256,14 @@ namespace MMO
     void MMOWorldSetup::Update(float deltaTime)
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         if (deltaTime <= 0.0f)
+        {
             return;
+        }
 
         m_worldTime += deltaTime;
 
@@ -275,13 +285,17 @@ namespace MMO
         // Networking is resolved through the injected engine context, not the global singleton
         auto* nm = m_context ? m_context->GetNetwork() : nullptr;
         if (!nm)
+        {
             return false;
+        }
 
         const bool serverAlreadyRunning = nm->GetRole() == Spark::Net::NetworkRole::Server;
         if (!serverAlreadyRunning && !nm->IsInitialized())
         {
             if (!nm->Initialize())
+            {
                 return false;
+            }
         }
 
         if (!serverAlreadyRunning &&
@@ -373,7 +387,9 @@ namespace MMO
     void MMOWorldSetup::ServerTick(float deltaTime)
     {
         if (!m_networkServerRunning)
+        {
             return;
+        }
 
         if (!m_networkOwnedByModule)
         {
@@ -383,7 +399,9 @@ namespace MMO
         // Networking is resolved through the injected engine context, not the global singleton
         auto* nm = m_context ? m_context->GetNetwork() : nullptr;
         if (!nm)
+        {
             return;
+        }
 
         nm->Update(deltaTime);
         // Only admitted players exist for the WorldServer. A slot still Securing (NET-100:
@@ -433,7 +451,9 @@ namespace MMO
     void MMOWorldSetup::StopNetworkServer()
     {
         if (!m_networkServerRunning)
+        {
             return;
+        }
 
         // Networking is resolved through the injected engine context, not the global singleton
         auto* nm = m_context ? m_context->GetNetwork() : nullptr;
@@ -475,11 +495,15 @@ namespace MMO
         {
             auto* streamingMgr = m_context ? m_context->GetAreaStreaming() : nullptr;
             if (!streamingMgr)
+            {
                 streamingMgr = &Spark::Streaming::SeamlessAreaManager::GetInstance();
+            }
             for (const auto& area : m_areas)
             {
                 if (!area.isInstanced)
+                {
                     streamingMgr->UnregisterArea(area.areaId);
+                }
             }
         }
 
@@ -494,7 +518,9 @@ namespace MMO
     {
 #ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("MMO World"))
+        {
             return;
+        }
 
         ImGui::Text("World Time: %.1f s", m_worldTime);
         ImGui::Text("Areas: %zu", m_areas.size());
@@ -536,7 +562,9 @@ namespace MMO
         for (const auto& area : m_areas)
         {
             if (area.areaId == areaId)
+            {
                 return &area;
+            }
         }
         return nullptr;
     }
@@ -547,12 +575,16 @@ namespace MMO
         // outdoor map. Prefer the current area while it still contains the
         // player to prevent edge jitter and instant exits after explicit travel.
         if (const auto* currentArea = GetArea(fallbackAreaId); currentArea && currentArea->Contains(x, y, z))
+        {
             return fallbackAreaId;
+        }
 
         for (const auto& area : m_areas)
         {
             if (area.Contains(x, y, z))
+            {
                 return area.areaId;
+            }
         }
         return fallbackAreaId;
     }
@@ -564,9 +596,13 @@ namespace MMO
         {
             list += "[" + std::to_string(area.areaId) + "] " + area.name;
             if (area.isPvPEnabled)
+            {
                 list += " [PvP]";
+            }
             if (area.isInstanced)
+            {
                 list += " [Instanced]";
+            }
             list += " (max " + std::to_string(area.maxPlayers) + " players)\n";
             list += "    " + area.description + "\n";
         }

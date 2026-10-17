@@ -106,7 +106,9 @@ HRESULT Player::Initialize(ID3D11Device* device, ID3D11DeviceContext* context, S
         FPS_CONSOLE("Player projectile pool initialized. HR=0x" + std::to_string(hr), "INFO");
         FPS_ASSERT_MSG(SUCCEEDED(hr), "ProjectilePool::Initialize failed");
         if (FAILED(hr))
+        {
             return hr;
+        }
     }
     FPS_CONSOLE("Player initialization complete with weapon models.", "INFO");
     return GameObject::Initialize(device, context);
@@ -118,7 +120,9 @@ void Player::Update(float dt)
     // **FIXED: No per-frame logging to prevent console spam**
     FPS_ASSERT_MSG(dt >= 0.0f && std::isfinite(dt), "Delta time must be non-negative and finite");
     if (!IsAlive())
+    {
         return;
+    }
 
     m_spawnProtectionTimer = std::max(0.0f, m_spawnProtectionTimer - dt);
 
@@ -143,7 +147,9 @@ void Player::Render(const XMMATRIX& view, const XMMATRIX& proj)
 void Player::RenderWeapon(const XMMATRIX& view, const XMMATRIX& proj)
 {
     if (!m_camera)
+    {
         return;
+    }
 
     // Get the appropriate weapon model based on current weapon
     Model* currentWeaponModel = nullptr;
@@ -230,10 +236,14 @@ void Player::TakeDamage(float dmg)
 
     // Respawn grace window: ignore silently so it neither logs nor flashes as a hit
     if (m_spawnProtectionTimer > 0.0f)
+    {
         return;
+    }
 
     if (!IsAlive())
+    {
         return;
+    }
 
     // Apply class damage resistance
     float effectiveDmg = dmg * (1.0f - m_damageResistance);
@@ -280,7 +290,9 @@ void Player::TakeDamage(float dmg)
     {
         SetActive(false);
         if (m_deathCallback)
+        {
             m_deathCallback();
+        }
     }
     SPARK_BRANCH_GUARD_END("fps_player_death_check")
 
@@ -345,15 +357,21 @@ void Player::Fire()
     auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - lastFireLog).count();
 
     if (m_isReloading || m_fireTimer > 0.0f)
+    {
         return;
+    }
 
     // **ENHANCED: Check infinite ammo from console integration**
     if (!m_infiniteAmmoEnabled && m_currentAmmo <= 0)
+    {
         return;
+    }
 
     FPS_ASSERT_MSG(m_projectilePool != nullptr, "Pointer m_projectilePool must not be null");
     if (!m_camera)
+    {
         return;
+    }
 
     XMFLOAT3 pos = m_camera->GetPosition();
     XMFLOAT3 dir = CalculateFireDirection();
@@ -399,7 +417,9 @@ void Player::ChangeWeapon(WeaponType t)
     FPS_CONSOLE_RATE_LIMITED(2, 5, "Player::ChangeWeapon called. type=" + std::to_string(static_cast<int>(t)),
                              "OPERATION");
     if (m_isReloading)
+    {
         return;
+    }
     m_currentWeapon = GetWeaponStats(t);
     m_currentAmmo = m_currentWeapon.MagazineSize;
     m_fireTimer = 0.0f;
@@ -429,7 +449,9 @@ void Player::OnHitWorld(const XMFLOAT3& hitPoint, const XMFLOAT3& normal)
 void Player::HandleInput(float)
 {
     if (!m_input)
+    {
         return;
+    }
 
     // === VEHICLE CONTROLS ===
     if (m_currentVehicle)
@@ -452,13 +474,21 @@ void Player::HandleInput(float)
                 float throttle = 0.0f;
                 float steering = 0.0f;
                 if (m_input->IsKeyDown('W'))
+                {
                     throttle += 1.0f;
+                }
                 if (m_input->IsKeyDown('S'))
+                {
                     throttle -= 1.0f;
+                }
                 if (m_input->IsKeyDown('A'))
+                {
                     steering -= 1.0f;
+                }
                 if (m_input->IsKeyDown('D'))
+                {
                     steering += 1.0f;
+                }
                 m_currentVehicle->SetThrottle(throttle);
                 m_currentVehicle->SetSteering(steering);
                 m_currentVehicle->SetBrake(m_input->IsKeyDown(VK_SPACE));
@@ -468,9 +498,13 @@ void Player::HandleInput(float)
                 {
                     float vThrust = 0.0f;
                     if (m_input->IsKeyDown(VK_SPACE))
+                    {
                         vThrust += 1.0f;
+                    }
                     if (m_input->IsKeyDown(VK_LCONTROL))
+                    {
                         vThrust -= 1.0f;
+                    }
                     m_currentVehicle->SetVerticalThrust(vThrust);
                 }
             }
@@ -496,24 +530,38 @@ void Player::HandleInput(float)
 
     // === NORMAL PLAYER CONTROLS ===
     if (m_input->WasKeyPressed('R'))
+    {
         StartReload();
+    }
     if (m_input->IsMouseButtonDown(0))
+    {
         Fire();
+    }
     if (m_input->WasKeyPressed(VK_SPACE))
+    {
         Jump();
+    }
 
     m_isRunning = m_input->IsKeyDown(VK_LSHIFT);
     m_isCrouching = m_input->IsKeyDown(VK_LCONTROL);
 
     // Class loadout weapon slots (1-4)
     if (m_input->WasKeyPressed('1'))
+    {
         EquipPrimary();
+    }
     if (m_input->WasKeyPressed('2'))
+    {
         EquipSecondary();
+    }
     if (m_input->WasKeyPressed('3'))
+    {
         EquipSidearm();
+    }
     if (m_input->WasKeyPressed('4'))
+    {
         EquipTool();
+    }
 
     // Class abilities
     if (m_input->WasKeyPressed('F'))
@@ -529,7 +577,9 @@ void Player::HandleInput(float)
         }
     }
     if (m_input->WasKeyPressed('G'))
+    {
         ActivateSecondaryAbility();
+    }
 
     // Jetpack hold (Scout) - hold Space while in air
     if (m_playerClass == PlayerClass::SCOUT && m_primaryAbility.isActive)
@@ -542,15 +592,21 @@ void Player::HandleInput(float)
 void Player::UpdateMovement(float dt)
 {
     if (!m_camera || !m_input)
+    {
         return;
+    }
 
     // Skip player movement when in vehicle (vehicle handles position)
     if (m_currentVehicle)
+    {
         return;
+    }
 
     // Titan lockdown prevents all movement
     if (m_lockedDown)
+    {
         return;
+    }
 
     float speed = m_speed;
 
@@ -579,16 +635,26 @@ void Player::UpdateMovement(float dt)
     speed *= dt;
 
     if (m_input->IsKeyDown('W'))
+    {
         m_camera->MoveForward(speed);
+    }
     if (m_input->IsKeyDown('S'))
+    {
         m_camera->MoveForward(-speed);
+    }
     if (m_input->IsKeyDown('A'))
+    {
         m_camera->MoveRight(-speed);
+    }
     if (m_input->IsKeyDown('D'))
+    {
         m_camera->MoveRight(speed);
+    }
 
     if (!m_isRunning)
+    {
         m_stamina = std::min(m_maxStamina, m_stamina + 50.0f * dt);
+    }
 
     SetPosition(m_camera->GetPosition());
 }
@@ -601,7 +667,9 @@ void Player::UpdateCombat(float dt)
     {
         m_fireTimer -= dt;
         if (m_fireTimer < 0)
+        {
             m_fireTimer = 0;
+        }
     }
     if (m_isReloading)
     {
@@ -635,7 +703,9 @@ void Player::UpdatePhysics(float dt)
     pos.z += m_velocity.z * dt;
     SetPosition(pos);
     if (m_camera)
+    {
         m_camera->SetPosition(pos);
+    }
 
     // Apply console-controlled friction
     m_velocity.x *= m_frictionCoeff;
@@ -703,7 +773,9 @@ void Player::CheckGroundCollision()
         m_isGrounded = true;
         m_isJumping = false;
         if (m_camera)
+        {
             m_camera->SetPosition(pos);
+        }
     }
 }
 
@@ -729,7 +801,9 @@ WeaponStats Player::GetWeaponStats(WeaponType type)
 XMFLOAT3 Player::GetForwardDirection() const
 {
     if (!m_camera)
+    {
         return XMFLOAT3(0, 0, 1);
+    }
     return m_camera->GetForward();
 }
 
@@ -737,7 +811,9 @@ XMFLOAT3 Player::GetForwardDirection() const
 XMFLOAT3 Player::CalculateFireDirection()
 {
     if (!m_camera)
+    {
         return XMFLOAT3(0, 0, 1);
+    }
     XMFLOAT3 f = m_camera->GetForward();
     float spread = (1.0f - m_currentWeapon.Accuracy) * 0.1f;
     if (spread > 0.0f)
@@ -918,11 +994,15 @@ void Player::DeactivatePrimaryAbility()
 bool Player::CanEquipWeapon(WeaponType type) const
 {
     if (m_allowedWeapons.empty())
+    {
         return true; // No restrictions
+    }
     for (auto w : m_allowedWeapons)
     {
         if (w == type)
+        {
             return true;
+        }
     }
     return false;
 }
@@ -1063,7 +1143,9 @@ void Player::UpdateEnergyShield(float dt)
 bool Player::EnterVehicle(Spark::Vehicle* vehicle, int seatIndex)
 {
     if (!vehicle || m_currentVehicle)
+    {
         return false; // Already in a vehicle
+    }
 
     if (vehicle->EnterSeat(this, seatIndex))
     {
@@ -1080,7 +1162,9 @@ bool Player::EnterVehicle(Spark::Vehicle* vehicle, int seatIndex)
 bool Player::ExitVehicle()
 {
     if (!m_currentVehicle)
+    {
         return false;
+    }
 
     XMFLOAT3 exitPos = m_currentVehicle->GetExitPosition(m_vehicleSeatIndex);
 
@@ -1088,7 +1172,9 @@ bool Player::ExitVehicle()
     {
         SetPosition(exitPos);
         if (m_camera)
+        {
             m_camera->SetPosition(exitPos);
+        }
         m_velocity = {0, 0, 0};
 
         FPS_CONSOLE("Player exited vehicle", "SUCCESS");

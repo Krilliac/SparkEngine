@@ -19,13 +19,17 @@ namespace Racing
     bool RacingCameraSystem::Initialize(Spark::IEngineContext* context)
     {
         if (!context)
+        {
             return false;
+        }
 
         m_context = context;
 
         // Initialize default configs for all camera modes
         for (size_t i = 0; i < static_cast<size_t>(CameraMode::Count); ++i)
+        {
             m_configs[i] = GetDefaultConfig(static_cast<CameraMode>(i));
+        }
 
         m_activeMode = CameraMode::Chase;
         m_initialized = true;
@@ -38,7 +42,9 @@ namespace Racing
     void RacingCameraSystem::Update(float deltaTime)
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         switch (m_activeMode)
         {
@@ -66,7 +72,9 @@ namespace Racing
 
         // Transition blending
         if (m_transitionProgress < 1.0f)
+        {
             m_transitionProgress = std::min(1.0f, m_transitionProgress + deltaTime * 3.0f);
+        }
     }
 
     void RacingCameraSystem::Shutdown()
@@ -77,7 +85,9 @@ namespace Racing
     void RacingCameraSystem::SetMode(CameraMode mode)
     {
         if (mode == m_activeMode)
+        {
             return;
+        }
 
         m_activeMode = mode;
         m_transitionProgress = 0.0f;
@@ -224,7 +234,9 @@ namespace Racing
     {
         const auto& cfg = m_configs[static_cast<size_t>(m_activeMode)];
         if (cfg.shakeIntensity <= 0.0f)
+        {
             return;
+        }
 
         // Speed-proportional camera shake
         float intensity = cfg.shakeIntensity * std::clamp(speed / 250.0f, 0.0f, 1.0f);
@@ -301,7 +313,9 @@ namespace Racing
     {
 #ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Racing Camera"))
+        {
             return;
+        }
 
         ImGui::Text("Mode: %s", ModeToString(m_activeMode));
         ImGui::Text("FOV: %.1f", m_state.fov);
@@ -316,9 +330,13 @@ namespace Racing
         for (int i = 0; i < 5; ++i)
         {
             if (ImGui::Button(modeNames[i]))
+            {
                 SetMode(static_cast<CameraMode>(i));
+            }
             if (i < 4)
+            {
                 ImGui::SameLine();
+            }
         }
 
         // Orbit controls

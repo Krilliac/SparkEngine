@@ -453,7 +453,7 @@ namespace SparkLauncher
         /// refreshed while it is being iterated.
         struct RowAction
         {
-            enum class Kind
+            enum class Kind : std::uint8_t
             {
                 None,
                 Launch,

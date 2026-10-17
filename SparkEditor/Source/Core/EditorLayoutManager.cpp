@@ -70,7 +70,9 @@ namespace SparkEditor
     bool EditorLayoutManager::IsValidLayoutName(const std::string& name)
     {
         if (name.empty() || name.size() > kMaxLayoutNameLength || name == "." || name == "..")
+        {
             return false;
+        }
 
         // Characters no Windows file name may hold, plus the path separators every platform rejects.
         const bool hasForbiddenChar = std::any_of(name.begin(), name.end(),
@@ -81,11 +83,15 @@ namespace SparkEditor
                                                              c == '*';
                                                   });
         if (hasForbiddenChar)
+        {
             return false;
+        }
 
         // Windows silently strips a trailing dot or space, so "A." would overwrite "A".
         if (name.back() == '.' || name.back() == ' ' || name.front() == ' ')
+        {
             return false;
+        }
 
         // Reserved DOS device names are invalid as file stems on Windows whatever the extension.
         std::string stem = name.substr(0, name.find('.'));
@@ -144,7 +150,9 @@ namespace SparkEditor
     void EditorLayoutManager::RegisterPanel(const PanelConfig& config)
     {
         if (config.name.empty())
+        {
             return;
+        }
 
         if (m_panels.find(config.name) == m_panels.end())
         {
@@ -158,7 +166,9 @@ namespace SparkEditor
     {
         auto it = m_panels.find(panelName);
         if (it == m_panels.end())
+        {
             return;
+        }
         it->second.isVisible = visible;
     }
 
@@ -166,7 +176,9 @@ namespace SparkEditor
     {
         auto it = m_panels.find(panelName);
         if (it == m_panels.end())
+        {
             return false;
+        }
         return it->second.isVisible;
     }
 
@@ -174,7 +186,9 @@ namespace SparkEditor
     {
         auto it = m_panels.find(panelName);
         if (it == m_panels.end())
+        {
             return;
+        }
         it->second.posX = x;
         it->second.posY = y;
     }
@@ -183,7 +197,9 @@ namespace SparkEditor
     {
         auto it = m_panels.find(panelName);
         if (it == m_panels.end())
+        {
             return;
+        }
         it->second.sizeX = w;
         it->second.sizeY = h;
     }
@@ -192,7 +208,9 @@ namespace SparkEditor
     {
         auto it = m_panels.find(panelName);
         if (it == m_panels.end())
+        {
             return nullptr;
+        }
         return &it->second;
     }
 
@@ -271,11 +289,15 @@ namespace SparkEditor
         {
             auto it = m_panels.find(panelName);
             if (it == m_panels.end())
+            {
                 continue;
+            }
             const PanelConfig& p = it->second;
 
             if (!first)
+            {
                 f << ",\n";
+            }
             first = false;
 
             f << "      {\n";
@@ -368,9 +390,13 @@ namespace SparkEditor
             void SkipTo(char target)
             {
                 while (pos < s.size() && s[pos] != target)
+                {
                     ++pos;
+                }
                 if (pos < s.size())
+                {
                     ++pos;
+                }
             }
 
             // Find a key `"name":` at any position >= pos; move pos to the
@@ -405,7 +431,9 @@ namespace SparkEditor
             {
                 SkipWhitespaceAndPunct();
                 if (pos >= s.size() || s[pos] != '"')
+                {
                     return {};
+                }
                 ++pos; // opening quote
                 std::string out;
                 while (pos < s.size() && s[pos] != '"')
@@ -443,7 +471,9 @@ namespace SparkEditor
                     }
                 }
                 if (pos < s.size())
+                {
                     ++pos; // closing quote
+                }
                 return out;
             }
 
@@ -471,12 +501,18 @@ namespace SparkEditor
                 {
                     char c = s[pos];
                     if ((c >= '0' && c <= '9') || c == '-' || c == '+' || c == '.' || c == 'e' || c == 'E')
+                    {
                         ++pos;
+                    }
                     else
+                    {
                         break;
+                    }
                 }
                 if (start == pos)
+                {
                     return 0.0;
+                }
                 try
                 {
                     return std::stod(s.substr(start, pos - start));
@@ -536,7 +572,9 @@ namespace SparkEditor
         {
             cursor.SkipWhitespaceAndPunct();
             if (cursor.pos >= cursor.s.size() || cursor.s[cursor.pos] != '{')
+            {
                 return false;
+            }
 
             // Find the matching closing brace so we restrict key lookups
             // to this object.
@@ -547,7 +585,9 @@ namespace SparkEditor
             {
                 char c = cursor.s[i];
                 if (c == '{')
+                {
                     ++depth;
+                }
                 else if (c == '}')
                 {
                     --depth;
@@ -559,16 +599,22 @@ namespace SparkEditor
                 }
             }
             if (objEnd == std::string::npos)
+            {
                 return false;
+            }
 
             const std::string objStr = cursor.s.substr(objStart, objEnd - objStart + 1);
             Cursor sub(objStr);
 
             if (sub.FindKey("name"))
+            {
                 out.name = sub.ReadString();
+            }
             sub.pos = 0;
             if (sub.FindKey("displayName"))
+            {
                 out.displayName = sub.ReadString();
+            }
             int dock = static_cast<int>(out.dockPosition);
             if (!ReadIntField(sub, "dock", dock) || !ReadFloatField(sub, "sizeX", out.sizeX) ||
                 !ReadFloatField(sub, "sizeY", out.sizeY) || !ReadFloatField(sub, "posX", out.posX) ||
@@ -579,23 +625,33 @@ namespace SparkEditor
             out.dockPosition = static_cast<LayoutDockPosition>(dock);
             sub.pos = 0;
             if (sub.FindKey("visible"))
+            {
                 out.isVisible = sub.ReadBool();
+            }
             sub.pos = 0;
             if (sub.FindKey("floating"))
+            {
                 out.isFloating = sub.ReadBool();
+            }
             sub.pos = 0;
             if (sub.FindKey("canClose"))
+            {
                 out.canClose = sub.ReadBool();
+            }
             sub.pos = 0;
             if (sub.FindKey("canDock"))
+            {
                 out.canDock = sub.ReadBool();
+            }
             if (!ReadFloatField(sub, "dockRatio", out.dockRatio) || !ReadIntField(sub, "tabOrder", out.tabOrder))
             {
                 return false;
             }
             sub.pos = 0;
             if (sub.FindKey("parentDock"))
+            {
                 out.parentDock = sub.ReadString();
+            }
 
             cursor.pos = objEnd + 1;
             return !out.name.empty();
@@ -709,7 +765,9 @@ namespace SparkEditor
         {
             auto it = m_panels.find(panel.name);
             if (it != m_panels.end())
+            {
                 it->second = std::move(panel);
+            }
         }
         return true;
     }
@@ -737,7 +795,9 @@ namespace SparkEditor
     bool EditorLayoutManager::HasLayout(const std::string& name) const
     {
         if (!m_initialized || !IsValidLayoutName(name))
+        {
             return false;
+        }
         std::error_code ec;
         return fs::is_regular_file(LayoutFilePath(name), ec);
     }
@@ -774,7 +834,9 @@ namespace SparkEditor
         fs::remove(fs::path(dockIni.string() + ".meta"), companionEc);
 
         if (m_currentLayoutName == name)
+        {
             m_currentLayoutName = "Default";
+        }
         return true;
     }
 
@@ -783,17 +845,25 @@ namespace SparkEditor
         std::vector<LayoutInfo> result;
         std::error_code ec;
         if (!fs::exists(m_layoutDirectory, ec))
+        {
             return result;
+        }
 
         for (const auto& entry : fs::directory_iterator(m_layoutDirectory, ec))
         {
             if (ec)
+            {
                 break;
+            }
             if (!entry.is_regular_file())
+            {
                 continue;
+            }
             const fs::path& p = entry.path();
             if (p.extension() != ".json")
+            {
                 continue;
+            }
 
             // Layouts are reloaded by name through narrow std::string paths. A file
             // name the Windows ANSI code page cannot spell has none, and

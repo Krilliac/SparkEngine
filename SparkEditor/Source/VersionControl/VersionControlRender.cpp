@@ -30,18 +30,24 @@ namespace SparkEditor
         {
             Spark::Process::Builder builder(executable);
             for (const auto& argument : arguments)
+            {
                 builder.Arg(argument);
+            }
             builder.CaptureStdout();
 
             auto launched = builder.Launch();
             if (!launched)
+            {
                 return false;
+            }
 
             auto process = std::move(*launched);
             selectedPath = process.ReadAllStdout();
             const int status = process.WaitForExit();
             while (!selectedPath.empty() && (selectedPath.back() == '\n' || selectedPath.back() == '\r'))
+            {
                 selectedPath.pop_back();
+            }
             return status == 0 && !selectedPath.empty() && std::filesystem::is_directory(selectedPath);
         }
 #endif
@@ -115,7 +121,9 @@ namespace SparkEditor
                 }
 #endif
                 if (selected)
+                {
                     OpenRepository(selectedPath);
+                }
             }
             return;
         }
@@ -186,7 +194,9 @@ namespace SparkEditor
 
         Spark::Ui::SubHeader("Changed Files");
         if (m_repositoryInfo->changedFiles.empty())
+        {
             Spark::Ui::SecondaryText("Working tree clean.");
+        }
 
         // Track staging selection per file
         static std::unordered_map<std::string, bool> selectedFiles;
@@ -240,13 +250,17 @@ namespace SparkEditor
             for (auto& [path, sel] : selectedFiles)
             {
                 if (sel)
+                {
                     toStage.push_back(path);
+                }
             }
             if (!toStage.empty())
             {
                 StageFiles(toStage);
                 for (auto& [path, sel] : selectedFiles)
+                {
                     sel = false;
+                }
             }
         }
         ImGui::SameLine();
@@ -256,13 +270,17 @@ namespace SparkEditor
             for (auto& [path, sel] : selectedFiles)
             {
                 if (sel)
+                {
                     toUnstage.push_back(path);
+                }
             }
             if (!toUnstage.empty())
             {
                 UnstageFiles(toUnstage);
                 for (auto& [path, sel] : selectedFiles)
+                {
                     sel = false;
+                }
             }
         }
 
@@ -563,7 +581,9 @@ namespace SparkEditor
             builder.Arg("-C").Arg(workingDirectory);
         }
         for (const auto& arg : args)
+        {
             builder.Arg(arg);
+        }
         builder.CaptureStdout();
 
         auto procResult = builder.Launch();

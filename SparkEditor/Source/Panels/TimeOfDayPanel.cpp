@@ -98,7 +98,9 @@ namespace SparkEditor
     void TimeOfDayPanel::Render()
     {
         if (!IsVisible())
+        {
             return;
+        }
 
         if (BeginPanel())
         {
@@ -125,7 +127,9 @@ namespace SparkEditor
         const int minutes = static_cast<int>((hour - static_cast<float>(hours)) * 60.0f);
 
         if (!Spark::Ui::BeginPropertyGrid("TimeOfDayClock"))
+        {
             return;
+        }
 
         Spark::Ui::PropertyLabel(ICON_FA_CLOCK " Time");
         Spark::Ui::MonoText("%02d:%02d", hours, minutes);
@@ -144,21 +148,31 @@ namespace SparkEditor
 
         Spark::Ui::PropertyLabel("Quick Scale");
         if (ImGui::SmallButton("1x"))
+        {
             SetTimeScale(1.0f);
+        }
         ImGui::SameLine();
         if (ImGui::SmallButton("10x"))
+        {
             SetTimeScale(10.0f);
+        }
         ImGui::SameLine();
         if (ImGui::SmallButton("60x"))
+        {
             SetTimeScale(60.0f);
+        }
         ImGui::SameLine();
         if (ImGui::SmallButton("600x"))
+        {
             SetTimeScale(600.0f);
+        }
 
         Spark::Ui::PropertyLabel("Clock");
         const bool paused = IsPaused();
         if (Spark::Ui::SecondaryButton(paused ? ICON_FA_PLAY " Resume" : ICON_FA_PAUSE " Pause"))
+        {
             SetPaused(!paused);
+        }
         Spark::Ui::EndPropertyGrid();
 
         if (!IsDrivingClock())
@@ -172,19 +186,29 @@ namespace SparkEditor
         Spark::Ui::SubHeader(ICON_FA_SUN " Presets");
 
         if (Spark::Ui::SecondaryButton("Dawn (6:00)"))
+        {
             SetHour(6.0f);
+        }
         ImGui::SameLine();
         if (Spark::Ui::SecondaryButton("Morning (9:00)"))
+        {
             SetHour(9.0f);
+        }
         ImGui::SameLine();
         if (Spark::Ui::SecondaryButton("Noon (12:00)"))
+        {
             SetHour(12.0f);
+        }
         ImGui::SameLine();
         if (Spark::Ui::SecondaryButton("Dusk (18:00)"))
+        {
             SetHour(18.0f);
+        }
         ImGui::SameLine();
         if (Spark::Ui::SecondaryButton("Midnight (0:00)"))
+        {
             SetHour(0.0f);
+        }
     }
 
     void TimeOfDayPanel::RenderLightingPreview()
@@ -196,7 +220,9 @@ namespace SparkEditor
 
         Spark::Ui::SubHeader(ICON_FA_LIGHTBULB " Lighting State");
         if (!Spark::Ui::BeginPropertyGrid("TimeOfDayLighting"))
+        {
             return;
+        }
 
         Spark::Ui::PropertyLabel("Sun Direction");
         Spark::Ui::MonoText("(%.2f, %.2f, %.2f)", sunDirection.x, sunDirection.y, sunDirection.z);

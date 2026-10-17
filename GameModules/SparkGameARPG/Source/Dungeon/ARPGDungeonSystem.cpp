@@ -51,7 +51,9 @@ namespace ARPG
     {
         auto* world = m_context ? m_context->GetWorld() : nullptr;
         if (!world)
+        {
             return;
+        }
 
         // Meters, pivot at the ground-contact centre, front facing +Z (source Art/Blender/SparkGameARPG/arpg_kit.blend).
         // The hero starts at the origin looking down -Z: urns (the art for the "arpg_urn" fracture pattern registered
@@ -118,7 +120,9 @@ namespace ARPG
             {
                 auto entity = static_cast<EntityID>(entityId);
                 if (world->GetRegistry().valid(entity))
+                {
                     world->DestroyEntity(entity);
+                }
             }
         }
         m_kitEntities.clear();
@@ -210,7 +214,9 @@ namespace ARPG
         for (const auto& config : m_tierConfigs)
         {
             if (config.tier == tier)
+            {
                 return &config;
+            }
         }
         return nullptr;
     }
@@ -257,7 +263,9 @@ namespace ARPG
     const DungeonLevel* ARPGDungeonSystem::GetCurrentFloor() const
     {
         if (m_currentFloorIndex < 0 || m_currentFloorIndex >= static_cast<int>(m_floors.size()))
+        {
             return nullptr;
+        }
         return &m_floors[static_cast<size_t>(m_currentFloorIndex)];
     }
 
@@ -290,9 +298,13 @@ namespace ARPG
         msg += " (MonLv:" + std::to_string(level.monsterLevel);
         msg += " Density:" + std::to_string(static_cast<int>(level.monsterDensity * 100.0f)) + "%";
         if (level.hasElitePack)
+        {
             msg += " ELITE";
+        }
         if (level.hasBoss)
+        {
             msg += " BOSS";
+        }
         msg += ")";
         Spark::ModuleLog::Info(m_context, "ARPG descended to floor {} (monster level {})", nextFloor,
                                level.monsterLevel);
@@ -318,9 +330,13 @@ namespace ARPG
             ss << "\nCurrent: Floor " << floor->floorNumber << " | MonLv:" << floor->monsterLevel
                << " | Density:" << static_cast<int>(floor->monsterDensity * 100.0f) << "%";
             if (floor->hasElitePack)
+            {
                 ss << " | ELITE PACK";
+            }
             if (floor->hasBoss)
+            {
                 ss << " | BOSS";
+            }
             ss << "\n";
         }
         else
@@ -345,9 +361,13 @@ namespace ARPG
                 ImGui::Text("Current: Floor %d | MonLv %d | Density %.0f%%", floor->floorNumber, floor->monsterLevel,
                             floor->monsterDensity * 100.0f);
                 if (floor->hasElitePack)
+                {
                     ImGui::TextColored({1, 0.5f, 0, 1}, "ELITE PACK present");
+                }
                 if (floor->hasBoss)
+                {
                     ImGui::TextColored({1, 0, 0, 1}, "BOSS present");
+                }
             }
             else
             {

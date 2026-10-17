@@ -81,7 +81,7 @@ namespace Spark::Ui
             try
             {
                 const std::u8string utf8 = path.u8string();
-                return std::string(utf8.begin(), utf8.end());
+                return {utf8.begin(), utf8.end()};
             }
             catch (const std::system_error&)
             {

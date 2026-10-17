@@ -147,9 +147,13 @@ namespace SparkEditor
 
             // Handle keyboard navigation
             if (ImGui::IsKeyPressed(ImGuiKey_DownArrow))
+            {
                 MoveSelection(1);
+            }
             if (ImGui::IsKeyPressed(ImGuiKey_UpArrow))
+            {
                 MoveSelection(-1);
+            }
             if (ImGui::IsKeyPressed(ImGuiKey_Enter) && GetVisibleActionCount() > 0)
             {
                 if (ExecuteSelected())
@@ -191,7 +195,9 @@ namespace SparkEditor
                     break;
                 }
                 if (isSelected && (ImGui::IsKeyPressed(ImGuiKey_DownArrow) || ImGui::IsKeyPressed(ImGuiKey_UpArrow)))
+                {
                     ImGui::SetScrollHereY();
+                }
 
                 // Category badge, name, then the shortcut right-aligned on the same row.
                 ImGui::SameLine(rowLeft + Ui::Px(8.0f));
@@ -230,9 +236,13 @@ namespace SparkEditor
             // Footer
             ImGui::Separator();
             if (GetVisibleActionCount() < m_filteredIndices.size())
+            {
                 Ui::SecondaryText("%zu of %zu actions shown", GetVisibleActionCount(), m_filteredIndices.size());
+            }
             else
+            {
                 Ui::SecondaryText("%zu actions available", m_filteredIndices.size());
+            }
         }
         ImGui::End();
     }
@@ -346,7 +356,9 @@ namespace SparkEditor
         {
             size_t actionIdx = m_filteredIndices[static_cast<size_t>(m_selectedIndex)];
             if (actionIdx >= m_allActions.size())
+            {
                 return false;
+            }
             const auto& action = m_allActions[actionIdx];
             if (action.callback)
             {

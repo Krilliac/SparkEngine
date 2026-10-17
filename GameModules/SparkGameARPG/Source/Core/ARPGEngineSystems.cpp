@@ -77,7 +77,9 @@ namespace ARPG
                                        ARPGLootSystem* loot, ARPGDungeonSystem* dungeon)
     {
         if (!context || !heroes || !combat || !loot || !dungeon)
+        {
             return false;
+        }
 
         m_context = context;
         m_heroes = heroes;
@@ -102,23 +104,31 @@ namespace ARPG
     void ARPGEngineSystems::Update(float deltaTime)
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         if (m_heroAnimation && std::isfinite(deltaTime) && deltaTime > 0.0f)
+        {
             m_heroAnimation->Update(deltaTime);
+        }
 
         if (!m_actionUsesCoroutine && m_actionTimeRemaining > 0.0f && std::isfinite(deltaTime) && deltaTime > 0.0f)
         {
             m_actionTimeRemaining = std::max(0.0f, m_actionTimeRemaining - deltaTime);
             if (m_actionTimeRemaining <= 0.0f)
+            {
                 CompleteHeroAction(m_actionGeneration);
+            }
         }
     }
 
     void ARPGEngineSystems::Shutdown()
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         // RAII handles auto-unsubscribe, but clear explicitly for deterministic order
         m_eventHandles.clear();
@@ -136,7 +146,9 @@ namespace ARPG
         if (m_context && !m_actionCoroutineName.empty())
         {
             if (auto* scheduler = m_context->GetCoroutineScheduler())
+            {
                 scheduler->StopCoroutine(m_actionCoroutineName);
+            }
         }
 
         m_heroAnimation.reset();
@@ -163,7 +175,9 @@ namespace ARPG
     {
 #ifdef SPARK_HAS_IMGUI
         if (!m_initialized)
+        {
             return;
+        }
 
         if (ImGui::TreeNode("ARPG Engine Integration"))
         {
@@ -191,7 +205,9 @@ namespace ARPG
     {
         auto* eventBus = m_context->GetEventBus();
         if (!eventBus)
+        {
             return;
+        }
 
         // Route damage events into combat system tracking
         m_eventHandles.push_back(eventBus->Subscribe<Spark::EntityDamagedEvent>(
@@ -232,7 +248,9 @@ namespace ARPG
     {
         auto* destruction = m_context->GetDestruction();
         if (!destruction)
+        {
             return;
+        }
 
         // Barrel fracture pattern — common dungeon prop
         Spark::FracturePattern barrel;
@@ -283,7 +301,9 @@ namespace ARPG
     {
         auto* ai = m_context->GetAI();
         if (!ai)
+        {
             return;
+        }
 
         // Melee chase behavior — basic monsters rush toward the hero
         Spark::AI::AIAgentConfig meleeConfig;
@@ -402,7 +422,9 @@ namespace ARPG
     void ARPGEngineSystems::PlayHeroAction(ARPGHeroAction action)
     {
         if (!m_initialized || !m_heroAnimation)
+        {
             return;
+        }
 
         const char* state = IDLE_STATE;
         switch (action)
@@ -460,7 +482,9 @@ namespace ARPG
     void ARPGEngineSystems::CompleteHeroAction(uint64_t generation)
     {
         if (!m_initialized || generation != m_actionGeneration || !m_heroAnimation)
+        {
             return;
+        }
 
         m_heroAnimation->ForceState(IDLE_STATE);
         m_actionTimeRemaining = 0.0f;
@@ -488,7 +512,9 @@ namespace ARPG
     {
         auto* weather = m_context->GetWeather();
         if (!weather)
+        {
             return;
+        }
 
         // Set default dungeon weather to foggy/dark atmosphere
         weather->SetWeather(Spark::WeatherType::Fog, 0.4f, 2.0f);

@@ -42,7 +42,7 @@ namespace SparkInstaller
     namespace
     {
         // The wizard's pages, in step-rail order. The Progress page is the rail's "Install" step.
-        enum class Page
+        enum class Page : std::uint8_t
         {
             Welcome,
             Destination,
@@ -121,7 +121,9 @@ namespace SparkInstaller
             ~GuiState()
             {
                 if (worker.joinable())
+                {
                     worker.join();
+                }
             }
 
             bool Running() const { return started && !finished.load(); }
@@ -152,10 +154,14 @@ namespace SparkInstaller
             std::string value = text != nullptr ? text : "";
             const auto isSpace = [](char c) { return std::isspace(static_cast<unsigned char>(c)) != 0; };
             while (!value.empty() && isSpace(value.back()))
+            {
                 value.pop_back();
+            }
             std::size_t first = 0;
             while (first < value.size() && isSpace(value[first]))
+            {
                 ++first;
+            }
             return value.substr(first);
         }
 
@@ -202,7 +208,9 @@ namespace SparkInstaller
             for (const auto& option : ctx.configManager.config.options)
             {
                 if (option.currentValue)
+                {
                     ++enabled;
+                }
             }
             return enabled;
         }
@@ -212,7 +220,9 @@ namespace SparkInstaller
             for (int i = 0; i < kRefChoiceCount; ++i)
             {
                 if (ref == kRefValues[i])
+                {
                     return i;
+                }
             }
             return -1;
         }
@@ -223,30 +233,46 @@ namespace SparkInstaller
         {
             const std::string path = Trimmed(s.destBuf);
             if (path == s.priorPath)
+            {
                 return;
+            }
             s.priorPath = path;
             s.prior.reset();
             s.updateChosen = false;
             if (path.empty() || !InstallState::Exists(path))
+            {
                 return;
+            }
             InstallState loaded;
             if (InstallState::Load(path, loaded))
+            {
                 s.prior = std::move(loaded);
+            }
         }
 
         // Update mode restores what the previous install used, as the TUI does: the ref, and every
         // option the record knows, on top of the defaults.
         void ChooseUpdate(GuiState& s, InstallerContext& ctx)
         {
+            // The Update button is only drawn with a loaded record; without one there is nothing to restore.
+            if (!s.prior.has_value())
+            {
+                return;
+            }
+            const InstallState& prior = *s.prior;
             s.updateChosen = true;
-            if (!s.prior->ref.empty())
-                CopyToBuffer(s.refBuf, s.prior->ref);
+            if (!prior.ref.empty())
+            {
+                CopyToBuffer(s.refBuf, prior.ref);
+            }
             ctx.configManager.InitDefaults();
             for (auto& option : ctx.configManager.config.options)
             {
-                const auto it = s.prior->options.find(option.cmakeVar);
-                if (it != s.prior->options.end())
+                const auto it = prior.options.find(option.cmakeVar);
+                if (it != prior.options.end())
+                {
                     option.currentValue = it->second;
+                }
             }
             s.presetIdx = -1;
         }
@@ -293,11 +319,17 @@ namespace SparkInstaller
         void CollectFinishedInstall(GuiState& s)
         {
             if (!s.started || !s.finished.load())
+            {
                 return;
+            }
             if (s.worker.joinable())
+            {
                 s.worker.join();
+            }
             if (s.page == Page::Progress)
+            {
                 s.page = Page::Done;
+            }
         }
 
         const char* NextBlockedReason(const GuiState& s)
@@ -306,13 +338,19 @@ namespace SparkInstaller
             {
             case Page::Destination:
                 if (Trimmed(s.destBuf).empty())
+                {
                     return "Enter an install folder.";
+                }
                 if (s.prior && !s.updateChosen)
+                {
                     return "This folder already holds an install. Choose Update, or pick another folder.";
+                }
                 return nullptr;
             case Page::Ref:
                 if (Trimmed(s.refBuf).empty())
+                {
                     return "Enter a branch or tag.";
+                }
                 return nullptr;
             default:
                 return nullptr;
@@ -397,17 +435,21 @@ namespace SparkInstaller
                 while (clipper.Step())
                 {
                     for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i)
+                    {
                         ImGui::TextUnformatted(s.logLines[first + static_cast<std::size_t>(i)].c_str());
+                    }
                 }
                 if (following)
+                {
                     ImGui::SetScrollHereY(1.0f);
+                }
             }
             ImGui::EndChild();
         }
 
         // --- step rail -----------------------------------------------------------------------
 
-        enum class StepState
+        enum class StepState : std::uint8_t
         {
             Done,
             Current,
@@ -422,13 +464,19 @@ namespace SparkInstaller
             {
                 const bool failed = s.exitCode.load() != 0;
                 if (step == static_cast<int>(Page::Progress) && failed)
+                {
                     return StepState::Failed;
+                }
                 if (step == static_cast<int>(Page::Done) && failed)
+                {
                     return StepState::Current;
+                }
                 return StepState::Done;
             }
             if (step < current)
+            {
                 return StepState::Done;
+            }
             return step == current ? StepState::Current : StepState::Pending;
         }
 
@@ -522,9 +570,13 @@ namespace SparkInstaller
             const ui::BrandBandStyle band = ui::ChooseBrandBandStyle(ui::ActiveTokens());
             const ImVec2 bandMax(origin.x + width, origin.y + bandHeight);
             if (band.gradient)
+            {
                 ui::DrawBrandGradient(drawList, origin, bandMax);
+            }
             else
+            {
                 drawList->AddRectFilled(origin, bandMax, ui::Col(ui::Role::SurfaceRaised));
+            }
             const float markSize = ui::Px(kLogomarkSize);
             const float markLeft = origin.x + ui::Px(kBandPad);
             ui::DrawLogomark(drawList, ImVec2(markLeft + markSize * 0.5f, origin.y + bandHeight * 0.5f), markSize,
@@ -560,7 +612,9 @@ namespace SparkInstaller
                 if (clickable)
                 {
                     if (ImGui::InvisibleButton("##step", ImVec2(rowWidth, rowHeight)))
+                    {
                         requested = i;
+                    }
                 }
                 else
                 {
@@ -624,7 +678,9 @@ namespace SparkInstaller
                 ImGui::TextUnformatted(title);
             }
             if (subtitle != nullptr)
+            {
                 ui::SecondaryText("%s", subtitle);
+            }
             ImGui::Dummy(ImVec2(0.0f, ui::Px(4.0f)));
         }
 
@@ -675,7 +731,9 @@ namespace SparkInstaller
             RefreshPrior(s);
 
             if (!s.prior)
+            {
                 return;
+            }
             ImGui::Dummy(ImVec2(0.0f, ui::Px(8.0f)));
             ui::Banner(ui::Status::Info, "Spark Engine is already installed in this folder.");
             ui::KeyValue("Version", "%s", s.prior->ref.empty() ? "(unknown)" : s.prior->ref.c_str());
@@ -688,10 +746,14 @@ namespace SparkInstaller
                 return;
             }
             if (ui::PrimaryButton("Update this install (keeps your options)"))
+            {
                 ChooseUpdate(s, ctx);
+            }
             ImGui::SameLine();
             if (ui::SecondaryButton("Choose another folder"))
+            {
                 s.focusPath = true;
+            }
         }
 
         void DrawVersion(GuiState& s)
@@ -699,7 +761,9 @@ namespace SparkInstaller
             PageTitle("Which version?", "Pick a channel, or type any branch or tag.");
             int choice = RefChoiceIndex(Trimmed(s.refBuf));
             if (ui::SegmentedControl("##ref", kRefLabels, kRefChoiceCount, &choice))
+            {
                 CopyToBuffer(s.refBuf, kRefValues[choice]);
+            }
             ImGui::Dummy(ImVec2(0.0f, ui::Px(4.0f)));
             ImGui::PushTextWrapPos(0.0f);
             for (int i = 0; i < kRefChoiceCount; ++i)
@@ -718,7 +782,9 @@ namespace SparkInstaller
         {
             PageTitle("Choose components", "Pick a preset, then switch single components on or off.");
             if (ui::SegmentedControl("##preset", kPresetNames, kPresetCount, &s.presetIdx))
+            {
                 ApplyPreset(ctx, s.presetIdx);
+            }
             ImGui::Dummy(ImVec2(0.0f, ui::Px(4.0f)));
             ui::KeyValue("Enabled", "%zu of %zu", EnabledCount(ctx), ctx.configManager.config.options.size());
             ImGui::Dummy(ImVec2(0.0f, ui::Px(4.0f)));
@@ -735,9 +801,13 @@ namespace SparkInstaller
                     const auto category = static_cast<SparkBuild::OptionCategory>(c);
                     bool any = false;
                     for (const auto& option : ctx.configManager.config.options)
+                    {
                         any = any || option.category == category;
+                    }
                     if (!any)
+                    {
                         continue;
+                    }
                     ui::SubHeader(SparkBuild::CategoryDisplayName(category));
                     ImGui::PushID(c);
                     if (ui::BeginPropertyGrid("##grid"))
@@ -745,11 +815,15 @@ namespace SparkInstaller
                         for (auto& option : ctx.configManager.config.options)
                         {
                             if (option.category != category)
+                            {
                                 continue;
+                            }
                             ImGui::PushID(option.cmakeVar.c_str());
                             ui::PropertyLabel(option.displayName.c_str(), option.description.c_str());
                             if (ImGui::Checkbox("##enabled", &option.currentValue))
+                            {
                                 s.presetIdx = -1;
+                            }
                             ImGui::PopID();
                         }
                         ui::EndPropertyGrid();
@@ -786,7 +860,9 @@ namespace SparkInstaller
                 for (const auto& option : ctx.configManager.config.options)
                 {
                     if (option.currentValue)
+                    {
                         ImGui::BulletText("%s", option.displayName.c_str());
+                    }
                 }
             }
             ImGui::EndChild();
@@ -811,7 +887,9 @@ namespace SparkInstaller
             if (ui::SectionHeader("Full log", nullptr, false))
             {
                 if (ui::SecondaryButton("Copy log"))
+                {
                     ImGui::SetClipboardText(JoinedLog(s).c_str());
+                }
                 DrawLogView(s, "##log", 0, true);
             }
         }
@@ -828,7 +906,9 @@ namespace SparkInstaller
                 ui::KeyValue("Location", "%s", ctx.destination.c_str());
                 ui::KeyValue("Version", "%s", ctx.ref.c_str());
                 if (!ctx.skipBuild && !ctx.configManager.config.buildPath.empty())
+                {
                     ui::KeyValue("Build folder", "%s", ctx.configManager.config.buildPath.c_str());
+                }
                 return;
             }
 
@@ -848,7 +928,9 @@ namespace SparkInstaller
                             : 0;
             }
             if (ui::SecondaryButton("Copy log"))
+            {
                 ImGui::SetClipboardText(JoinedLog(s).c_str());
+            }
             DrawLogView(s, "##tail", first, false);
         }
 
@@ -979,13 +1061,21 @@ namespace SparkInstaller
             ImGui::End();
 
             if (railRequest >= 0)
+            {
                 s.page = static_cast<Page>(railRequest);
+            }
             if (footer.cancel)
+            {
                 s.quit = true;
+            }
             if (footer.back)
+            {
                 Retreat(s);
+            }
             if (footer.primary)
+            {
                 Advance(s, ctx);
+            }
         }
 
         // Tokens for the installer: Ember Dark (or High Contrast when the desktop uses a
@@ -1007,7 +1097,9 @@ namespace SparkInstaller
     {
         m_exitCode = 0;
         if (!GuiBackend_Init(kGuiWindowWidth, kGuiWindowHeight, "SparkInstaller"))
+        {
             return false;
+        }
         BackendSession backend;
 
         const GuiSystemPreferences preferences = GuiBackend_QuerySystemPreferences();
@@ -1016,7 +1108,9 @@ namespace SparkInstaller
         ImGuiIO& io = ImGui::GetIO();
         const ui::FontSet fonts = ui::LoadFontSet(*io.Fonts, fontDirectory, tokens.type.body);
         if (fonts.body != nullptr)
+        {
             io.FontDefault = fonts.body;
+        }
         ui::Install(ImGui::GetCurrentContext(), tokens, GuiBackend_DpiScale(), 1.0f, preferences.reduceMotion);
         ui::InstallFocusRing(ImGui::GetCurrentContext());
 #ifdef _WIN32
@@ -1026,7 +1120,9 @@ namespace SparkInstaller
 
         GuiState s;
         if (!fonts.diagnostic.empty())
+        {
             s.AppendLog("UI fonts: " + fonts.diagnostic);
+        }
 
         std::string initialDest = ctx.destination;
         if (initialDest.empty())
@@ -1037,7 +1133,9 @@ namespace SparkInstaller
         }
         CopyToBuffer(s.destBuf, initialDest);
         if (!ctx.ref.empty())
+        {
             CopyToBuffer(s.refBuf, ctx.ref);
+        }
         ApplyPreset(ctx, s.presetIdx);
 
         const LogSink savedLog = ctx.log;
@@ -1047,22 +1145,32 @@ namespace SparkInstaller
             {
                 // There is no cancel for a started install: closing waits for it to finish.
                 if (s.Running())
+                {
                     s.closeWhenFinished = true;
+                }
                 else
+                {
                     s.quit = true;
+                }
             }
             CollectFinishedInstall(s);
             if (s.closeWhenFinished && !s.Running())
+            {
                 s.quit = true;
+            }
 
             DrawWizard(s, ctx);
             GuiBackend_EndFrame();
             if (s.quit)
+            {
                 break;
+            }
         }
 
         if (s.worker.joinable())
+        {
             s.worker.join();
+        }
         ctx.log = savedLog;
         m_exitCode = s.started ? s.exitCode.load() : 0;
         return true;

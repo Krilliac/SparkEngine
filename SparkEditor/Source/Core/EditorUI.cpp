@@ -118,7 +118,9 @@ namespace SparkEditor
         std::string FormatRecoveryCapturedTime(int64_t capturedUnixMilliseconds)
         {
             if (capturedUnixMilliseconds <= 0)
+            {
                 return "Unknown time";
+            }
 
             const auto seconds =
                 std::chrono::duration_cast<std::chrono::seconds>(std::chrono::milliseconds(capturedUnixMilliseconds))
@@ -130,12 +132,16 @@ namespace SparkEditor
                 return "Unknown time";
 #else
             if (localtime_r(&timestamp, &localTime) == nullptr)
+            {
                 return "Unknown time";
+            }
 #endif
 
             char buffer[64]{};
             if (std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &localTime) == 0)
+            {
                 return "Unknown time";
+            }
             return buffer;
         }
     } // namespace
@@ -195,7 +201,9 @@ namespace SparkEditor
                     const std::string json = m_document.Capture();
                     data.assign(json.begin(), json.end());
                     if (data.empty())
+                    {
                         return false;
+                    }
                     m_selectedEntityBeforePlay = m_document.GetSelectedEntity();
                     m_sceneModifiedBeforePlay = m_sceneModified;
                     return Spark::Editor::CommandHistory::GetInstance().BeginTransientSession();
@@ -224,7 +232,9 @@ namespace SparkEditor
                 auto& history = Spark::Editor::CommandHistory::GetInstance();
                 // keepChangesOnStop intentionally skips the restore callback.
                 if (history.IsTransientSessionActive())
+                {
                     history.CommitTransientSession();
+                }
             };
             m_playModeManager.SetCallbacks(playCallbacks);
 
@@ -271,7 +281,9 @@ namespace SparkEditor
             // read them once and handed them over through AdoptPreferences(); a test-mode launch keeps the defaults
             // in memory and never writes the user's file, whatever was adopted.
             if (config.testMode)
+            {
                 m_persistPreferences = false;
+            }
 
             // Apply startup theme (CLI --theme override, else Ember Studio — matches hi-fi design)
             const std::string themeName = config.startupTheme.empty() ? "Ember Studio" : config.startupTheme;
@@ -281,7 +293,9 @@ namespace SparkEditor
 
             // The Start page opens on first run and while "Show at startup" stays on; never in test mode.
             if (!config.testMode && m_preferences.showStartPage)
+            {
                 m_startPage.Open();
+            }
 
             m_isInitialized = true;
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "EditorUI initialized successfully");
@@ -456,9 +470,13 @@ namespace SparkEditor
                 // simulator. Do not leak its weapons, bots, and capture point
                 // into Empty, RPG, platformer, or other template previews.
                 if (auto gameViewIt = m_panels.find("GameView"); gameViewIt != m_panels.end())
+                {
                     if (auto* gameView = dynamic_cast<GameViewPanel*>(gameViewIt->second.get()))
+                    {
                         gameView->SetFPSHUDPreviewEnabled(project.hasTemplateIdentity &&
                                                           project.templateType == ProjectTemplate::FirstPerson);
+                    }
+                }
 
                 // Update asset browser path
                 auto it = m_panels.find("AssetBrowser");
@@ -480,9 +498,13 @@ namespace SparkEditor
                     const size_t loadedPrefabs = m_prefabManager->LoadProjectPrefabs(prefabDiagnostics);
                     auto& console = Spark::SimpleConsole::GetInstance();
                     for (const std::string& diagnostic : prefabDiagnostics)
+                    {
                         console.LogWarning(diagnostic);
+                    }
                     if (loadedPrefabs > 0)
+                    {
                         console.LogInfo("Loaded " + std::to_string(loadedPrefabs) + " project prefab(s)");
+                    }
                 }
 
                 // Open the project's last scene through the live reflected
@@ -514,18 +536,26 @@ namespace SparkEditor
             {
                 ClearPendingRecoveryOffer();
                 if (auto gameViewIt = m_panels.find("GameView"); gameViewIt != m_panels.end())
+                {
                     if (auto* gameView = dynamic_cast<GameViewPanel*>(gameViewIt->second.get()))
+                    {
                         gameView->SetFPSHUDPreviewEnabled(false);
+                    }
+                }
 
                 ResetWorldAfterProjectClose();
                 if (m_prefabManager)
+                {
                     m_prefabManager->SetProjectPrefabDirectory({});
+                }
 
                 auto it = m_panels.find("AssetBrowser");
                 if (it != m_panels.end())
                 {
                     if (auto* assetBrowser = dynamic_cast<AssetBrowserPanel*>(it->second.get()))
+                    {
                         assetBrowser->ClearProject();
+                    }
                 }
                 ShowNotification("Project closed: " + project.name, "info");
             });
@@ -552,7 +582,9 @@ namespace SparkEditor
                     [this](const std::vector<ObjectID>& selectedObjects)
                     {
                         if (!m_collabSession || !m_collabSession->IsConnected())
+                        {
                             return;
+                        }
 
                         // Broadcast the first selected object as the local selection
                         if (!selectedObjects.empty())
@@ -569,7 +601,9 @@ namespace SparkEditor
                     [this](const std::string& operation, ObjectID objectId)
                     {
                         if (!m_collabSession || !m_collabSession->IsConnected())
+                        {
                             return;
+                        }
 
                         // Map object operations to EditMessage types
                         EditMessage edit;
@@ -577,17 +611,29 @@ namespace SparkEditor
                         edit.nodeId = std::to_string(objectId);
 
                         if (operation == "create")
+                        {
                             edit.type = EditMessageType::NodeAdded;
+                        }
                         else if (operation == "delete")
+                        {
                             edit.type = EditMessageType::NodeRemoved;
+                        }
                         else if (operation == "duplicate")
+                        {
                             edit.type = EditMessageType::NodeAdded;
+                        }
                         else if (operation == "rename")
+                        {
                             edit.type = EditMessageType::NodeRenamed;
+                        }
                         else if (operation == "move")
+                        {
                             edit.type = EditMessageType::NodeMoved;
+                        }
                         else
+                        {
                             return;
+                        }
 
                         m_collabSession->BroadcastEdit(edit);
 
@@ -604,7 +650,9 @@ namespace SparkEditor
     void EditorUI::Update(float deltaTime)
     {
         if (!m_isInitialized)
+        {
             return;
+        }
 
         // Input handling (scene shortcuts, play mode, transform tools)
         ProcessSceneShortcuts();
@@ -619,8 +667,12 @@ namespace SparkEditor
         // Tick only the editor preview state machine; gameplay runs in a separate process.
         m_playModeManager.Update(deltaTime);
         if (auto it = m_panels.find("GameView"); it != m_panels.end())
+        {
             if (auto* gameView = dynamic_cast<GameViewPanel*>(it->second.get()))
+            {
                 gameView->SetPlaying(m_playModeManager.IsPlaying());
+            }
+        }
 
         // Update stats
         UpdateStats(deltaTime);
@@ -738,7 +790,9 @@ namespace SparkEditor
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Editor);
         if (!m_isInitialized)
+        {
             return;
+        }
 
         // Loading docking settings from a Window-menu callback used to happen
         // while ##SparkEditorDockSpace was inside ImGui::Begin().  Rebuilding
@@ -753,7 +807,9 @@ namespace SparkEditor
 
         // The status bar reserves its strip of the viewport work area before the dockspace host sizes itself.
         if (m_preferences.showStatusBar)
+        {
             RenderStatusBar();
+        }
 
         // === Full-screen DockSpace ===
         ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -785,7 +841,9 @@ namespace SparkEditor
         if (m_firstFrame || m_defaultDockLayoutResetRequested)
         {
             if (NeedsDefaultEditorDockLayout(dockspaceId, m_defaultDockLayoutResetRequested))
+            {
                 SetupDefaultDockLayout(dockspaceId);
+            }
             m_firstFrame = false;
             m_defaultDockLayoutResetRequested = false;
         }
@@ -859,7 +917,9 @@ namespace SparkEditor
         {
             const std::string dockName = PanelDockWindowName(key);
             if (!dockName.empty())
+            {
                 ImGui::DockBuilderDockWindow(dockName.c_str(), node);
+            }
         };
         dockPanel("Hierarchy", dockLeft);
         dockPanel("Inspector", dockRight);
@@ -877,7 +937,9 @@ namespace SparkEditor
     {
         const auto it = m_panels.find(panelKey);
         if (it == m_panels.end() || !it->second)
+        {
             return {};
+        }
         return "###" + it->second->GetID();
     }
 
@@ -1054,7 +1116,9 @@ namespace SparkEditor
                 {
                     Ui::Badge("EDIT");
                     if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+                    {
                         ImGui::SetTooltip("Editing the scene. The bar turns ember while play preview runs.");
+                    }
                 }
 
                 ImGui::SameLine();
@@ -1113,25 +1177,37 @@ namespace SparkEditor
         const float fps = m_stats.frameTime > 0.001f ? 1000.0f / m_stats.frameTime : 0.0f;
         Ui::Status fpsStatus = Ui::Status::Neutral;
         if (fps < 15.0f)
+        {
             fpsStatus = Ui::Status::Error;
+        }
         else if (fps < 30.0f)
+        {
             fpsStatus = Ui::Status::Warning;
+        }
         Ui::Role fpsRole = previewing ? Ui::Role::TextOnAccent : Ui::Role::TextPrimary;
         if (!previewing && fpsStatus != Ui::Status::Neutral)
+        {
             fpsRole = Ui::StatusTextRole(fpsStatus);
+        }
         ImGui::SameLine();
         Ui::VerticalSeparator();
         ImGui::SameLine();
         {
             Ui::ScopedFont mono(Ui::FontRole::Mono);
             if (fpsStatus == Ui::Status::Neutral)
+            {
                 Ui::TextRole(fpsRole, "%3.0f FPS", fps);
+            }
             else
+            {
                 Ui::TextRole(fpsRole, "%s %3.0f FPS %s", Ui::StatusGlyph(fpsStatus), fps,
                              fpsStatus == Ui::Status::Error ? "very low" : "low");
+            }
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+            {
                 ImGui::SetTooltip("Frame #%llu, %d assets in the database",
                                   static_cast<unsigned long long>(m_frameNumber), m_assetDatabaseSize);
+            }
             ImGui::SameLine();
             Ui::TextRole(quietRole, "%5.1f ms", m_stats.frameTime);
         }
@@ -1142,9 +1218,13 @@ namespace SparkEditor
         const std::size_t unread = m_notificationManager->GetUnreadCount();
         char bellLabel[32];
         if (unread > 0)
+        {
             std::snprintf(bellLabel, sizeof(bellLabel), "%s %zu##bell", kBellGlyph, unread);
+        }
         else
+        {
             std::snprintf(bellLabel, sizeof(bellLabel), "%s##bell", kBellGlyph);
+        }
         // On the ember preview bar the theme's hover and pressed surfaces would sit under TextOnAccent ink; the accent
         // fill states are the surfaces that ink is specified against.
         const Ui::Role hoverRole = previewing ? Ui::Role::AccentFillHover : Ui::Role::SurfaceHover;
@@ -1155,14 +1235,20 @@ namespace SparkEditor
             Ui::ScopedRoleColor activeColor(ImGuiCol_ButtonActive, activeRole);
             Ui::ScopedRoleColor textColor(ImGuiCol_Text, unread > 0 && !previewing ? Ui::Role::AccentText : quietRole);
             if (ImGui::SmallButton(bellLabel))
+            {
                 ImGui::OpenPopup("##notificationHistory");
+            }
         }
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
         {
             if (unread > 0)
+            {
                 ImGui::SetTooltip("%zu unread notifications", unread);
+            }
             else
+            {
                 ImGui::SetTooltip("Notifications");
+            }
         }
         if (ImGui::BeginPopup("##notificationHistory"))
         {
@@ -1179,11 +1265,15 @@ namespace SparkEditor
             Ui::ScopedRoleColor activeColor(ImGuiCol_ButtonActive, activeRole);
             Ui::ScopedRoleColor textColor(ImGuiCol_Text, quietRole);
             if (ImGui::SmallButton(scaleLabel))
+            {
                 StepUiScale(0);
+            }
         }
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+        {
             ImGui::SetTooltip("UI scale %.1f%% (display %.0f%%). Click to reset to 100%%; Ctrl+= and Ctrl+- step it.",
                               Ui::UserScale() * 100.0f, Ui::DpiScale() * 100.0f);
+        }
     }
 
     void EditorUI::RenderPanels()
@@ -1252,7 +1342,9 @@ namespace SparkEditor
                     if (ImGui::Button(buttonName.c_str()))
                     {
                         if (callback)
+                        {
                             callback();
+                        }
                         m_currentDialog.isOpen = false;
                     }
                     ImGui::SameLine();
@@ -1266,13 +1358,17 @@ namespace SparkEditor
     void EditorUI::RenderUnsavedChangesDialog()
     {
         if (!m_documentTransitionGuard.HasPending())
+        {
             return;
+        }
 
         constexpr const char* popupTitle = "Unsaved Scene Changes";
         ImGui::OpenPopup(popupTitle);
         ImGui::SetNextWindowSize(ImVec2(Spark::Ui::Em(34.0f), 0.0f), ImGuiCond_Appearing);
         if (!ImGui::BeginPopupModal(popupTitle, nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        {
             return;
+        }
 
         ImGui::TextWrapped("%s has unsaved changes.", m_currentSceneName.c_str());
         ImGui::TextWrapped("Save before continuing?");
@@ -1316,7 +1412,9 @@ namespace SparkEditor
     void EditorUI::RenderStartPage()
     {
         if (!m_startPage.IsOpen())
+        {
             return;
+        }
 
         // Join the centre dock node. A dock tree loaded from settings never ran SetupDefaultDockLayout, so fall
         // back to the node the Scene view lives in.
@@ -1327,13 +1425,17 @@ namespace SparkEditor
             {
                 const std::string sceneWindow = "###" + it->second->GetID();
                 if (const ImGuiWindow* window = ImGui::FindWindowByName(sceneWindow.c_str()))
+                {
                     dockId = window->DockId;
+                }
             }
         }
 
         const StartPageResult result = m_startPage.Draw(m_preferences, dockId);
         if (result.preferencesChanged)
+        {
             SavePreferences();
+        }
 
         switch (result.action)
         {
@@ -1360,7 +1462,9 @@ namespace SparkEditor
     void EditorUI::RenderAppearanceWindow()
     {
         if (m_appearanceWindow.Draw(m_preferences))
+        {
             CommitPreferenceChange();
+        }
     }
 
     void EditorUI::RenderNotificationHistory()
@@ -1409,7 +1513,9 @@ namespace SparkEditor
         {
             ImGui::TextUnformatted("Layout name");
             if (ImGui::IsWindowAppearing())
+            {
                 ImGui::SetKeyboardFocusHere();
+            }
             ImGui::SetNextItemWidth(-FLT_MIN);
             const bool submitted = ImGui::InputText("##layoutName", m_layoutNameBuffer, sizeof(m_layoutNameBuffer),
                                                     ImGuiInputTextFlags_EnterReturnsTrue);
@@ -1418,14 +1524,20 @@ namespace SparkEditor
             const bool exists = valid && m_layoutManager && m_layoutManager->HasLayout(name);
             ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + Ui::Em(24.0f));
             if (!name.empty() && !valid)
+            {
                 Ui::StatusText(Ui::Status::Error,
                                "Use up to %zu characters, none of \\ / : * ? \" < > |, and no leading space or "
                                "trailing dot or space.",
                                EditorLayoutManager::kMaxLayoutNameLength);
+            }
             else if (exists)
+            {
                 Ui::StatusText(Ui::Status::Warning, "A layout named \"%s\" exists and will be replaced.", name.c_str());
+            }
             if (!m_layoutNameError.empty())
+            {
                 Ui::StatusText(Ui::Status::Error, "%s", m_layoutNameError.c_str());
+            }
             ImGui::PopTextWrapPos();
             ImGui::Separator();
 
@@ -1465,7 +1577,9 @@ namespace SparkEditor
             ImGui::OpenPopup(kDeletePopup);
         }
         if (m_layoutPendingDelete.empty())
+        {
             return;
+        }
         const std::string body =
             "Delete the saved layout \"" + m_layoutPendingDelete + "\"? Its panel arrangement cannot be restored.";
         if (Ui::ConfirmDestructive(kDeletePopup, "Delete layout?", body.c_str(), "Delete"))
@@ -1480,8 +1594,10 @@ namespace SparkEditor
                 }
             }
             else
+            {
                 Notify(NotificationSeverity::Error, "Layout not deleted",
                        m_layoutManager ? m_layoutManager->GetLastError() : std::string());
+            }
             m_layoutPendingDelete.clear();
         }
         else if (!ImGui::IsPopupOpen(kDeletePopup))
@@ -1500,7 +1616,9 @@ namespace SparkEditor
     void EditorUI::FollowSystemAppearance()
     {
         if (m_preferences.appearance != "system")
+        {
             return;
+        }
         EditorTheme::SetAppearanceOverride(EditorAppearanceWindow::AppearanceOverrideFor(m_preferences.appearance));
         m_currentTheme = EditorTheme::GetCurrentThemeName();
     }
@@ -1508,16 +1626,22 @@ namespace SparkEditor
     void EditorUI::SavePreferences()
     {
         if (!m_persistPreferences)
+        {
             return;
+        }
         std::string error;
         if (!SaveEditorPreferences(EditorPreferencesPath(), m_preferences, &error))
+        {
             Spark::SimpleConsole::GetInstance().LogWarning("Editor preferences were not saved: " + error);
+        }
     }
 
     void EditorUI::RememberRecentScene(const std::string& scenePath)
     {
         if (scenePath.empty())
+        {
             return;
+        }
         PushRecentScene(m_preferences, scenePath);
         SavePreferences();
     }
@@ -1579,7 +1703,9 @@ namespace SparkEditor
         try
         {
             if (!m_layoutManager || !m_layoutManager->IsInitialized())
+            {
                 return false;
+            }
 
             for (const auto& [name, panel] : m_panels)
             {
@@ -1608,7 +1734,9 @@ namespace SparkEditor
             // Save ImGui settings to specific file
             ImGui::SaveIniSettingsToDisk(filePath.string().c_str());
             if (!std::filesystem::exists(filePath))
+            {
                 return false;
+            }
 
             // Save layout metadata
             std::ofstream metaFile(filePath.string() + ".meta");
@@ -1621,7 +1749,9 @@ namespace SparkEditor
                 metaFile << "created=" << time_t << "\n";
             }
             if (!metaFile.good())
+            {
                 return false;
+            }
 
             // The toolbar Layout dropdown shows the layout last saved or loaded.
             m_preferences.lastLayout = layoutName;
@@ -1661,7 +1791,9 @@ namespace SparkEditor
             }
 
             for (const std::string& panelName : m_layoutManager->GetRegisteredPanels())
+            {
                 SetPanelVisible(panelName, m_layoutManager->IsPanelVisible(panelName));
+            }
 
             // Loading an ini file rebuilds ImGui's dock tree.  Queue it for
             // the start of the next frame so no dockspace/window is active.
@@ -1767,7 +1899,9 @@ namespace SparkEditor
                                    const std::string& description)
     {
         if (name.empty() || !handler)
+        {
             return;
+        }
         m_commands[name] = handler;
     }
 
@@ -1806,11 +1940,15 @@ namespace SparkEditor
     std::string EditorUI::GetCanonicalActiveProjectIdentity() const
     {
         if (!m_projectManager || !m_projectManager->HasOpenProject())
+        {
             return {};
+        }
 
         const std::string activeProjectPath = ProjectManager::GetActiveProjectPath();
         if (activeProjectPath.empty())
+        {
             return {};
+        }
 
         try
         {
@@ -1836,24 +1974,32 @@ namespace SparkEditor
     {
         const std::string projectIdentity = GetCanonicalActiveProjectIdentity();
         if (projectIdentity.empty() || m_currentScenePath.empty())
+        {
             return {};
+        }
 
         try
         {
             const std::filesystem::path projectRoot = PathFromUtf8(projectIdentity);
             std::filesystem::path scenePath = PathFromUtf8(m_currentScenePath);
             if (scenePath.is_relative())
+            {
                 scenePath = projectRoot / scenePath;
+            }
 
             std::error_code pathError;
             scenePath = std::filesystem::weakly_canonical(scenePath, pathError);
             if (pathError)
+            {
                 return {};
+            }
 
             const std::filesystem::path relative =
                 std::filesystem::relative(scenePath, projectRoot, pathError).lexically_normal();
             if (pathError || relative.empty() || relative.is_absolute() || *relative.begin() == "..")
+            {
                 return {};
+            }
             return PathToUtf8(relative);
         }
         catch (...)
@@ -1865,14 +2011,20 @@ namespace SparkEditor
     void EditorUI::RecordRecoveryOperation(const std::string& description)
     {
         if (description.empty())
+        {
             return;
+        }
 
         m_recentRecoveryOperations.push_back(description);
         while (m_recentRecoveryOperations.size() > kMaxRecoveryOperations)
+        {
             m_recentRecoveryOperations.pop_front();
+        }
 
         if (m_crashHandler)
+        {
             m_crashHandler->RecordOperation(description);
+        }
     }
 
     void EditorUI::ResetRecoveryCaptureTracking()
@@ -1891,7 +2043,9 @@ namespace SparkEditor
     void EditorUI::ObserveDocumentHistoryForRecovery()
     {
         if (!GetWorld())
+        {
             return;
+        }
 
         auto& history = Spark::Editor::CommandHistory::GetInstance();
         const uint64_t sequence = history.GetEditSequence();
@@ -1903,7 +2057,9 @@ namespace SparkEditor
             const bool wasUndo = undoDepth < m_lastObservedUndoDepth && redoDepth > m_lastObservedRedoDepth;
             std::string description = wasUndo ? history.GetRedoDescription() : history.GetUndoDescription();
             if (description.empty())
+            {
                 description = wasUndo ? history.GetUndoDescription() : history.GetRedoDescription();
+            }
             RecordRecoveryOperation(description);
 
             m_lastObservedEditSequence = sequence;
@@ -1942,7 +2098,9 @@ namespace SparkEditor
     {
         const std::string projectIdentity = GetCanonicalActiveProjectIdentity();
         if (projectIdentity.empty() || !GetWorld() || !m_recoveryStore)
+        {
             return false;
+        }
 
         try
         {
@@ -1989,11 +2147,15 @@ namespace SparkEditor
     {
         ClearPendingRecoveryOffer();
         if (!m_recoveryStore)
+        {
             return;
+        }
 
         const std::string projectIdentity = GetCanonicalActiveProjectIdentity();
         if (projectIdentity.empty())
+        {
             return;
+        }
 
         EditorRecoveryLoadResult loaded = m_recoveryStore->LoadForProject(projectIdentity);
         if ((loaded.state == EditorRecoveryLoadState::Primary || loaded.state == EditorRecoveryLoadState::Backup) &&
@@ -2027,11 +2189,15 @@ namespace SparkEditor
         // choice and must remain until the user restores or discards it there.
         m_recoveryCaptureGate.SuppressAfterExplicitDiscard();
         if (!m_recoveryStore || m_recoveryController.Snapshot())
+        {
             return;
+        }
 
         const std::string projectIdentity = GetCanonicalActiveProjectIdentity();
         if (projectIdentity.empty())
+        {
             return;
+        }
 
         std::string error;
         if (!m_recoveryStore->ClearForProject(projectIdentity, error))
@@ -2046,7 +2212,9 @@ namespace SparkEditor
     {
         const EditorRecoverySnapshot* snapshot = m_recoveryController.Snapshot();
         if (!snapshot)
+        {
             return false;
+        }
         if (!m_recoveryStore)
         {
             m_recoveryController.SetRestoreFailure("Recovery storage is not available");
@@ -2091,7 +2259,9 @@ namespace SparkEditor
                 restoredScenePath = PathToUtf8(resolvedScene);
                 const std::string derivedSceneName = PathToUtf8(relativeScene.stem());
                 if (!derivedSceneName.empty())
+                {
                     sceneName = derivedSceneName;
+                }
             }
             catch (const std::exception& exception)
             {
@@ -2115,12 +2285,16 @@ namespace SparkEditor
         m_sceneModified = true;
         m_recentRecoveryOperations.assign(previousOperations.begin(), previousOperations.end());
         while (m_recentRecoveryOperations.size() > kMaxRecoveryOperations)
+        {
             m_recentRecoveryOperations.pop_front();
+        }
         RecordRecoveryOperation("Restore recovery: " + sceneName);
 
         m_recoveryController.DismissAfterRestore();
         if (m_pluginManager)
+        {
             m_pluginManager->NotifySceneLoad(m_currentScenePath.empty() ? m_currentSceneName : m_currentScenePath);
+        }
 
         std::string cleanupError;
         if (!m_recoveryStore->ClearForProject(projectIdentity, cleanupError))
@@ -2139,7 +2313,9 @@ namespace SparkEditor
     {
         const EditorRecoverySnapshot* snapshot = m_recoveryController.Snapshot();
         if (!snapshot)
+        {
             return false;
+        }
         if (!m_recoveryStore)
         {
             m_recoveryController.SetRestoreFailure("Recovery storage is not available");
@@ -2171,11 +2347,15 @@ namespace SparkEditor
         // yet. Saving the newly opened base document must not silently erase
         // that snapshot.
         if (!m_recoveryStore || m_recoveryController.Snapshot())
+        {
             return;
+        }
 
         const std::string projectIdentity = GetCanonicalActiveProjectIdentity();
         if (projectIdentity.empty())
+        {
             return;
+        }
 
         std::string error;
         if (!m_recoveryStore->ClearForProject(projectIdentity, error))
@@ -2219,7 +2399,9 @@ namespace SparkEditor
         ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
         ImGui::SetNextWindowSize(ImVec2(Spark::Ui::Em(40.0f), 0.0f), ImGuiCond_Appearing);
         if (!ImGui::BeginPopupModal(popupTitle, nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        {
             return;
+        }
 
         ImGui::TextUnformatted("SparkEditor found an unsaved recovery snapshot for this project.");
         ImGui::Spacing();
@@ -2254,13 +2436,17 @@ namespace SparkEditor
         if (ImGui::Button("Restore", recoveryButtonSize))
         {
             if (RestorePendingRecovery())
+            {
                 ImGui::CloseCurrentPopup();
+            }
         }
         ImGui::SameLine();
         if (ImGui::Button("Discard", recoveryButtonSize))
         {
             if (DiscardPendingRecovery())
+            {
                 ImGui::CloseCurrentPopup();
+            }
         }
         ImGui::EndPopup();
     }
@@ -2271,22 +2457,30 @@ namespace SparkEditor
         {
             std::ifstream file(filePath);
             if (!file.is_open())
+            {
                 return false;
+            }
 
             std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
             file.close();
 
             if (content.empty())
+            {
                 return false;
+            }
 
             // Extract layout name from file content or use filename
             std::string layoutName = filePath;
             auto lastSlash = layoutName.find_last_of("/\\");
             if (lastSlash != std::string::npos)
+            {
                 layoutName = layoutName.substr(lastSlash + 1);
+            }
             auto lastDot = layoutName.find_last_of('.');
             if (lastDot != std::string::npos)
+            {
                 layoutName = layoutName.substr(0, lastDot);
+            }
 
             // Use layout manager to apply the imported layout
             if (m_layoutManager)
@@ -2309,7 +2503,9 @@ namespace SparkEditor
         {
             std::ofstream file(filePath);
             if (!file.is_open())
+            {
                 return false;
+            }
 
             // Export current layout state
             file << "{\n";
@@ -2322,9 +2518,13 @@ namespace SparkEditor
             for (const auto& [name, panel] : m_panels)
             {
                 if (!panel)
+                {
                     continue;
+                }
                 if (!first)
+                {
                     file << ",\n";
+                }
                 file << "      \"" << name << "\": { \"visible\": " << (panel->IsVisible() ? "true" : "false") << " }";
                 first = false;
             }
@@ -2379,11 +2579,15 @@ namespace SparkEditor
     bool EditorUI::RequestOpenProject(const std::string& projectPath)
     {
         if (projectPath.empty() || m_documentTransitionGuard.HasPending())
+        {
             return false;
+        }
 
         m_pendingProjectPath = projectPath;
         if (!m_documentTransitionGuard.Request(DocumentTransitionAction::OpenProject, IsSceneModified()))
+        {
             return m_documentTransitionGuard.GetPending() == DocumentTransitionAction::OpenProject;
+        }
         return ExecuteDocumentTransition(DocumentTransitionAction::OpenProject);
     }
 
@@ -2391,21 +2595,27 @@ namespace SparkEditor
                                         ProjectTemplate templateType, const std::string& description)
     {
         if (projectName.empty() || parentDirectory.empty() || m_documentTransitionGuard.HasPending())
+        {
             return false;
+        }
 
         m_pendingProjectName = projectName;
         m_pendingProjectParentDirectory = parentDirectory;
         m_pendingProjectTemplate = templateType;
         m_pendingProjectDescription = description;
         if (!m_documentTransitionGuard.Request(DocumentTransitionAction::CreateProject, IsSceneModified()))
+        {
             return m_documentTransitionGuard.GetPending() == DocumentTransitionAction::CreateProject;
+        }
         return ExecuteDocumentTransition(DocumentTransitionAction::CreateProject);
     }
 
     bool EditorUI::RequestDocumentTransition(DocumentTransitionAction action)
     {
         if (!m_documentTransitionGuard.Request(action, IsSceneModified()))
+        {
             return false;
+        }
         return ExecuteDocumentTransition(action);
     }
 
@@ -2485,7 +2695,9 @@ namespace SparkEditor
     bool EditorUI::RequestExitWithConfirmation()
     {
         if (m_exitRequested)
+        {
             return true;
+        }
         return RequestDocumentTransition(DocumentTransitionAction::Exit);
     }
 
@@ -2497,7 +2709,9 @@ namespace SparkEditor
     void EditorUI::RequestOpenScenePath(const std::string& path)
     {
         if (path.empty() || m_documentTransitionGuard.HasPending())
+        {
             return;
+        }
         m_pendingScenePath = path;
         RequestDocumentTransition(DocumentTransitionAction::OpenScenePath);
     }
@@ -2531,7 +2745,9 @@ namespace SparkEditor
         Spark::Editor::CommandHistory::GetInstance().MarkSaved();
         RecordRecoveryOperation("New Scene");
         if (m_pluginManager)
+        {
             m_pluginManager->NotifySceneLoad("Untitled");
+        }
         ShowNotification("New scene created", "success");
     }
 
@@ -2567,7 +2783,9 @@ namespace SparkEditor
     void EditorUI::StopPlayModeForDocumentTransition()
     {
         if (m_playModeManager.IsInPlayMode())
+        {
             m_playModeManager.ExitPlayMode();
+        }
     }
 
     void EditorUI::SwapWorld(std::unique_ptr<::World> newWorld)
@@ -2602,10 +2820,14 @@ namespace SparkEditor
         // hotkeys and command palette only changed a status-bar label.
         auto sceneViewIt = m_panels.find("SceneView");
         if (sceneViewIt == m_panels.end())
+        {
             return;
+        }
         auto* sceneView = dynamic_cast<SceneViewPanel*>(sceneViewIt->second.get());
         if (!sceneView)
+        {
             return;
+        }
 
         switch (tool)
         {
@@ -2669,7 +2891,9 @@ namespace SparkEditor
         if (gameViewIt != m_panels.end())
         {
             if (auto* gameView = dynamic_cast<GameViewPanel*>(gameViewIt->second.get()))
+            {
                 gameView->SetWorld(GetWorld());
+            }
         }
 
         // SceneStatistics counts the live document instead of sample data.
@@ -2677,7 +2901,9 @@ namespace SparkEditor
         if (sceneStatsIt != m_panels.end())
         {
             if (auto* sceneStats = dynamic_cast<SceneStatisticsPanel*>(sceneStatsIt->second.get()))
+            {
                 sceneStats->SetWorld(GetWorld());
+            }
         }
 
         // Search enumerates the live document and the project's real asset tree,
@@ -2691,7 +2917,9 @@ namespace SparkEditor
                 search->SetSelectionHandler([this](uint32_t id) { SetSelectedEntity(static_cast<::EntityID>(id)); });
                 const std::string projectPath = ProjectManager::GetActiveProjectPath();
                 if (!projectPath.empty())
+                {
                     search->SetAssetRoot(projectPath + "/Assets");
+                }
             }
         }
 
@@ -2701,7 +2929,9 @@ namespace SparkEditor
         if (placementIt != m_panels.end())
         {
             if (auto* placement = dynamic_cast<ObjectPlacementPanel*>(placementIt->second.get()))
+            {
                 placement->SetEntityCreator([this](const std::string& name) { return CreateDocumentEntity(name); });
+            }
         }
 
         // Inspector reads EditorUI::GetWorld()/GetSelectedEntity() live each
@@ -2717,10 +2947,14 @@ namespace SparkEditor
     bool EditorUI::SaveCurrentScene(const std::string& path)
     {
         if (path.empty())
+        {
             return false;
+        }
 
         if (!GetWorld())
+        {
             return false;
+        }
 
         try
         {
@@ -2808,7 +3042,9 @@ namespace SparkEditor
         auto& console = Spark::SimpleConsole::GetInstance();
 
         if (path.empty())
+        {
             return false;
+        }
 
         // Load into a fresh World first so a failed/partial load never
         // corrupts the World currently being edited.
@@ -3017,11 +3253,17 @@ namespace SparkEditor
         if (io.KeyCtrl && !io.WantTextInput)
         {
             if (ImGui::IsKeyPressed(ImGuiKey_Equal, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadAdd, false))
+            {
                 StepUiScale(1);
+            }
             else if (ImGui::IsKeyPressed(ImGuiKey_Minus, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadSubtract, false))
+            {
                 StepUiScale(-1);
+            }
             else if (ImGui::IsKeyPressed(ImGuiKey_0, false) || ImGui::IsKeyPressed(ImGuiKey_Keypad0, false))
+            {
                 StepUiScale(0);
+            }
         }
     }
 

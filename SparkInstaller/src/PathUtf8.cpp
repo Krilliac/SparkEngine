@@ -151,7 +151,7 @@ namespace SparkInstaller
         return std::filesystem::path(std::move(wide));
 #else
         // POSIX paths are byte strings; the installer's bytes are UTF-8.
-        return std::filesystem::path(std::string(utf8));
+        return {std::string(utf8)};
 #endif
     }
 

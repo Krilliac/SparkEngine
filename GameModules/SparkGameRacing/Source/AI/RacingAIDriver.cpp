@@ -32,7 +32,9 @@ namespace Racing
         [[nodiscard]] float NormalizeSigned(float value, float range)
         {
             if (range <= 0.0f)
+            {
                 return 0.0f;
+            }
             return std::clamp(value / range, -1.0f, 1.0f);
         }
     } // namespace
@@ -51,12 +53,16 @@ namespace Racing
     void RacingAIDriver::Update(float deltaTime)
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         for (size_t i = 0; i < m_drivers.size(); ++i)
         {
             if (i < m_states.size())
+            {
                 UpdateDriver(m_drivers[i], m_states[i], deltaTime);
+            }
         }
     }
 
@@ -119,7 +125,9 @@ namespace Racing
     void RacingAIDriver::UpdateRubberBanding(float playerDistance, float leadDistance, float lastDistance)
     {
         if (m_states.empty())
+        {
             return;
+        }
 
         // Rubber-banding model with synthetic race positions:
         // - m_states index 0 is considered race leader, last index is tail.
@@ -163,7 +171,9 @@ namespace Racing
     {
         const auto it = m_stateIndexByVehicleId.find(vehicleId);
         if (it == m_stateIndexByVehicleId.end() || it->second >= m_states.size() || !std::isfinite(steer))
+        {
             return;
+        }
         m_states[it->second].trackSteer = std::clamp(steer, -1.0f, 1.0f);
         m_states[it->second].hasTrackSteer = true;
     }
@@ -172,7 +182,9 @@ namespace Racing
     {
         const auto it = m_stateIndexByVehicleId.find(vehicleId);
         if (it == m_stateIndexByVehicleId.end())
+        {
             return nullptr;
+        }
         const size_t index = it->second;
         return (index < m_states.size()) ? &m_states[index] : nullptr;
     }
@@ -182,7 +194,9 @@ namespace Racing
         m_stateIndexByVehicleId.clear();
         m_stateIndexByVehicleId.reserve(m_states.size());
         for (size_t i = 0; i < m_states.size(); ++i)
+        {
             m_stateIndexByVehicleId[m_states[i].vehicleId] = i;
+        }
     }
 
     std::string RacingAIDriver::GetDriverListString() const
@@ -197,7 +211,9 @@ namespace Racing
             result += " | " + std::string(diffNames[static_cast<int>(d.difficulty)]);
             result += " | Speed: " + std::to_string(static_cast<int>(d.speedFactor * 100.0f)) + "%";
             if (i < m_states.size() && m_states[i].isOvertaking)
+            {
                 result += " [OVERTAKING]";
+            }
             result += "\n";
         }
         return result;
@@ -206,7 +222,9 @@ namespace Racing
     void RacingAIDriver::UpdateDriver(AIDriverConfig& config, AIDriverState& state, float dt)
     {
         if (dt <= 0.0f)
+        {
             return;
+        }
 
         dt = std::min(dt, 0.1f);
 
@@ -254,7 +272,9 @@ namespace Racing
 
         // Apply overtake lateral offset
         if (state.isOvertaking)
+        {
             state.steer += state.overtakeOffset * 0.5f;
+        }
 
         state.steer = std::clamp(state.steer, -1.0f, 1.0f);
     }
@@ -296,16 +316,22 @@ namespace Racing
         // Synthetic overtake trigger: only attempt on mild steering and when
         // aggressiveness plus rubber-band pressure indicates catch-up intent.
         if (std::abs(state.steer) > 0.35f)
+        {
             return;
+        }
 
         const float overtakeIntent = std::clamp(config.aggressiveness * state.rubberBandFactor, 0.0f, 1.5f);
         if (overtakeIntent < 0.35f)
+        {
             return;
+        }
 
         const float phase = GetTrackPhase(state);
         const float triggerWave = 0.5f + 0.5f * std::sin(phase * 4.0f + static_cast<float>(state.vehicleId) * 0.17f);
         if (triggerWave > overtakeIntent)
+        {
             return;
+        }
 
         state.isOvertaking = true;
         state.overtakeTimer = std::clamp(0.8f + (1.4f - overtakeIntent), 0.5f, 2.0f);
@@ -363,7 +389,9 @@ namespace Racing
     {
 #ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Racing AI Drivers"))
+        {
             return;
+        }
 
         const char* diffNames[] = {"Easy", "Medium", "Hard", "Expert"};
         ImGui::Text("Global Difficulty: %s", diffNames[static_cast<int>(m_globalDifficulty)]);

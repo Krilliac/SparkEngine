@@ -90,7 +90,9 @@ namespace Platformer
         for (auto& cp : m_checkpoints)
         {
             if (cp.levelIndex != m_activeLevel || cp.activated)
+            {
                 continue;
+            }
 
             float dx = cp.posX - playerX;
             float dy = cp.posY - playerY;
@@ -114,7 +116,9 @@ namespace Platformer
         for (const auto& cp : m_checkpoints)
         {
             if (cp.levelIndex == m_activeLevel && cp.id == m_lastActivatedId)
+            {
                 return {cp.posX, cp.posY, cp.posZ};
+            }
         }
 
         // No checkpoint activated yet — use level spawn
@@ -127,7 +131,9 @@ namespace Platformer
         for (const auto& cp : m_checkpoints)
         {
             if (cp.activated)
+            {
                 ++count;
+            }
         }
         return count;
     }
@@ -138,7 +144,9 @@ namespace Platformer
         for (const auto& cp : m_checkpoints)
         {
             if (cp.activated)
+            {
                 progress.activatedIds.push_back(cp.id);
+            }
         }
         std::ranges::sort(progress.activatedIds);
         progress.lastActivatedId = m_lastActivatedId;
@@ -153,9 +161,13 @@ namespace Platformer
         { return std::ranges::find(progress.activatedIds, id) != progress.activatedIds.end(); };
 
         if (!std::ranges::all_of(progress.activatedIds, isPlaced))
+        {
             return false;
+        }
         if (progress.lastActivatedId != 0 && !isActivated(progress.lastActivatedId))
+        {
             return false;
+        }
 
         for (auto& cp : m_checkpoints)
         {
@@ -188,7 +200,9 @@ namespace Platformer
     void PlatformerCheckpointSystem::Update(float deltaTime)
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         // Update flag raise animation for recently activated checkpoints
         for (auto& cp : m_checkpoints)
@@ -197,7 +211,9 @@ namespace Platformer
             {
                 cp.animationTimer += deltaTime * 2.0f; // 0.5s flag raise
                 if (cp.animationTimer > 1.0f)
+                {
                     cp.animationTimer = 1.0f;
+                }
             }
         }
     }
@@ -212,7 +228,9 @@ namespace Platformer
     {
 #ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Platformer Checkpoints"))
+        {
             return;
+        }
 
         ImGui::Text("Checkpoints: %zu", m_checkpoints.size());
         ImGui::Text("Activated: %zu", GetActivatedCount());
@@ -224,14 +242,18 @@ namespace Platformer
             ImGui::PushID(static_cast<int>(cp.id));
             std::string label = "CP " + std::to_string(cp.id) + " (Level " + std::to_string(cp.levelIndex) + ")";
             if (cp.activated)
+            {
                 label += " [ACTIVE]";
+            }
 
             if (ImGui::TreeNode(label.c_str()))
             {
                 ImGui::Text("Position: (%.1f, %.1f, %.1f)", cp.posX, cp.posY, cp.posZ);
                 ImGui::Text("Activated: %s", cp.activated ? "Yes" : "No");
                 if (cp.activated)
+                {
                     ImGui::Text("Flag Animation: %.0f%%", cp.animationTimer * 100.0f);
+                }
                 ImGui::TreePop();
             }
             ImGui::PopID();

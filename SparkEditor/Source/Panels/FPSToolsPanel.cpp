@@ -26,10 +26,14 @@ namespace SparkEditor
         Spark::Ui::Role TeamRole(int teamId)
         {
             if (teamId == 1)
+            {
                 return Spark::Ui::Role::Category5; // Team Alpha: blue
+            }
             if (teamId == 2)
+            {
                 return Spark::Ui::Role::Category6; // Team Bravo: vermillion
-            return Spark::Ui::Role::TextPrimary;   // Free for all
+            }
+            return Spark::Ui::Role::TextPrimary; // Free for all
         }
     } // namespace
 
@@ -63,7 +67,9 @@ namespace SparkEditor
     void FPSToolsPanel::Render()
     {
         if (!IsVisible())
+        {
             return;
+        }
 
         if (BeginPanel())
         {
@@ -211,7 +217,9 @@ namespace SparkEditor
                 float sy = mapCY + s.z * mapScale;
 
                 if (sx < mapPos.x || sx > mapPos.x + mapSize.x || sy < mapPos.y || sy > mapPos.y + mapSize.y)
+                {
                     continue;
+                }
 
                 const ImU32 col = Spark::Ui::Col(TeamRole(s.teamId), s.active ? 0.86f : 0.4f);
 

@@ -58,7 +58,9 @@ namespace SparkEditor
     void SpriteEditorPanel::Render()
     {
         if (!IsVisible())
+        {
             return;
+        }
 
         if (BeginPanel())
         {
@@ -72,10 +74,14 @@ namespace SparkEditor
             {
                 // Toolbar
                 if (Spark::Ui::IconButton("ZoomIn", ICON_FA_SEARCH_PLUS, "Zoom in"))
+                {
                     m_previewZoom *= 1.25f;
+                }
                 ImGui::SameLine();
                 if (Spark::Ui::IconButton("ZoomOut", ICON_FA_SEARCH_MINUS, "Zoom out"))
+                {
                     m_previewZoom *= 0.8f;
+                }
                 ImGui::SameLine();
                 if (Spark::Ui::IconButton("ResetView", ICON_FA_CROSSHAIRS, "Reset zoom and pan"))
                 {
@@ -356,7 +362,9 @@ namespace SparkEditor
             for (const QuickTint& tint : kQuickTints)
             {
                 if (!firstSwatch)
+                {
                     ImGui::SameLine();
+                }
                 firstSwatch = false;
                 if (ImGui::ColorButton(tint.name, ImVec4(tint.rgba[0], tint.rgba[1], tint.rgba[2], tint.rgba[3])))
                 {

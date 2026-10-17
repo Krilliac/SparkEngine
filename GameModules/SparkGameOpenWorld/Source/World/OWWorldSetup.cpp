@@ -270,7 +270,9 @@ namespace OpenWorld
         // retain the fallback only for standalone/unit-test contexts.
         auto* streamingMgr = m_context ? m_context->GetAreaStreaming() : nullptr;
         if (!streamingMgr)
+        {
             streamingMgr = &Spark::Streaming::SeamlessAreaManager::GetInstance();
+        }
 
         for (const auto& region : m_regions)
         {
@@ -322,26 +324,36 @@ namespace OpenWorld
     void OWWorldSetup::Update(float deltaTime)
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         m_worldTime += deltaTime;
 
         // The host service is pumped once by the shared gameplay lifecycle.
         // Only standalone/test use of the per-image fallback owns its tick.
         if (!m_context || !m_context->GetAreaStreaming())
+        {
             Spark::Streaming::SeamlessAreaManager::GetInstance().Update(deltaTime);
+        }
     }
 
     void OWWorldSetup::Shutdown()
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         auto* streamingMgr = m_context ? m_context->GetAreaStreaming() : nullptr;
         if (!streamingMgr)
+        {
             streamingMgr = &Spark::Streaming::SeamlessAreaManager::GetInstance();
+        }
         for (const auto& region : m_regions)
+        {
             streamingMgr->UnregisterArea(region.regionId);
+        }
 
         m_regions.clear();
         m_roads.clear();
@@ -354,7 +366,9 @@ namespace OpenWorld
         for (const auto& r : m_regions)
         {
             if (r.regionId == regionId)
+            {
                 return &r;
+            }
         }
         return nullptr;
     }
@@ -364,7 +378,9 @@ namespace OpenWorld
         for (const auto& r : m_regions)
         {
             if (x >= r.boundsMinX && x <= r.boundsMaxX && z >= r.boundsMinZ && z <= r.boundsMaxZ)
+            {
                 return &r;
+            }
         }
         return nullptr;
     }
@@ -375,7 +391,9 @@ namespace OpenWorld
         {
             if (x >= r.boundsMinX && x <= r.boundsMaxX && y >= r.boundsMinY && y <= r.boundsMaxY && z >= r.boundsMinZ &&
                 z <= r.boundsMaxZ)
+            {
                 return &r;
+            }
         }
         return nullptr;
     }
@@ -395,7 +413,9 @@ namespace OpenWorld
             for (size_t i = 0; i < r.connectedRegions.size(); ++i)
             {
                 if (i > 0)
+                {
                     ss << ", ";
+                }
                 const auto* connected = GetRegion(r.connectedRegions[i]);
                 ss << (connected ? connected->name : "?");
             }
@@ -417,7 +437,9 @@ namespace OpenWorld
     {
 #ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Open World Map"))
+        {
             return;
+        }
 
         ImGui::Text("World Time: %.1f s", m_worldTime);
         ImGui::Text("Regions: %zu | Roads: %zu", m_regions.size(), m_roads.size());
