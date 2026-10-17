@@ -275,6 +275,11 @@
       "kind": "environment"
     },
     {
+      "prefix": "typeid().name() is not an Itanium mangled name",
+      "owner": "engine-core",
+      "kind": "environment"
+    },
+    {
       "prefix": "temp directory has no narrow spelling",
       "owner": "platform",
       "kind": "environment"
