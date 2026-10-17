@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  CPACK_WIX_PATCH_FILE for the per-user Windows Runtime MSI (cmake/SparkCPackOptions.cmake).
+
+  Remember the install root. Windows Installer does not persist a directory chosen with
+  INSTALL_ROOT=<dir> or in the install-directory dialog. Without this, uninstall, repair
+  and upgrade resolve INSTALL_ROOT to the default (%LOCALAPPDATA%\SparkEngine): files still
+  leave by their registered key paths, but the RemoveFolder rows point at the default tree,
+  so a custom install root and its empty subdirectories stay behind.
+
+  The registry value is the key path of a per-user (HKCU) component in the root feature,
+  so it is written on install and removed with the product. AppSearch reads it back into
+  INSTALL_ROOT before CostFinalize resolves the directory table.
+-->
+<CPackWiXPatch>
+  <CPackWiXFragment Id="#PRODUCT">
+    <Property Id="INSTALL_ROOT" Secure="yes">
+      <RegistrySearch Id="SparkRememberedInstallRoot" Root="HKCU"
+                      Key="Software\Spark Engine Team\SparkEngine" Name="InstallRoot" Type="raw"/>
+    </Property>
+  </CPackWiXFragment>
+  <CPackWiXFragment Id="#PRODUCTFEATURE">
+    <Component Id="SparkRememberInstallRoot" Directory="INSTALL_ROOT"
+               Guid="{6C0E2C7B-3D3F-4F5E-9B6A-2E8F1A4D7C91}">
+      <RegistryValue Root="HKCU" Key="Software\Spark Engine Team\SparkEngine" Name="InstallRoot"
+                     Type="string" Value="[INSTALL_ROOT]" KeyPath="yes"/>
+    </Component>
+  </CPackWiXFragment>
+</CPackWiXPatch>

@@ -104,4 +104,7 @@ if(CPACK_GENERATOR STREQUAL "WIX")
     # across versions so a separately built predecessor can be upgraded. Leave
     # CPACK_WIX_PRODUCT_GUID unset: each MSI needs its own ProductCode.
     set(CPACK_WIX_UPGRADE_GUID "74E90DE5-B7E2-442C-9696-8CA63782F55A")
+    # Persist a custom INSTALL_ROOT so uninstall, repair and upgrade find the chosen tree
+    # (see the patch file).
+    set(CPACK_WIX_PATCH_FILE "${CMAKE_CURRENT_LIST_DIR}/SparkWixPatch.xml")
 endif()

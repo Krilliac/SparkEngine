@@ -31,6 +31,12 @@ run, and no hosted evidence or readiness state was promoted.
   as its own artifact so the evidence artifacts keep their layout. This aligns
   the hosted runner with the product's client target; it is still not Windows
   11 certification.
+- The MSI remembers a custom install root. Windows Installer does not persist
+  `INSTALL_ROOT`, so a plain `msiexec /x` resolved it to the default
+  `%LOCALAPPDATA%\SparkEngine` and left the chosen tree's empty directories
+  behind (the first hosted repeatability drill caught this). `cmake/SparkWixPatch.xml`
+  (`CPACK_WIX_PATCH_FILE`) stores the root as the HKCU key path of a root-feature
+  component and reads it back through AppSearch before costing.
 - `Tests/PackageSmoke/package_runtime_probe.py` verifies installed stable-v1
   asset hashes, runs the authored camera/material pixel checks, installed
   NullRHI save/reload, and AppContainer source/build denial with scene-less and

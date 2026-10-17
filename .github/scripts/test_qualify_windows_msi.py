@@ -16,6 +16,7 @@ import sys
 import tempfile
 import unittest
 from unittest import mock
+import xml.etree.ElementTree as ET  # parses only the repo-owned cmake/SparkWixPatch.xml
 
 SPEC = importlib.util.spec_from_file_location("qualify_windows_msi", Path(__file__).with_name("qualify-windows-msi.py"))
 MODULE = importlib.util.module_from_spec(SPEC)
@@ -652,6 +653,48 @@ class WindowsMSILifecycleTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 families.append(output.read_text(encoding="utf-8").strip())
             self.assertEqual(families, ["74E90DE5-B7E2-442C-9696-8CA63782F55A"] * 3)
+
+    def test_cpack_wix_patch_remembers_custom_install_root(self):
+        """Uninstall/repair/upgrade must resolve INSTALL_ROOT to the tree chosen at install.
+
+        Without a persisted value, msiexec /x resolves INSTALL_ROOT to the default and the
+        RemoveFolder rows miss a custom root, leaving it behind (repeatability residue).
+        """
+        cmake = shutil.which("cmake")
+        self.assertIsNotNone(cmake, "CMake is required for the installer configuration regression")
+        repo = Path(__file__).resolve().parents[2]
+        options = repo / "cmake" / "SparkCPackOptions.cmake"
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            script = root / "patch.cmake"
+            output = root / "patch.txt"
+            script.write_text(
+                'set(CPACK_GENERATOR "WIX")\n'
+                'set(CPACK_PACKAGE_FILE_NAME "SparkEngine-1.0.0-Windows-AMD64")\n'
+                f'include("{options.as_posix()}")\n'
+                f'file(WRITE "{output.as_posix()}" "${{CPACK_WIX_PATCH_FILE}}")\n',
+                encoding="utf-8",
+            )
+            result = subprocess.run([cmake, "-DCPACK_PACKAGE_VERSION=1.0.0", "-P", str(script)],
+                                    capture_output=True, text=True, timeout=30, check=False)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            patch = Path(output.read_text(encoding="utf-8").strip())
+        self.assertEqual(patch.resolve(), (repo / "cmake" / "SparkWixPatch.xml").resolve())
+        fragments = {fragment.get("Id"): fragment for fragment in ET.parse(patch).getroot()}
+        self.assertEqual(set(fragments), {"#PRODUCT", "#PRODUCTFEATURE"})
+        prop = fragments["#PRODUCT"].find("Property")
+        self.assertEqual(prop.get("Id"), "INSTALL_ROOT")
+        search = prop.find("RegistrySearch")
+        component = fragments["#PRODUCTFEATURE"].find("Component")
+        self.assertEqual(component.get("Directory"), "INSTALL_ROOT")
+        value = component.find("RegistryValue")
+        # Per-user package: the remembered root lives in HKCU and is the component key path,
+        # so it is written on install and removed with the product.
+        for element in (search, value):
+            self.assertEqual(element.get("Root"), "HKCU")
+        self.assertEqual((search.get("Key"), search.get("Name")), (value.get("Key"), value.get("Name")))
+        self.assertEqual(value.get("Value"), "[INSTALL_ROOT]")
+        self.assertEqual(value.get("KeyPath"), "yes")
 
     def test_two_version_upgrade_installs_new_product_and_uninstalls_cleanly(self):
         """The qualification contract must exercise an old->new upgrade, not only fresh install."""
