@@ -20,6 +20,16 @@
       "measured": 4964,
       "tool": "Tools/test_source_census.py --json",
       "note": "Tests that include at least one production header. The remaining registered tests assert about test-local reimplementations, so the headline total is not a measure of shipped-code coverage."
+    },
+    "remeasured": {
+      "windows-vs2022-release": {
+        "commit": "06fe8f90abf72eea2716c976a9f282d68074c6e3",
+        "buildRunId": 38989707566,
+        "recorded": 8302,
+        "executed": 8268,
+        "skipped": 34,
+        "note": "Re-measured after the PR616 integration merged the OpenGL RHI240, audio, MSan-canary and editor-panel test families. All 34 skips are classified environment skips (19 OpenGL without a GL driver, 6 XAudio2 without an output device, 2 MSan canaries, 2 POSIX directory-sync paths, 2 process-wide EngineContext editor paths, 1 owned-decoder FPS case, 1 OpenAL non-Windows case, 1 MSVC-ABI type-name case) plus 1 intentional framework probe; Tools/validate_test_warnings.py classifies every site. Floors keep the original slack (19 recorded, 28 executed); the skip ceiling keeps 6 of slack."
+      }
     }
   },
   "lanes": {
@@ -66,9 +76,9 @@
       "maximumEmpty": 25
     },
     "windows-vs2022-release": {
-      "minimumRecorded": 6800,
-      "minimumExecuted": 6790,
-      "maximumSkipped": 25,
+      "minimumRecorded": 8283,
+      "minimumExecuted": 8240,
+      "maximumSkipped": 40,
       "maximumFlaky": 10,
       "maximumEmpty": 25
     }
