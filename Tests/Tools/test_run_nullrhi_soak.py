@@ -22,6 +22,7 @@ import io
 import json
 import math
 import os
+import random
 import stat
 import subprocess
 import sys
@@ -174,7 +175,7 @@ class QueueCheckTests(unittest.TestCase):
 
     def test_flat_and_slowly_growing_depth_pass(self) -> None:
         self.assertEqual(self.verdict([(0.5 + 0.1 * i, 7) for i in range(25)]).failures, [])
-        # One late single-message step is not sustained growth (Theil-Sen median).
+        # One late single-message step stays under the FAST queue-growth ceiling.
         self.assertEqual(self.verdict([(0.5 + 0.1 * i, 7 + (i // 20)) for i in range(25)]).failures, [])
 
     def test_growth_over_the_ceiling_fails_with_the_slope(self) -> None:
@@ -215,9 +216,143 @@ class LeakFitTests(unittest.TestCase):
         # The hosted gcc Release shape: flat for 100 s, one 2 MB step, flat again.
         samples = [(float(t), 30_277_632) for t in range(0, 102)]
         samples += [(float(t), 32_333_824) for t in range(102, 121)]
-        slope, count = soak_tool.fit_leak_slope(samples, 0.0, 120.0)
+        slope, count = soak_tool.fit_leak_slope(samples, 0.0, 120.0, soak_tool.RSS_STEP_ALLOWANCE_BYTES)
         self.assertEqual(count, 121)
         self.assertLess(abs(slope), soak_tool.DEFAULT_MAX_LEAK_BYTES_PER_HOUR / 10)
+
+    def test_one_mid_window_allocator_step_is_not_a_leak(self) -> None:
+        # Hosted gcc Release, 2026-10-17: 29.69 MB until t=77.6 s, one 2 MB step, 31.75 MB to the end.
+        # The 30-120 s window splits the plateaus 48/43; a whole-window Theil-Sen fit read 86.7 MB/h.
+        samples = [(0.05 + 1.0066 * index, 29_687_808 if index < 78 else 31_748_096) for index in range(121)]
+        slope, count = soak_tool.fit_leak_slope(samples, 30.0, 120.0, soak_tool.RSS_STEP_ALLOWANCE_BYTES)
+        self.assertEqual(count, 90)
+        self.assertLess(abs(slope), soak_tool.DEFAULT_MAX_LEAK_BYTES_PER_HOUR / 10)
+
+    def test_one_step_anywhere_in_the_window_is_not_a_leak(self) -> None:
+        for step_time in range(31, 121):
+            with self.subTest(step_time=step_time):
+                samples = [(float(t), 30_000_000 if t < step_time else 32_000_000) for t in range(0, 121)]
+                slope, _ = soak_tool.fit_leak_slope(samples, 30.0, 120.0, soak_tool.RSS_STEP_ALLOWANCE_BYTES)
+                self.assertLess(abs(slope), soak_tool.DEFAULT_MAX_LEAK_BYTES_PER_HOUR / 10)
+
+    def test_one_step_beyond_the_allowance_is_still_growth(self) -> None:
+        # Only RSS_STEP_ALLOWANCE_BYTES is forgiven: a 10 MB jump in a two-minute window still fails.
+        samples = [(float(t), 30_000_000 if t < 70 else 40_000_000) for t in range(0, 121)]
+        slope, _ = soak_tool.fit_leak_slope(samples, 30.0, 120.0, soak_tool.RSS_STEP_ALLOWANCE_BYTES)
+        self.assertGreater(slope, soak_tool.DEFAULT_MAX_LEAK_BYTES_PER_HOUR)
+
+    def test_recurring_steps_fail_at_every_phase(self) -> None:
+        # 2 MB every 30 s is 240 MB/h (3.6x the ceiling); the allowance forgives one step only.
+        for first_step in range(31, 61):
+            with self.subTest(first_step=first_step):
+                samples = [(float(t), 30_000_000 + 2_000_000 * sum(1 for k in range(first_step, 121, 30) if t >= k))
+                           for t in range(0, 121)]
+                slope, _ = soak_tool.fit_leak_slope(samples, 30.0, 120.0, soak_tool.RSS_STEP_ALLOWANCE_BYTES)
+                self.assertGreater(slope, soak_tool.DEFAULT_MAX_LEAK_BYTES_PER_HOUR)
+
+    def test_hour_long_staircase_keeps_its_rate(self) -> None:
+        # A leak at twice the ceiling, in steps however far apart, reads above the ceiling over an hour.
+        rate = 2 * soak_tool.DEFAULT_MAX_LEAK_BYTES_PER_HOUR
+        for period in (600, 1100, 1650):
+            with self.subTest(period=period):
+                samples = [(float(t), 30_000_000 + (t // period) * rate * period / 3600) for t in range(0, 3601, 5)]
+                slope, _ = soak_tool.fit_leak_slope(samples, 300.0, 3600.0, soak_tool.RSS_STEP_ALLOWANCE_BYTES)
+                self.assertGreater(slope, soak_tool.DEFAULT_MAX_LEAK_BYTES_PER_HOUR * 1.5)
+
+    def test_cache_fill_and_flush_without_net_growth_is_not_a_leak(self) -> None:
+        for period in (30, 45):
+            with self.subTest(period=period):
+                samples = [(float(t), 30_000_000 + 5_000_000 * (t % period) // period) for t in range(0, 121)]
+                slope, _ = soak_tool.fit_leak_slope(samples, 30.0, 120.0, soak_tool.RSS_STEP_ALLOWANCE_BYTES)
+                self.assertLess(slope, soak_tool.DEFAULT_MAX_LEAK_BYTES_PER_HOUR)
+
+    def test_unevenly_spaced_growth_is_recovered(self) -> None:
+        times = [30.0 + sum((1.0, 2.5, 0.5, 4.0)[k % 4] for k in range(index)) for index in range(45)]
+        samples = [(t, 30_000_000 + int(t * 20_000)) for t in times]
+        slope, _ = soak_tool.fit_leak_slope(samples, 30.0, 120.0)
+        self.assertAlmostEqual(slope, 20_000 * 3600, delta=1.0)
+        # The allowance forgives one shift measured across TRANSIENT_SAMPLES gaps (7 s of rise
+        # here): several percent low, never zero.
+        forgiven, _ = soak_tool.fit_leak_slope(samples, 30.0, 120.0, soak_tool.RSS_STEP_ALLOWANCE_BYTES)
+        self.assertAlmostEqual(forgiven, 20_000 * 3600, delta=0.10 * 20_000 * 3600)
+
+    def test_a_transient_spike_forgives_nothing(self) -> None:
+        # A buffer that comes and goes is not a step: forgiving it would lower every later
+        # sample and fake a drop that cancels a real leak (or reads a flat run as shrinking).
+        ceiling = soak_tool.DEFAULT_MAX_LEAK_BYTES_PER_HOUR
+        for spike_at in (50, 70, 75, 100):
+            for spike_samples in (1, 3):
+                with self.subTest(spike_at=spike_at, spike_samples=spike_samples):
+                    spike = lambda t: 5_000_000 if spike_at <= t < spike_at + spike_samples else 0
+                    flat = [(float(t), 30_000_000 + spike(t)) for t in range(0, 121)]
+                    slope, _ = soak_tool.fit_leak_slope(flat, 30.0, 120.0, soak_tool.RSS_STEP_ALLOWANCE_BYTES)
+                    self.assertLess(abs(slope), ceiling / 2)
+                    leaking = [(float(t), 30_000_000 + 3 * ceiling * t / 3600 + spike(t)) for t in range(0, 121)]
+                    slope, _ = soak_tool.fit_leak_slope(leaking, 30.0, 120.0, soak_tool.RSS_STEP_ALLOWANCE_BYTES)
+                    self.assertGreater(slope, ceiling)
+
+    def test_a_step_spread_over_a_few_samples_is_not_a_leak(self) -> None:
+        # Two or three allocations a second apart are one allocator step, not growth.
+        for width in (2, 3):
+            for step_time in range(31, 119):
+                with self.subTest(width=width, step_time=step_time):
+                    samples = [(float(t), 30_000_000 + 2_000_000 * min(max(t - step_time + 1, 0), width) // width)
+                               for t in range(0, 121)]
+                    slope, _ = soak_tool.fit_leak_slope(samples, 30.0, 120.0, soak_tool.RSS_STEP_ALLOWANCE_BYTES)
+                    self.assertLess(abs(slope), soak_tool.DEFAULT_MAX_LEAK_BYTES_PER_HOUR / 10)
+
+    def test_a_transient_dip_forgives_nothing(self) -> None:
+        # A buffer freed and reallocated within a few seconds must not spend the allowance:
+        # lowering every sample after the dip would fake a drop that cancels a real leak.
+        ceiling = soak_tool.DEFAULT_MAX_LEAK_BYTES_PER_HOUR
+        for dip_at in range(31, 118):
+            for dip_samples in (1, 3):
+                with self.subTest(dip_at=dip_at, dip_samples=dip_samples):
+                    dip = lambda t: 5_000_000 if dip_at <= t < dip_at + dip_samples else 0
+                    leaking = [(float(t), 30_000_000 + 2 * ceiling * t // 3600 - dip(t)) for t in range(0, 121)]
+                    slope, _ = soak_tool.fit_leak_slope(leaking, 30.0, 120.0, soak_tool.RSS_STEP_ALLOWANCE_BYTES)
+                    self.assertGreater(slope, 1.4 * ceiling)
+
+    def test_a_transient_spike_anywhere_is_not_a_leak_and_hides_none(self) -> None:
+        # A spike of up to TRANSIENT_SAMPLES samples moves nothing wherever it lands, as long as
+        # the window holds TRANSIENT_SAMPLES samples after it; one touching the window start is
+        # removed with warm-up samples as context.
+        ceiling = soak_tool.DEFAULT_MAX_LEAK_BYTES_PER_HOUR
+        last_start = 120 - 2 * soak_tool.TRANSIENT_SAMPLES
+        for spike_at in range(30, last_start + 1):
+            for spike_samples in (1, soak_tool.TRANSIENT_SAMPLES):
+                with self.subTest(spike_at=spike_at, spike_samples=spike_samples):
+                    spike = lambda t: 20_000_000 if spike_at <= t < spike_at + spike_samples else 0
+                    flat = [(float(t), 30_000_000 + spike(t)) for t in range(0, 121)]
+                    slope, _ = soak_tool.fit_leak_slope(flat, 30.0, 120.0, soak_tool.RSS_STEP_ALLOWANCE_BYTES)
+                    self.assertEqual(slope, 0.0)
+                    leaking = [(float(t), 30_000_000 + 2 * ceiling * t // 3600 + spike(t)) for t in range(0, 121)]
+                    slope, _ = soak_tool.fit_leak_slope(leaking, 30.0, 120.0, soak_tool.RSS_STEP_ALLOWANCE_BYTES)
+                    self.assertGreater(slope, 1.8 * ceiling)
+
+    def test_noise_is_not_forgiven_as_a_step(self) -> None:
+        # Page-level noise on a flat run: the allowance and the transient filter must leave
+        # the fit well under the ceiling for every seed, not just a lucky one.
+        ceiling = soak_tool.DEFAULT_MAX_LEAK_BYTES_PER_HOUR
+        for seed in range(100):
+            with self.subTest(seed=seed):
+                noise = random.Random(seed)
+                samples = [(float(t), 30_000_000 + int(noise.gauss(0, 300_000))) for t in range(0, 121)]
+                slope, _ = soak_tool.fit_leak_slope(samples, 30.0, 120.0, soak_tool.RSS_STEP_ALLOWANCE_BYTES)
+                self.assertLess(abs(slope), ceiling / 3)
+
+    def test_a_rise_in_the_last_samples_counts_as_a_level_change(self) -> None:
+        # Documented limit: nothing after the window can prove a late rise transient, so a
+        # 20 MB rise that lasts to the end reads as growth beyond the allowance.
+        samples = [(float(t), 30_000_000 + (20_000_000 if t >= 118 else 0)) for t in range(0, 121)]
+        slope, _ = soak_tool.fit_leak_slope(samples, 30.0, 120.0, soak_tool.RSS_STEP_ALLOWANCE_BYTES)
+        self.assertGreater(slope, soak_tool.DEFAULT_MAX_LEAK_BYTES_PER_HOUR)
+
+    def test_queue_depth_gets_no_step_allowance(self) -> None:
+        # A one-off burst of 5000 queued messages is real queue growth, not allocator granularity.
+        samples = [(float(t), 0 if t < 75 else 5000) for t in range(0, 121)]
+        slope, _ = soak_tool.evaluate_queue_growth(samples, soak_tool.SoakConfig(duration_s=120.0, warmup_s=30.0))
+        self.assertGreater(slope, soak_tool.DEFAULT_MAX_QUEUE_GROWTH_PER_HOUR)
 
     def test_long_run_fit_is_bounded_and_still_recovers_growth(self) -> None:
         samples = [(float(t), 10_000_000 + t * 500) for t in range(20_000)]

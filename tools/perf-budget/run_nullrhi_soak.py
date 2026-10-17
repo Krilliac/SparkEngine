@@ -30,15 +30,18 @@ Launches SparkEngine exactly as collect_headless_result.py does
   (``PROCESS_MEMORY_COUNTERS_EX.PrivateUsage`` from ``K32GetProcessMemoryInfo``,
   which the OS never trims the way it trims a working set) on Windows,
   sampled every ``--sample-interval`` seconds. The leak
-  slope is a Theil-Sen (median pairwise slope) fit of RSS against time over
-  ``[ready + warmup, ready + duration]``. The loop runs at most 60 Hz, so it
-  cannot finish before ``ready + duration``: the window never includes
-  teardown, whose frees would bias the slope downward.
+  slope is a least-squares fit of RSS against time over
+  ``[ready + warmup, ready + duration]``, after a median filter removes spikes
+  and dips of up to TRANSIENT_SAMPLES samples, less one allocator step
+  (fit_leak_slope). The loop runs at most 60 Hz, so it cannot finish before
+  ``ready + duration``: the window never includes teardown, whose frees would
+  bias the slope downward.
 * Queue depth -- a host that reports its work-queue depth prints
   ``SPARK_HEADLESS_QUEUE_DEPTH depth=N`` lines to stdout while it runs. The
   newest value is sampled on the ``--sample-interval`` cadence and its
-  Theil-Sen slope over the same fit window must stay at or under
-  ``--max-queue-growth-per-hour``. This is a separate check from the memory
+  slope, fitted the same way over the same window but with no step allowance
+  (a burst of up to TRANSIENT_SAMPLES samples is not sustained growth), must stay
+  at or under ``--max-queue-growth-per-hour``. This is a separate check from the memory
   slope: a queue that grows without bound fails here even when its entries are
   too small to move RSS. A host that prints no such record is reported as
   ``not-measured`` (never as a pass), and the run is not failed for it.
@@ -110,7 +113,16 @@ TICK_HZ = 60
 MIN_RESULT_DURATION_S = 3600.0
 MAX_DURATION_S = 7 * 24 * 3600.0
 MIN_FIT_SAMPLES = 10
-MAX_THEIL_SEN_SAMPLES = 1500
+# One upward RSS jump of up to this size is not growth: a glibc arena or mmap step of a
+# couple of MiB lands once in an otherwise flat run (hosted gcc Release, 2 MB, twice). The
+# allowance is bytes, not a rate, so it barely moves an hour-long fit but forgives the step
+# that would otherwise read as ~80 MiB/hour in a two-minute window.
+RSS_STEP_ALLOWANCE_BYTES = 4 * 1024 * 1024
+# A rise or dip that lasts at most this many consecutive samples is a transient, not a
+# level change: each sample is replaced by the median of itself and this many neighbours
+# on either side before the fit, so a buffer that comes and goes within a few seconds
+# moves nothing. A level shift needs a sample to stay up for longer than this.
+TRANSIENT_SAMPLES = 3
 # Provisional harness ceiling, not a governed budget. It is loose enough to
 # absorb allocator noise in a two-minute fit window yet still trips on a
 # steady leak of a few KiB per tick (1 KiB/tick at 60 Hz is ~211 MiB/hour).
@@ -349,7 +361,7 @@ class QueueDepthTail:
 
 
 def evaluate_queue_growth(samples: list[tuple[float, int]], config: SoakConfig) -> tuple[float | None, int]:
-    """Theil-Sen queue-depth slope in messages/hour over the fit window, or (None, n) with too few samples."""
+    """Least-squares queue-depth slope in messages/hour over the fit window, or (None, n) with too few samples."""
     return fit_leak_slope(samples, config.warmup_s, config.duration_s)
 
 
@@ -403,36 +415,62 @@ def parse_nullrhi_live_resources(stdout_text: str) -> int:
 
 
 def fit_leak_slope(samples: list[tuple[float, int]], window_start_s: float,
-                   window_end_s: float) -> tuple[float | None, int]:
-    """Theil-Sen RSS slope in bytes/hour over samples inside the window.
+                   window_end_s: float, step_allowance: int = 0) -> tuple[float | None, int]:
+    """Least-squares slope in units/hour over the samples inside the window.
 
-    The median of every pairwise slope: steady growth is recovered exactly, as
-    with least squares, but one late allocator step on an otherwise flat run (a
-    hosted gcc Release soak held 30.3 MB for 100 s, then stepped 2 MB once) no
-    longer reads as a leak. Recurring growth still moves the median.
+    Transients are removed first: every sample becomes the median of itself and up to
+    TRANSIENT_SAMPLES neighbours on each side, over the whole series so the window edges
+    see their context. A spike or dip of at most TRANSIENT_SAMPLES samples disappears;
+    steps, ramps and staircases are untouched. (A rise inside the last TRANSIENT_SAMPLES
+    samples has nothing after it to prove it transient and counts as a level change.)
 
-    Returns (None, n) when fewer than MIN_FIT_SAMPLES samples fall inside the
-    window or they do not span any time.
+    Then, with step_allowance > 0, one persistent level shift of up to that many units
+    is forgiven: the split whose later samples (from TRANSIENT_SAMPLES on, so a step that
+    lands across two or three samples is one shift) all stay furthest above the level just
+    before it. Every later sample is lowered by its share of that rise. RSS fits pass
+    RSS_STEP_ALLOWANCE_BYTES: one allocator step on an otherwise flat run is not a leak
+    wherever it lands, a transient or noise forgives nothing worth a slope, and recurring
+    growth keeps all but one allowance of its rise. A whole-window Theil-Sen fit, used
+    before, read a hosted step that split the window 48/43 as 87 MB/hour, because over
+    half of all sample pairs straddled it.
+
+    Returns (None, n) when fewer than MIN_FIT_SAMPLES samples fall inside the window or
+    they do not span any time.
     """
-    window = [(t, rss) for t, rss in samples if window_start_s <= t <= window_end_s]
-    count = len(window)
+    series = sorted(samples)
+    times = [t for t, _ in series]
+    raw = [value for _, value in series]
+    values = []
+    for index in range(len(raw)):
+        reach = min(TRANSIENT_SAMPLES, index, len(raw) - 1 - index)
+        values.append(sorted(raw[index - reach:index + reach + 1])[reach])
+    inside = [index for index, t in enumerate(times) if window_start_s <= t <= window_end_s]
+    count = len(inside)
     if count < MIN_FIT_SAMPLES:
         return None, count
-    if count > MAX_THEIL_SEN_SAMPLES:
-        # Pairwise slopes are quadratic; an evenly spaced subset keeps a multi-day run's fit bounded.
-        step = count / MAX_THEIL_SEN_SAMPLES
-        window = [window[int(index * step)] for index in range(MAX_THEIL_SEN_SAMPLES)]
-    slopes = sorted(
-        (window[j][1] - window[i][1]) / (window[j][0] - window[i][0])
-        for i in range(len(window))
-        for j in range(i + 1, len(window))
-        if window[j][0] != window[i][0]
-    )
-    if not slopes:
+    times = [times[index] for index in inside]
+    values = [values[index] for index in inside]
+    if step_allowance > 0:
+        lowest_after = values[:]
+        for index in range(count - 2, -1, -1):
+            lowest_after[index] = min(values[index], lowest_after[index + 1])
+        split, rise = 0, 0
+        for index in range(count - 1):
+            level_before = max(values[max(0, index - TRANSIENT_SAMPLES + 1):index + 1])
+            shift = lowest_after[min(index + TRANSIENT_SAMPLES, count - 1)] - level_before
+            if shift > rise:
+                split, rise = index, shift
+        forgiven = min(rise, step_allowance)
+        base = values[split]
+        values = [value - min(forgiven, max(0, value - base)) if index > split else value
+                  for index, value in enumerate(values)]
+    mean_time = sum(times) / count
+    mean_value = sum(values) / count
+    time_spread = sum((t - mean_time) ** 2 for t in times)
+    if time_spread == 0:
         return None, count
-    middle = len(slopes) // 2
-    median = slopes[middle] if len(slopes) % 2 else (slopes[middle - 1] + slopes[middle]) / 2.0
-    return median * 3600.0, count
+    slope = sum((t - mean_time) * (value - mean_value) for t, value in zip(times, values)) / time_spread
+    return slope * 3600.0, count
 
 
 def _read_bounded(path: Path) -> str:
@@ -557,7 +595,7 @@ def run_soak(engine: Path, module: Path, config: SoakConfig) -> SoakOutcome:
                     "released the device")
 
     outcome.slope_bytes_per_hour, outcome.fit_sample_count = fit_leak_slope(
-        outcome.samples, config.warmup_s, config.duration_s)
+        outcome.samples, config.warmup_s, config.duration_s, RSS_STEP_ALLOWANCE_BYTES)
     if outcome.slope_bytes_per_hour is None:
         if not outcome.crashed:
             outcome.failures.append(
