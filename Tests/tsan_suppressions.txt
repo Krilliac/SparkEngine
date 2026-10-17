@@ -19,12 +19,16 @@ race:JPH::JobSystem
 # is hidden too; the Logger's own races are covered by the non-Vulkan tests.
 race:libVkLayer_khronos_validation.so
 
-# Mesa llvmpipe (libgallium): a fence's mutex/condvar is destroyed on the GL
-# thread while an llvmpipe-N rasterizer worker last touched it under the same
-# lock. Every racing access is inside the driver; the engine frame is only the
-# GL draw that retired the fence (LinuxForwardPass_OpenGLCubeRenders,
-# AssetPipeline::DrawBoundMesh). Frame #0 is the libtsan interceptor, so the
-# library must be matched at any frame. Accepted exposure: an engine race whose
-# stack passes through a GL call is hidden; engine-side state is covered by the
-# non-OpenGL tests.
+# Mesa llvmpipe (libgallium): a driver-allocated mutex and condvar are destroyed
+# on the GL thread (pthread_mutex_destroy / pthread_cond_destroy) after an
+# llvmpipe-N worker last locked the mutex. Every racing access is inside the
+# driver; the only engine frame is the draw that triggered the teardown
+# (LinuxForwardPass_OpenGLCubeRenders, AssetPipeline::DrawBoundMesh). Frame #0 is
+# the libtsan interceptor, so the library must be matched at any frame.
+# Accepted exposure: TSan drops a report when either access happens inside
+# libgallium, so the driver touching engine memory while another engine thread
+# does is hidden too: client-memory uploads (glBufferData / glTexImage* from an
+# engine pointer) and the synchronous GL debug callback registered in
+# OpenGLDevice.cpp (GL_DEBUG_OUTPUT_SYNCHRONOUS, which logs). Neither is covered
+# by the non-OpenGL tests.
 race:libgallium

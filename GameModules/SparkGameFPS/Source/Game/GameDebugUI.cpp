@@ -178,10 +178,11 @@ void Game::RenderDebugUI()
     // Its own window, collapsed in the top-left corner on first use. Without a Begin
     // the panel landed in ImGui's implicit "Debug" window (400x400 at 60,60), which
     // covered the play area that FPSVisibleFrame_AuthoredAndFallback samples.
-    // Expanding it is one click; the F-key shortcuts below work either way.
+    // Expanding it is one click; the F-key shortcuts below work either way. It does
+    // not take focus on appearing, so it never captures the game's keyboard input.
     ImGui::SetNextWindowPos(ImVec2(8.0f, 8.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowCollapsed(true, ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("Spark Arena", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    if (!ImGui::Begin("Spark Arena", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing))
     {
         ImGui::End();
         return;
