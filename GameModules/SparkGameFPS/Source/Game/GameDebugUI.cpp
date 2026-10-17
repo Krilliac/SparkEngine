@@ -175,8 +175,15 @@ void Game::RenderDebugUI()
     // developer-command policy in Console/FPSConsolePolicy.h, so a Shipping
     // build without ENABLE_DEVCOMMANDS_IN_SHIPPING draws no overlay over play.
 #if defined(SPARK_HAS_IMGUI) && (defined(SPARK_DEVCOMMANDS_IN_SHIPPING) || !defined(SPARK_BUILD_SHIPPING))
-    if (!ImGui::CollapsingHeader("Spark Arena", ImGuiTreeNodeFlags_DefaultOpen))
+    // Its own window, collapsed in the top-left corner on first use. Without a Begin
+    // the panel landed in ImGui's implicit "Debug" window (400x400 at 60,60), which
+    // covered the play area that FPSVisibleFrame_AuthoredAndFallback samples.
+    // Expanding it is one click; the F-key shortcuts below work either way.
+    ImGui::SetNextWindowPos(ImVec2(8.0f, 8.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowCollapsed(true, ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin("Spark Arena", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
     {
+        ImGui::End();
         return;
     }
 
@@ -213,5 +220,6 @@ void Game::RenderDebugUI()
 
     ImGui::TextDisabled("F2: quicksave | F3: quickload | F11: start survival");
     ImGui::TextDisabled("F5-F10: choose class | [ / ]: cycle class | V: enter vehicle");
+    ImGui::End();
 #endif
 }
