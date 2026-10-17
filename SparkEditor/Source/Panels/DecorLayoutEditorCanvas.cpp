@@ -35,6 +35,70 @@ namespace SparkEditor
     {
         constexpr float kDegToRad = 0.01745329252f; // same constant as TFWorldCollision
 
+        /// Decor-layout canvas art. The canvas is a top-down view of game geometry, not editor
+        /// chrome: the footprint hues carry collision meaning that the hint line names ("red =
+        /// solid OBB, orange = collideParts, green = walk-through, yellow knob, white corner"), so
+        /// they stay fixed, and the surface stays dark in every editor appearance. The table is
+        /// exempt from the UI-literal ratchet by name (tools/ui/literal-baselines/P3.json).
+        struct DecorCanvasArt
+        {
+            ImU32 background;     ///< Canvas surface.
+            ImU32 grid;           ///< 10 m grid lines.
+            ImU32 originAxis;     ///< Axes through the region center.
+            ImU32 scatterRing;    ///< Scatter radius min/max rings.
+            ImU32 clearanceFill;  ///< Capture-point clearance disc.
+            ImU32 clearanceRing;  ///< Clearance disc outline.
+            ImU32 clearanceProbe; ///< Draggable probe dot.
+            ImU32 clearanceLabel; ///< Probe label.
+            ImU32 pawnCapsule;    ///< 0.8 m pawn capsule ring.
+            ImU32 solidOutline;   ///< Piece colliding via its whole-model OBB (red).
+            ImU32 solidFill;
+            ImU32 partsOutline; ///< Piece colliding via authored collideParts (orange).
+            ImU32 partsFill;
+            ImU32 walkOutline; ///< Walk-through piece (green).
+            ImU32 walkFill;
+            ImU32 missingOutline; ///< OBJ missing: the footprint is a guess (alarming red).
+            ImU32 missingFill;
+            ImU32 selectedOutline; ///< Selected piece or part.
+            ImU32 partFill;        ///< Nested collidePart box.
+            ImU32 partOutline;
+            ImU32 pieceLabel;    ///< Model name under each piece.
+            ImU32 rotateLine;    ///< Line to the rotate knob.
+            ImU32 rotateKnob;    ///< Yellow rotate knob.
+            ImU32 resizeHandle;  ///< White part-resize corner.
+            ImU32 handleOutline; ///< Dark outline around handles.
+            ImU32 hint;          ///< Legend / hint line.
+        };
+
+        constexpr DecorCanvasArt kDecorCanvasArt = {
+            .background = IM_COL32(24, 26, 30, 255),
+            .grid = IM_COL32(60, 63, 70, 110),
+            .originAxis = IM_COL32(110, 115, 125, 170),
+            .scatterRing = IM_COL32(120, 130, 145, 90),
+            .clearanceFill = IM_COL32(250, 210, 70, 26),
+            .clearanceRing = IM_COL32(250, 210, 70, 170),
+            .clearanceProbe = IM_COL32(250, 210, 70, 255),
+            .clearanceLabel = IM_COL32(250, 210, 70, 200),
+            .pawnCapsule = IM_COL32(90, 220, 235, 220),
+            .solidOutline = IM_COL32(235, 100, 90, 255),
+            .solidFill = IM_COL32(235, 100, 90, 40),
+            .partsOutline = IM_COL32(255, 170, 60, 255),
+            .partsFill = IM_COL32(255, 170, 60, 34),
+            .walkOutline = IM_COL32(120, 200, 140, 255),
+            .walkFill = IM_COL32(120, 200, 140, 28),
+            .missingOutline = IM_COL32(220, 70, 70, 255),
+            .missingFill = IM_COL32(220, 70, 70, 20),
+            .selectedOutline = IM_COL32(255, 255, 255, 255),
+            .partFill = IM_COL32(235, 100, 90, 45),
+            .partOutline = IM_COL32(235, 100, 90, 230),
+            .pieceLabel = IM_COL32(225, 228, 235, 255),
+            .rotateLine = IM_COL32(255, 255, 120, 160),
+            .rotateKnob = IM_COL32(255, 255, 120, 255),
+            .resizeHandle = IM_COL32(255, 255, 255, 230),
+            .handleOutline = IM_COL32(30, 30, 30, 255),
+            .hint = IM_COL32(170, 175, 185, 255),
+        };
+
         float Dist2(float ax, float ay, float bx, float by)
         {
             const float dx = ax - bx;
@@ -365,7 +429,7 @@ namespace SparkEditor
 
         // ---- Drawing ----
         dl->PushClipRect(p0, p1, true);
-        dl->AddRectFilled(p0, p1, IM_COL32(24, 26, 30, 255));
+        dl->AddRectFilled(p0, p1, kDecorCanvasArt.background);
 
         // Meter grid (10 m) + origin axes (the region center).
         {
@@ -375,19 +439,19 @@ namespace SparkEditor
             const float wz1 = toWorldZ(p0.y);
             const float step = 10.0f;
             for (float g = std::floor(wx0 / step) * step; g <= wx1; g += step)
-                dl->AddLine(toScreen(g, wz0), toScreen(g, wz1), IM_COL32(60, 63, 70, 110));
+                dl->AddLine(toScreen(g, wz0), toScreen(g, wz1), kDecorCanvasArt.grid);
             for (float g = std::floor(wz0 / step) * step; g <= wz1; g += step)
-                dl->AddLine(toScreen(wx0, g), toScreen(wx1, g), IM_COL32(60, 63, 70, 110));
-            dl->AddLine(toScreen(0.0f, wz0), toScreen(0.0f, wz1), IM_COL32(110, 115, 125, 170));
-            dl->AddLine(toScreen(wx0, 0.0f), toScreen(wx1, 0.0f), IM_COL32(110, 115, 125, 170));
+                dl->AddLine(toScreen(wx0, g), toScreen(wx1, g), kDecorCanvasArt.grid);
+            dl->AddLine(toScreen(0.0f, wz0), toScreen(0.0f, wz1), kDecorCanvasArt.originAxis);
+            dl->AddLine(toScreen(wx0, 0.0f), toScreen(wx1, 0.0f), kDecorCanvasArt.originAxis);
         }
 
         // Scatter ring (radius min/max) — context for where props may land.
         if (!t.scatter.models.empty() && t.scatter.radiusMax > 0.0f)
         {
             const ImVec2 o = toScreen(0.0f, 0.0f);
-            dl->AddCircle(o, t.scatter.radiusMin * s, IM_COL32(120, 130, 145, 90), 64, 1.0f);
-            dl->AddCircle(o, t.scatter.radiusMax * s, IM_COL32(120, 130, 145, 90), 64, 1.0f);
+            dl->AddCircle(o, t.scatter.radiusMin * s, kDecorCanvasArt.scatterRing, 64, 1.0f);
+            dl->AddCircle(o, t.scatter.radiusMax * s, kDecorCanvasArt.scatterRing, 64, 1.0f);
         }
 
         // Clearance preview UNDER the pieces: the capture-point clearance circle
@@ -395,14 +459,14 @@ namespace SparkEditor
         if (m_showClearance)
         {
             const ImVec2 pp = toScreen(m_probeX, m_probeZ);
-            dl->AddCircleFilled(pp, m_clearanceM * s, IM_COL32(250, 210, 70, 26), 64);
-            dl->AddCircle(pp, m_clearanceM * s, IM_COL32(250, 210, 70, 170), 64, 1.5f);
-            dl->AddCircle(pp, kPawnRadiusM * s, IM_COL32(90, 220, 235, 220), 32, 1.5f);
-            dl->AddCircleFilled(pp, 3.0f, IM_COL32(250, 210, 70, 255));
+            dl->AddCircleFilled(pp, m_clearanceM * s, kDecorCanvasArt.clearanceFill, 64);
+            dl->AddCircle(pp, m_clearanceM * s, kDecorCanvasArt.clearanceRing, 64, 1.5f);
+            dl->AddCircle(pp, kPawnRadiusM * s, kDecorCanvasArt.pawnCapsule, 32, 1.5f);
+            dl->AddCircleFilled(pp, 3.0f, kDecorCanvasArt.clearanceProbe);
             char label[96];
             std::snprintf(label, sizeof(label), "clearance %.0fm / capsule 0.8m (drag me)",
                           static_cast<double>(m_clearanceM));
-            dl->AddText(ImVec2(pp.x + 8.0f, pp.y - 16.0f), IM_COL32(250, 210, 70, 200), label);
+            dl->AddText(ImVec2(pp.x + 8.0f, pp.y - 16.0f), kDecorCanvasArt.clearanceLabel, label);
         }
 
         // Pieces as rotated footprint rectangles. Color code:
@@ -418,18 +482,18 @@ namespace SparkEditor
             pieceCorners(p, b, quad);
 
             const bool hasParts = !p.collideParts.empty();
-            ImU32 outline = p.collide ? (hasParts ? IM_COL32(255, 170, 60, 255) : IM_COL32(235, 100, 90, 255))
-                                      : IM_COL32(120, 200, 140, 255);
-            ImU32 fill = p.collide ? (hasParts ? IM_COL32(255, 170, 60, 34) : IM_COL32(235, 100, 90, 40))
-                                   : IM_COL32(120, 200, 140, 28);
+            ImU32 outline = p.collide ? (hasParts ? kDecorCanvasArt.partsOutline : kDecorCanvasArt.solidOutline)
+                                      : kDecorCanvasArt.walkOutline;
+            ImU32 fill = p.collide ? (hasParts ? kDecorCanvasArt.partsFill : kDecorCanvasArt.solidFill)
+                                   : kDecorCanvasArt.walkFill;
             if (!b.valid)
             {
-                outline = IM_COL32(220, 70, 70, 255); // alarming: footprint is a guess
-                fill = IM_COL32(220, 70, 70, 20);
+                outline = kDecorCanvasArt.missingOutline; // alarming: footprint is a guess
+                fill = kDecorCanvasArt.missingFill;
             }
             const bool isSel = (static_cast<int>(i) == m_selPiece);
             dl->AddConvexPolyFilled(quad, 4, fill);
-            dl->AddPolyline(quad, 4, isSel ? IM_COL32(255, 255, 255, 255) : outline, isSel ? 3.0f : 1.5f,
+            dl->AddPolyline(quad, 4, isSel ? kDecorCanvasArt.selectedOutline : outline, isSel ? 3.0f : 1.5f,
                             ImDrawFlags_Closed);
 
             // Facing tick: piece origin toward local +z.
@@ -446,14 +510,14 @@ namespace SparkEditor
                 ImVec2 pq[4];
                 partCorners(p, p.collideParts[k], pq);
                 const bool partSel = isSel && static_cast<int>(k) == m_selPart;
-                dl->AddConvexPolyFilled(pq, 4, IM_COL32(235, 100, 90, 45));
-                dl->AddPolyline(pq, 4, partSel ? IM_COL32(255, 255, 255, 255) : IM_COL32(235, 100, 90, 230),
+                dl->AddConvexPolyFilled(pq, 4, kDecorCanvasArt.partFill);
+                dl->AddPolyline(pq, 4, partSel ? kDecorCanvasArt.selectedOutline : kDecorCanvasArt.partOutline,
                                 partSel ? 2.5f : 1.5f, ImDrawFlags_Closed);
             }
 
             const std::string label = ModelLabel(p.model);
             const ImVec2 ts = ImGui::CalcTextSize(label.c_str());
-            dl->AddText(ImVec2(org.x - ts.x * 0.5f, org.y + 6.0f), IM_COL32(225, 228, 235, 255), label.c_str());
+            dl->AddText(ImVec2(org.x - ts.x * 0.5f, org.y + 6.0f), kDecorCanvasArt.pieceLabel, label.c_str());
         }
 
         // Handles for the selected piece: rotate knob + part resize corners.
@@ -462,16 +526,16 @@ namespace SparkEditor
             const ObjBounds& b = BoundsForModel(sel->model);
             const ImVec2 rh = rotateHandle(*sel, b);
             const ImVec2 org = toScreen(sel->offX, sel->offZ);
-            dl->AddLine(org, rh, IM_COL32(255, 255, 120, 160), 1.0f);
-            dl->AddCircleFilled(rh, 5.0f, IM_COL32(255, 255, 120, 255));
-            dl->AddCircle(rh, 5.0f, IM_COL32(30, 30, 30, 255));
+            dl->AddLine(org, rh, kDecorCanvasArt.rotateLine, 1.0f);
+            dl->AddCircleFilled(rh, 5.0f, kDecorCanvasArt.rotateKnob);
+            dl->AddCircle(rh, 5.0f, kDecorCanvasArt.handleOutline);
             for (const CollidePart& part : sel->collideParts)
             {
                 const ImVec2 rz = partResizeHandle(*sel, part);
                 dl->AddRectFilled(ImVec2(rz.x - 4.0f, rz.y - 4.0f), ImVec2(rz.x + 4.0f, rz.y + 4.0f),
-                                  IM_COL32(255, 255, 255, 230));
+                                  kDecorCanvasArt.resizeHandle);
                 dl->AddRect(ImVec2(rz.x - 4.0f, rz.y - 4.0f), ImVec2(rz.x + 4.0f, rz.y + 4.0f),
-                            IM_COL32(30, 30, 30, 255));
+                            kDecorCanvasArt.handleOutline);
             }
         }
 
@@ -481,7 +545,7 @@ namespace SparkEditor
                 ? "Drag body = move, yellow knob = rotate (15-deg steps). Parts: drag = move, white corner = "
                   "resize. Wheel = zoom, right/middle drag = pan."
                 : "Click a footprint to select. Red = solid OBB, orange = collideParts, green = walk-through.";
-        dl->AddText(ImVec2(p0.x + 6.0f, p0.y + 4.0f), IM_COL32(170, 175, 185, 255), hint);
+        dl->AddText(ImVec2(p0.x + 6.0f, p0.y + 4.0f), kDecorCanvasArt.hint, hint);
         dl->PopClipRect();
     }
 

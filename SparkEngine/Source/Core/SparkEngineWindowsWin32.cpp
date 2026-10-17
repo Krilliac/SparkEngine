@@ -25,14 +25,13 @@
 #include "FixedTimestepAccumulator.h"
 #include "GameImGuiLayer.h"
 #include "GameplaySystemLifecycle.h"
+#include "HostScenePreview.h"
 #include "Graphics/GraphicsEngine.h"
-#include "Graphics/ProjectAssetPath.h"
 #include "Graphics/WeatherSystem.h"
 #include "Graphics/WorldBasicRenderer.h" // -scene: Spark::RenderWorldBasic
 #include "Input/InputManager.h"
 #include "ModuleHotReload.h"
 #include "ModuleManager.h"
-#include "SceneManager/ReflectedSceneSerializer.h" // -scene: Spark::LoadWorld
 #include "Utils/Assert.h"
 #include "Utils/ConsoleProcessManager.h"
 #include "Utils/DeltaSmoother.h"
@@ -74,9 +73,19 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
     // A module whose OnLoad failed keeps its entry (its DLL stays mapped) but
     // renders nothing, so the usable-module question is the initialized one.
     bool haveModules = GetEngineRuntime().moduleManager && GetEngineRuntime().moduleManager->HasInitializedModules();
-    if (!g_scenePath.empty() && !haveModules)
+    if (!g_scenePath.empty())
     {
-        if (Spark::LoadWorld(g_sceneWorld, g_scenePath))
+        // A scene that cannot run must fail the launch rather than leave an
+        // empty engine exiting 0. WM_QUIT with the failure status keeps the
+        // ordinary shutdown preflight and teardown below authoritative.
+        Spark::HostSceneLoadReport sceneReport;
+        if (haveModules)
+        {
+            console.LogError(std::format("[-scene] A game module is active; '{}' cannot run", g_scenePath));
+            g_scenePath.clear();
+            PostQuitMessage(Spark::kHostSceneLoadFailedExitCode);
+        }
+        else if (Spark::LoadHostScene(g_sceneWorld, g_scenePath, sceneReport))
         {
             // Explicit scene preview renders this dedicated world rather than
             // the ordinary runtime world. Publish that same instance through
@@ -84,18 +93,18 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
             // the user can actually see.
             if (EngineContext* context = EngineContext::Get())
                 context->SetWorld(&g_sceneWorld);
-            if (const auto root = Spark::DeriveProjectRootFromScenePath(g_scenePath))
-                sceneProjectRoot = *root;
-            else
+            sceneProjectRoot = sceneReport.projectRoot;
+            if (sceneProjectRoot.empty())
                 console.LogWarning("[-scene] Could not derive a project root from a canonical Scenes/... path; "
                                    "relative assets are disabled");
-            console.LogSuccess(std::format("[-scene] Loaded '{}' ({} entities)", g_scenePath,
-                                           g_sceneWorld.GetRegistry().storage<entt::entity>().size()));
+            console.LogSuccess(std::format("[-scene] Loaded '{}' ({} entities)", g_scenePath, sceneReport.entities));
+            Spark::PrintHostSceneRecords(sceneReport);
         }
         else
         {
-            console.LogError(std::format("[-scene] Failed to load '{}'", g_scenePath));
+            console.LogError(std::format("[-scene] Failed to load '{}': {}", g_scenePath, sceneReport.error));
             g_scenePath.clear();
+            PostQuitMessage(Spark::kHostSceneLoadFailedExitCode);
         }
     }
 
@@ -114,14 +123,13 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
         // the quit is actually consumed. The old `continue` skipped PeekMessage,
         // spinning forever without SPARK_HEARTBEAT until the FreezeDetector
         // killed the process (exit code 1) on every -test-frames run.
-        if (((g_testFrameLimit > 0 && frameCount >= g_testFrameLimit) ||
-             (g_testSecondsLimit > 0.0 && ExecElapsedSeconds() >= g_testSecondsLimit)) &&
+        if (((g_testFrameLimit > 0 && frameCount >= g_testFrameLimit) || g_execScript.TestSecondsLimitReached()) &&
             !quitPosted)
         {
             if (CanShutdownEngine())
             {
                 console.LogInfo(std::format("[TEST] Limit reached (frame {} / t={:.1f}s). Exiting.", frameCount,
-                                            ExecElapsedSeconds()));
+                                            g_execScript.ElapsedSeconds()));
                 PostQuitMessage(0);
                 quitPosted = true;
             }
@@ -276,7 +284,7 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
             // the ImGui frame, where module load + init is safe.
             ConsumeProjectSelectorChoice();
 
-            RunDueScriptedCommands(frameCount);
+            g_execScript.RunDue(frameCount, console);
             ++frameCount;
         }
     }
@@ -288,23 +296,6 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
     // path otherwise AVs in ~UIPanel (dead ImGui/graphics) and then hangs
     // inside the crash handler.
     //
-    // Deregister them from EngineContext FIRST. Module OnUnload runs later,
-    // inside ShutdownEngineAfterPreflight, and a module that unregisters what
-    // it installed in OnLoad reaches these systems through ctx->GetUI() /
-    // GetDialogue() / GetWeather() / GetModSystem(). Leaving the slots set
-    // handed that module freed memory; clearing them makes the getters return
-    // null, which the documented contract allows.
-    if (EngineContext* shutdownContext = EngineContext::Get())
-    {
-        shutdownContext->SetModSystem(nullptr);
-        shutdownContext->SetDialogue(nullptr);
-        shutdownContext->SetUI(nullptr);
-        shutdownContext->SetWeather(nullptr);
-    }
-    g_modSystem.reset();
-    g_dialogueSystem.reset();
-    g_uiSystem.reset();
-    g_weatherSystem.reset();
     console.LogInfo("Shutting down...");
     g_fileCache.reset();
 
@@ -314,9 +305,10 @@ int RunWindowedMainLoop(HINSTANCE hInstance)
         GetEngineRuntime().graphics->SetPrePresentHook(nullptr, nullptr);
     Spark::GameImGui::Shutdown();
 
-    ShutdownEngineAfterPreflight();
+    const bool teardownClean = ShutdownEngineAfterPreflight();
 
-    return static_cast<int>(msg.wParam);
+    const int exitCode = static_cast<int>(msg.wParam);
+    return (!teardownClean && exitCode == 0) ? 1 : exitCode;
 }
 
 // ===================================================================================
@@ -419,6 +411,29 @@ BOOL InitInstance(HINSTANCE hInst, int nCmdShow)
 // ===================================================================================
 //                          Window procedure
 // ===================================================================================
+static WPARAM NormalizeWin32ModifierVirtualKey(WPARAM virtualKey, LPARAM lParam)
+{
+    if (virtualKey != VK_SHIFT && virtualKey != VK_CONTROL && virtualKey != VK_MENU)
+        return virtualKey;
+
+    UINT scanCode = (static_cast<ULONG_PTR>(lParam) >> 16u) & 0xFFu;
+    if ((static_cast<ULONG_PTR>(lParam) & 0x01000000u) != 0)
+        scanCode |= 0xE000u;
+
+    const UINT mappedKey = MapVirtualKeyW(scanCode, MAPVK_VSC_TO_VK_EX);
+    switch (virtualKey)
+    {
+    case VK_SHIFT:
+        return (mappedKey == VK_LSHIFT || mappedKey == VK_RSHIFT) ? mappedKey : virtualKey;
+    case VK_CONTROL:
+        return (mappedKey == VK_LCONTROL || mappedKey == VK_RCONTROL) ? mappedKey : virtualKey;
+    case VK_MENU:
+        return (mappedKey == VK_LMENU || mappedKey == VK_RMENU) ? mappedKey : virtualKey;
+    default:
+        return virtualKey;
+    }
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     // Game-mode ImGui overlay gets first look at input so HUD menus
@@ -429,13 +444,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     switch (msg)
     {
     case WM_KEYDOWN:
+    case WM_SYSKEYDOWN:
     case WM_KEYUP:
+    case WM_SYSKEYUP:
         if (GetEngineRuntime().input)
         {
             // While gameplay owns the mouse (FPS look mode) it keeps the
             // keyboard too; otherwise a focused ImGui text field eats keys.
             if (GetEngineRuntime().input->IsMouseCaptured() || !Spark::GameImGui::WantsKeyboard())
-                GetEngineRuntime().input->HandleMessage(msg, wParam, lParam);
+            {
+                const UINT keyMessage = (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN) ? WM_KEYDOWN : WM_KEYUP;
+                GetEngineRuntime().input->HandleMessage(keyMessage, NormalizeWin32ModifierVirtualKey(wParam, lParam),
+                                                        lParam);
+            }
         }
         break;
 

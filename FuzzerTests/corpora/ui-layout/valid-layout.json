@@ -1,0 +1,9 @@
+{
+  "name": "hud",
+  "children": [
+    {"type": "label", "name": "title", "text": "Spark", "x": 10, "y": 12.5, "w": 200, "h": 24},
+    {"type": "button", "name": "play", "text": "Play", "x": -4, "y": 40},
+    {"type": "progressbar", "name": "health", "w": 180.75},
+    {"type": "image", "name": "logo", "src": "Textures/logo.png", "x": 0.001}
+  ]
+}

@@ -18,7 +18,11 @@
  *
  * Thread-safe: `HandleMessage` runs on per-connection worker threads, so
  * lookups and mutations are protected by an internal mutex. Hit/miss
- * counters use relaxed atomics.
+ * counters use relaxed atomics. Mutations (Put, Clear) also hold
+ * `m_persistMutex` across their in-memory update and disk write or delete,
+ * so disk state follows the same mutation order as memory; lookups never
+ * wait on disk I/O. Lock order: `m_persistMutex` before `m_mutex`. A Put
+ * whose disk write fails drops the entry and returns an error.
  *
  * ## LRU semantics
  *
@@ -136,6 +140,8 @@ namespace Spark::Daemon
         void DeleteBlobFile(const Key& key);
         void DeleteAllBlobFiles();
 
+        /// Serializes mutations end to end (memory + disk). Taken before m_mutex.
+        std::mutex m_persistMutex;
         mutable std::mutex m_mutex;
         EntryList m_lruList;
         std::unordered_map<Key, EntryIter, KeyHash> m_index;

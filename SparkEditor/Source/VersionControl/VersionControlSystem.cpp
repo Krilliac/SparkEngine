@@ -10,6 +10,8 @@
  */
 
 #include "VersionControlSystem.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include <imgui.h>
@@ -51,13 +53,13 @@ namespace SparkEditor
         ImGui::OpenPopup("Scene Merge Conflict");
         if (ImGui::BeginPopupModal("Scene Merge Conflict", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
         {
-            ImGui::Text("Conflict in scene file:");
-            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "%s", conflict.filePath.c_str());
+            Spark::Ui::SecondaryText("Conflict in scene file:");
+            Spark::Ui::StatusText(Spark::Ui::Status::Warning, "%s", conflict.filePath.c_str());
             ImGui::Separator();
-            ImGui::Text("Description: %s", conflict.description.c_str());
+            ImGui::TextWrapped("Description: %s", conflict.description.c_str());
             ImGui::Spacing();
 
-            if (ImGui::Button("Accept Local", ImVec2(150, 0)))
+            if (Spark::Ui::SecondaryButton("Accept Local", Spark::Ui::Px2(150, 0)))
             {
                 conflict.resolution = "local";
                 conflict.isResolved = true;
@@ -65,7 +67,7 @@ namespace SparkEditor
                 ImGui::CloseCurrentPopup();
             }
             ImGui::SameLine();
-            if (ImGui::Button("Accept Remote", ImVec2(150, 0)))
+            if (Spark::Ui::SecondaryButton("Accept Remote", Spark::Ui::Px2(150, 0)))
             {
                 conflict.resolution = "remote";
                 conflict.isResolved = true;
@@ -73,7 +75,7 @@ namespace SparkEditor
                 ImGui::CloseCurrentPopup();
             }
             ImGui::SameLine();
-            if (ImGui::Button("Manual Merge", ImVec2(150, 0)))
+            if (Spark::Ui::SecondaryButton("Manual Merge", Spark::Ui::Px2(150, 0)))
             {
                 conflict.resolution = "manual";
                 resolved = false;
@@ -122,13 +124,13 @@ namespace SparkEditor
         ImGui::OpenPopup("Material Merge Conflict");
         if (ImGui::BeginPopupModal("Material Merge Conflict", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
         {
-            ImGui::Text("Conflict in material/shader file:");
-            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "%s", conflict.filePath.c_str());
+            Spark::Ui::SecondaryText("Conflict in material/shader file:");
+            Spark::Ui::StatusText(Spark::Ui::Status::Warning, "%s", conflict.filePath.c_str());
             ImGui::Separator();
-            ImGui::Text("Description: %s", conflict.description.c_str());
+            ImGui::TextWrapped("Description: %s", conflict.description.c_str());
             ImGui::Spacing();
 
-            if (ImGui::Button("Accept Local", ImVec2(150, 0)))
+            if (Spark::Ui::SecondaryButton("Accept Local", Spark::Ui::Px2(150, 0)))
             {
                 conflict.resolution = "local";
                 conflict.isResolved = true;
@@ -136,7 +138,7 @@ namespace SparkEditor
                 ImGui::CloseCurrentPopup();
             }
             ImGui::SameLine();
-            if (ImGui::Button("Accept Remote", ImVec2(150, 0)))
+            if (Spark::Ui::SecondaryButton("Accept Remote", Spark::Ui::Px2(150, 0)))
             {
                 conflict.resolution = "remote";
                 conflict.isResolved = true;
@@ -144,7 +146,7 @@ namespace SparkEditor
                 ImGui::CloseCurrentPopup();
             }
             ImGui::SameLine();
-            if (ImGui::Button("Manual Merge", ImVec2(150, 0)))
+            if (Spark::Ui::SecondaryButton("Manual Merge", Spark::Ui::Px2(150, 0)))
             {
                 conflict.resolution = "manual";
                 resolved = false;

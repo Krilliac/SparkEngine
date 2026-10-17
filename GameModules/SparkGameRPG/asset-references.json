@@ -1,0 +1,67 @@
+{
+  "manifestVersion": 1,
+  "module": "SparkGameRPG",
+  "description": "Every asset path SparkGameRPG source names (the Blender village and dungeon kit streamed per area in RPGWorldSetup, music tracks in RPGEngineSystems), with its sha256 and the tools/asset-integrity/provenance.json rule that licenses it. tools/check-module-asset-refs.py requires this record to match the source references, the files on disk and Assets/assets.integrity.json.",
+  "references": [
+    {
+      "path": "Assets/Audio/RPG/Music/rpg_boss.wav",
+      "sha256": "a9fa0b9478fe9378b585360c43fcbe9551faf47db69dca2843ad3250fec5fb0d",
+      "kind": "music loop (WAV)",
+      "provenanceRule": "module-music-composer"
+    },
+    {
+      "path": "Assets/Audio/RPG/Music/rpg_dungeon.wav",
+      "sha256": "4394267ac3ef463ab3d0236f40866dfebd4b5d3aad06466d812ace0539863f04",
+      "kind": "music loop (WAV)",
+      "provenanceRule": "module-music-composer"
+    },
+    {
+      "path": "Assets/Audio/RPG/Music/rpg_forest.wav",
+      "sha256": "b904a8b4bd8499ed928835e37b99d27df560815d6d194413ac39c8116f0e64d9",
+      "kind": "music loop (WAV)",
+      "provenanceRule": "module-music-composer"
+    },
+    {
+      "path": "Assets/Audio/RPG/Music/rpg_victory.wav",
+      "sha256": "4124febe99eb7cad11ab606a46ab3bf88ec6f08078c88f05ebb227366aeae17a",
+      "kind": "music stinger (WAV)",
+      "provenanceRule": "module-music-composer"
+    },
+    {
+      "path": "Assets/Audio/RPG/Music/rpg_village.wav",
+      "sha256": "96fb78264a83a0995ca78bbe301690a0343a0972724c241a36e4ff26cea88d90",
+      "kind": "music loop (WAV)",
+      "provenanceRule": "module-music-composer"
+    },
+    {
+      "path": "Assets/Models/RPG/Kit/barrel.obj",
+      "sha256": "23f43652831b889d53016c17ad927e87bbdd95785491dd0e9a52777df9773cd6",
+      "kind": "village and dungeon prop mesh (OBJ)",
+      "provenanceRule": "rpg-blender-kit"
+    },
+    {
+      "path": "Assets/Models/RPG/Kit/quest_signpost.obj",
+      "sha256": "3d41ef0c1873d1843f29405f889ebffab513befd60dc1e12feb62d805bef009c",
+      "kind": "village and trail prop mesh (OBJ)",
+      "provenanceRule": "rpg-blender-kit"
+    },
+    {
+      "path": "Assets/Models/RPG/Kit/treasure_chest.obj",
+      "sha256": "5a1afcfdb54151952981f49d017a366178c55328854de39ac62d116b737fd320",
+      "kind": "dungeon loot prop mesh (OBJ)",
+      "provenanceRule": "rpg-blender-kit"
+    },
+    {
+      "path": "Assets/Models/RPG/Kit/village_well.obj",
+      "sha256": "b8dc4316701976360fa02d66bfbe08611fcacc184d75589cf80480ad466400c0",
+      "kind": "village landmark prop mesh (OBJ)",
+      "provenanceRule": "rpg-blender-kit"
+    },
+    {
+      "path": "Assets/Models/RPG/Kit/wall_sconce.obj",
+      "sha256": "8b2cc7aad306a971b6a201882054fe111ec5858c2c8a35f704326bbf382d7d43",
+      "kind": "dungeon wall torch prop mesh (OBJ)",
+      "provenanceRule": "rpg-blender-kit"
+    }
+  ]
+}

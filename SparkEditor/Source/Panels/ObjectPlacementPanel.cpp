@@ -13,6 +13,9 @@
 #include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
+
 namespace SparkEditor
 {
 
@@ -110,27 +113,27 @@ namespace SparkEditor
             RenderPlacementModeSelector();
             ImGui::Separator();
 
-            if (ImGui::CollapsingHeader(ICON_FA_TH " Snap Settings", ImGuiTreeNodeFlags_DefaultOpen))
+            if (Spark::Ui::SectionHeader("Snap Settings", ICON_FA_TH))
             {
                 RenderSnapSettings();
             }
 
             if (m_placementMode == PlacementMode::Brush || m_placementMode == PlacementMode::Scatter)
             {
-                if (ImGui::CollapsingHeader(ICON_FA_PAINT_BRUSH " Brush Settings", ImGuiTreeNodeFlags_DefaultOpen))
+                if (Spark::Ui::SectionHeader("Brush Settings", ICON_FA_PAINT_BRUSH))
                 {
                     RenderBrushSettings();
                 }
             }
 
-            if (ImGui::CollapsingHeader(ICON_FA_LOCK " Transform Constraints"))
+            if (Spark::Ui::SectionHeader("Transform Constraints", ICON_FA_LOCK, false))
             {
                 RenderTransformConstraints();
             }
 
             ImGui::Separator();
 
-            if (ImGui::CollapsingHeader(ICON_FA_CUBE " Prefab Library", ImGuiTreeNodeFlags_DefaultOpen))
+            if (Spark::Ui::SectionHeader("Prefab Library", ICON_FA_CUBE))
             {
                 RenderPrefabLibrary();
             }
@@ -153,35 +156,19 @@ namespace SparkEditor
 
     void ObjectPlacementPanel::RenderPlacementModeSelector()
     {
-        ImGui::Text(ICON_FA_MOUSE_POINTER " Placement Mode");
-        ImGui::TextDisabled("Preview - the scene viewport does not read the mode, align, snap or");
-        ImGui::TextDisabled("brush settings below yet; Quick Place and Place Selected do work.");
+        Spark::Ui::SubHeader(ICON_FA_MOUSE_POINTER " Placement Mode");
+        Spark::Ui::Banner(Spark::Ui::Status::Info,
+                          "Preview - the scene viewport does not read the mode, align, snap or brush settings below "
+                          "yet; Quick Place and Place Selected do work.");
         ImGui::Spacing();
 
-        float btnWidth = (ImGui::GetContentRegionAvail().x - 16.0f) / 5.0f;
-        ImVec2 btnSize(btnWidth, 28.0f);
-
-        auto ModeButton = [&](const char* label, PlacementMode mode)
+        // Order matches PlacementMode, so the enum value is the segment index.
+        const char* modeLabels[] = {"Single", "Brush", "Line", "Grid", "Scatter"};
+        int modeIndex = static_cast<int>(m_placementMode);
+        if (Spark::Ui::SegmentedControl("PlacementMode", modeLabels, 5, &modeIndex))
         {
-            bool active = (m_placementMode == mode);
-            if (active)
-            {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.55f, 0.9f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.6f, 0.95f, 1.0f));
-            }
-            if (ImGui::Button(label, btnSize))
-                m_placementMode = mode;
-            if (active)
-                ImGui::PopStyleColor(2);
-            ImGui::SameLine();
-        };
-
-        ModeButton("Single", PlacementMode::Single);
-        ModeButton("Brush", PlacementMode::Brush);
-        ModeButton("Line", PlacementMode::Line);
-        ModeButton("Grid", PlacementMode::Grid);
-        ModeButton("Scatter", PlacementMode::Scatter);
-        ImGui::NewLine();
+            m_placementMode = static_cast<PlacementMode>(modeIndex);
+        }
 
         // Align mode
         ImGui::Text("Align To:");
@@ -199,13 +186,13 @@ namespace SparkEditor
 
     void ObjectPlacementPanel::RenderSnapSettings()
     {
-        ImGui::Indent(8.0f);
+        ImGui::Indent(Spark::Ui::Px(8.0f));
 
         ImGui::Checkbox("Snap to Grid", &m_snapToGrid);
         if (m_snapToGrid)
         {
             ImGui::SameLine();
-            ImGui::SetNextItemWidth(80);
+            ImGui::SetNextItemWidth(Spark::Ui::Px(80));
             ImGui::DragFloat("##GridSize", &m_snapGridSize, 0.1f, 0.1f, 100.0f, "%.1f m");
         }
 
@@ -213,7 +200,7 @@ namespace SparkEditor
         if (m_snapRotation)
         {
             ImGui::SameLine();
-            ImGui::SetNextItemWidth(80);
+            ImGui::SetNextItemWidth(Spark::Ui::Px(80));
             ImGui::DragFloat("##RotSnap", &m_snapRotationAngle, 1.0f, 1.0f, 90.0f, "%.0f\xc2\xb0");
         }
 
@@ -221,19 +208,19 @@ namespace SparkEditor
         if (m_snapScale)
         {
             ImGui::SameLine();
-            ImGui::SetNextItemWidth(80);
+            ImGui::SetNextItemWidth(Spark::Ui::Px(80));
             ImGui::DragFloat("##ScaleSnap", &m_snapScaleIncrement, 0.05f, 0.05f, 5.0f, "%.2f");
         }
 
         ImGui::Checkbox("Snap to Surface", &m_snapToSurface);
         ImGui::Checkbox("Snap to Vertex", &m_snapToVertex);
 
-        ImGui::Unindent(8.0f);
+        ImGui::Unindent(Spark::Ui::Px(8.0f));
     }
 
     void ObjectPlacementPanel::RenderBrushSettings()
     {
-        ImGui::Indent(8.0f);
+        ImGui::Indent(Spark::Ui::Px(8.0f));
 
         ImGui::DragFloat("Brush Radius", &m_brush.radius, 0.5f, 0.5f, 100.0f, "%.1f m");
         ImGui::DragFloat("Density", &m_brush.density, 0.1f, 0.1f, 10.0f, "%.1f");
@@ -254,25 +241,33 @@ namespace SparkEditor
 
         ImGui::Checkbox("Align to Surface Normal", &m_brush.alignToSurface);
 
-        ImGui::Unindent(8.0f);
+        ImGui::Unindent(Spark::Ui::Px(8.0f));
     }
 
     void ObjectPlacementPanel::RenderTransformConstraints()
     {
-        ImGui::Indent(8.0f);
+        ImGui::Indent(Spark::Ui::Px(8.0f));
 
         ImGui::Text("Lock Axes:");
         ImGui::SameLine();
 
-        ImVec4 lockColor(0.9f, 0.2f, 0.2f, 1.0f);
+        const ImVec2 lockSize = Spark::Ui::Px2(30, 24);
         auto LockButton = [&](const char* label, bool& locked)
         {
+            bool clicked = false;
             if (locked)
-                ImGui::PushStyleColor(ImGuiCol_Button, lockColor);
-            if (ImGui::Button(label, ImVec2(30, 24)))
+            {
+                // A locked axis reads as "on": accent fill, and the tooltip names the state.
+                Spark::Ui::ScopedPrimaryButtonColors lockedColours;
+                clicked = ImGui::Button(label, lockSize);
+            }
+            else
+            {
+                clicked = ImGui::Button(label, lockSize);
+            }
+            ImGui::SetItemTooltip("%s axis %s", label, locked ? "locked" : "unlocked");
+            if (clicked)
                 locked = !locked;
-            if (locked)
-                ImGui::PopStyleColor();
             ImGui::SameLine();
         };
 
@@ -283,17 +278,15 @@ namespace SparkEditor
 
         ImGui::Checkbox("Uniform Scale", &m_uniformScale);
 
-        ImGui::Unindent(8.0f);
+        ImGui::Unindent(Spark::Ui::Px(8.0f));
     }
 
     void ObjectPlacementPanel::RenderPrefabLibrary()
     {
-        ImGui::Indent(8.0f);
+        ImGui::Indent(Spark::Ui::Px(8.0f));
 
         // Search bar
-        ImGui::SetNextItemWidth(-1);
-        ImGui::InputTextWithHint("##PrefabSearch", ICON_FA_SEARCH " Search prefabs...", m_prefabSearch,
-                                 sizeof(m_prefabSearch));
+        Spark::Ui::SearchField("PrefabSearch", m_prefabSearch, sizeof(m_prefabSearch), "Search prefabs...");
 
         // Category filter
         std::vector<std::string> categories = {"All"};
@@ -326,7 +319,7 @@ namespace SparkEditor
         }
 
         // Prefab list
-        ImGui::BeginChild("##PrefabList", ImVec2(0, 200), true);
+        ImGui::BeginChild("##PrefabList", Spark::Ui::Px2(0, 200), true);
         for (int i = 0; i < static_cast<int>(m_prefabs.size()); ++i)
         {
             const auto& prefab = m_prefabs[i];
@@ -386,13 +379,13 @@ namespace SparkEditor
 
         const bool hasSelection = m_selectedPrefab >= 0 && m_selectedPrefab < static_cast<int>(m_prefabs.size());
         ImGui::BeginDisabled(!hasSelection || !IsPlacementConnected());
-        if (ImGui::Button(ICON_FA_PLUS " Place Selected") && hasSelection)
+        if (Spark::Ui::PrimaryButton(ICON_FA_PLUS " Place Selected") && hasSelection)
         {
             PlaceTemplate(m_prefabs[static_cast<size_t>(m_selectedPrefab)].name);
         }
         ImGui::EndDisabled();
 
-        ImGui::Unindent(8.0f);
+        ImGui::Unindent(Spark::Ui::Px(8.0f));
     }
 
     bool ObjectPlacementPanel::PlaceTemplate(const std::string& templateName)
@@ -418,16 +411,17 @@ namespace SparkEditor
 
     void ObjectPlacementPanel::RenderQuickPlace()
     {
-        ImGui::Text(ICON_FA_BOLT " Quick Place");
+        Spark::Ui::SubHeader(ICON_FA_BOLT " Quick Place");
         if (!IsPlacementConnected())
         {
-            ImGui::TextDisabled("Preview - not connected: this panel has no editor document to");
-            ImGui::TextDisabled("place into.");
+            Spark::Ui::UnavailableFeature("Quick Place",
+                                          "Preview - not connected: this panel has no editor document to place into.");
         }
         ImGui::Spacing();
 
-        const float btnWidth = (ImGui::GetContentRegionAvail().x - 8.0f) / 3.0f;
-        const ImVec2 btnSize(btnWidth, 28.0f);
+        const float spacing = ImGui::GetStyle().ItemSpacing.x;
+        const float btnWidth = (ImGui::GetContentRegionAvail().x - spacing * 2.0f) / 3.0f;
+        const ImVec2 btnSize(btnWidth, Spark::Ui::Px(28.0f));
 
         ImGui::BeginDisabled(!IsPlacementConnected());
 

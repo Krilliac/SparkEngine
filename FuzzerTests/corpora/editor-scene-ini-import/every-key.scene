@@ -1,0 +1,31 @@
+# every key the reader knows, plus ones it ignores
+; semicolon comment
+[Scene]
+name=Courtyard
+author=ignored
+
+[Object]
+type=cube
+name=wall_north
+position=0,1.5,-10
+rotation=0,90,0
+scale=20,3,0.5
+material=Assets/Materials/Concrete.json
+tag=ignored
+
+[Object]
+type=Model
+model=Assets/Models/crate.obj
+position=1.25, 0, 2.5
+scale=1,1,1
+
+[SpawnPoint]
+type=spawnpoint
+position=0,0,0
+
+[Terrain]
+heightmap=terrain.raw
+
+[Object]
+type=terrain
+tfSize=4096

@@ -184,7 +184,7 @@ function receiptHasSemanticClosure(receipt) {
         !RAW_DIGEST_PATTERN.test(inputArtifact.parityReportSha256 || '') ||
         pendingState.state !== 'pending-external-attestation' ||
         pendingState.authority !== 'external-attestation-required' ||
-        pendingState.errorCount !== EXPECTED_PROFILES.length || pendingState.warningCount !== 2) {
+        pendingState.errorCount !== EXPECTED_PROFILES.length || pendingState.warningCount !== 3) {
         return false;
     }
     return profiles.every((profile, index) => isObject(profile) &&
@@ -346,8 +346,12 @@ async function inspectSource({ github, context }, mode) {
             reasons.push(`The source Build workflow could not be attested: ${error.message}`);
         }
     }
+    // GitHub can deliver the workflow_run in_progress event before the Actions
+    // API transitions the source run out of its queued state. Pending status
+    // publication must tolerate that race; completed remains accepted for a
+    // late event that observes the source finishing before this verifier runs.
     const acceptedStatuses = event.action === 'in_progress'
-        ? ['in_progress', 'completed']
+        ? ['queued', 'in_progress', 'completed']
         : ['completed'];
     if (!acceptedStatuses.includes(eventRun?.status) || !acceptedStatuses.includes(run?.status)) {
         reasons.push(`The source run is not in the expected '${acceptedStatuses.join('/')}' lifecycle state (event: ${eventRun?.status}, api: ${run?.status}).`);

@@ -1,0 +1,16 @@
+[
+  [
+    {
+      "tag_name": "nightly",
+      "name": "Nightly Build (c5826aac)",
+      "draft": false,
+      "prerelease": true
+    },
+    {
+      "tag_name": "v1.0.0",
+      "name": "Unpublished draft",
+      "draft": true,
+      "prerelease": false
+    }
+  ]
+]

@@ -6,11 +6,14 @@
  *   - IModule interface, ModuleInfo struct, and lifecycle hooks
  *   - IEngineContext service locator (26 subsystem getters)
  *   - ILogger logging interface
+ *   - IConsole console command registration
+ *   - IStateValidation ECS invalid-state rule registration
  *   - SPARK_IMPLEMENT_MODULE macro
  *   - Version and compatibility utilities
  *   - Export macros
  *   - Common math types (Vec3, Quat, Color, Mat4x4, AABB, Ray)
  *   - Input types (MouseButton, GamepadButton, InputAction)
+ *   - Shared gameplay identifiers (player classes, damage, vehicles, interactions)
  *   - Event types for pub/sub messaging
  */
 
@@ -21,9 +24,12 @@
 #include "IEngineContext.h"
 #include "IModule.h"
 #include "ILogger.h"
+#include "IConsole.h"
+#include "IStateValidation.h"
 #include "ModuleABI.h"
 #include "PluginABI.h"
 #include "ModuleRegistry.h"
 #include "MathTypes.h"
 #include "InputTypes.h"
 #include "EventTypes.h"
+#include "GameTypes.h"

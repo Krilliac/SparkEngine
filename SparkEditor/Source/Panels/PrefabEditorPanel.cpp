@@ -11,6 +11,10 @@
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
 #include <algorithm>
+#include <cstdio>
+
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
@@ -72,7 +76,7 @@ namespace SparkEditor
             ImGui::Text("Enter a name for the new prefab:");
             ImGui::InputText("##PrefabName", m_newPrefabName, sizeof(m_newPrefabName));
 
-            if (ImGui::Button("Create", ImVec2(120, 0)))
+            if (Spark::Ui::PrimaryButton("Create", Spark::Ui::Px2(120, 0)))
             {
                 if (m_prefabManager && m_newPrefabName[0] != '\0')
                 {
@@ -85,7 +89,7 @@ namespace SparkEditor
                 ImGui::CloseCurrentPopup();
             }
             ImGui::SameLine();
-            if (ImGui::Button("Cancel", ImVec2(120, 0)))
+            if (ImGui::Button("Cancel", Spark::Ui::Px2(120, 0)))
             {
                 m_newPrefabName[0] = '\0';
                 ImGui::CloseCurrentPopup();
@@ -112,9 +116,11 @@ namespace SparkEditor
         ImGui::BeginDisabled(!hasSelection);
         if (ImGui::Button(ICON_FA_SAVE " Save"))
         {
-            if (m_prefabManager)
+            // SavePrefab logs the actionable reason (no project open, unusable name, write failure).
+            if (m_prefabManager && !m_prefabManager->SavePrefab(m_selectedPrefab))
             {
-                m_prefabManager->SavePrefab(m_selectedPrefab);
+                SPARK_LOG_ERROR(Spark::LogCategory::Editor, "PrefabEditorPanel: prefab '%s' was not saved",
+                                m_selectedPrefab.c_str());
             }
         }
         ImGui::SameLine();
@@ -150,7 +156,7 @@ namespace SparkEditor
         }
         ImGui::SameLine();
 
-        if (ImGui::Button(ICON_FA_TRASH " Delete"))
+        if (Spark::Ui::DangerButton(ICON_FA_TRASH " Delete"))
         {
             if (m_prefabManager)
             {
@@ -164,13 +170,12 @@ namespace SparkEditor
 
         // Search filter
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(150.0f);
         char filterBuf[128] = {};
         if (m_searchFilter.size() < sizeof(filterBuf))
         {
             std::copy(m_searchFilter.begin(), m_searchFilter.end(), filterBuf);
         }
-        if (ImGui::InputTextWithHint("##PrefabFilter", ICON_FA_SEARCH " Filter...", filterBuf, sizeof(filterBuf)))
+        if (Spark::Ui::SearchField("PrefabFilter", filterBuf, sizeof(filterBuf), "Filter..."))
         {
             m_searchFilter = filterBuf;
         }
@@ -180,12 +185,13 @@ namespace SparkEditor
     {
         if (!m_prefabManager)
         {
-            ImGui::TextDisabled("No prefab manager available");
+            Spark::Ui::UnavailableFeature("Prefab library", "No prefab manager is attached to this panel.");
             return;
         }
 
-        ImGui::Text(ICON_FA_CUBE " Prefabs (%zu)", m_prefabManager->GetPrefabCount());
-        ImGui::Separator();
+        char countLabel[64];
+        std::snprintf(countLabel, sizeof(countLabel), ICON_FA_CUBE " Prefabs (%zu)", m_prefabManager->GetPrefabCount());
+        Spark::Ui::SubHeader(countLabel);
 
         auto names = m_prefabManager->GetPrefabNames();
         for (const auto& name : names)
@@ -235,14 +241,14 @@ namespace SparkEditor
     {
         if (m_selectedPrefab.empty() || !m_prefabManager)
         {
-            ImGui::TextDisabled("Select a prefab to inspect");
+            Spark::Ui::EmptyState(ICON_FA_CUBE, "Select a prefab to inspect");
             return;
         }
 
         auto* prefab = m_prefabManager->GetPrefab(m_selectedPrefab);
         if (!prefab)
         {
-            ImGui::TextDisabled("Prefab not found");
+            Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Prefab not found");
             return;
         }
 
@@ -250,15 +256,15 @@ namespace SparkEditor
         if (prefab->IsModified())
         {
             ImGui::SameLine();
-            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f), "(modified)");
+            Spark::Ui::TextRole(Spark::Ui::Role::WarningText, "(modified)");
         }
         ImGui::Separator();
 
         // Prefab info
-        ImGui::TextDisabled("ID: %llu", static_cast<unsigned long long>(prefab->GetId()));
+        Spark::Ui::KeyValue("ID:", "%llu", static_cast<unsigned long long>(prefab->GetId()));
         if (!prefab->GetFilePath().empty())
         {
-            ImGui::TextDisabled("Path: %s", prefab->GetFilePath().c_str());
+            Spark::Ui::KeyValue("Path:", "%s", prefab->GetFilePath().c_str());
         }
         ImGui::Spacing();
 
@@ -309,7 +315,7 @@ namespace SparkEditor
 
     void PrefabEditorPanel::RenderComponentEditor(SerializedComponent& component)
     {
-        bool isOpen = ImGui::CollapsingHeader(component.typeName.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
+        bool isOpen = Spark::Ui::SectionHeader(component.typeName.c_str());
 
         // Right-click context menu
         if (ImGui::BeginPopupContextItem())
@@ -323,27 +329,27 @@ namespace SparkEditor
 
         if (isOpen)
         {
-            ImGui::Indent(10.0f);
-            for (auto& [name, value] : component.properties)
-            {
-                RenderPropertyEditor(name, value);
-            }
-
+            ImGui::Indent(Spark::Ui::Px(10.0f));
             if (component.properties.empty())
             {
-                ImGui::TextDisabled("(no properties)");
+                Spark::Ui::SecondaryText("(no properties)");
             }
-            ImGui::Unindent(10.0f);
+            else if (Spark::Ui::BeginPropertyGrid("##ComponentProperties"))
+            {
+                for (auto& [name, value] : component.properties)
+                {
+                    RenderPropertyEditor(name, value);
+                }
+                Spark::Ui::EndPropertyGrid();
+            }
+            ImGui::Unindent(Spark::Ui::Px(10.0f));
         }
     }
 
     void PrefabEditorPanel::RenderPropertyEditor(const std::string& name, PrefabPropertyValue& value)
     {
         ImGui::PushID(name.c_str());
-        ImGui::Columns(2, nullptr, false);
-        ImGui::SetColumnWidth(0, 120.0f);
-        ImGui::TextDisabled("%s", name.c_str());
-        ImGui::NextColumn();
+        Spark::Ui::PropertyLabel(name.c_str());
 
         std::visit(
             [&](auto&& val)
@@ -400,7 +406,6 @@ namespace SparkEditor
             },
             value);
 
-        ImGui::Columns(1);
         ImGui::PopID();
     }
 

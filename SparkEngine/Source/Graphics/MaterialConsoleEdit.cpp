@@ -2,12 +2,13 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 /**
  * @file MaterialConsoleEdit.cpp
- * @brief Console commands for material property editing, texture assignment, and hot-reload.
+ * @brief Console commands for material property editing and texture slot management.
  *
- * Covers property modification (SetMaterialProperty, SetMaterialColor),
- * texture operations (SetTextureQuality, GetTextureMemoryInfo, LoadTextureToSlot,
- * UnloadTextureFromSlot), and hot-reload toggling. Inspection/listing/validation
- * commands live in MaterialConsoleOps.cpp.
+ * Covers property modification (SetMaterialProperty, SetMaterialColor) and
+ * texture operations (SetTextureQuality, GetTextureMemoryInfo, UnloadTextureFromSlot).
+ * Materials never load texture files by path here: the material system has no file
+ * import or hot-reload path. Inspection/listing/validation commands live in
+ * MaterialConsoleOps.cpp.
  */
 
 #include "MaterialSystem.h"
@@ -31,7 +32,7 @@
 #ifdef SPARK_PLATFORM_WINDOWS
 
 // ============================================================================
-// CONSOLE METHODS — Property Editing, Texture Assignment, Hot-Reload
+// CONSOLE METHODS — Property Editing, Texture Slots
 // ============================================================================
 
 void MaterialSystem::Console_SetMaterialProperty(const std::string& materialName, const std::string& property,
@@ -66,26 +67,6 @@ void MaterialSystem::Console_SetMaterialColor(const std::string& materialName, c
     else
     {
         Spark::SimpleConsole::GetInstance().LogError("Material not found: " + materialName);
-    }
-}
-
-void MaterialSystem::Console_SetHotReload(bool enabled)
-{
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Material hot reload %s", enabled ? "enabled" : "disabled");
-    m_hotReloadEnabled = enabled;
-    if (enabled)
-    {
-        // Initialize timestamps for all currently loaded materials
-        for (const auto& pair : m_materials)
-        {
-            m_fileTimestamps[pair.first] = GetFileTimestamp(pair.first);
-        }
-        Spark::SimpleConsole::GetInstance().LogSuccess("Hot reload enabled");
-    }
-    else
-    {
-        m_fileTimestamps.clear();
-        Spark::SimpleConsole::GetInstance().LogInfo("Hot reload disabled");
     }
 }
 
@@ -181,42 +162,9 @@ std::string MaterialSystem::Console_GetTextureMemoryInfo() const
 {
     std::stringstream ss;
     ss << "=== Texture Memory Info ===\n";
-    ss << "Texture cache: " << m_textureCache.size() << " textures\n";
     ss << "Sampler cache: " << m_samplerCache.size() << " samplers\n";
 
-    // Estimate memory usage (this would be more accurate with actual texture sizes)
-    size_t estimatedMemory = m_textureCache.size() * 1024 * 1024; // Rough estimate: 1MB per texture
-    ss << "Estimated memory usage: " << (estimatedMemory / 1024 / 1024) << " MB\n";
-
     return ss.str();
-}
-
-bool MaterialSystem::Console_LoadTextureToSlot(const std::string& materialName, const std::string& textureType,
-                                               const std::string& texturePath)
-{
-    auto material = GetMaterial(materialName);
-    if (!material || material == m_defaultMaterial)
-    {
-        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Cannot load texture: material '%s' not found",
-                       materialName.c_str());
-        Spark::SimpleConsole::GetInstance().LogError("Material not found: " + materialName);
-        return false;
-    }
-
-    MaterialTextureType type = StringToTextureType(textureType);
-
-    if (material->LoadTexture(type, texturePath, m_device))
-    {
-        Spark::SimpleConsole::GetInstance().LogSuccess("Loaded texture '" + texturePath + "' to " + textureType +
-                                                       " slot of material '" + materialName + "'");
-        return true;
-    }
-    else
-    {
-        Spark::SimpleConsole::GetInstance().LogError("Failed to load texture '" + texturePath + "' to material '" +
-                                                     materialName + "'");
-        return false;
-    }
 }
 
 void MaterialSystem::Console_UnloadTextureFromSlot(const std::string& materialName, const std::string& textureType)
@@ -252,7 +200,7 @@ void MaterialSystem::Console_UnloadTextureFromSlot(const std::string& materialNa
 #include <filesystem>
 
 // ============================================================================
-// Console Methods — Linux: Property Editing, Texture Assignment, Hot-Reload
+// Console Methods — Linux: Property Editing, Texture Slots
 // ============================================================================
 
 void MaterialSystem::Console_SetMaterialProperty(const std::string& materialName, const std::string& property,
@@ -283,13 +231,6 @@ void MaterialSystem::Console_SetMaterialColor(const std::string& materialName, c
     mat->Console_SetColor(property, r, g, b);
 }
 
-void MaterialSystem::Console_SetHotReload(bool enabled)
-{
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Material hot reload %s", enabled ? "enabled" : "disabled");
-    EnableHotReloading(enabled);
-    fprintf(stderr, "[MaterialSystem] Hot reload %s\n", enabled ? "enabled" : "disabled");
-}
-
 void MaterialSystem::Console_SetTextureQuality(const std::string& quality)
 {
     // Store quality preference but no GPU-side changes on Linux
@@ -303,7 +244,6 @@ std::string MaterialSystem::Console_GetTextureMemoryInfo() const
 {
     std::stringstream ss;
     ss << "=== Texture Memory Info (Linux) ===\n";
-    ss << "Cached textures:     " << m_textureCache.size() << "\n";
     ss << "Cached samplers:     " << m_samplerCache.size() << "\n";
     ss << "GPU texture memory:  N/A (Linux - no GPU textures)\n";
 
@@ -331,19 +271,6 @@ std::string MaterialSystem::Console_GetTextureMemoryInfo() const
     ss << "Material tex refs:   " << totalTexRefs << " total, " << activeTexRefs << " active\n";
 
     return ss.str();
-}
-
-bool MaterialSystem::Console_LoadTextureToSlot(const std::string& materialName, const std::string& textureType,
-                                               const std::string& texturePath)
-{
-    auto mat = GetMaterial(materialName);
-    if (!mat)
-    {
-        fprintf(stderr, "[MaterialSystem] Cannot load texture: material '%s' not found\n", materialName.c_str());
-        return false;
-    }
-    MaterialTextureType type = StringToTextureType(textureType);
-    return mat->LoadTexture(type, texturePath, m_device);
 }
 
 void MaterialSystem::Console_UnloadTextureFromSlot(const std::string& materialName, const std::string& textureType)

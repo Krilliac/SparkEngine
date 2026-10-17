@@ -279,7 +279,7 @@ The **DecalEditorPanel** (`SparkEditor/Source/Panels/DecalEditorPanel.h`) provid
 | `SparkEngine/Source/Graphics/DecalSystem.cpp` | Implementation (Windows + Linux stub) |
 | `SparkEditor/Source/Panels/DecalEditorPanel.h` | Editor panel declaration |
 | `SparkEditor/Source/Panels/DecalEditorPanel.cpp` | Editor panel implementation |
-| `Tests/TestDecalSystem.cpp` | Unit tests (7 tests) |
+| `Tests/TestDecalSystem.cpp` | Unit tests |
 
 ---
 

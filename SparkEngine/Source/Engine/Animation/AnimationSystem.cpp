@@ -9,13 +9,18 @@
  *   - AnimationStateMachine.cpp — state machine transitions and crossfade
  */
 #include "AnimationSystem.h"
+#include "AnimationBinaryFormat.h"
 #include "../../Core/Platform.h"
 #include "../../Core/FaultIsolation.h"
 #include "../../Utils/Validate.h"
+#include "../../Graphics/GLTFAnimationLoader.h"
+#include "../../Graphics/GLTFSkinnedMeshLoader.h"
+#include <algorithm>
+#include <cctype>
+#include <filesystem>
 #include <sstream>
 #include <cmath>
 #include <fstream>
-#include <cstring>
 
 using namespace DirectX;
 namespace Spark::Animation
@@ -23,24 +28,64 @@ namespace Spark::Animation
 
     namespace
     {
-        /// Length prefixes above this are malformed. The prefix bytes are already
-        /// consumed when the name itself is not, so an out-of-range length is a
-        /// desync, not something to skip past.
-        constexpr uint32_t MAX_ASSET_NAME_LENGTH = 256u;
+        /// Largest .skel or .sanim file the binary loaders will read. Far above any real skeleton
+        /// or clip set; the decoders bound every allocation by the bytes actually read.
+        constexpr std::uintmax_t kMaxAnimationAssetBytes = std::uintmax_t{256} * 1024u * 1024u;
 
-        /// A matrix read from a desynced or corrupt file carries NaNs straight into
-        /// global transforms, skinning, and any physics driven from bone transforms.
-        bool IsFiniteMatrix(const XMFLOAT4X4& matrix)
+        /// Read an animation asset whole. The stat is only a fast reject: the file can be replaced or
+        /// keep growing after it, so the read itself is capped at the size stat reported plus one byte,
+        /// and seeing that extra byte rejects the file.
+        bool ReadAnimationAssetFile(const std::filesystem::path& path, const std::string& displayPath,
+                                    std::vector<std::uint8_t>& bytes)
         {
-            for (int row = 0; row < 4; ++row)
+            std::error_code ec;
+            const std::uintmax_t fileSize = std::filesystem::file_size(path, ec);
+            if (ec)
             {
-                for (int column = 0; column < 4; ++column)
-                {
-                    if (!std::isfinite(matrix.m[row][column]))
-                        return false;
-                }
+                SPARK_LOG_WARN(LogCategory::Animation, "cannot stat '%s' (%s)", displayPath.c_str(),
+                               ec.message().c_str());
+                return false;
             }
+            if (fileSize > kMaxAnimationAssetBytes)
+            {
+                SPARK_LOG_WARN(LogCategory::Animation, "'%s' is %llu bytes, above the %llu byte limit",
+                               displayPath.c_str(), static_cast<unsigned long long>(fileSize),
+                               static_cast<unsigned long long>(kMaxAnimationAssetBytes));
+                return false;
+            }
+            std::ifstream file(path, std::ios::binary);
+            if (!file.is_open())
+            {
+                SPARK_LOG_WARN(LogCategory::Animation, "cannot open '%s' (errno=%d)", displayPath.c_str(), errno);
+                return false;
+            }
+            bytes.assign(static_cast<std::size_t>(fileSize) + 1u, 0u);
+            file.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+            const auto bytesRead = static_cast<std::size_t>(file.gcount());
+            if (bytesRead > fileSize)
+            {
+                SPARK_LOG_WARN(LogCategory::Animation, "'%s' grew while it was being read", displayPath.c_str());
+                return false;
+            }
+            bytes.resize(bytesRead);
             return true;
+        }
+
+        /// Asset paths are UTF-8. Constructing a path from a narrow std::string would decode it with
+        /// the Windows ANSI code page, so non-ASCII file names would not be found there.
+        std::filesystem::path PathFromUtf8(const std::string& utf8)
+        {
+            return {std::u8string(utf8.begin(), utf8.end())};
+        }
+
+        /// .gltf and .glb go through the fail-closed glTF importers instead of the engine binary readers.
+        bool IsGLTFPath(const std::filesystem::path& path)
+        {
+            const std::u8string utf8Extension = path.extension().u8string();
+            std::string extension(utf8Extension.begin(), utf8Extension.end());
+            std::transform(extension.begin(), extension.end(), extension.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            return extension == ".gltf" || extension == ".glb";
         }
     } // namespace
 
@@ -63,138 +108,41 @@ namespace Spark::Animation
         auto skeleton = std::make_shared<Skeleton>();
         skeleton->name = filepath;
 
-        // Set by every abort path below. A failed load must not be reported as a
-        // success and must not be memoised: caching it would make a later repaired
-        // asset unreachable for the lifetime of the process.
-        bool loadFailed = false;
-
-        // Parse skeleton from Spark Engine binary skeleton format (.skel)
-        // Format: [magic:4][version:4][boneCount:4] then per bone:
-        //   [nameLen:4][name:nameLen][parentIndex:4][offsetMatrix:64][localBindPose:64]
-        std::ifstream file(filepath, std::ios::binary);
-        if (file.is_open())
+        const std::filesystem::path path = PathFromUtf8(filepath);
+        if (IsGLTFPath(path))
         {
-            char magic[4] = {};
-            file.read(magic, 4);
-
-            if (std::memcmp(magic, "SKEL", 4) == 0)
+            // The skin is read through the same validation as the skinned mesh, so a skeleton is
+            // only accepted from a file whose geometry and weights would also import.
+            Spark::Graphics::Detail::GLTFSkinnedMeshData imported;
+            std::string error;
+            if (!Spark::Graphics::Detail::LoadGLTFSkinnedMesh(path, imported, error))
             {
-                uint32_t version = 0;
-                file.read(reinterpret_cast<char*>(&version), sizeof(version));
-                if (!file.good())
-                {
-                    SPARK_LOG_WARN(LogCategory::Animation, "Skeleton file '%s' truncated before version field",
-                                   filepath.c_str());
-                    return skeleton;
-                }
-
-                uint32_t boneCount = 0;
-                file.read(reinterpret_cast<char*>(&boneCount), sizeof(boneCount));
-
-                // Bound the count read from an untrusted file before reserving — a corrupt
-                // .skel with boneCount near 0xFFFFFFFF would otherwise trigger a multi-GB
-                // allocation (bad_alloc / DoS) before the file.good()-bounded loop runs.
-                constexpr uint32_t kMaxBones = 100'000;
-                if (!file.good() || boneCount > kMaxBones)
-                {
-                    SPARK_LOG_WARN(LogCategory::Animation, "Skeleton file '%s' has invalid bone count %u (max %u)",
-                                   filepath.c_str(), boneCount, kMaxBones);
-                    return skeleton;
-                }
-
-                skeleton->bones.reserve(boneCount);
-
-                for (uint32_t i = 0; i < boneCount && file.good(); ++i)
-                {
-                    Bone bone;
-
-                    // Read bone name (length-prefixed string)
-                    uint32_t nameLen = 0;
-                    file.read(reinterpret_cast<char*>(&nameLen), sizeof(nameLen));
-                    if (nameLen >= MAX_ASSET_NAME_LENGTH)
-                    {
-                        // Skipping the read without consuming nameLen bytes leaves the
-                        // stream one name out of phase: parentIndex and both matrices
-                        // would then be filled from name bytes and the loader would
-                        // still report success.
-                        SPARK_LOG_WARN(LogCategory::Animation,
-                                       "Skeleton '%s': bone %u declares a %u byte name; aborting load",
-                                       filepath.c_str(), i, nameLen);
-                        skeleton->bones.clear();
-                        skeleton->boneNameToIndex.clear();
-                        loadFailed = true;
-                        break;
-                    }
-                    if (nameLen > 0)
-                    {
-                        bone.name.resize(nameLen);
-                        file.read(bone.name.data(), nameLen);
-                    }
-
-                    // Read parent index
-                    file.read(reinterpret_cast<char*>(&bone.parentIndex), sizeof(bone.parentIndex));
-
-                    // Read offset matrix (inverse bind pose) - 16 floats, row-major
-                    file.read(reinterpret_cast<char*>(&bone.offsetMatrix), sizeof(XMFLOAT4X4));
-
-                    // Read local bind pose - 16 floats, row-major
-                    file.read(reinterpret_cast<char*>(&bone.localBindPose), sizeof(XMFLOAT4X4));
-
-                    if (!file.good())
-                    {
-                        SPARK_LOG_WARN(LogCategory::Animation, "Skeleton '%s' truncated at bone %u", filepath.c_str(),
-                                       i);
-                        skeleton->bones.clear();
-                        skeleton->boneNameToIndex.clear();
-                        loadFailed = true;
-                        break;
-                    }
-
-                    // Validate at load time instead of relying on every consumer's
-                    // bounds check: a parent must exist and must precede its child.
-                    if (bone.parentIndex < -1 || bone.parentIndex >= static_cast<int32_t>(i))
-                    {
-                        SPARK_LOG_WARN(LogCategory::Animation, "Skeleton '%s': bone %u has invalid parent index %d",
-                                       filepath.c_str(), i, bone.parentIndex);
-                        skeleton->bones.clear();
-                        skeleton->boneNameToIndex.clear();
-                        loadFailed = true;
-                        break;
-                    }
-
-                    if (!IsFiniteMatrix(bone.offsetMatrix) || !IsFiniteMatrix(bone.localBindPose))
-                    {
-                        SPARK_LOG_WARN(LogCategory::Animation, "Skeleton '%s': bone %u has a non-finite matrix",
-                                       filepath.c_str(), i);
-                        skeleton->bones.clear();
-                        skeleton->boneNameToIndex.clear();
-                        loadFailed = true;
-                        break;
-                    }
-
-                    skeleton->boneNameToIndex[bone.name] = static_cast<int32_t>(i);
-                    skeleton->bones.push_back(std::move(bone));
-                }
+                SPARK_LOG_ERROR(LogCategory::Animation, "Failed to load glTF skeleton '%s': %s; result is not cached",
+                                filepath.c_str(), error.c_str());
+                return skeleton;
             }
-            else
-            {
-                SPARK_LOG_WARN(LogCategory::Animation, "Skeleton file '%s' is not a .skel file (bad magic)",
-                               filepath.c_str());
-                loadFailed = true;
-            }
-        }
-        else
-        {
-            SPARK_LOG_WARN(LogCategory::Animation, "LoadSkeleton: cannot open '%s'", filepath.c_str());
-            loadFailed = true;
+            *skeleton = std::move(imported.skeleton);
+            skeleton->name = filepath;
+            m_skeletons[filepath] = skeleton;
+            SPARK_LOG_INFO(LogCategory::Animation, "Loaded glTF skeleton '%s' (%zu bones)", filepath.c_str(),
+                           skeleton->bones.size());
+            return skeleton;
         }
 
-        if (loadFailed)
+        // A failed load is reported as a failure and not memoised: caching it would make a later
+        // repaired asset unreachable for the lifetime of the process.
+        std::vector<std::uint8_t> bytes;
+        if (!ReadAnimationAssetFile(path, filepath, bytes))
         {
-            // Report the failure as a failure. Caching it here would memoise the empty
-            // result, so a repaired asset could never be reloaded in this process.
             SPARK_LOG_ERROR(LogCategory::Animation, "Failed to load skeleton '%s'; result is not cached",
                             filepath.c_str());
+            return skeleton;
+        }
+        std::string error;
+        if (!DecodeSkeletonBinary(bytes, *skeleton, error))
+        {
+            SPARK_LOG_ERROR(LogCategory::Animation, "Failed to load skeleton '%s': %s; result is not cached",
+                            filepath.c_str(), error.c_str());
             return skeleton;
         }
 
@@ -210,211 +158,42 @@ namespace Spark::Animation
     {
         std::vector<std::shared_ptr<AnimationClip>> clips;
 
-        // Parse animation clips from Spark Engine binary animation format (.sanim)
-        // Format: [magic:4][version:4][clipCount:4] then per clip:
-        //   [nameLen:4][name:nameLen][duration:4][ticksPerSecond:4][loop:1]
-        //   [channelCount:4] then per channel:
-        //     [boneNameLen:4][boneName:boneNameLen][boneIndex:4]
-        //     [posKeyCount:4] then per key: [time:4][x:4][y:4][z:4]
-        //     [rotKeyCount:4] then per key: [time:4][x:4][y:4][z:4][w:4]
-        //     [sclKeyCount:4] then per key: [time:4][x:4][y:4][z:4]
-        std::ifstream file(filepath, std::ios::binary);
-        if (!file.is_open())
+        const std::filesystem::path path = PathFromUtf8(filepath);
+        if (IsGLTFPath(path))
         {
-            SPARK_LOG_WARN(LogCategory::Animation, "LoadAnimations: cannot open '%s' (errno=%d)", filepath.c_str(),
-                           errno);
-            return clips;
-        }
-
-        char magic[4] = {};
-        file.read(magic, 4);
-
-        if (std::memcmp(magic, "ANIM", 4) != 0)
-        {
-            SPARK_LOG_WARN(LogCategory::Animation, "LoadAnimations: '%s' is not a .sanim file (bad magic '%c%c%c%c')",
-                           filepath.c_str(), magic[0], magic[1], magic[2], magic[3]);
-            return clips;
-        }
-
-        uint32_t version = 0;
-        file.read(reinterpret_cast<char*>(&version), sizeof(version));
-
-        uint32_t clipCount = 0;
-        file.read(reinterpret_cast<char*>(&clipCount), sizeof(clipCount));
-        // Bound the count from an untrusted file before reserving (matches the per-channel
-        // and per-keyframe caps below) so a corrupt clipCount cannot force a huge alloc.
-        constexpr uint32_t kMaxClips = 100'000;
-        if (!file.good() || clipCount > kMaxClips)
-        {
-            SPARK_LOG_WARN(LogCategory::Animation, "LoadAnimations: invalid clip count %u in '%s'", clipCount,
+            std::vector<AnimationClip> imported;
+            std::string error;
+            if (!Spark::Graphics::Detail::LoadGLTFAnimationClips(path, imported, error))
+            {
+                SPARK_LOG_ERROR(LogCategory::Animation,
+                                "Failed to load glTF animations from '%s': %s; no clips returned", filepath.c_str(),
+                                error.c_str());
+                return clips;
+            }
+            clips.reserve(imported.size());
+            for (AnimationClip& clip : imported)
+            {
+                clips.push_back(std::make_shared<AnimationClip>(std::move(clip)));
+            }
+            SPARK_LOG_INFO(LogCategory::Animation, "Loaded %zu glTF animation clips from '%s'", clips.size(),
                            filepath.c_str());
             return clips;
         }
 
-        clips.reserve(clipCount);
-
-        // Every length prefix below is consumed before the payload it describes. Once a
-        // prefix is rejected the payload is still in the stream, so the reader is out of
-        // phase and every later clip would be decoded from misaligned bytes. Any abort
-        // therefore has to abandon the whole file, not just the current clip or channel.
-        bool aborted = false;
-
-        for (uint32_t c = 0; c < clipCount && file.good(); ++c)
+        // Binary .sanim; the layout and its validation live in AnimationBinaryFormat.h.
+        std::vector<std::uint8_t> bytes;
+        std::vector<AnimationClip> decoded;
+        std::string error;
+        if (!ReadAnimationAssetFile(path, filepath, bytes) || !DecodeAnimationClipsBinary(bytes, decoded, error))
         {
-            auto clip = std::make_shared<AnimationClip>();
-
-            // Read clip name
-            uint32_t nameLen = 0;
-            file.read(reinterpret_cast<char*>(&nameLen), sizeof(nameLen));
-            if (nameLen >= MAX_ASSET_NAME_LENGTH)
-            {
-                // The prefix is consumed but the name is not, so every following read
-                // would be one name out of phase. Stop instead of building clips from
-                // misaligned bytes and reporting success.
-                SPARK_LOG_WARN(LogCategory::Animation, "LoadAnimations: clip %u in '%s' declares a %u byte name", c,
-                               filepath.c_str(), nameLen);
-                aborted = true;
-                break;
-            }
-            if (nameLen > 0)
-            {
-                clip->name.resize(nameLen);
-                file.read(clip->name.data(), nameLen);
-            }
-
-            // Read clip metadata
-            file.read(reinterpret_cast<char*>(&clip->duration), sizeof(float));
-            file.read(reinterpret_cast<char*>(&clip->ticksPerSecond), sizeof(float));
-
-            uint8_t loopByte = 0;
-            file.read(reinterpret_cast<char*>(&loopByte), sizeof(loopByte));
-            clip->loop = (loopByte != 0);
-
-            // Read channels
-            uint32_t channelCount = 0;
-            file.read(reinterpret_cast<char*>(&channelCount), sizeof(channelCount));
-            // Sanity cap: prevent malformed files from causing huge allocations
-            constexpr uint32_t kMaxChannels = 10'000;
-            if (!file.good() || channelCount > kMaxChannels)
-            {
-                SPARK_LOG_WARN(LogCategory::Animation, "Invalid channel count %u in '%s'", channelCount,
-                               filepath.c_str());
-                aborted = true;
-                break;
-            }
-            clip->channels.reserve(channelCount);
-
-            for (uint32_t ch = 0; ch < channelCount && file.good(); ++ch)
-            {
-                BoneAnimation boneAnim;
-
-                // Read bone name for this channel
-                uint32_t boneNameLen = 0;
-                file.read(reinterpret_cast<char*>(&boneNameLen), sizeof(boneNameLen));
-                if (boneNameLen >= MAX_ASSET_NAME_LENGTH)
-                {
-                    SPARK_LOG_WARN(LogCategory::Animation,
-                                   "LoadAnimations: channel %u of clip %u in '%s' declares a %u byte bone name", ch, c,
-                                   filepath.c_str(), boneNameLen);
-                    aborted = true;
-                    break;
-                }
-                if (boneNameLen > 0)
-                {
-                    boneAnim.boneName.resize(boneNameLen);
-                    file.read(boneAnim.boneName.data(), boneNameLen);
-                }
-
-                // Read cached bone index (-1 if unresolved)
-                file.read(reinterpret_cast<char*>(&boneAnim.boneIndex), sizeof(boneAnim.boneIndex));
-
-                // Read position keyframes
-                uint32_t posKeyCount = 0;
-                file.read(reinterpret_cast<char*>(&posKeyCount), sizeof(posKeyCount));
-                constexpr uint32_t kMaxKeyframes = 1'000'000;
-                if (posKeyCount > kMaxKeyframes)
-                {
-                    SPARK_LOG_WARN(LogCategory::Animation,
-                                   "LoadAnimations: channel %u of clip %u in '%s' declares %u position keys", ch, c,
-                                   filepath.c_str(), posKeyCount);
-                    aborted = true;
-                    break;
-                }
-                boneAnim.positionKeys.resize(posKeyCount);
-                for (uint32_t k = 0; k < posKeyCount && file.good(); ++k)
-                {
-                    file.read(reinterpret_cast<char*>(&boneAnim.positionKeys[k].time), sizeof(float));
-                    file.read(reinterpret_cast<char*>(&boneAnim.positionKeys[k].value), sizeof(XMFLOAT3));
-                }
-
-                // Read rotation keyframes
-                uint32_t rotKeyCount = 0;
-                file.read(reinterpret_cast<char*>(&rotKeyCount), sizeof(rotKeyCount));
-                if (rotKeyCount > kMaxKeyframes)
-                {
-                    SPARK_LOG_WARN(LogCategory::Animation,
-                                   "LoadAnimations: channel %u of clip %u in '%s' declares %u rotation keys", ch, c,
-                                   filepath.c_str(), rotKeyCount);
-                    aborted = true;
-                    break;
-                }
-                boneAnim.rotationKeys.resize(rotKeyCount);
-                for (uint32_t k = 0; k < rotKeyCount && file.good(); ++k)
-                {
-                    file.read(reinterpret_cast<char*>(&boneAnim.rotationKeys[k].time), sizeof(float));
-                    file.read(reinterpret_cast<char*>(&boneAnim.rotationKeys[k].value), sizeof(XMFLOAT4));
-                }
-
-                // Read scale keyframes
-                uint32_t sclKeyCount = 0;
-                file.read(reinterpret_cast<char*>(&sclKeyCount), sizeof(sclKeyCount));
-                if (sclKeyCount > kMaxKeyframes)
-                {
-                    SPARK_LOG_WARN(LogCategory::Animation,
-                                   "LoadAnimations: channel %u of clip %u in '%s' declares %u scale keys", ch, c,
-                                   filepath.c_str(), sclKeyCount);
-                    aborted = true;
-                    break;
-                }
-                boneAnim.scaleKeys.resize(sclKeyCount);
-                for (uint32_t k = 0; k < sclKeyCount && file.good(); ++k)
-                {
-                    file.read(reinterpret_cast<char*>(&boneAnim.scaleKeys[k].time), sizeof(float));
-                    file.read(reinterpret_cast<char*>(&boneAnim.scaleKeys[k].value), sizeof(XMFLOAT3));
-                }
-
-                // Each keyframe loop stops on !good() and leaves the rest of its
-                // vector zero-initialised, so a truncated file would otherwise be
-                // pushed as a channel of silent zero keys and reported as a
-                // successful load. Truncation is corruption: abandon the file.
-                // Checking here also caps the amplification of a tiny file that
-                // declares kMaxChannels channels of kMaxKeyframes keys each - the
-                // first truncated channel aborts instead of resizing the rest.
-                if (!file.good())
-                {
-                    SPARK_LOG_WARN(LogCategory::Animation,
-                                   "LoadAnimations: '%s' is truncated inside channel %u of clip %u", filepath.c_str(),
-                                   ch, c);
-                    aborted = true;
-                    break;
-                }
-
-                clip->channels.push_back(std::move(boneAnim));
-            }
-
-            if (aborted)
-                break;
-
-            clips.push_back(std::move(clip));
-        }
-
-        if (aborted)
-        {
-            SPARK_LOG_ERROR(LogCategory::Animation,
-                            "Failed to load animations from '%s': the file is corrupt; no clips returned",
-                            filepath.c_str());
-            clips.clear();
+            SPARK_LOG_ERROR(LogCategory::Animation, "Failed to load animations from '%s'%s%s; no clips returned",
+                            filepath.c_str(), error.empty() ? "" : ": ", error.c_str());
             return clips;
+        }
+        clips.reserve(decoded.size());
+        for (AnimationClip& clip : decoded)
+        {
+            clips.push_back(std::make_shared<AnimationClip>(std::move(clip)));
         }
 
         SPARK_LOG_INFO(LogCategory::Animation, "Loaded %zu animation clips from '%s'", clips.size(), filepath.c_str());

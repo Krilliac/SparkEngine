@@ -25,7 +25,10 @@ Platform certification (PLT-200, gate G08) proves that a specific commit builds,
 | `tools/platform-cert/evidence_schema.json` | JSON Schema for evidence records |
 | `docs/certification/support-matrix.json` | Seed support matrix (stable-v1) |
 | `docs/certification/evidence/*.json` | Per-row evidence records (one file per row) |
-| `Tests/Tools/test_platform_certification.py` | 136 adversarial tests |
+| `docs/certification/plans/<rowId>.json` | Collector probe plan for each declared row |
+| `Tools/platform-cert/collect_evidence.py` | Runs a plan's probes and writes the measured record |
+| `Tools/platform-cert/pe_imports.py` | Bounded PE32+ import/delay-import reader; measures a staged package's dependency closure |
+| `Tests/Tools/test_platform_certification.py` | Adversarial validation tests |
 
 ## Support Matrix
 
@@ -43,6 +46,7 @@ The support matrix (`docs/certification/support-matrix.json`) declares every pla
 |--------|------|---------|-------------------|
 | `win11-x64-msvc143-d3d11` | primary | D3D11 | All 13 |
 | `win11-x64-msvc143-nullrhi` | supported | NullRHI | 9 (no renderer/content/input/audio) |
+| `win11-x64-msvc143-d3d11-amd-igpu` | experimental | D3D11 | Not certifiable; no job yet (OD-31) |
 
 ## Evidence Records
 
@@ -88,6 +92,10 @@ The validator rejects a row under any of these conditions:
 | GPU vendor/device/driver/featureLevel mismatch | **FAIL** |
 | Compiler version/toolset mismatch | **FAIL** |
 | Missing dependency closure when required | **FAIL** |
+| `dependency_closure` probe without exactly one PE import graph (`*.imports.json`) | **FAIL** |
+| Measured non-API-set import missing from the closure, or a closure entry nothing imports | **FAIL** |
+| Import resolving neither to the package root nor to an authority `platformRuntime` entry | **FAIL** |
+| Import graph whose API-set/platform classification disagrees with the authority | **FAIL** |
 | Collector identity blank or missing | **FAIL** |
 | Resource limits exceeded (rows, deps, strings, etc.) | **FAIL** |
 
@@ -121,16 +129,173 @@ Evidence is not fabricated — it must come from actual test runs on matching ha
 4. Place the file in `docs/certification/evidence/` named `{rowId}.json`.
 5. Run the validator to confirm the evidence passes.
 
-### Remaining blockers for PLT-200 completion
+### Row probe plans
 
-The certification infrastructure is in place. What remains is **physical-host evidence collection** — an operator must:
+Each declared row has a collector plan in `docs/certification/plans/`. Every probe runs a
+command that already exists; categories with no implementation are listed under
+`uncoveredCategories` with the reason, never mapped to a stand-in that could pass.
 
-- Build, install, launch, and exercise SparkEngine on a Windows 11 x64 machine with an NVIDIA GPU (D3D11 row)
-- Build, install, launch, and exercise SparkEngine in NullRHI headless mode (NullRHI row)
-- Record the results as evidence JSON files
-- Run the validator to confirm pass
+| Row | Probed | Command |
+|-----|--------|---------|
+| `win11-x64-msvc143-nullrhi` | `build` | `cmake --build --preset windows-shipping --config MinSizeRel` |
+| | `launch` | `ctest --test-dir build/windows-shipping -C MinSizeRel -R ^NullRHI_Windows_FPSLifecycle$ --no-tests=error` |
+| `win11-x64-msvc143-d3d11` | `build` | same Shipping build |
+| | `content`, `save` | `ctest ... -R ^FPSPackage_InstalledRuntime$ --no-tests=error` |
+| both | `dependency_closure` | `collect_evidence.py --package-root <staged bin/>` against the plan's declared closure |
 
-This cannot be automated away — it requires real hardware running real builds.
+Uncovered today: `install`/`uninstall`/`upgrade`/`rollback` (the MSI qualifier needs per-run
+arguments and predecessor packages; INST-130, REL-100 and REL-110) and `crash` (OPS-100). The NullRHI row
+also leaves out `save`, because the only save/reload proof runs D3D11 WARP. The D3D11 row also
+leaves out `launch` and `renderer`, because every D3D11 test forces WARP, plus `input` and
+`audio`. The validator refuses to certify a row with any category missing, so both rows stay
+uncertified until these gaps close.
+
+### Measured dependency closure
+
+`collect_evidence.py --package-root <staged package>` records `dependency_closure` by running
+`pe_imports.py` as the probe subprocess. It reads the import and delay-import directories of every
+PE32+ (AMD64) image in the package and resolves each DLL name. An `api-ms-win-*`/`ext-ms-*` name is
+an OS API set. A KnownDLL (`KNOWN_DLLS` in `pe_imports.py`, such as `kernel32.dll`) always loads from
+the system directory, so a same-named file in the package never satisfies it. Any other DLL in the
+package root (the application directory) is package-local and hashed. Anything else must be a
+`platformRuntime` entry of `docs/certification/dependency-authority.json`, or it is unresolved. The canonical import graph becomes a content-addressed `*.imports.json`
+artifact, and each declared dependency gets its own evidence file under `dependency_closure/deps/`.
+
+The plan declares only `dependencyClosure` entries (`name`, `version`, `source`) and the product's own
+`firstPartyImages`. Paths, hashes and sizes are always measured, and a plan that declares a closure
+without `--package-root` is refused. The validator re-reads the attested graph and fails the row if
+any of these holds:
+
+- an import is unresolved
+- a measured non-API-set, non-first-party import is missing from the closure
+- a closure entry is imported by nothing
+- an API set is declared
+- the graph's name-only classifications disagree with the authority
+- a package-local DLL, or a `firstPartyImages` entry, has a name the OS owns (an API set, a
+  KnownDLL or a `system`-source `platformRuntime` library)
+- a `firstPartyImages` entry names a `platformRuntime` library or a third-party image
+- a package-local DLL is neither first-party, an app-local `platformRuntime` library (declared under
+  its own name and source, e.g. `msvcp140.dll` from `vcredist`), nor a reviewed third-party image
+
+A package-local third-party DLL is declared under its authority identity, not its file name. The
+graph records file names (`sdl2.dll`) while the authority's `thirdParty` entries are manifest projects
+(`SDL2`), so the link is the entry's reviewed `imageNames` list. That list comes from
+`THIRD_PARTY_PACKAGE_IMAGES` in `dependency_authority.py`. It is empty today because every vendored
+library is linked statically into the Windows binaries (SDL2 is only built off Windows). A Windows
+package that ships a third-party DLL is therefore refused until that DLL is reviewed into the table
+and the authority is regenerated.
+
+Not every classification is re-derived at validation time. Whether a DLL sits in the package root
+depends on the package, which the bundle does not carry. The validator trusts that fact from the
+attested collector run and pins it only to a package-root image of the same name. The plan's
+`firstPartyImages` list is also a declaration. It is checked against OS-owned, runtime and
+third-party names, but not against the build's real targets.
+
+#### The declared Windows closure
+
+Both Windows row plans retain the historical `firstPartyImages` and `dependencyClosure`
+declaration from the 256603c1c Shipping install on 2026-09-29. This is a regression baseline,
+not current-tree evidence. **Remeasurement of the current Shipping install remains pending.**
+The prior lane's image counts are not used as proof. No readiness status is promoted here.
+
+CTest `WindowsCertification_PackageDependencyClosure` installs the component set from
+`cmake/SparkCPackOptions.cmake` into a unique prefix. It requires MinSizeRel and is registered
+for the `windows-shipping` product set. The required `build-windows-shipping` CI job calls the
+same driver directly, including when `BUILD_TESTS=OFF`.
+
+The driver applies both existing checks:
+
+- `tools/pe_import_closure.py` requires imported CRT DLLs beside the importing image and checks
+  OS imports against System32 on Windows. A VC runtime installed on the developer host cannot
+  satisfy a missing packaged DLL.
+- `Tools/platform-cert/pe_imports.py` records the import and delay-import graph, verifies the
+  first-party images and declared dependencies, and applies the row's dependency authority
+  rules for names, sources, versions and duplicates. Shipped OS-owned images are refused even
+  when nothing imports them.
+
+Each run retains JSON import graphs (including image SHA-256 and size), install logs and checker
+logs beneath `build/windows-shipping/package-closure/MinSizeRel/run-*` when run through CTest.
+The install subtree is removed only after both checks pass; failed stages remain for diagnosis.
+CI uses `build/shipping-closure/run-*` and uploads the reports as `shipping-closure-<commit>`.
+These reports describe the measured bytes; physical-host certification still needs the attested
+collector workflow below.
+
+From an MSVC developer shell, after the Shipping build has completed:
+
+```powershell
+ctest --test-dir build/windows-shipping -C MinSizeRel `
+  -R '^WindowsCertification_PackageDependencyClosure$' --no-tests=error --output-on-failure
+```
+
+A new import or missing DLL must be investigated before updating the declaration. Never copy a
+prior graph as evidence for a new tree. `pe_imports.py` does not read DLL file versions: refresh
+those declaration values from the newly staged CRT and the measurement host's System32 files.
+
+The reader is bounded: 512 MiB per image, 96 sections, 16 data directories, 4096 descriptors per
+directory, and 255-byte names. Truncated headers, an RVA outside every section, PE32 or non-AMD64
+images, and names containing path characters all fail closed.
+
+Plans carry no `provenance` block. Collection therefore has to run under CI with
+`--from-github-env` on the physical host, after
+`cmake --preset windows-shipping -DBUILD_TESTS=ON` at the commit under test. Probes run in
+category order, so `build` rebuilds the product before any ctest probe uses it.
+`TestRowProbePlans` in `Tests/Tools/test_platform_certification.py` checks four things: every
+probed or uncovered category is in the row's `evidenceRequired`, every `ctest -R ^Name$`
+selector names an `add_test` in `Tests/CMakeLists.txt`, every ctest probe passes
+`--no-tests=error`, and every named preset exists in `CMakePresets.json`.
+
+### Self-hosted GPU runner (OD-31)
+
+The primary D3D11 row's hardware is the owner's workstation (Ryzen 9 9900X3D, RTX 5070 Ti). OD-31 makes it a
+GitHub Actions self-hosted runner labelled `spark-gpu`, and `.github/workflows/gpu-certification.yml` collects
+exact-commit evidence for `win11-x64-msvc143-d3d11` on it. The job enters the pinned MSVC environment, refuses a
+`cl` that differs from `cmake/WindowsShippingToolchain.json`, configures `windows-shipping` with tests, builds
+MinSizeRel, stages the package through `WindowsCertification_PackageDependencyClosure`, runs
+`collect_evidence.py --from-github-env --package-root`, checks the record with `validate_certification.py --mode
+ledger-consistency`, and uploads it as `gpu-cert-<row>-<sha>`.
+
+What it does not do:
+
+- **Certify the row.** The plan's uncovered categories (install, launch, renderer, input, audio, crash, upgrade,
+  rollback, uninstall) still have no hardware probe, so the validator reports the row as not certified.
+- **Stand in for a clean host.** The workstation is not a clean machine; clean-host categories stay deferred
+  under OD-27.
+- **Measure the iGPU row.** The engine always creates the default D3D11 adapter and the collector records the first
+  WMI adapter, so `win11-x64-msvc143-d3d11-amd-igpu` stays experimental with no job until both can target it.
+
+The repository is public, so the workflow runs only on `workflow_dispatch` and pushes to `Working`, and its job
+refuses any other repository. No `pull_request`, `pull_request_target`, `issue_comment`, `workflow_run` or
+`schedule` trigger may ever reach the `spark-gpu` label, and release environments stay on GitHub-hosted runners.
+
+The triggers in this file are not the whole boundary: a fork pull request runs the workflows in its own head, so it
+can add a new workflow that targets `spark-gpu`. Two controls close that path. The repository must require approval
+for workflows from **all** outside collaborators (the default only stops first-time contributors), and
+`test_workflow_privilege_boundaries.py` fails if any other workflow names `self-hosted` or `spark-gpu`, or if
+`gpu-certification.yml` gains a trigger, secret, environment or write permission. The test is defence in depth only,
+since a pull request can edit it too; approval is the control that holds. This is a personal account, so runner
+groups restricted to one workflow are not available. An ephemeral runner in a VM would isolate jobs better, but
+loses direct GPU access; the runner instead runs as a non-administrator account holding no secrets.
+
+#### Registering the runner
+
+The owner runs these steps; they need a registration token and install a Windows service.
+
+1. In Settings, Actions, General, set "Approval for running fork pull request workflows from contributors" to
+   require approval for all outside collaborators. Do this first: the repository is on "first-time contributors"
+   today, which would let anyone with one merged pull request run code on the workstation.
+2. Update Visual Studio 2022 (Visual Studio Installer, Update) until a Developer PowerShell `cl` prints
+   `Version 19.44.35229`. The Shipping configure refuses any other compiler build.
+3. Install Python 3.12 for all users with "Add to PATH", so the service account finds `python`.
+4. Create a standard local account for the service (not an administrator), e.g. `spark-runner`.
+5. On GitHub, open Settings, Actions, Runners, New self-hosted runner, Windows x64. Download and extract the runner
+   into `C:\actions-runner` (outside any user profile) as that page shows.
+6. In `C:\actions-runner`, run `.\config.cmd --url https://github.com/Krilliac/SparkEngine --token <TOKEN>
+   --name spark-gpu-01 --labels spark-gpu --work _work --runasservice`, and give `.\spark-runner` when it asks for
+   the service account. `self-hosted`, `Windows` and `X64` are added automatically.
+7. After the workflow reaches `Working`, start it from Actions, GPU certification, Run workflow.
+
+A run builds the whole Shipping tree with `--parallel 1` and holds the GPU for its duration, so expect it to compete
+with local work on the same machine.
 
 ## Running Tests
 
@@ -138,7 +303,42 @@ This cannot be automated away — it requires real hardware running real builds.
 python -m pytest Tests/Tools/test_platform_certification.py -v
 ```
 
-136 tests covering schema loading, strict JSON parsing (duplicate keys, NaN/Infinity), additionalProperties enforcement, timestamp bounds, compiler identity, zero-duration pass rejection, SHA-256/artifact path confinement, canonical profile coverage, complete host matching, dependency closure, collector identity, resource limits, cross-validation, and CLI modes.
+Tests cover schema loading, strict JSON parsing (duplicate keys, NaN/Infinity), additionalProperties enforcement, timestamp bounds, compiler identity, zero-duration pass rejection, SHA-256/artifact path confinement, canonical profile coverage, complete host matching, dependency closure, collector identity, resource limits, cross-validation, and CLI modes.
+
+## Windows installer predecessor evidence
+
+The Runtime MSI family uses the project-owned UpgradeCode declared in
+`cmake/SparkCPackOptions.cmake`; ProductCode remains generated per MSI. Before
+an old-to-new transaction, `.github/scripts/qualify-windows-msi.py` requires
+`--previous-signer-thumbprint` from the caller's protected trust configuration,
+together with all three predecessor artifact arguments. It verifies a valid,
+timestamped Authenticode signature from that publisher on the private MSI copy
+before any Windows Installer command, and keeps that copy locked through its
+initial installation. The current MSI is locked and its digest rechecked before
+the `/fvomus` repair command; the lock remains held until that command exits.
+`previous-signature.json` binds the checked publisher
+and native signature result to the predecessor bytes; it is signature evidence,
+not proof that the installation or upgrade passed.
+
+This foundation does not admit a bootstrap release, provision signing authority,
+or certify Windows 11. The release controller supplies the externally provisioned
+`SPARK_PREVIOUS_RELEASE_SIGNER_THUMBPRINT` repository/environment variable explicitly
+to the qualifier. The release owner must set it to the authorized predecessor
+publisher's 40-hex Authenticode certificate thumbprint; it is not inferred from
+the downloaded MSI or the current release's signer. An absent, malformed, or
+mismatched value blocks qualification. Hosted signed-artifact and supported-host
+execution remain required evidence.
+
+The v0.9.0 bootstrap path (`--bootstrap-repair`) has no predecessor, so it binds
+its evidence to the owner-reviewed baseline instead. It requires
+`--reviewed-baseline-commit`, which `release.yml` reads from
+`predecessorRelease.sourceCommitEvidence.baselineCommit` in
+`docs/site/readiness.json`. Before any Windows Installer command, the source SHA
+must have exactly one parent equal to that baseline. This is the same rule the
+publication job's `verify_v090_source_seal.py` enforces, and the qualifier
+imports it from that script instead of keeping a copy. Both SHAs are
+written to `bootstrap-baseline.json`. While the baseline is unrecorded (empty),
+the v0.9.0 qualification step fails closed.
 
 ## Related Pages
 
@@ -151,3 +351,5 @@ python -m pytest Tests/Tools/test_platform_certification.py -v
 - **Created:** 2026-08-28 for PLT-200
 - **Commit:** `360c05e883d4d5d1c0d050455a5cbb226cce3ffc`
 - **Status:** Infrastructure complete; evidence collection pending
+- **Updated:** 2026-09-30: fresh-stage closure enforcement and retained reports; current-tree measurement pending
+- **Updated:** 2026-10-15: OD-31 self-hosted GPU runner, experimental iGPU row, measured primary-row identity

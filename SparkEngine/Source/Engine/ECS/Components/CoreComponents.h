@@ -15,6 +15,7 @@
 #include "Core/Platform.h"
 #endif // SPARK_PLATFORM_WINDOWS
 #include <string>
+#include <cstdint>
 #include <vector>
 #include <functional>
 

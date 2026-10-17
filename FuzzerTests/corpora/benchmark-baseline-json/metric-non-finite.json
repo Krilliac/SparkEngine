@@ -1,0 +1,14 @@
+{
+  "baselines": [
+    {
+      "scenario": "alpha",
+      "metrics": {
+        "NotANumber": nan,
+        "Positive": inf,
+        "Negative": -inf,
+        "Hex": 0x10
+      },
+      "tolerance": 5.0
+    }
+  ]
+}

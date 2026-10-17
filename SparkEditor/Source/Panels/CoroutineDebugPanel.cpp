@@ -5,9 +5,10 @@
 
 #include "CoroutineDebugPanel.h"
 #include "../Core/EditorIcons.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #include "Utils/LogMacros.h"
 #include <imgui.h>
-#include <iostream>
 
 namespace SparkEditor
 {
@@ -55,20 +56,26 @@ namespace SparkEditor
                 ++suspendedCount;
         }
 
-        ImGui::Text(ICON_FA_CLOCK " Active: %d | Suspended: %d | Total Started: %d | Completed: %d | Failed: %d",
-                    activeCount, suspendedCount, m_totalStarted, m_totalCompleted, m_totalFailed);
+        Spark::Ui::KeyValue(ICON_FA_CLOCK " Active", "%d", activeCount);
+        ImGui::SameLine(0.0f, Spark::Ui::Em(1.0f));
+        Spark::Ui::KeyValue("Suspended", "%d", suspendedCount);
+        ImGui::SameLine(0.0f, Spark::Ui::Em(1.0f));
+        Spark::Ui::KeyValue("Total Started", "%d", m_totalStarted);
+        ImGui::SameLine(0.0f, Spark::Ui::Em(1.0f));
+        Spark::Ui::KeyValue("Completed", "%d", m_totalCompleted);
+        ImGui::SameLine(0.0f, Spark::Ui::Em(1.0f));
+        Spark::Ui::KeyValue("Failed", "%d", m_totalFailed);
 
-        ImGui::Text("Creation Rate: %.1f/s", m_creationsPerSecond);
+        Spark::Ui::KeyValue("Creation Rate", "%.1f/s", m_creationsPerSecond);
     }
 
     void CoroutineDebugPanel::RenderFilterBar()
     {
         const char* filters[] = {"All", "Running", "Suspended"};
-        ImGui::SetNextItemWidth(120);
-        ImGui::Combo("Status Filter", &m_statusFilter, filters, IM_ARRAYSIZE(filters));
+        Spark::Ui::SegmentedControl("StatusFilter", filters, IM_ARRAYSIZE(filters), &m_statusFilter);
 
         ImGui::SameLine();
-        if (ImGui::Button(ICON_FA_STOP " Cancel All"))
+        if (Spark::Ui::DangerButton(ICON_FA_STOP " Cancel All"))
         {
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "CoroutineDebugPanel: cancelling all %d coroutines",
                            static_cast<int>(m_coroutines.size()));
@@ -81,22 +88,21 @@ namespace SparkEditor
     {
         if (m_coroutines.empty())
         {
-            ImGui::TextDisabled("No active coroutines.");
-            ImGui::TextDisabled("Coroutines are started during Play mode via CoroutineScheduler.");
+            Spark::Ui::EmptyState(ICON_FA_CLOCK, "No active coroutines",
+                                  "State preview does not run game coroutines. "
+                                  "Use Play Control > Launch Game to test runtime coroutines.");
             return;
         }
 
-        ImGui::Text("Coroutines: %d", static_cast<int>(m_coroutines.size()));
+        Spark::Ui::KeyValue("Coroutines", "%d", static_cast<int>(m_coroutines.size()));
 
-        if (ImGui::BeginTable("CoroutineTable", 5,
-                              ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable |
-                                  ImGuiTableFlags_ScrollY))
+        if (Spark::Ui::BeginDataTable("CoroutineTable", 5))
         {
             ImGui::TableSetupColumn("Name");
-            ImGui::TableSetupColumn("Elapsed", ImGuiTableColumnFlags_WidthFixed, 70);
-            ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 80);
+            ImGui::TableSetupColumn("Elapsed", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(70));
+            ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(100));
             ImGui::TableSetupColumn("Wait State");
-            ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthFixed, 60);
+            ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(60));
             ImGui::TableHeadersRow();
 
             for (int i = 0; i < static_cast<int>(m_coroutines.size()); ++i)
@@ -116,17 +122,16 @@ namespace SparkEditor
                 ImGui::TextUnformatted(cr.name);
 
                 ImGui::TableNextColumn();
-                ImGui::Text("%.1f s", cr.elapsedTime);
+                Spark::Ui::TableNumber("%.1f s", cr.elapsedTime);
 
                 ImGui::TableNextColumn();
-                ImVec4 statusColor = GetStatusColor(cr.status);
-                ImGui::TextColored(statusColor, "%s", GetStatusName(cr.status));
+                Spark::Ui::StatusText(ToUiStatus(cr.status), "%s", GetStatusName(cr.status));
 
                 ImGui::TableNextColumn();
                 ImGui::TextUnformatted(cr.waitState);
 
                 ImGui::TableNextColumn();
-                if (ImGui::SmallButton(ICON_FA_STOP "##cancel"))
+                if (Spark::Ui::IconButton("cancel", ICON_FA_STOP, "Cancel this coroutine"))
                 {
                     m_coroutines.erase(m_coroutines.begin() + i);
                     ++m_totalCompleted;
@@ -157,20 +162,19 @@ namespace SparkEditor
         }
     }
 
-    ImVec4 CoroutineDebugPanel::GetStatusColor(CoroutineStatus status)
+    Spark::Ui::Status CoroutineDebugPanel::ToUiStatus(CoroutineStatus status)
     {
         switch (status)
         {
         case CoroutineStatus::Running:
-            return ImVec4(0.2f, 0.8f, 0.2f, 1.0f);
+            return Spark::Ui::Status::Success;
         case CoroutineStatus::Suspended:
-            return ImVec4(1.0f, 0.8f, 0.0f, 1.0f);
-        case CoroutineStatus::Completed:
-            return ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
+            return Spark::Ui::Status::Warning;
         case CoroutineStatus::Failed:
-            return ImVec4(1.0f, 0.3f, 0.3f, 1.0f);
+            return Spark::Ui::Status::Error;
+        case CoroutineStatus::Completed:
         default:
-            return ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+            return Spark::Ui::Status::Neutral;
         }
     }
 

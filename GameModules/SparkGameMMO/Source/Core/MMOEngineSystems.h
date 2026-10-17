@@ -5,8 +5,9 @@
  * @author Spark Engine Team
  * @date 2026
  *
- * MMOEngineSystems registers the MMO content supported by public engine APIs and
- * exposes the data-driven ability/animation catalog used by the showcase.
+ * MMOEngineSystems registers the MMO content supported by public engine APIs,
+ * exposes the data-driven ability/animation catalog used by the showcase, and
+ * places the Blender-authored TownSquare kit (Assets/Models/MMO/Kit).
  */
 
 #pragma once
@@ -94,8 +95,13 @@ namespace MMO
         void RegisterAnimationStateMachines();
         void SubscribeEvents();
         void RegisterLocalization();
+        void PlaceTownSquareKit();
+        void RemoveTownSquareKit();
 
         Spark::IEngineContext* m_context = nullptr;
+
+        // TownSquare kit props (MeshRenderer entities) owned by this module
+        std::vector<uint32_t> m_kitEntities;
 
         // RAII event handles — automatically unsubscribe on destruction
         std::vector<Spark::SubscriptionHandle> m_eventHandles;

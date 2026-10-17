@@ -1,26 +1,52 @@
 /** @file GatewayAreaControl.h @brief Authenticated local area-control transport. */
 #pragma once
 
+#include "GatewayAreaControlState.h"
 #include "GatewaySecurity.h"
+#include "Engine/Networking/AreaHandoffDispatcher.h"
 
+#include <array>
 #include <atomic>
 #include <filesystem>
 #include <mutex>
+#include <string_view>
 #include <thread>
+#include <type_traits>
 #include <unordered_map>
 
 namespace Spark::Gateway
 {
     class GatewayCoordinator;
-    enum class AreaControlPhase : uint8_t
+
+    static_assert(std::is_same_v<Net::AreaID, uint32_t> && Net::INVALID_AREA == 0,
+                  "AreaControlSessionFence stores Net::AreaID as uint32_t with 0 as INVALID_AREA");
+
+    /**
+     * @brief Bounded classification of every frame the area-control service receives.
+     *
+     * Each connection produces exactly one audit record (one log line plus one
+     * counter increment). Only @c Accepted, @c Replay and @c LedgerFull are
+     * reached after the MAC verified; every other reason describes an
+     * unauthenticated frame whose claimed fields must not be trusted.
+     */
+    enum class AreaControlAuditReason : uint8_t
     {
-        Prepare = 1,
-        Transfer = 2,
-        Commit = 3,
-        Acknowledge = 4,
-        Abort = 5,
-        Probe = 6
+        Accepted = 0,    ///< Authenticated and fresh; the phase was handed to the epoch fence
+        Incomplete,      ///< Connection closed or timed out before a whole frame arrived
+        PeerMismatch,    ///< Peer is not the same operating-system user as the service
+        Oversize,        ///< Frame payload exceeds GatewayMaximumBodySize
+        WrongService,    ///< Frame addressed to a service other than Orchestration
+        DecodeFailed,    ///< Payload is not a well-formed area-control request
+        PhaseMismatch,   ///< Signed phase differs from the frame message type
+        TimestampWindow, ///< Request timestamp outside the +/-60 s freshness window
+        MacInvalid,      ///< HMAC-SHA256 did not verify under the service key
+        Replay,          ///< Nonce already seen inside the freshness window
+        LedgerFull,      ///< Replay ledger is at capacity; new nonces fail closed
+        Count
     };
+
+    /** @brief Stable lower_snake_case name of @p reason as written to the audit log. */
+    [[nodiscard]] std::string_view AreaControlAuditReasonName(AreaControlAuditReason reason);
 
     /** Gateway-side one-request-per-connection local named-pipe adapter. */
     class LocalAreaControlPlane final : public IAreaControlPlane
@@ -63,16 +89,20 @@ namespace Spark::Gateway
         void Stop();
         [[nodiscard]] bool IsReady() const { return m_ready.load(std::memory_order_acquire); }
         [[nodiscard]] std::string GetLastError() const;
+        /** @brief Number of frames classified as @p reason since construction. */
+        [[nodiscard]] uint64_t GetAuditCount(AreaControlAuditReason reason) const;
+        void SetHandoffDispatcher(Spark::Net::AreaHandoffDispatcher* dispatcher) { m_dispatcher = dispatcher; }
 
       private:
-        struct SessionFence
-        {
-            uint64_t epoch = 0;
-            AreaControlPhase phase = AreaControlPhase::Abort;
-        };
+        using SessionFence = AreaControlSessionFence;
         void Run();
         void SetError(std::string error);
-        [[nodiscard]] HandoffOperationResult Apply(std::string_view sessionId, uint64_t epoch, AreaControlPhase phase);
+        /** Authenticates one received frame, applies it when valid, and writes its audit record. */
+        [[nodiscard]] HandoffOperationResult HandleFrame(uint16_t serviceId, uint16_t messageType,
+                                                         const std::vector<uint8_t>& payload);
+        void RecordAudit(AreaControlAuditReason reason, unsigned int phase, uint64_t epoch, std::string_view sessionId,
+                         HandoffOperationResult outcome);
+        [[nodiscard]] HandoffOperationResult Apply(const HandoffCommand& command, AreaControlPhase phase);
         [[nodiscard]] bool LoadState();
         [[nodiscard]] bool SaveState() const;
 
@@ -82,13 +112,15 @@ namespace Spark::Gateway
         std::vector<uint8_t> m_key;
         std::string m_error;
         mutable std::mutex m_errorMutex;
-        std::unordered_map<std::string, SessionFence> m_sessions;
+        AreaControlSessions m_sessions;
         std::unordered_map<uint64_t, int64_t> m_seenNonces;
         mutable std::mutex m_mutex;
+        std::array<std::atomic<uint64_t>, static_cast<size_t>(AreaControlAuditReason::Count)> m_auditCounts{};
         std::thread m_thread;
         std::atomic<bool> m_stop{false};
         std::atomic<bool> m_ready{false};
         std::atomic<bool> m_startupComplete{false};
+        Spark::Net::AreaHandoffDispatcher* m_dispatcher = nullptr;
     };
 
     class LocalGatewayIngressClient

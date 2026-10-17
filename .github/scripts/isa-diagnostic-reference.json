@@ -1,0 +1,31 @@
+{
+  "source_sha": "d90b86e42fd586a56d53f077bbca6a457200d9bd",
+  "source_tree": "4b16d0da9ad4dd98794a180786f7db00b1e38cb4",
+  "original_run": 37101493564,
+  "original_workflow": "0a77b06580fe354905457b6090fdd56c8ee51e88",
+  "image_sha256": "a78b3d3c6563a15a92af289e9da67e795a884e56098fe08f92be76b31fbfab3b",
+  "original_pdb_available": false,
+  "tools": {
+    "cl": {
+      "sha256": "fe251ef50a1545b1b0835ee17b1e785459712b38d79e45b5c1d3d28970a36619"
+    },
+    "rc": {
+      "sha256": "43da1503c262c30894c851589bf0155f8365d77e63a5f7bc13982320e3a6b42d"
+    },
+    "fxc": {
+      "sha256": "31fa10504b1551337de4d06ec2194143885a76a8b5a81177999e2faa34729183"
+    },
+    "cmake": {
+      "sha256": "3fe22eb02e1c6184ec207366ed21a6f2f9c3828c1e9f3324546befadfb362be3"
+    },
+    "ninja": {
+      "sha256": "b28222007c60aec66bb734ef43c0802e43aaa4a1028b41b29058970d7b7df745"
+    },
+    "llvm-objdump": {
+      "sha256": "3250af97b9d8fd7d379710d561c312dc8b3a89b9a008014a4486805c840175b2"
+    },
+    "llvm-pdbutil": {
+      "sha256": "5ecf2e51ad37498d8e35f4979670f938ec41dbead8a769a2b1650c69dac0c8a6"
+    }
+  }
+}

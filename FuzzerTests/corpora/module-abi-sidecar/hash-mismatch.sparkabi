@@ -1,0 +1,12 @@
+struct_size=64
+magic=1263685715
+format=1
+sdk_version=9
+runtime_abi_version=1
+compiler_family=2
+compiler_abi_version=@compiler_abi_version@
+cxx_language_level=202302
+runtime_library=0
+iterator_debug_level=0
+pointer_size=8
+binary_sha256=0000000000000000000000000000000000000000000000000000000000000000

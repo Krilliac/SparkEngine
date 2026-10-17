@@ -15,4 +15,18 @@ namespace Terrafront
     {
         return {currentRole == NetRole::Client ? NetRole::Standalone : currentRole, !loginFlowAtLogin};
     }
+
+    /**
+     * @brief Whether a UI logout must close the transport to end the server session.
+     *
+     * The authority unbinds an account only when the session is cleaned up. A
+     * remote client's session ends on its socket leave, so logout disconnects
+     * the transport. The in-process listen-host / standalone player has no
+     * socket; TFClientNet::Disconnect runs the same authoritative cleanup for it
+     * directly, and hosting continues.
+     */
+    inline bool LogoutStopsTransport(NetRole currentRole) noexcept
+    {
+        return currentRole == NetRole::Client;
+    }
 } // namespace Terrafront

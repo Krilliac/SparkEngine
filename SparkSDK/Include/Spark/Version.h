@@ -13,15 +13,39 @@
 
 #include <cstdint>
 
-// SDK ABI version — increment when IModule, IEngineContext, or any SDK
-// interface changes in a binary-incompatible way.
+// SDK ABI version — increment when the checked public interface contract
+// changes, including newly published native class interfaces.
 // v2: Added 7 subsystem getters, IModule lifecycle hooks, ILogger, math/input/event types
 // v3: Added IModule::CanUnload() as a non-destructive unload/hot-reload veto.
 // v4: Appended IEngineContext::GetInvalidStateDetector()/GetComponentSerializers()
 //     (four vtable slots). IsSDKCompatible is exact equality, so a module built
 //     against v4 must not be accepted by a v3 host: the host's vtable is shorter
 //     and the call would run off the end of it.
-#define SPARK_SDK_VERSION 4
+// v5: Removed IEngineContext::InitializeAll()/ShutdownAll() (two vtable slots,
+//     OD-01): EngineRuntime owns subsystem lifecycle, so every later slot moved.
+// v6: Appended IEngineContext::GetLogger() (one vtable slot, MOD-295) so modules
+//     log through the host's ILogger instead of the private console headers.
+// v7: Appended IEngineContext::GetConsole() (one vtable slot, MOD-295) and the
+//     IConsole interface, so modules register console commands through the host
+//     instead of the private Utils/SparkConsole.h.
+// v8: Appended IConsole::Print() (one IConsole vtable slot, MOD-310) so modules
+//     write to the host's in-game console instead of the private LOG_TO_CONSOLE
+//     macros. Migration: rebuild every module against v8; a module that
+//     implements IConsole itself must add Print.
+// v9: Appended IEngineContext::GetStateValidation() (one vtable slot, MOD-295)
+//     and the IStateValidation interface, so modules register ECS invalid-state
+//     rules through the host instead of the private Utils/InvalidStateDetector.h.
+//     StateViolationSeverity, StateViolation and StateCheckFn moved into the SDK
+//     unchanged.
+// v10: Appended IEngineContext::GetWeatherService() (one vtable slot, MOD-310)
+//      and public IWeatherService/WeatherPreset, so modules issue weather commands
+//      without including the private WeatherSystem. Rebuild every module against
+//      v10; SDK compatibility remains exact-match and old GetWeather slots remain.
+// v11: Published the existing native GameObject/primitive and Mesh contracts,
+//      including engine-linked validating Vertex construction. Actor layouts
+//      and IEngineContext slots are unchanged; rebuild all modules for the
+//      expanded SDK because module compatibility remains exact-match.
+#define SPARK_SDK_VERSION 11
 
 // Packed engine version for runtime comparisons: 0xMMmmpp
 #define SPARK_ENGINE_VERSION_PACKED                                                                                    \

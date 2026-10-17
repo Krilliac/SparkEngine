@@ -1,0 +1,457 @@
+{
+  "manifestVersion": 1,
+  "module": "SparkGameMMOFPS",
+  "description": "Every asset path SparkGameMMOFPS (TERRAFRONT) source names as a complete literal (building, prop and character models, the Blender frontline-logistics kit under Models/MMOFPS/Kit placed by TFSanctuaryDecor, structure materials, data tables, scenes, FX/UI textures and ambient, foley, UI, vehicle and weapon sounds), with its sha256 and the tools/asset-integrity/provenance.json rule that licenses it. Paths the module composes at run time from its data tables are not listed. tools/check-module-asset-refs.py requires this record to match the source references, the files on disk and Assets/assets.integrity.json.",
+  "references": [
+    {
+      "path": "Assets/Audio/MMOFPS/ambient/combat_distant.wav",
+      "sha256": "3f21148e2b37cd41fc25bad7644a98e208ca4ccca155411f231573fd5ec7432f",
+      "kind": "ambient loop (WAV)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Audio/MMOFPS/ambient/sanctuary_hum.wav",
+      "sha256": "349b3e4fc49683fdaf5e90abd281bf18f2aba422086efdcd1a34c58ac2cc147f",
+      "kind": "ambient loop (WAV)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Audio/MMOFPS/ambient/wind_loop.wav",
+      "sha256": "0a96d4091d93134c20965a5e378c926be02f1dc2cce183934ac8e60b41313953",
+      "kind": "ambient loop (WAV)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Audio/MMOFPS/ambient/wind_loop_02.wav",
+      "sha256": "70b6ad19f50626e956ed65e2dfb636ce538671019522d1f6ed7e70a31f76562b",
+      "kind": "ambient loop (WAV)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Audio/MMOFPS/ambient/wind_loop_03.wav",
+      "sha256": "ae8692c5c896c207520682acd0ae5be2ffa89b54fd6d62472ce814e81529f69c",
+      "kind": "ambient loop (WAV)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Audio/MMOFPS/foley/footstep_metal_01.wav",
+      "sha256": "e1e7f2a7ab489f92d4c9221b54be2358290ae462f8b3137bc467c60c05287c7f",
+      "kind": "footstep one-shot (WAV)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Audio/MMOFPS/foley/footstep_metal_02.wav",
+      "sha256": "024ecbe11fb5ee2090dff3c48873f759580a974caf169d5f5ba44bbc0bae30c0",
+      "kind": "footstep one-shot (WAV)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Audio/MMOFPS/foley/footstep_metal_03.wav",
+      "sha256": "891effa5687856c7801d04436f0d1eac7a4889db6271587ddc9c41fff359fc5b",
+      "kind": "footstep one-shot (WAV)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Audio/MMOFPS/foley/footstep_metal_04.wav",
+      "sha256": "f971b12c45236f0119fe8402740b7e4c8f5f75abf392d032b010fa0162b98b75",
+      "kind": "footstep one-shot (WAV)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Audio/MMOFPS/foley/footstep_sand_01.wav",
+      "sha256": "6e3af2d6abe15a43248ee974b697549ab8a71ed9f2ac2bd7c302458b8a7723c3",
+      "kind": "footstep one-shot (WAV)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Audio/MMOFPS/foley/footstep_sand_02.wav",
+      "sha256": "c271698518030b77787bfae1f07fb177ce4bfb0349159057fe9621da5831286b",
+      "kind": "footstep one-shot (WAV)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Audio/MMOFPS/foley/footstep_sand_03.wav",
+      "sha256": "b54315bc3bd79373f7596c51e74772c097c08c8de4c4665359bf90e220bd1b48",
+      "kind": "footstep one-shot (WAV)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Audio/MMOFPS/foley/footstep_sand_04.wav",
+      "sha256": "e738634266a10ded01055337d2260d1f74a61ec64b7e61456dd05bea6d50a780",
+      "kind": "footstep one-shot (WAV)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Audio/MMOFPS/ui/capture_alarm.wav",
+      "sha256": "27ae6b7764e80bf490d424443b3aa738fb582fbba4a4986ecc3f72980da66522",
+      "kind": "UI sound (WAV)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Audio/MMOFPS/ui/terminal_bleep_01.wav",
+      "sha256": "c08cac403e02c2a4c5fdaca812f599bfda4b7a90a64bb1eb71735235033ed7da",
+      "kind": "UI sound (WAV)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Audio/MMOFPS/ui/terminal_bleep_02.wav",
+      "sha256": "4da8ad33f6b364d29db85a3f8625143dc58592af474e0ce406548e6995f814c2",
+      "kind": "UI sound (WAV)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Audio/MMOFPS/ui/terminal_bleep_03.wav",
+      "sha256": "d2ac4de60899286660e8864ba1e5be05b8562a880e647848bc570b9684933295",
+      "kind": "UI sound (WAV)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Audio/MMOFPS/ui/terminal_bleep_04.wav",
+      "sha256": "898c883636f912ed356f7648bc57912bcd237c375ce18483db9a10faed0265b2",
+      "kind": "UI sound (WAV)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Audio/MMOFPS/vehicles/explosion.wav",
+      "sha256": "02f1dcb3cb93633f2f7a6767c668622fc039b20d60900f8ce8f30ea275124e4a",
+      "kind": "vehicle sound (WAV)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Audio/MMOFPS/weapons/distant_fire_auc.wav",
+      "sha256": "af185cf36ecabc1910a755864876ba9576a882272c55db39bd27b900cb226144",
+      "kind": "weapon sound (WAV)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Audio/MMOFPS/weapons/distant_fire_common.wav",
+      "sha256": "69fda56cfc222b801b44c0592919a602c79a38771ab6b2d870a9cd304c21d457",
+      "kind": "weapon sound (WAV)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Audio/MMOFPS/weapons/distant_fire_hlx.wav",
+      "sha256": "f9cf02822edb2f58cbdc6e02fb330dfaf8a02b41a36591419012d446148ef264",
+      "kind": "weapon sound (WAV)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Audio/MMOFPS/weapons/distant_fire_mra.wav",
+      "sha256": "02a36841f3688e5873782d2bf6532f75a515e1e8256a788ba3ac59440176f042",
+      "kind": "weapon sound (WAV)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/MMOFPS/Data/continents.json",
+      "sha256": "21f9b9fd79f5407343039cbcfcbe6c82fa69a2b6d8fc5b3041cefad245896087",
+      "kind": "data table (JSON)",
+      "provenanceRule": "repository-authored"
+    },
+    {
+      "path": "Assets/MMOFPS/Data/decor.json",
+      "sha256": "51a2b4674fe435bc2fa6feced2245e25a9d4cd49fc9b66a35f30cb8174032b8f",
+      "kind": "data table (JSON)",
+      "provenanceRule": "repository-authored"
+    },
+    {
+      "path": "Assets/MMOFPS/Data/suits.json",
+      "sha256": "eb779473e0207a03e2e1710041e784b21b7e9be60f99787bf0c0e7927450c7f3",
+      "kind": "data table (JSON)",
+      "provenanceRule": "repository-authored"
+    },
+    {
+      "path": "Assets/MMOFPS/Data/weapons.json",
+      "sha256": "37ed36a1624608e340731ebe15e4e77657aa2ec9b6bf6b63f030f358520e82ae",
+      "kind": "data table (JSON)",
+      "provenanceRule": "repository-authored"
+    },
+    {
+      "path": "Assets/Materials/MMOFPS/Structure_AlloyDark.json",
+      "sha256": "ffce789bf71679912d75043d73039c9b7c3377d5295cfd5d8af9b3ec588fab0e",
+      "kind": "procedural material (JSON)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Materials/MMOFPS/Structure_Concrete.json",
+      "sha256": "3f7cdb35d84dabf62bb018f287720eece990513481814411b0e10111a0d7440a",
+      "kind": "procedural material (JSON)",
+      "provenanceRule": "terrafront-cc0-import"
+    },
+    {
+      "path": "Assets/Materials/MMOFPS/Structure_Metal.json",
+      "sha256": "b99de97b74e301a3059a80acbcda0f2d40df14dd7f8e94c199057a2391642486",
+      "kind": "procedural material (JSON)",
+      "provenanceRule": "terrafront-cc0-import"
+    },
+    {
+      "path": "Assets/Materials/MMOFPS/Structure_Sanctuary.json",
+      "sha256": "5f796840e020635d0a5e8d7d24b40707de77e8c0747c93a8cf3659d3c21a71de",
+      "kind": "procedural material (JSON)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/Kit/comms_relay.obj",
+      "sha256": "0cf677e573e3542bffc160151019431a0bcc3150dd6d64bfadf0aa9fd2262064",
+      "kind": "logistics-kit static mesh (OBJ)",
+      "provenanceRule": "mmofps-blender-kit"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/Kit/deployable_barricade.obj",
+      "sha256": "1c12a7514c1e98dc31913829f9123e3bd4fe337ba5ff60e88e807723463fe58c",
+      "kind": "logistics-kit static mesh (OBJ)",
+      "provenanceRule": "mmofps-blender-kit"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/Kit/supply_drop_pod.obj",
+      "sha256": "c2f29676190b33ac85fd8ab9dcf41a5e606a7c02938e156443e37b12e572d8c4",
+      "kind": "logistics-kit static mesh (OBJ)",
+      "provenanceRule": "mmofps-blender-kit"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/Kit/vehicle_pad.obj",
+      "sha256": "96544a14220edfdc76ddf189c6774eca5aad3d08b674e1b7719c9a6ed9300da6",
+      "kind": "logistics-kit static mesh (OBJ)",
+      "provenanceRule": "mmofps-blender-kit"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/buildings/cap_banner_ring.obj",
+      "sha256": "f14107a9811e3853825bf6a528c00c4e6aca212cd6c8d1bc90ac8d2afae26a58",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/buildings/cap_tower.obj",
+      "sha256": "6634945ed0f9e5f72e86ad658d79fe3f1811035c44d67980adec048ed41aede7",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/buildings/holo_sign_post.obj",
+      "sha256": "3ea5438c73c947ce66b8215d4d016d41d0f28f01196f10af9ab02688177884d1",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/buildings/sanc_balustrade.obj",
+      "sha256": "dd82e09b28807bc25e25c8849085d56e50a8babc397873950bd3ee0cd7e6a7e3",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/buildings/sanc_holo_tree.obj",
+      "sha256": "0580481f18768caa3d176f3e214967f58047b5a0457ef9f32bfe5050fd8ee32f",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/buildings/sanc_plaza_core.obj",
+      "sha256": "bf9bd1e77d22d9e71553443d89314e1eb4ee23dc52da969b6336e0dfcf81988e",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/buildings/sanc_spawn_pad.obj",
+      "sha256": "30ab49a086c6f5e0765d9a6cd148293aec844d617e1e3b97c9a09710985cdfd8",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/buildings/sanc_terminal.obj",
+      "sha256": "8ed12a8bd4eb1d2cb2f99967f8b6f775e9a5bdae43a02bcca706977b7061780e",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/buildings/vehicle_terminal.obj",
+      "sha256": "e87dac0dea9293656477a56627be329b65ca5ee93307c96294a7e4bf30df1bf8",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "terrafront-cc0-import"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/buildings/warpgate_auc.obj",
+      "sha256": "8f358d7deae6dc4e0f1462a04035e8cc884bc4c69e5e06067bab9d6f70a9dcad",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/buildings/warpgate_hlx.obj",
+      "sha256": "3fed82888f4b0f4138bed975bd1c2bd426caa70f7a11eb0630a028d6ea50dd75",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/buildings/warpgate_mra.obj",
+      "sha256": "e35723c6426be311af60756fd63a2a02e4c97c6d138b46712a0469b1bd4bd84d",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/characters/char_bulwark.obj",
+      "sha256": "3555c73e2401aaf73477657bd7040a9f6ddbcc466c5325bef21004313d11e292",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/characters/char_ghost.obj",
+      "sha256": "afee410824ddc1a7ffa276fb69ff90aa6af9122b228e8b40638a343d540ff7b8",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/characters/char_striker.obj",
+      "sha256": "604832712838b85dbf56e11e88390be0e41e22c2682932bf1429f7c895f05bdb",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/characters/soldier.obj",
+      "sha256": "9d7286bd9db8a5241af67ae6374b9a8c153f5ad0dbdfc527a775364075c8e678",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/props/prop_ammo_printer.obj",
+      "sha256": "a4a645245732557867ab06cf45933ffeee08b8b19755a69752acbc0993c48fb1",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/props/prop_crate_m.obj",
+      "sha256": "ca9fee268b31e3f52647d742843c120bf79a32fa33c781743d7ab0a89532b6f0",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/props/prop_crate_s.obj",
+      "sha256": "24bec5f724d668d0b3e28e208726ca329fd327c73895cf74bea74a35f05d8c58",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/props/prop_floodlight.obj",
+      "sha256": "cf614ebc47f6fe6948649d0bb8666e254d6698a2a4a7a97fb196cf09aa2bf88e",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/props/prop_holomap_table.obj",
+      "sha256": "ec3f39fc923d3b663ff0761a88f92fcd1482ec1c3dc1425c95d499297f14a713",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/weapons/veh_aegis_pdw_base.obj",
+      "sha256": "4d4fffb4ec6dd63435813615b248c6b17a283b62f8a35fbc978402dca5ce833a",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/weapons/veh_aegis_pdw_head.obj",
+      "sha256": "d83322f529479190168d7b9b49b20661903045f383bb8b6c27c3f10484ef2f7c",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Models/MMOFPS/weapons/veh_ravager_90.obj",
+      "sha256": "c0a16b09ed52834158675a89c7b216016dc238be3fa56d0a0620baf7790aa1f1",
+      "kind": "static mesh (OBJ)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Scenes/MMOFPS/cindral_wastes.scene",
+      "sha256": "aae6455d3fbe3f1b7501e4bb6a25e399ec041e3c78435e2460131a8daa1ad7e2",
+      "kind": "scene (Spark .scene)",
+      "provenanceRule": "repository-authored"
+    },
+    {
+      "path": "Assets/Scenes/MMOFPS/sanctuary_haven.scene",
+      "sha256": "2e15d6c3f45f857a6e68aa860b95eb0cb2a71f4418311e3ea281302fa79e9c8a",
+      "kind": "scene (Spark .scene)",
+      "provenanceRule": "repository-authored"
+    },
+    {
+      "path": "Assets/Textures/MMOFPS/fx/capture_beam.png",
+      "sha256": "1170bb240b35f9fe9b0eccbd198ceab0b1993e8d22d7385cd3fac0e6d08f4fdc",
+      "kind": "texture (PNG)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Textures/MMOFPS/fx/capture_disc.png",
+      "sha256": "4a2665fd5bf490e9aa9273b93bf83663d4df6330db4e2e07500905ee717e0a2d",
+      "kind": "texture (PNG)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Textures/MMOFPS/fx/capture_ring.png",
+      "sha256": "ff38773732594b4facc225fb5273134f12adcfef9e1cdf41046b4246f572dfd4",
+      "kind": "texture (PNG)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Textures/MMOFPS/fx/hover_dust.png",
+      "sha256": "52e36dd907453b34c1225d9cd7936eb45164604eb8e6e9457fcf4c3b0acdbde2",
+      "kind": "texture (PNG)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Textures/MMOFPS/fx/muzzle_flash_common.png",
+      "sha256": "e950926b3216d4561da30b8f997431fdae401048245d96ebff11059fe56afdf0",
+      "kind": "texture (PNG)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Textures/MMOFPS/fx/shield_plane.png",
+      "sha256": "f5f864f0cb663ec9e2e7e6153be6fbde8e9335e108f39762db73fcf2039a53b9",
+      "kind": "texture (PNG)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Textures/MMOFPS/fx/veh_smoke.png",
+      "sha256": "f2ab1f5ad8032e5736a4db84793046786ccce930f39798d098ff5053641c958b",
+      "kind": "texture (PNG)",
+      "provenanceRule": "terrafront-unrecorded"
+    },
+    {
+      "path": "Assets/Textures/MMOFPS/sky/space_nx.png",
+      "sha256": "e4c0cfdf2070ac9fd650d2f1f27faef2a62b0812108e605f389f60e9ab2287e6",
+      "kind": "texture (PNG)",
+      "provenanceRule": "terrafront-cc0-import"
+    },
+    {
+      "path": "Assets/Textures/MMOFPS/sky/space_ny.png",
+      "sha256": "3249e8b88eb8580fe76da6e776a9d60d355b40087b4225bec69c5104b4d577f6",
+      "kind": "texture (PNG)",
+      "provenanceRule": "terrafront-cc0-import"
+    },
+    {
+      "path": "Assets/Textures/MMOFPS/sky/space_nz.png",
+      "sha256": "1601aba73fc8e3fe74cf37829a2a70a2f33a5d13bdfeb71498a19ac490d61b3e",
+      "kind": "texture (PNG)",
+      "provenanceRule": "terrafront-cc0-import"
+    },
+    {
+      "path": "Assets/Textures/MMOFPS/sky/space_px.png",
+      "sha256": "4cdd56e78922fdb43a7bd0c6a3591fc75233482219b13580a0abd3a8ed10d7d9",
+      "kind": "texture (PNG)",
+      "provenanceRule": "terrafront-cc0-import"
+    },
+    {
+      "path": "Assets/Textures/MMOFPS/sky/space_py.png",
+      "sha256": "38bad1d8864ff8cd3c1c57f310a43d74bb6a765af07292987d766229d62c069a",
+      "kind": "texture (PNG)",
+      "provenanceRule": "terrafront-cc0-import"
+    },
+    {
+      "path": "Assets/Textures/MMOFPS/sky/space_pz.png",
+      "sha256": "8f83fa6a01d6a53bc8663a872e7e4e1ef8273178c1b5fb7bd9151d819d42590f",
+      "kind": "texture (PNG)",
+      "provenanceRule": "terrafront-cc0-import"
+    },
+    {
+      "path": "Assets/Textures/MMOFPS/terrain/sand_color.png",
+      "sha256": "00243cd7623a777cd544de3ed68313745d5309bccf9b730d178e656cb4ba694a",
+      "kind": "texture (PNG)",
+      "provenanceRule": "terrafront-unrecorded"
+    }
+  ]
+}

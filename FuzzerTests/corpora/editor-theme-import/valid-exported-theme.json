@@ -1,0 +1,32 @@
+{
+  "name": "Spark Dusk",
+  "description": "Warm dark theme",
+  "author": "Spark Engine Team",
+  "colors": {
+    "background": [0.1, 0.1, 0.1, 1],
+    "backgroundDark": [0.13, 0.13, 0.13, 1],
+    "backgroundLight": [0.16, 0.16, 0.16, 1],
+    "backgroundAccent": [0.19, 0.19, 0.19, 1],
+    "backgroundHeader": [0.22, 0.22, 0.22, 1],
+    "backgroundActive": [0.25, 0.25, 0.25, 1],
+    "backgroundHover": [0.28, 0.28, 0.28, 1],
+    "backgroundSelected": [0.31, 0.31, 0.31, 1],
+    "text": [0.34, 0.34, 0.34, 1],
+    "textDisabled": [0.37, 0.37, 0.37, 1],
+    "textSecondary": [0.4, 0.4, 0.4, 1],
+    "textAccent": [0.43, 0.43, 0.43, 1],
+    "textWarning": [0.46, 0.46, 0.46, 1],
+    "textError": [0.49, 0.49, 0.49, 1],
+    "textSuccess": [0.52, 0.52, 0.52, 1],
+    "button": [0.55, 0.55, 0.55, 1],
+    "buttonHovered": [0.58, 0.58, 0.58, 1],
+    "buttonActive": [0.61, 0.61, 0.61, 1],
+    "frame": [0.64, 0.64, 0.64, 1],
+    "frameHovered": [0.67, 0.67, 0.67, 1],
+    "frameActive": [0.7, 0.7, 0.7, 1],
+    "border": [0.73, 0.73, 0.73, 1],
+    "borderLight": [0.76, 0.76, 0.76, 1],
+    "borderAccent": [0.79, 0.79, 0.79, 1],
+    "borderSeparator": [0.82, 0.82, 0.82, 1]
+  }
+}

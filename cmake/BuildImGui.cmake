@@ -14,14 +14,36 @@ if(NOT DEFINED IMGUI_INCLUDE_DIR OR NOT IMGUI_INCLUDE_DIR)
     )
 endif()
 
-if(IMGUI_INCLUDE_DIR)
+# Off Windows the ImGui backends are SDL2 + OpenGL. A build without them (ENABLE_SDL2=OFF and no
+# system SDL2, as a headless runtime configures) gets no imgui target instead of a failed
+# configure; every consumer checks IMGUI_FOUND (SparkEditor, SparkLauncher, the optional
+# SparkInstaller GUI).
+set(_IMGUI_BACKEND_AVAILABLE TRUE)
+if(IMGUI_INCLUDE_DIR AND NOT TARGET imgui AND NOT WIN32)
+    if(NOT TARGET SDL2::SDL2 AND NOT TARGET SDL2)
+        find_package(SDL2 QUIET)
+    endif()
+    find_package(OpenGL QUIET)
+    if(NOT (TARGET SDL2::SDL2 OR TARGET SDL2 OR SDL2_FOUND) OR NOT OpenGL_FOUND)
+        set(_IMGUI_BACKEND_AVAILABLE FALSE)
+        message(STATUS "Dear ImGui: SDL2 or OpenGL not available, so the imgui target is not built")
+    endif()
+endif()
+
+if(IMGUI_INCLUDE_DIR AND _IMGUI_BACKEND_AVAILABLE)
     if(NOT TARGET imgui)
         message(STATUS "Found Dear ImGui at: ${IMGUI_INCLUDE_DIR}")
 
         # Optional FreeType rasterizer — produces visibly smoother text than the
         # default stb_truetype rasterizer (matches the SparkEditor hi-fi design).
         # Linux: install libfreetype-dev. Windows/macOS: vcpkg or system freetype.
-        find_package(Freetype QUIET)
+        option(SPARK_IMGUI_ENABLE_FREETYPE "Enable optional FreeType rasterizer" ON)
+        if(SPARK_IMGUI_ENABLE_FREETYPE)
+            find_package(Freetype QUIET)
+        else()
+            set(Freetype_FOUND FALSE)
+            message(STATUS "Dear ImGui: FreeType disabled by SPARK_IMGUI_ENABLE_FREETYPE=OFF — falling back to stb_truetype rasterizer")
+        endif()
         set(_IMGUI_FREETYPE_SOURCES "")
         if(Freetype_FOUND)
             list(APPEND _IMGUI_FREETYPE_SOURCES

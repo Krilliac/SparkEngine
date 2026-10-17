@@ -1,0 +1,12 @@
+{
+  "rules": [
+    {"name": "Door Open", "sourceEntityId": 12, "trigger": "OnTriggerEnter", "triggerParam": "door_zone",
+     "enabled": true, "oneShot": false,
+     "actions": [{"type": "PlayAnimation", "params": ["door_open"]}, {"type": "PlaySound", "params": ["creak.wav"]}]},
+    {"name": "Tick", "trigger": "OnTimer", "triggerParam": "2.5",
+     "actions": [{"type": "SetWorldVariable", "params": ["ticks", 1]}]},
+    {"name": "Welcome", "trigger": "OnStart", "oneShot": true,
+     "actions": [{"type": "ShowMessage", "params": ["Hello"]}, {"type": "Delay", "params": [0.75]},
+                 {"type": "SetPosition", "params": [1.5, -2, 3e2]}]}
+  ]
+}

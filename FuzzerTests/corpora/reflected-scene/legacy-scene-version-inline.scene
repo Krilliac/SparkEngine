@@ -1,0 +1,61 @@
+P{
+ "sceneVersion": 1,
+ "entities": [
+  {
+   "id": 1,
+   "name": "Directional Light",
+   "components": [
+    {
+     "type": "Transform",
+     "position": [
+      0,
+      10,
+      0
+     ],
+     "rotation": [
+      50,
+      -30,
+      0
+     ],
+     "scale": [
+      1,
+      1,
+      1
+     ]
+    },
+    {
+     "type": "DirectionalLight",
+     "color": [
+      1,
+      0.95,
+      0.8
+     ],
+     "intensity": 1.2
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "name": "Main Camera",
+   "components": [
+    {
+     "type": "Camera",
+     "fov": 70,
+     "nearClip": 0.2,
+     "farClip": 500
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "name": "Player",
+   "components": [
+    {
+     "type": "CharacterController",
+     "height": 1.9,
+     "radius": 0.4
+    }
+   ]
+  }
+ ]
+}

@@ -9,6 +9,7 @@
  */
 #include "Mesh.h"
 #include "GLTFStaticMeshLoader.h"
+#include "OBJStaticMeshLoader.h"
 #include "../Core/Platform.h"
 #include "../Utils/MathUtils.h"
 /**
@@ -172,15 +173,26 @@ bool Mesh::LoadFromFile(const std::wstring& path)
     const auto& shapes = reader.GetShapes();
     const auto& materials = reader.GetMaterials();
 
+    // tinyobjloader accepts out-of-range positive face indices with only a
+    // warning; makeVertex below indexes the attribute arrays directly.
+    {
+        std::string indexError;
+        if (!Spark::Graphics::Detail::ValidateOBJIndices(attrib, shapes, indexError))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "OBJ rejected '%s': %s", u8Path.c_str(), indexError.c_str());
+            return false;
+        }
+    }
+
     auto makeVertex = [&](const tinyobj::index_t& idx)
     {
         Vertex v{};
-        v.Position = {attrib.vertices[3 * idx.vertex_index + 0], attrib.vertices[3 * idx.vertex_index + 1],
-                      attrib.vertices[3 * idx.vertex_index + 2]};
+        const size_t position = static_cast<size_t>(idx.vertex_index) * 3;
+        v.Position = {attrib.vertices[position + 0], attrib.vertices[position + 1], attrib.vertices[position + 2]};
         if (idx.normal_index >= 0)
         {
-            v.Normal = {attrib.normals[3 * idx.normal_index + 0], attrib.normals[3 * idx.normal_index + 1],
-                        attrib.normals[3 * idx.normal_index + 2]};
+            const size_t normal = static_cast<size_t>(idx.normal_index) * 3;
+            v.Normal = {attrib.normals[normal + 0], attrib.normals[normal + 1], attrib.normals[normal + 2]};
         }
         else
         {
@@ -188,8 +200,8 @@ bool Mesh::LoadFromFile(const std::wstring& path)
         }
         if (idx.texcoord_index >= 0)
         {
-            v.TexCoord = {attrib.texcoords[2 * idx.texcoord_index + 0],
-                          1.0f - attrib.texcoords[2 * idx.texcoord_index + 1]};
+            const size_t texCoord = static_cast<size_t>(idx.texcoord_index) * 2;
+            v.TexCoord = {attrib.texcoords[texCoord + 0], 1.0f - attrib.texcoords[texCoord + 1]};
         }
         else
         {

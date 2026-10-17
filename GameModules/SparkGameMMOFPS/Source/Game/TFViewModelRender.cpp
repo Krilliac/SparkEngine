@@ -21,6 +21,7 @@
 #include "Game/TFVehicleSystem.h"
 #include "Game/TFViewModelInternal.h"
 #include "Game/TFWeaponSystem.h"
+#include "Net/TFRepProtocol.h" // QuantAim::WrapPi
 
 #include "Graphics/GraphicsEngine.h"
 #include "Graphics/Mesh.h"
@@ -46,13 +47,9 @@ namespace Terrafront
             pos += vel * dt;
         }
 
-        float WrapPi(float a)
+        float WrapPi(float a) noexcept
         {
-            while (a > 3.14159265f)
-                a -= kTwoPi;
-            while (a < -3.14159265f)
-                a += kTwoPi;
-            return a;
+            return QuantAim::WrapPi(a); // constant-time and total (no 2*pi loop)
         }
 
         /// World matrix for a unit cube stretched joint-to-joint (same right/up/

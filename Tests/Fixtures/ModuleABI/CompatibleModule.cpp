@@ -33,6 +33,12 @@ namespace
     class CompatibleModule final : public Spark::IModule
     {
       public:
+        CompatibleModule()
+        {
+            const char* vetoHotReload = std::getenv("SPARK_MODULE_ABI_VETO_HOT_RELOAD");
+            m_supportsHotReload = !vetoHotReload || vetoHotReload[0] == '\0';
+        }
+
         Spark::ModuleInfo GetModuleInfo() const override
         {
             Spark::ModuleInfo info{};
@@ -40,6 +46,21 @@ namespace
             info.version = "1.0.0";
             const char* gameKind = std::getenv("SPARK_MODULE_ABI_KIND_GAME");
             info.kind = gameKind && gameKind[0] != '\0' ? Spark::ModuleKind::Game : Spark::ModuleKind::Addon;
+            // Lets tests prove the post-factory ModuleInfo SDK check still
+            // rejects a module whose ModuleInfo contradicts its descriptor.
+            const char* contradictSdk = std::getenv("SPARK_MODULE_ABI_CONTRADICT_INFO_SDK");
+            if (contradictSdk && contradictSdk[0] != '\0')
+                info.sdkVersion = SPARK_SDK_VERSION + 1;
+            // Lets tests declare a dependency on a module that is not loaded,
+            // or on this module itself (a one-module cycle).
+            const char* dependsOn = std::getenv("SPARK_MODULE_ABI_DEPENDS_ON");
+            if (dependsOn && dependsOn[0] != '\0')
+            {
+                static const char* dependency[1] = {nullptr};
+                dependency[0] = dependsOn;
+                info.dependencies = dependency;
+                info.dependencyCount = 1;
+            }
             return info;
         }
 
@@ -54,7 +75,11 @@ namespace
             const char* vetoUnload = std::getenv("SPARK_MODULE_ABI_VETO_UNLOAD");
             return !vetoUnload || vetoUnload[0] == '\0';
         }
+        bool SupportsHotReload() const override { return m_supportsHotReload; }
         void OnUpdate(float) override {}
+
+      private:
+        bool m_supportsHotReload = true;
     };
 } // namespace
 

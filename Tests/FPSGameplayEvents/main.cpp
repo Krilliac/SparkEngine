@@ -1,9 +1,9 @@
 /** @file main.cpp
- * @brief Exercise production FPS event adapters with the real engine EventBus.
+ * @brief Exercise production FPS event adapters with the installed public EventBus.
  */
 #include "Game/InventorySystem.h"
 #include "Game/QuestSystem.h"
-#include "Engine/Events/EventSystem.h"
+#include <Spark/EventSystem.h>
 
 #include <iostream>
 #include <vector>

@@ -4,10 +4,9 @@
  */
 
 #include "OWDynamicEventSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -25,10 +24,9 @@ namespace OpenWorld
         DefineEventTemplates();
 
         m_initialized = true;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Dynamic event system initialized: %zu event types",
-                       m_templates.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Events: " + std::to_string(m_templates.size()) +
-                                                    " event types registered");
+        Spark::ModuleLog::Info(m_context, "Dynamic event system initialized: {} event types", m_templates.size());
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[OpenWorld] Events: " + std::to_string(m_templates.size()) + " event types registered");
         return true;
     }
 
@@ -120,7 +118,9 @@ namespace OpenWorld
     void OWDynamicEventSystem::Update(float deltaTime, float playerX, float playerZ, uint32_t playerRegionId)
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         // Tick cooldowns
         for (auto& [id, remaining] : m_cooldowns)
@@ -149,11 +149,15 @@ namespace OpenWorld
             // Check cooldown
             auto cdIt = m_cooldowns.find(tmpl.templateId);
             if (cdIt != m_cooldowns.end() && cdIt->second > 0.0f)
+            {
                 continue;
+            }
 
             // Limit concurrent events
             if (m_activeEvents.size() >= 3)
+            {
                 break;
+            }
 
             // Simplified biome check: use a deterministic "random" based on world time
             bool biomeMatch = false;
@@ -166,12 +170,16 @@ namespace OpenWorld
                 }
             }
             if (!biomeMatch)
+            {
                 continue;
+            }
 
             // Pseudo-random spawn chance (deterministic for reproducibility)
             uint32_t hash = (m_nextEventId * 31 + playerRegionId * 17 + tmpl.templateId * 13) % 100;
             if (hash < 85) // 15% chance per eligible template per check
+            {
                 continue;
+            }
 
             TriggerEvent(tmpl.templateId, playerRegionId, playerX + static_cast<float>(hash), playerZ);
             break; // One event per check cycle
@@ -190,7 +198,9 @@ namespace OpenWorld
             }
         }
         if (!tmpl)
+        {
             return 0;
+        }
 
         ActiveWorldEvent evt{};
         evt.eventId = m_nextEventId++;
@@ -207,9 +217,9 @@ namespace OpenWorld
         m_activeEvents[evt.eventId] = evt;
         m_cooldowns[templateId] = tmpl->cooldown;
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] EVENT: " + tmpl->name + " in Region " +
-                                                    std::to_string(regionId) + " (id=" + std::to_string(evt.eventId) +
-                                                    ")");
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[OpenWorld] EVENT: " + tmpl->name + " in Region " + std::to_string(regionId) +
+                                   " (id=" + std::to_string(evt.eventId) + ")");
         return evt.eventId;
     }
 
@@ -217,12 +227,36 @@ namespace OpenWorld
     {
         auto it = m_activeEvents.find(eventId);
         if (it == m_activeEvents.end() || it->second.state == EventState::Completed)
+        {
             return false;
+        }
 
         it->second.playerParticipating = true;
         it->second.state = EventState::Active;
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Joined event: " + it->second.name);
+        Spark::ModuleLog::Info(m_context, "{}", "[OpenWorld] Joined event: " + it->second.name);
         return true;
+    }
+
+    uint32_t OWDynamicEventSystem::FindJoinableEventNear(float x, float z, float maxDistance) const
+    {
+        uint32_t bestId = 0;
+        float bestDistSq = maxDistance * maxDistance;
+        for (const auto& [id, evt] : m_activeEvents)
+        {
+            if (evt.state == EventState::Completed || evt.playerParticipating)
+            {
+                continue;
+            }
+            const float dx = evt.posX - x;
+            const float dz = evt.posZ - z;
+            const float distSq = dx * dx + dz * dz;
+            if (distSq < bestDistSq || (distSq == bestDistSq && bestId != 0 && id < bestId))
+            {
+                bestDistSq = distSq;
+                bestId = id;
+            }
+        }
+        return bestId;
     }
 
     DynamicEventSaveState OWDynamicEventSystem::CaptureSaveState() const
@@ -237,7 +271,9 @@ namespace OpenWorld
         std::ranges::sort(state.activeEvents, {}, &ActiveWorldEvent::eventId);
         state.cooldowns.reserve(m_cooldowns.size());
         for (const auto& cooldown : m_cooldowns)
+        {
             state.cooldowns.push_back(cooldown);
+        }
         std::ranges::sort(state.cooldowns, {}, [](const auto& cooldown) { return cooldown.first; });
         state.nextEventId = m_nextEventId;
         state.eventCheckTimer = m_eventCheckTimer;
@@ -250,12 +286,16 @@ namespace OpenWorld
         auto fail = [&](const char* message)
         {
             if (error)
+            {
                 *error = message;
+            }
             return false;
         };
         if (state.activeEvents.size() > 1024 || state.cooldowns.size() > m_templates.size() ||
             !std::isfinite(state.eventCheckTimer) || state.eventCheckTimer < 0.0f || state.eventCheckTimer > 3600.0f)
+        {
             return fail("invalid dynamic event state size or timer");
+        }
 
         auto findTemplate = [&](uint32_t templateId) -> const WorldEventTemplate*
         {
@@ -277,7 +317,9 @@ namespace OpenWorld
                 !std::isfinite(event.totalDuration) || event.timeRemaining < 0.0f || event.totalDuration <= 0.0f ||
                 event.timeRemaining > event.totalDuration || event.regionId == 0 || event.regionId > 8 ||
                 event.name.size() > 128 || !events.emplace(event.eventId, event).second)
+            {
                 return fail("invalid active world event record");
+            }
             highestEventId = std::max(highestEventId, event.eventId);
         }
 
@@ -288,10 +330,14 @@ namespace OpenWorld
             const WorldEventTemplate* eventTemplate = findTemplate(templateId);
             if (!eventTemplate || !std::isfinite(remaining) || remaining < 0.0f ||
                 remaining > eventTemplate->cooldown || !cooldowns.emplace(templateId, remaining).second)
+            {
                 return fail("invalid event cooldown record");
+            }
         }
         if (state.nextEventId == 0 || state.nextEventId <= highestEventId)
+        {
             return fail("invalid next event id");
+        }
 
         m_activeEvents = std::move(events);
         m_cooldowns = std::move(cooldowns);
@@ -314,30 +360,40 @@ namespace OpenWorld
             // State transitions based on remaining time
             float progress = 1.0f - (evt.timeRemaining / evt.totalDuration);
             if (progress > 0.9f)
+            {
                 evt.state = EventState::Resolving;
+            }
             else if (progress > 0.1f && evt.state == EventState::Approaching)
+            {
                 evt.state = EventState::Active;
+            }
 
             if (evt.timeRemaining <= 0.0f)
+            {
                 completed.push_back(id);
+            }
         }
 
         for (uint32_t id : completed)
+        {
             CompleteEvent(id);
+        }
     }
 
     void OWDynamicEventSystem::CompleteEvent(uint32_t eventId)
     {
         auto it = m_activeEvents.find(eventId);
         if (it == m_activeEvents.end())
+        {
             return;
+        }
 
         it->second.state = EventState::Completed;
         m_totalEventsCompleted++;
 
         std::string result = it->second.playerParticipating ? "PARTICIPATED" : "MISSED";
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Event completed: " + it->second.name + " (" + result +
-                                                    ")");
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[OpenWorld] Event completed: " + it->second.name + " (" + result + ")");
 
         m_activeEvents.erase(it);
     }
@@ -382,7 +438,9 @@ namespace OpenWorld
             }
             ss << "[" << id << "] " << evt.name << " (" << stateStr << ") " << evt.timeRemaining << "s remaining";
             if (evt.playerParticipating)
+            {
                 ss << " [JOINED]";
+            }
             ss << "\n";
         }
         ss << "Total completed: " << m_totalEventsCompleted << "\n";
@@ -392,7 +450,9 @@ namespace OpenWorld
     void OWDynamicEventSystem::Shutdown()
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         m_templates.clear();
         m_activeEvents.clear();
@@ -402,9 +462,11 @@ namespace OpenWorld
 
     void OWDynamicEventSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Dynamic Events"))
+        {
             return;
+        }
 
         ImGui::Text("Event Types: %zu | Active: %zu | Completed: %u", m_templates.size(), m_activeEvents.size(),
                     m_totalEventsCompleted);

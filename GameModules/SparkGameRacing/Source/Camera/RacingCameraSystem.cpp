@@ -4,13 +4,12 @@
  */
 
 #include "RacingCameraSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #include <algorithm>
 #include <cmath>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -20,27 +19,32 @@ namespace Racing
     bool RacingCameraSystem::Initialize(Spark::IEngineContext* context)
     {
         if (!context)
+        {
             return false;
+        }
 
         m_context = context;
 
         // Initialize default configs for all camera modes
         for (size_t i = 0; i < static_cast<size_t>(CameraMode::Count); ++i)
+        {
             m_configs[i] = GetDefaultConfig(static_cast<CameraMode>(i));
+        }
 
         m_activeMode = CameraMode::Chase;
         m_initialized = true;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing camera system initialized (5 modes)");
-        console.LogInfo("[Racing Camera] Camera system initialized (5 modes)");
+        Spark::ModuleLog::Info(m_context, "Racing camera system initialized (5 modes)");
+        Spark::ModuleLog::Info(m_context, "[Racing Camera] Camera system initialized (5 modes)");
         return true;
     }
 
     void RacingCameraSystem::Update(float deltaTime)
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         switch (m_activeMode)
         {
@@ -68,7 +72,9 @@ namespace Racing
 
         // Transition blending
         if (m_transitionProgress < 1.0f)
+        {
             m_transitionProgress = std::min(1.0f, m_transitionProgress + deltaTime * 3.0f);
+        }
     }
 
     void RacingCameraSystem::Shutdown()
@@ -79,15 +85,16 @@ namespace Racing
     void RacingCameraSystem::SetMode(CameraMode mode)
     {
         if (mode == m_activeMode)
+        {
             return;
+        }
 
         m_activeMode = mode;
         m_transitionProgress = 0.0f;
         m_state.fov = m_configs[static_cast<size_t>(mode)].fov;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Racing camera mode changed to: %s", ModeToString(mode));
-        console.LogInfo("[Racing Camera] Mode: " + std::string(ModeToString(mode)));
+        Spark::ModuleLog::Debug(m_context, "Racing camera mode changed to: {}", ModeToString(mode));
+        Spark::ModuleLog::Info(m_context, "{}", "[Racing Camera] Mode: " + std::string(ModeToString(mode)));
     }
 
     void RacingCameraSystem::CycleMode()
@@ -227,7 +234,9 @@ namespace Racing
     {
         const auto& cfg = m_configs[static_cast<size_t>(m_activeMode)];
         if (cfg.shakeIntensity <= 0.0f)
+        {
             return;
+        }
 
         // Speed-proportional camera shake
         float intensity = cfg.shakeIntensity * std::clamp(speed / 250.0f, 0.0f, 1.0f);
@@ -302,9 +311,11 @@ namespace Racing
 
     void RacingCameraSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Racing Camera"))
+        {
             return;
+        }
 
         ImGui::Text("Mode: %s", ModeToString(m_activeMode));
         ImGui::Text("FOV: %.1f", m_state.fov);
@@ -319,9 +330,13 @@ namespace Racing
         for (int i = 0; i < 5; ++i)
         {
             if (ImGui::Button(modeNames[i]))
+            {
                 SetMode(static_cast<CameraMode>(i));
+            }
             if (i < 4)
+            {
                 ImGui::SameLine();
+            }
         }
 
         // Orbit controls

@@ -1,11 +1,11 @@
 /**
  * @file FPSGameplayEvents.cpp
- * @brief Engine event adapters for the SDK-independent FPS inventory and quest mutations.
+ * @brief Public SDK event adapters for the independent FPS inventory and quest mutations.
  */
 
 #include "InventorySystem.h"
 #include "QuestSystem.h"
-#include "Engine/Events/EventSystem.h"
+#include <Spark/EventSystem.h>
 
 namespace Spark
 {

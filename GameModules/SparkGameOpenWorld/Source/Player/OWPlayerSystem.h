@@ -98,6 +98,9 @@ namespace OpenWorld
         void SetPosition(float x, float y, float z);
         void SetCurrentRegion(uint32_t regionId) { m_worldState.currentRegionId = regionId; }
         void SetFacing(float yaw);
+        /// @brief Record the ground speed (m/s) and sprint flag the controller moved at this step;
+        ///        FixedUpdate drains stamina while sprinting and recovers it otherwise.
+        void SetLocomotion(float speed, bool sprinting);
         float GetCompassBearing() const { return m_worldState.yaw; }
         std::string GetCompassDirection() const;
 

@@ -222,6 +222,96 @@ def make_wav_sweep(duration_s: float = 0.5, freq_start: float = 800,
     return buf.getvalue()
 
 
+def make_wav_music_loop(duration_s: float, chord_hz: tuple[int, ...], bpm: float,
+                        sample_rate: int = 22050, amplitude: float = 0.35) -> bytes:
+    """Seamless ambient music loop: a sustained chord with a beat-synchronous swell.
+
+    Every chord frequency is a whole number of hertz and ``duration_s`` a whole
+    number of seconds, so each partial completes an integer number of cycles and
+    the last sample flows into the first. The swell completes a whole number of
+    pulses per loop, rounded from ``bpm``, so the envelope also wraps cleanly.
+    """
+    import io
+    n_samples = int(sample_rate * duration_s)
+    pulses = max(1, round(duration_s * bpm / 60.0))
+    pulse_hz = pulses / duration_s
+    weights = [1.0 / (index + 1) for index in range(len(chord_hz))]
+    norm = sum(weights)
+    samples = array.array("h")
+    for i in range(n_samples):
+        t = i / sample_rate
+        swell = 0.75 + 0.25 * math.cos(2 * math.pi * pulse_hz * t)
+        tone = sum(w * math.sin(2 * math.pi * f * t) for w, f in zip(weights, chord_hz)) / norm
+        val = int(amplitude * 32767 * swell * tone)
+        samples.append(max(-32768, min(32767, val)))
+
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(sample_rate)
+        w.writeframes(samples.tobytes())
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# OBJ writer
+# ---------------------------------------------------------------------------
+
+def make_obj_ground(name: str, size_m: float, cells: int, relief_m: float, ridge_scale: float) -> bytes:
+    """Triangulated heightfield ground tile in meters, Y-up, centered on the origin.
+
+    Heights are a smooth sum of sines, so the tile is deterministic and its
+    edges stay at the same height on opposite sides (it tiles). Faces wind
+    counter-clockwise seen from above, and per-vertex normals come from the
+    analytic height gradient.
+    """
+    step = size_m / cells
+    half = size_m / 2.0
+    k = 2 * math.pi / size_m
+
+    def height(x: float, z: float) -> float:
+        u, v = x + half, z + half
+        return relief_m * (0.6 * math.sin(k * u) * math.sin(k * v)
+                           + 0.4 * math.sin(ridge_scale * k * u) * math.cos(k * v))
+
+    def gradient(x: float, z: float) -> tuple[float, float]:
+        u, v = x + half, z + half
+        dx = relief_m * k * (0.6 * math.cos(k * u) * math.sin(k * v)
+                             + 0.4 * ridge_scale * math.cos(ridge_scale * k * u) * math.cos(k * v))
+        dz = relief_m * k * (0.6 * math.sin(k * u) * math.cos(k * v)
+                             - 0.4 * math.sin(ridge_scale * k * u) * math.sin(k * v))
+        return dx, dz
+
+    lines = [
+        "# SparkEngine procedural OpenWorld ground tile (tools/generate_default_assets.py)",
+        f"# {size_m:g} m square, {cells}x{cells} cells, relief {relief_m:g} m; Y-up, meters",
+        f"o {name}",
+    ]
+    for row in range(cells + 1):
+        for col in range(cells + 1):
+            x, z = -half + col * step, -half + row * step
+            lines.append(f"v {x:.4f} {height(x, z):.4f} {z:.4f}")
+    for row in range(cells + 1):
+        for col in range(cells + 1):
+            lines.append(f"vt {col / cells:.4f} {row / cells:.4f}")
+    for row in range(cells + 1):
+        for col in range(cells + 1):
+            dx, dz = gradient(-half + col * step, -half + row * step)
+            length = math.sqrt(dx * dx + 1.0 + dz * dz)
+            lines.append(f"vn {-dx / length:.4f} {1.0 / length:.4f} {-dz / length:.4f}")
+    stride = cells + 1
+    for row in range(cells):
+        for col in range(cells):
+            a = row * stride + col + 1
+            b = a + 1
+            c = a + stride
+            d = c + 1
+            lines.append(f"f {a}/{a}/{a} {c}/{c}/{c} {b}/{b}/{b}")
+            lines.append(f"f {b}/{b}/{b} {c}/{c}/{c} {d}/{d}/{d}")
+    return ("\n".join(lines) + "\n").encode("ascii")
+
+
 # ---------------------------------------------------------------------------
 # Asset generation
 # ---------------------------------------------------------------------------
@@ -454,12 +544,51 @@ def generate_default_scene() -> None:
     write_file("Scenes/Default.scene", data)
 
 
+# OpenWorld (SparkGameOpenWorld) region ground tiles: file stem, relief (m), ridge frequency.
+# The module's OWWorldSetup names each file as a literal; keep both lists in step.
+OPENWORLD_GROUND_TILES = (
+    ("emerald_meadows", 2.0, 1.0),
+    ("ironwood_forest", 4.0, 2.0),
+    ("stormcrest_mountains", 18.0, 3.0),
+    ("ashwind_desert", 3.0, 4.0),
+    ("frosthollow_tundra", 2.5, 2.0),
+    ("mistveil_swamp", 0.8, 3.0),
+    ("sunbreak_coast", 1.5, 1.0),
+    ("cinderforge_caldera", 12.0, 2.0),
+)
+
+# OpenWorld music loops: file stem, bpm (matching OWEngineSystems::RegisterMusicTracks), chord (Hz).
+OPENWORLD_MUSIC_LOOPS = (
+    ("ow_meadow_dawn", 80.0, (196, 247, 294)),
+    ("ow_forest", 70.0, (147, 175, 220)),
+    ("ow_mountain", 65.0, (110, 165, 220)),
+    ("ow_desert", 75.0, (175, 208, 262)),
+    ("ow_tundra", 55.0, (131, 196, 247)),
+    ("ow_coast", 85.0, (220, 277, 330)),
+    ("ow_combat", 120.0, (82, 123, 156)),
+    ("ow_dragon", 140.0, (73, 110, 139)),
+    ("ow_village", 90.0, (262, 330, 392)),
+)
+
+
+def generate_openworld_assets() -> None:
+    """Repository-original OpenWorld content referenced by GameModules/SparkGameOpenWorld (MOD-360)."""
+    print("\n=== OpenWorld ===")
+    for stem, relief_m, ridge_scale in OPENWORLD_GROUND_TILES:
+        write_file(f"Models/OpenWorld/Ground/{stem}_ground.obj",
+                   make_obj_ground(f"{stem}_ground", 64.0, 16, relief_m, ridge_scale))
+    for stem, bpm, chord_hz in OPENWORLD_MUSIC_LOOPS:
+        write_file(f"Audio/OpenWorld/Music/{stem}.wav",
+                   make_wav_music_loop(4.0, chord_hz, bpm))
+
+
 def main() -> None:
     print(f"Generating default assets in: {ASSET_ROOT}")
     generate_textures()
     generate_audio()
     generate_materials()
     generate_default_scene()
+    generate_openworld_assets()
     print(f"\nDone! All default assets generated in {ASSET_ROOT}/")
 
 

@@ -12,7 +12,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Supports: Windows, Linux, macOS
 #
 # Split layout:
-#   SparkBuildCore  - reusable static library (Config, Downloader, ProcessRunner, Terminal)
+#   SparkBuildCore  - reusable static library (Config, Downloader, ArchiveExtraction, ProcessRunner, Terminal)
 #                     linked by both the SparkBuild executable and SparkInstaller
 #   SparkBuild      - interactive TUI executable (main.cpp + SparkBuild.cpp on top of core)
 
@@ -27,8 +27,12 @@ set(SPARKBUILDCORE_SOURCES
     src/ProcessRunner.cpp
     src/Downloader.h
     src/Downloader.cpp
+    src/ArchiveExtraction.h
+    src/ArchiveExtraction.cpp
     src/DownloadSecurity.h
     src/DownloadSecurity.cpp
+    src/PathSecurity.h
+    src/PathSecurity.cpp
     src/Terminal.h
     src/Terminal.cpp
 )
@@ -43,7 +47,7 @@ if(WIN32)
     target_link_libraries(SparkBuildCore PUBLIC
         winhttp       # HTTP downloads (WinHTTP API)
         shlwapi       # Shell lightweight utility functions
-        shell32       # Shell API (folder dialogs, ZIP extraction)
+        shell32       # Shell API
         ole32         # COM runtime
         oleaut32      # OLE Automation
         uuid          # COM GUIDs
@@ -79,6 +83,10 @@ add_executable(SparkBuild ${SPARKBUILD_SOURCES})
 
 spark_target_windows_version_info(SparkBuild)
 
+target_compile_definitions(SparkBuild PRIVATE
+    SPARK_BUILD_VERSION=\"${PROJECT_VERSION}\"
+)
+
 target_link_libraries(SparkBuild PRIVATE SparkBuildCore)
 
 # Inherit the top-level /MD[d] CRT — see comment above SparkBuildCore.
@@ -94,11 +102,15 @@ if(SPARKBUILD_BUILD_TESTS)
         tests/ProcessRunnerTests.cpp
     )
     target_link_libraries(SparkBuildProcessRunnerTests PRIVATE SparkBuildCore)
+    # SparkBuildVersion is a CTest contract over the executable. Keep the
+    # executable in the build graph whenever the workflow builds the focused
+    # process-runner target before invoking the complete test list.
+    add_dependencies(SparkBuildProcessRunnerTests SparkBuild)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(SparkBuildProcessRunnerTests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
     add_test(NAME SparkBuildProcessRunnerTests COMMAND SparkBuildProcessRunnerTests)
-    set_tests_properties(SparkBuildProcessRunnerTests PROPERTIES TIMEOUT 25)
+    set_tests_properties(SparkBuildProcessRunnerTests PROPERTIES TIMEOUT 25 LABELS "sparkbuild;unit")
 
     add_executable(SparkBuildDownloaderTests
         tests/DownloaderTests.cpp
@@ -108,7 +120,66 @@ if(SPARKBUILD_BUILD_TESTS)
         target_compile_options(SparkBuildDownloaderTests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
     add_test(NAME SparkBuildDownloaderTests COMMAND SparkBuildDownloaderTests)
-    set_tests_properties(SparkBuildDownloaderTests PROPERTIES TIMEOUT 10)
+    set_tests_properties(SparkBuildDownloaderTests PROPERTIES TIMEOUT 10 LABELS "sparkbuild;unit")
+
+    if(WIN32)
+        set(_sparkbuild_platform "Windows")
+    elseif(APPLE)
+        set(_sparkbuild_platform "macOS")
+    elseif(UNIX)
+        set(_sparkbuild_platform "Linux")
+    else()
+        message(FATAL_ERROR "SparkBuild version test has no platform identity")
+    endif()
+    set(_sparkbuild_version_test_script
+        "${CMAKE_CURRENT_BINARY_DIR}/VerifySparkBuildVersion.cmake")
+    file(GENERATE OUTPUT "${_sparkbuild_version_test_script}" CONTENT [=[
+foreach(_spark_required IN ITEMS
+        SPARK_VERSION_EXECUTABLE SPARK_EXPECTED_VERSION_OUTPUT)
+    if(NOT DEFINED ${_spark_required} OR "${${_spark_required}}" STREQUAL "")
+        message(FATAL_ERROR "${_spark_required} is required")
+    endif()
+endforeach()
+execute_process(
+    COMMAND "${SPARK_VERSION_EXECUTABLE}" --version
+    RESULT_VARIABLE _spark_version_result
+    OUTPUT_VARIABLE _spark_version_output
+    ERROR_VARIABLE _spark_version_error)
+if(NOT _spark_version_result EQUAL 0)
+    message(FATAL_ERROR
+        "Version command failed (${_spark_version_result}): ${_spark_version_error}")
+endif()
+string(REPLACE "\r\n" "\n" _spark_version_output "${_spark_version_output}")
+if(NOT _spark_version_output STREQUAL "${SPARK_EXPECTED_VERSION_OUTPUT}\n")
+    message(FATAL_ERROR
+        "Version output mismatch:\n"
+        "  expected: '${SPARK_EXPECTED_VERSION_OUTPUT}\\n'\n"
+        "  actual: '${_spark_version_output}'")
+endif()
+]=])
+    add_test(NAME SparkBuildVersion
+        COMMAND "${CMAKE_COMMAND}"
+            "-DSPARK_VERSION_EXECUTABLE=$<TARGET_FILE:SparkBuild>"
+            "-DSPARK_EXPECTED_VERSION_OUTPUT=SparkBuild v${PROJECT_VERSION} (${_sparkbuild_platform})"
+            -P "${_sparkbuild_version_test_script}")
+    set_tests_properties(SparkBuildVersion PROPERTIES
+        TIMEOUT 10
+        LABELS "sparkbuild;cli;version;integration;process")
+    unset(_sparkbuild_version_test_script)
+    unset(_sparkbuild_platform)
+
+    # Exercise the shipped executable through its noninteractive plan contract.
+    # This must remain a process-level test: library-only ConfigManager coverage
+    # cannot prove argument parsing, exit status, or that the TUI is bypassed.
+    add_test(NAME SparkBuildPlan
+        COMMAND "${CMAKE_COMMAND}"
+            "-DSPARK_PLAN_EXECUTABLE=$<TARGET_FILE:SparkBuild>"
+            "-DSPARK_PLAN_SOURCE=${CMAKE_SOURCE_DIR}"
+            "-DSPARK_PLAN_BUILD=${CMAKE_CURRENT_BINARY_DIR}/sparkbuild-plan-smoke"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/VerifySparkBuildPlan.cmake")
+    set_tests_properties(SparkBuildPlan PROPERTIES
+        TIMEOUT 10
+        LABELS "sparkbuild;cli;integration;process")
 endif()
 
 # Standalone consumers retain the historical flat output. The SparkEngine

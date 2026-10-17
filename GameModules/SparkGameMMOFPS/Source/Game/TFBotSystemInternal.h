@@ -10,6 +10,7 @@
 #include "Core/TFTypes.h"
 #include "Data/TFDataTables.h"
 #include "Game/TFPlayerSystem.h" // kTFRespawnDelaySec
+#include "Net/TFRepProtocol.h"   // QuantAim::WrapPi
 
 // W9 bots-v2: the class-abilities lane's system is optional at this lane's
 // compile time. When the header exists in the tree, include it so the seam
@@ -227,15 +228,10 @@ namespace Terrafront
             return r.homeFaction;
         }
 
-        inline float WrapPi(float a)
+        /// Constant-time [-pi, pi] wrap (the shared total helper; see QuantAim::WrapPi).
+        inline float WrapPi(float a) noexcept
         {
-            constexpr float kPi = std::numbers::pi_v<float>;
-            constexpr float kTau = 2.0f * kPi;
-            while (a > kPi)
-                a -= kTau;
-            while (a < -kPi)
-                a += kTau;
-            return a;
+            return QuantAim::WrapPi(a);
         }
 
     } // namespace BotDetail

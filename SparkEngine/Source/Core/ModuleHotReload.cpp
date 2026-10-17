@@ -9,6 +9,7 @@
 #include "Utils/SparkConsole.h"
 
 #include <algorithm>
+#include <exception>
 #include <sstream>
 #include <thread>
 
@@ -164,15 +165,37 @@ namespace Spark
                 if (success)
                     ++m_reloadCount;
 
-                auto it = m_watchedModules.find(pending.moduleName);
-                if (it != m_watchedModules.end())
-                    SnapshotFile(it->second);
+                // Keep the previous snapshot after a failed reload. The file
+                // change is still actionable, so a later poll can retry the
+                // same replacement once the compiler has finished writing it.
+                if (success)
+                {
+                    auto it = m_watchedModules.find(pending.moduleName);
+                    if (it != m_watchedModules.end())
+                        SnapshotFile(it->second);
+                }
 
                 callback = m_reloadCallback;
             }
 
             if (callback)
-                callback(pending.moduleName, success);
+            {
+                try
+                {
+                    callback(pending.moduleName, success);
+                }
+                catch (const std::exception& e)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Core, "Module hot-reload callback for '%s' threw: %s",
+                                    pending.moduleName.c_str(), e.what());
+                }
+                catch (...)
+                {
+                    SPARK_LOG_ERROR(Spark::LogCategory::Core,
+                                    "Module hot-reload callback for '%s' threw unknown exception",
+                                    pending.moduleName.c_str());
+                }
+            }
         }
 
         return reloadedCount;
@@ -203,15 +226,35 @@ namespace Spark
             if (success)
                 ++m_reloadCount;
 
-            auto it = m_watchedModules.find(moduleName);
-            if (it != m_watchedModules.end())
-                SnapshotFile(it->second);
+            // A failed forced reload must not consume the disk change either;
+            // leave the prior snapshot so PollChanges can retry it.
+            if (success)
+            {
+                auto it = m_watchedModules.find(moduleName);
+                if (it != m_watchedModules.end())
+                    SnapshotFile(it->second);
+            }
 
             callback = m_reloadCallback;
         }
 
         if (callback)
-            callback(moduleName, success);
+        {
+            try
+            {
+                callback(moduleName, success);
+            }
+            catch (const std::exception& e)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "Module hot-reload callback for '%s' threw: %s",
+                                moduleName.c_str(), e.what());
+            }
+            catch (...)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "Module hot-reload callback for '%s' threw unknown exception",
+                                moduleName.c_str());
+            }
+        }
 
         return success;
     }

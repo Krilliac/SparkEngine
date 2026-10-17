@@ -3,7 +3,7 @@
  * @brief Unit tests for the enhanced debugging utilities
  *
  * Tests for MemoryDebugger, FrameInspector, DebugDraw, DebugOverlay,
- * FileLogger, and StackTrace systems.
+ * StackTrace and Logger systems.
  */
 
 #include "TestFramework.h"
@@ -11,12 +11,8 @@
 #include "Utils/FrameInspector.h"
 #include "Utils/DebugDraw.h"
 #include "Utils/DebugOverlay.h"
-#include "Utils/FileLogger.h"
 #include "Utils/StackTrace.h"
 #include "Utils/Logger.h"
-
-#include <chrono>
-#include <filesystem>
 
 // ============================================================================
 // MemoryDebugger Tests
@@ -413,18 +409,23 @@ TEST(DebugOverlay_BuildStatsWhenDisabled)
 
 TEST(DebugOverlay_FPSTracking)
 {
+    // The overlay is a process-wide singleton that the lifecycle tests also tick
+    // through UpdateDebugSystemsImpl, so start from a known baseline.
     auto& overlay = Spark::DebugOverlay::GetInstance();
+    overlay.ResetStats();
     overlay.SetEnabled(true);
 
-    // Simulate several frames at ~60fps
+    // Feed 60 frames at exactly 60 fps; every statistic follows from the fed times.
+    constexpr float frameTime = 1.0f / 60.0f;
     for (int i = 0; i < 60; i++)
-        overlay.Update(1.0f / 60.0f);
+        overlay.Update(frameTime);
 
-    EXPECT_GT(overlay.GetCurrentFPS(), 0.0f);
-    EXPECT_GT(overlay.GetAvgFrameTime(), 0.0f);
     EXPECT_EQ(overlay.GetFrameCount(), static_cast<uint64_t>(60));
+    EXPECT_NEAR(overlay.GetCurrentFPS(), 60.0f, 0.01f);
+    EXPECT_NEAR(overlay.GetAvgFrameTime(), frameTime * 1000.0f, 0.001f);
 
     overlay.SetEnabled(false);
+    overlay.ResetStats();
 }
 
 TEST(DebugOverlay_SectionToggle)
@@ -600,41 +601,6 @@ TEST(Logger_StackTraceOff_NoCapture)
     logger.SetStackTraceLevel(originalLevel);
     logger.ClearSinks();
     logger.AddSink(std::make_unique<Spark::StderrSink>());
-}
-
-// ============================================================================
-// FileLogger Tests
-// ============================================================================
-
-TEST(FileLogger_InitializeShutdown)
-{
-    // Just test that init/shutdown doesn't crash
-    // Don't actually write files in unit tests
-    auto& logger = Spark::FileLogger::GetInstance();
-    EXPECT_FALSE(logger.IsInitialized());
-
-    logger.SetMinimumLevel(Spark::FileLogLevel::Error);
-    EXPECT_EQ(static_cast<int>(logger.GetMinimumLevel()), static_cast<int>(Spark::FileLogLevel::Error));
-}
-
-TEST(FileLogger_DirectoryWithoutTrailingSeparatorCreatesContainedLog)
-{
-    auto& logger = Spark::FileLogger::GetInstance();
-    logger.Shutdown();
-
-    const auto root =
-        std::filesystem::temp_directory_path() /
-        ("spark-filelogger-" + std::to_string(std::chrono::high_resolution_clock::now().time_since_epoch().count()));
-    const auto logs = root / "Logs";
-    EXPECT_TRUE(logger.Initialize(logs.string(), Spark::FileLogLevel::Debug));
-    const std::filesystem::path logPath = logger.GetCurrentFilePath();
-    EXPECT_EQ(logPath.parent_path().lexically_normal(), logs.lexically_normal());
-    EXPECT_TRUE(std::filesystem::is_regular_file(logPath));
-    logger.Shutdown();
-
-    std::error_code ec;
-    std::filesystem::remove_all(root, ec);
-    EXPECT_FALSE(ec);
 }
 
 // ============================================================================

@@ -104,7 +104,6 @@ namespace Spark
  * ### Responsibilities
  * - **Serialization**: JSON and legacy binary round-trip via `LoadJSON`/`SaveJSON`/`LoadCustom`.
  * - **Hierarchy management**: Add, remove, reparent nodes; maintain index invariants.
- * - **Prefab system**: Save/load subtrees as reusable prefab assets.
  * - **Async loading**: Background scene transitions via `LoadSceneAsync`.
  * - **Console integration**: Runtime inspection and manipulation from the debug console.
  *
@@ -135,10 +134,13 @@ class SceneManager
      * @brief Construct the SceneManager with required engine subsystems.
      *
      * Does not load any scene; call `NewScene()` or `LoadScene()` to populate the
-     * hierarchy. Both pointers must remain valid for the lifetime of this object.
+     * hierarchy. Non-null pointers must remain valid for the lifetime of this object.
+     * Passing `nullptr` for both selects data-only use (headless servers): authored
+     * INI and versioned scenes load their nodes with one null object slot each, and
+     * the legacy space-delimited format, which needs a device, is rejected.
      *
-     * @param graphics  Pointer to the active GraphicsEngine (used for mesh instantiation).
-     * @param input     Pointer to the InputManager (forwarded to spawned GameObjects).
+     * @param graphics  Active GraphicsEngine used for mesh instantiation, or `nullptr`.
+     * @param input     InputManager stored for callers, or `nullptr`.
      */
     SceneManager(GraphicsEngine* graphics, InputManager* input);
 
@@ -152,26 +154,34 @@ class SceneManager
     // =========================================================================
 
     /**
-     * @brief Load a scene from a JSON or legacy binary file, replacing the current scene.
+     * @brief Load a supported scene, committing the replacement only on success.
      *
-     * Clears the existing hierarchy, parses the file, populates `m_sceneNodes` and
-     * `m_metadata`, and calls `InstantiateNodes()` to create `GameObject` instances.
-     * The dirty flag is cleared on success.
+     * Preserves the current nodes, object ownership, path and dirty state on failure.
+     * The dirty flag is cleared after a replacement is committed.
      *
-     * File format is determined by extension:
-     * - `.scene` → legacy binary (`LoadCustom`)
-     * - `.json` or anything else → JSON (`LoadJSON`)
+     * File format is determined by extension and the versioned file header:
+     * - `.scene` → authored INI or versioned text; older object rows remain readable
+     * - `.json` → versioned text (the historical method name predates this format)
+     * - `.sparkscene` → strict reflected root mesh/main-camera/neutral player-spawn subset; unsupported
+     *   components, hierarchy, materials or asset references reject the load. No backup
+     *   or placeholder fallback is used. Spawn points require default tag, enabled, team 0, radius/cooldown 0,
+     *   unlimited concurrency, unit scale, supported pitch and at most 32 points; priority/facing are preserved.
+     *   SaveScene does not write this reflected format.
      *
      * @param filepath  Absolute or asset-relative path to the scene file.
      * @return          `true` on success; `false` if the file is missing or malformed.
      *
      * @note This call is synchronous and may stall the main thread for large scenes.
      *       Use `LoadSceneAsync()` for seamless transitions.
+     * @note A headless graphics engine can load INI/JSON scene data without a D3D
+     *       device. `GetObjects()` then has one null slot per parsed node; load
+     *       success means data parsed, not that renderable meshes were created.
+     *       The older space-delimited object format still requires a device.
      */
     bool LoadScene(const std::wstring& filepath);
 
     /**
-     * @brief Serialize the current scene to a JSON file.
+     * @brief Serialize the current scene to the versioned text format.
      *
      * Writes `m_metadata` and all nodes in `m_sceneNodes` to the specified path.
      * The dirty flag is cleared on success.
@@ -180,6 +190,28 @@ class SceneManager
      * @return          `true` on success; `false` on I/O error.
      */
     bool SaveScene(const std::wstring& filepath) const;
+
+    /**
+     * @brief Save to `root / relativePath` without letting any path component redirect the write.
+     *
+     * For user-supplied destinations (the FPS `scene_save` command). `root` is a
+     * trusted, existing scene directory. `relativePath` must be a relative
+     * `.scene`/`.json` path with no empty, `.` or `..` components; every
+     * directory below `root` must already exist and must not be a symlink,
+     * junction or other reparse point.
+     *
+     * Race-free by construction: each directory is opened one component at a
+     * time and kept open (POSIX `openat(O_NOFOLLOW)`; Windows handles opened
+     * with `FILE_FLAG_OPEN_REPARSE_POINT` and without `FILE_SHARE_DELETE`, so
+     * the component cannot be renamed while held). The temporary file is created
+     * exclusively inside that held directory and atomically renamed over the
+     * destination there, and the final location is re-verified after the rename.
+     * A component swapped for a link is refused, never followed out of `root`.
+     *
+     * @return `true` when the scene was written inside `root`; the dirty flag is
+     *         cleared on success, as with `SaveScene()`.
+     */
+    bool SaveSceneWithinRoot(const std::filesystem::path& root, const std::filesystem::path& relativePath) const;
 
     /**
      * @brief Begin loading a scene on a background thread.
@@ -292,41 +324,6 @@ class SceneManager
     int GetNodeCount() const { return static_cast<int>(m_sceneNodes.size()); }
 
     // =========================================================================
-    // Prefab System
-    // =========================================================================
-
-    /**
-     * @brief Serialize a node and its entire subtree to a standalone prefab file.
-     *
-     * The prefab file uses the same JSON format as a scene but contains only the
-     * specified subtree. Saved prefabs can later be loaded with `LoadPrefab()`.
-     *
-     * @param nodeIndex  Root node of the subtree to export as a prefab. Must be valid.
-     * @param filepath   Destination path for the prefab file (e.g. `"Assets/Prefabs/Tree.prefab"`).
-     * @return           `true` on success; `false` on I/O error or invalid `nodeIndex`.
-     */
-    bool SavePrefab(int nodeIndex, const std::wstring& filepath) const;
-
-    /**
-     * @brief Instantiate a saved prefab into the current scene at the given position.
-     *
-     * Reads the prefab file, offsets all node positions by `position` relative to
-     * the prefab's internal origin, and appends the subtree to `m_sceneNodes`. The
-     * dirty flag is set. The returned index is the root of the instantiated subtree.
-     *
-     * @param filepath  Path to a prefab file previously saved with `SavePrefab()`.
-     * @param position  World-space offset applied to all nodes in the prefab.
-     * @return          Index of the root node of the instantiated prefab, or -1 on failure.
-     *
-     * @code
-     *   int treeIdx = mgr.LoadPrefab(L"Assets/Prefabs/Tree.prefab", {10.f, 0.f, 5.f});
-     *   if (treeIdx < 0)
-     *       LOG_ERROR("Failed to load tree prefab");
-     * @endcode
-     */
-    int LoadPrefab(const std::wstring& filepath, const DirectX::XMFLOAT3& position = {0, 0, 0});
-
-    // =========================================================================
     // Scene State
     // =========================================================================
 
@@ -418,7 +415,7 @@ class SceneManager
      * and returns their paths as narrow strings suitable for display in a file picker.
      *
      * @param directory  Directory to scan. Defaults to `L"Assets/Scenes"`.
-     * @return           Vector of file path strings, one per found scene file.
+     * @return           UTF-8 file names, one per found scene file, sorted.
      */
     std::vector<std::string> GetAvailableScenes(const std::wstring& directory = L"Assets/Scenes") const;
 
@@ -480,39 +477,49 @@ class SceneManager
     void SetFileCache(Spark::LocalFileCache* cache) { m_fileCache = cache; }
 
   private:
+    // Strict reflected startup subset; outer LoadScene owns rollback/events.
+    bool LoadReflected(const std::wstring& path);
+
     /**
-     * @brief Load a scene from the legacy binary `.scene` format.
+     * @brief Load an authored INI or legacy `.scene` text file.
      *
-     * Invoked by `LoadScene()` when the file extension is `.scene`. The binary
-     * format is engine-version-specific; see the internal documentation for the
-     * exact byte layout.
+     * Invoked by `LoadScene()` for `.scene`. Versioned SaveScene output is
+     * recognized by its header and routed through `LoadJSON()`.
      *
-     * @param path  Path to the binary scene file.
+     * @param path  Path to the scene file.
      * @return      `true` on success; `false` on I/O error or format mismatch.
      */
     bool LoadCustom(const std::wstring& path);
 
     /**
-     * @brief Deserialize a scene from a JSON file into `m_metadata` and `m_sceneNodes`.
+     * @brief Deserialize versioned line-oriented scene text into metadata and nodes.
      *
-     * Parses the top-level `"metadata"` and `"nodes"` arrays. Unknown fields are
-     * silently ignored for forward compatibility.
+     * The historical name is retained for API compatibility; the current file
+     * format uses metadata comments and quoted node fields, not JSON syntax.
      *
      * @param path  Path to the JSON scene file.
-     * @return      `true` on success; `false` on I/O error or JSON parse failure.
+     * @return      `true` on success; `false` on I/O error or empty scene.
      */
     bool LoadJSON(const std::wstring& path);
 
     /**
-     * @brief Serialize the current scene to a JSON file.
+     * @brief Serialize the current scene to versioned line-oriented text.
      *
-     * Writes `m_metadata` followed by the full `m_sceneNodes` array. Existing
-     * file content is overwritten atomically.
+     * Writes `m_metadata` followed by the full `m_sceneNodes` array through a
+     * same-directory durable temporary file and atomic replacement.
      *
      * @param path  Destination file path. Must be writable.
      * @return      `true` on success; `false` on I/O error.
      */
     bool SaveJSON(const std::wstring& path) const;
+
+    /**
+     * @brief Validate the live graph and render it as versioned scene text.
+     *
+     * Shared by `SaveJSON()` and `SaveSceneWithinRoot()` so both write the
+     * same format. `pathForLog` is only used in the error message.
+     */
+    bool SerializeSceneText(std::string& text, const std::wstring& pathForLog) const;
 
     /**
      * @brief Create `GameObject` instances for all nodes in `m_sceneNodes`.
@@ -597,4 +604,8 @@ class SceneManager
 
     /** @brief Optional file cache for scene I/O (non-owning). */
     Spark::LocalFileCache* m_fileCache = nullptr;
+
+    // Replacement loads suppress transient unload notifications until parsing
+    // succeeds. Public Clear()/NewScene() retain their normal event semantics.
+    bool m_suppressSceneEvents = false;
 };

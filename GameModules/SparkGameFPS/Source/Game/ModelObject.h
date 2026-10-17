@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include "Game/GameObject.h"
-#include "Game/Model.h"
+#include <Spark/GameObject.h>
+#include <Spark/Model.h>
 #include <memory>
 #include <string>
 

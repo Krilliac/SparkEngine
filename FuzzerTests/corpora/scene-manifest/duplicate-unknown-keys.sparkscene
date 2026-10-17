@@ -1,0 +1,8 @@
+name = First
+name = Second
+material = materials/ignored.sparkmat
+Mesh = models/case_sensitive_key.mesh
+mesh = models/value=with=equals.mesh
+mesh == models/double_equals.mesh
+texture = textures/dup.dds
+texture = textures/dup.dds

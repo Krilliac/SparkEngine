@@ -17,6 +17,8 @@
 
 #include "Spark/SparkSDK.h"
 #include <memory>
+#include <string>
+#include <vector>
 
 // Forward declarations
 namespace RPG
@@ -26,6 +28,7 @@ namespace RPG
     class RPGCombatSystem;
     class RPGGameplayBridge;
     class RPGDemoSession;
+    class RPGQuestAutopilot;
     class RPGInventorySystem;
     class RPGNPCSystem;
     class RPGEngineSystems;
@@ -53,6 +56,11 @@ class SparkGameRPGModule : public Spark::IModule
     Spark::ModuleInfo GetModuleInfo() const override;
     bool OnLoad(Spark::IEngineContext* context) override;
     void OnUnload() override;
+    /// Transactional reload runs the replacement's OnLoad before this instance's
+    /// OnUnload. This module owns process-wide streaming areas keyed by
+    /// ID, not by owner, so the outgoing teardown would remove what the replacement just
+    /// registered. Refuse hot reload; a full restart is required.
+    bool SupportsHotReload() const override { return false; }
     void OnUpdate(float deltaTime) override;
     void OnFixedUpdate(float fixedDeltaTime) override;
     void OnRender() override;
@@ -78,6 +86,8 @@ class SparkGameRPGModule : public Spark::IModule
     std::unique_ptr<RPG::RPGNPCSystem> m_npcSystem;
     std::unique_ptr<RPG::RPGEngineSystems> m_engineSystems;
     std::unique_ptr<RPG::RPGDemoSession> m_demoSession;
+    std::unique_ptr<RPG::RPGQuestAutopilot> m_questAutopilot; ///< Set by rpg_autoplay until rpg_autoplay off
+    std::vector<std::string> m_registeredConsoleCommands;
 };
 
 // Module exports

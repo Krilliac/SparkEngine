@@ -32,6 +32,8 @@
 #include <string>
 #include <unordered_set>
 #include <vector>
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
@@ -284,7 +286,7 @@ namespace SparkEditor
         // 360 px inspector pane. Without a first-use size ImGui can create a
         // floating window at its minimum content height, leaving the map
         // effectively invisible until the user finds the resize handle.
-        ImGui::SetNextWindowSize(ImVec2(1180.0f, 720.0f), ImGuiCond_Appearing);
+        ImGui::SetNextWindowSize(Spark::Ui::Px2(1180.0f, 720.0f), ImGuiCond_Appearing);
         if (BeginPanel())
         {
             RenderToolbar();
@@ -313,7 +315,7 @@ namespace SparkEditor
         if (m_dataSourceIndex >= 0 && m_dataSourceIndex < static_cast<int>(m_dataSources.size()))
             sourceLabel = m_dataSources[static_cast<size_t>(m_dataSourceIndex)].name.c_str();
 
-        ImGui::SetNextItemWidth(190.0f);
+        ImGui::SetNextItemWidth(Spark::Ui::Px(190.0f));
         ImGui::BeginDisabled(m_dirty || m_dataSources.empty());
         if (ImGui::BeginCombo("##region_map_continent", sourceLabel))
         {
@@ -359,7 +361,7 @@ namespace SparkEditor
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Dragging a region center also drags its capture points, spawns and terminal.");
         ImGui::SameLine();
-        ImGui::TextDisabled("| %s%s", m_dataPath.c_str(), m_dirty ? " *" : "");
+        Spark::Ui::SecondaryText("| %s%s", m_dataPath.c_str(), m_dirty ? " *" : "");
     }
 
 } // namespace SparkEditor

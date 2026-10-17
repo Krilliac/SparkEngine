@@ -53,6 +53,8 @@ if (mods.IsModActive("weapon_pack_01")) {
 }
 ```
 
+`ScanForMods` parses every `mod.json` before it publishes any of them and returns the number of ids it published. An id that more than one mod directory declares is published from none of them, so a dropped-in mod cannot shadow an installed one. Rescanning refreshes the metadata of a known mod (name, author, version, description, preview image, dependencies, path) but keeps its load state: an Active mod stays Active and `UnloadAll` still unloads it.
+
 ## Load Order and Dependencies
 
 ```cpp
@@ -134,7 +136,7 @@ reason instead of silently yielding a partial object. All fields are described b
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | string | Unique identifier (lowercase, alphanumeric + underscores) |
+| `id` | string | Unique identifier: 1-128 characters of `[A-Za-z0-9._-]`, not `.` or `..`. The loader rejects any other id, and a dependency must follow the same rule |
 | `name` | string | Display name shown in the mod manager UI |
 | `version` | string | Semantic version (major.minor.patch) |
 | `author` | string | Author or organization name |

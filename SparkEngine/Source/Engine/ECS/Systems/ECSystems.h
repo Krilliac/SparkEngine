@@ -29,7 +29,7 @@
  * 2. **AnimationUpdateSystem** – Evaluates skeleton animation, produces bone matrices.
  * 3. **AIUpdateSystem** – Reads Transform, runs behavior trees, writes velocity/target.
  * 4. **AudioUpdateSystem** – Reads Transform, updates 3D audio source positions.
- * 5. **LifecycleSystem** – Processes health, death callbacks, active/inactive entities.
+ * 5. **LifecycleSystem** – Latches each new death (`HealthComponent::deathProcessed`).
  * 6. **RenderSystem** – Reads Transform + MeshRenderer, submits draw calls to GPU.
  *
  * ## Usage
@@ -62,15 +62,16 @@
 #include "../../../Utils/DeferredDeletion.h"
 #include "../../../Utils/Validate.h"
 #include <functional>
-#include <vector>
 #include <string>
 #include <string_view>
+#include <vector>
 
 // Forward declarations for engine subsystems that systems depend on.
 // Full headers are included in the .cpp implementations.
-class GraphicsEngine; ///< Rendering backend (DirectX 11)
-class PhysicsSystem;  ///< Bullet Physics simulation world
-class AudioEngine;    ///< XAudio2 audio backend
+class GraphicsEngine;    ///< Rendering backend (DirectX 11)
+class PhysicsSystem;     ///< Bullet Physics simulation world
+class AudioEngine;       ///< XAudio2 audio backend
+class AngelScriptEngine; ///< AngelScript VM and entity callback dispatcher
 
 namespace Spark::ECS
 {
@@ -233,6 +234,20 @@ namespace Spark::ECS
  * 2. Computes per-frame velocity from position delta for Doppler effects.
  * 3. Writes position and velocity to the underlying `AudioSource` via the AudioEngine.
  *
+ * ### Script sound cues
+ * Afterwards it drains every `ScriptAudioCues` queue that the script
+ * `playSound()` binding filled since the last tick: each cue starts as a one-shot
+ * through AudioEngine::PlaySound3D (at the position the entity had when the
+ * script asked) or AudioEngine::PlaySound (entity without a Transform), using
+ * the entity's AudioSourceComponent volume, pitch and rolloff when it has one.
+ * A cue AudioEngine refuses (sound not loaded, no device, no free voice) is
+ * counted in `ScriptAudioCues::dropped` and never retried; the queue is always
+ * emptied, keeping its capacity.
+ *
+ * ### Contract
+ * Game thread only (the Audio phase, after scripts ran). Allocates nothing
+ * per frame beyond what AudioEngine does to start a voice.
+ *
  * ### Listener position
  * The 3D audio listener (typically the camera / player head) must be updated
  * separately via `AudioEngine::Console_SetListenerPosition()` or by the Player
@@ -255,7 +270,8 @@ namespace Spark::ECS
      * @brief Sync 3D audio source positions from entity transforms.
      *
      * Iterates all entities with AudioSourceComponent + Transform.
-     * Writes world position and computed velocity to the AudioEngine.
+     * Writes world position and computed velocity to the AudioEngine, then
+     * starts and clears the script sound cues queued since the last tick.
      *
      * @param world      The ECS World to query.
      * @param deltaTime  Frame time used to compute position-delta velocity (seconds).
@@ -265,6 +281,9 @@ namespace Spark::ECS
         const char* GetName() const override { return "AudioUpdateSystem"; }
 
       private:
+        /** @brief Start and clear every pending script playSound() cue (see "Script sound cues"). */
+        void DrainScriptAudioCues(World& world);
+
         /** @brief Non-owning pointer to the XAudio2-based audio engine. */
         AudioEngine* m_audio;
     };
@@ -275,78 +294,65 @@ namespace Spark::ECS
 
     /**
  * @class LifecycleSystem
- * @brief Manages entity activation state and death events.
+ * @brief Latches each entity death exactly once.
  *
- * The LifecycleSystem monitors `ActiveComponent` and `HealthComponent` each frame:
+ * Every frame the system visits each `HealthComponent` and, for an entity whose
+ * `isDead` flag is set but whose death has not been seen yet, sets
+ * `HealthComponent::deathProcessed`. The latch lets invariant checks
+ * (`InvalidStateDetector`, module authority checks) tell a fresh death from one
+ * that has already been observed.
  *
- * - **Inactive entities** – entities with `ActiveComponent::active == false` are
- *   skipped by most other systems, achieving a cheap "disabled" state without
- *   removing components. The LifecycleSystem itself still visits them to detect
- *   re-activation.
+ * The system does not handle deaths. Loot, score, despawn and the
+ * `EntityKilledEvent` belong to the gameplay system that applied the lethal
+ * damage (for example `AbilitySystem`, which publishes `EntityKilledEvent` on the
+ * EventBus); republishing from here would deliver every kill twice.
  *
- * - **Death detection** – entities with `HealthComponent::isDead == true` trigger
- *   the registered death callback (`m_onDeath`). The callback receives the EntityID
- *   so the game can handle loot drops, score, sound effects, and eventual entity
- *   destruction.
+ * Code that brings an entity back to life must clear both flags, through
+ * `HealthComponent::Revive()` or `HealthComponent::SetHealth()`, so that a later
+ * death is latched again.
  *
- * ### Death callback
- * Register a callback before any enemies can die:
- * @code
- *   lifecycleSys->SetDeathCallback([&](EntityID id) {
- *       // Drop loot, play death sound, award score...
- *       world.DestroyEntity(id);
- *   });
- * @endcode
- *
- * @note The callback is invoked **once** per entity per death event. The entity
- *       is NOT automatically destroyed; the callback is responsible for that.
- *       To prevent the callback firing again, either destroy the entity or clear
- *       the `HealthComponent::isDead` flag.
+ * - Thread affinity: game thread (runs in `Phase::Gameplay`).
+ * - Ownership: owned by the `SystemManager`; holds no per-entity state.
+ * - Allocation: none per frame.
  */
     class LifecycleSystem : public ISystem
     {
       public:
         /**
-     * @brief Callback signature invoked when an entity's health reaches zero.
-     *
-     * @param entityID  The EntityID of the entity that died.
-     */
-        using DeathCallback = std::function<void(EntityID)>;
-
-        /**
-     * @brief Scan all entities for death and activation state changes.
-     *
-     * - Fires `m_onDeath` for each entity with `HealthComponent::isDead == true`.
-     * - (Future) handles re-activation of entities that transition to `active == true`.
+     * @brief Latch `deathProcessed` on every entity that died since the last update.
      *
      * @param world      The ECS World to query.
-     * @param deltaTime  Frame time (seconds). May be used for deferred actions.
+     * @param deltaTime  Frame time (seconds). Unused.
      */
         void Update(World& world, float deltaTime) override;
 
         const char* GetName() const override { return "LifecycleSystem"; }
+    };
 
-        /**
-     * @brief Register the callback invoked when an entity's HealthComponent marks it dead.
+    /**
+     * @class ScriptRuntimeSystem
+     * @brief Dispatches ECS Script components through the engine AngelScript VM.
      *
-     * Only one callback can be registered; subsequent calls overwrite the previous one.
-     * Pass an empty `std::function` to remove the callback.
-     *
-     * @param cb  Callback function receiving the EntityID of the dead entity.
+     * Runs on the game thread in the Lifecycle phase. Each attached script
+     * instance receives Start exactly once (hot reload keeps that; detach and
+     * re-attach makes a new instance) and Update once per phase tick. The system
+     * owns no script instances; AngelScriptEngine owns those resources and is
+     * held here as a non-owning pointer from EngineContext.
+     * Linear in attached components/instances. The entity snapshot retains its
+     * high-water capacity; allocation occurs only when the entity count grows.
      */
-        void SetDeathCallback(DeathCallback cb) { m_onDeath = cb; }
+    class ScriptRuntimeSystem : public ISystem
+    {
+      public:
+        explicit ScriptRuntimeSystem(AngelScriptEngine* scriptEngine) : m_scriptEngine(scriptEngine) {}
+
+        void Update(World& world, float deltaTime) override;
+
+        const char* GetName() const override { return "ScriptRuntimeSystem"; }
 
       private:
-        /**
-     * @brief Callback invoked when `HealthComponent::isDead` is detected.
-     *
-     * Set via `SetDeathCallback()`. May be empty (no-op) if not registered.
-     */
-        DeathCallback m_onDeath;
-
-        /// Persistent deferred queue — avoids heap allocation every frame.
-        /// Cleared at the end of each Update() via Flush().
-        Spark::DeferredQueue<entt::entity> m_deadEntities;
+        AngelScriptEngine* m_scriptEngine = nullptr;
+        std::vector<EntityID> m_entities;
     };
 
     // =============================================================================

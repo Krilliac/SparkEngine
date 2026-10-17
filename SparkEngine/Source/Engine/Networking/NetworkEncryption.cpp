@@ -1,193 +1,308 @@
 /**
  * @file NetworkEncryption.cpp
- * @brief Legacy XOR/FNV packet prototype plus independent traffic-control helpers
+ * @brief SecureChannel (keyed ChaCha20-Poly1305 packets), CSPRNG keys/tokens, replay window, rate limiter
+ *
+ * Every cryptographic primitive here is libsodium's (NET-100, owner decision
+ * OD-06): the IETF ChaCha20-Poly1305 AEAD, HKDF-SHA256, randombytes_buf,
+ * sodium_memcmp and sodium_memzero. This file only composes them.
  */
 
 #include "NetworkEncryption.h"
-#include "../../Utils/Validate.h"
-#include "../../Utils/Logger.h"
+#include "../../Utils/LogMacros.h"
 
-#include <algorithm>
-#include <cstring>
-#include <random>
+#include <string_view>
+
+#ifndef SPARK_HAS_LIBSODIUM
+#error "NetworkEncryption.cpp requires libsodium (cmake/SparkLibsodium.cmake links spark_sodium)"
+#endif
+#include <sodium.h>
 
 namespace Spark::Net
 {
 
-    // ============================================================================
-    // Key / Token Generation
-    // ============================================================================
+    static_assert(SESSION_KEY_SIZE == crypto_aead_chacha20poly1305_ietf_KEYBYTES);
+    static_assert(AEAD_NONCE_SIZE == crypto_aead_chacha20poly1305_ietf_NPUBBYTES);
+    static_assert(AEAD_TAG_SIZE == crypto_aead_chacha20poly1305_ietf_ABYTES);
+    static_assert(SESSION_KEY_SIZE == crypto_kdf_hkdf_sha256_KEYBYTES);
 
-    static std::mt19937_64& GetRNG()
+    bool EnsureSodium()
     {
-        static std::mt19937_64 rng(std::random_device{}());
-        return rng;
-    }
-
-    SessionKey GenerateSessionKey()
-    {
-        SessionKey key;
-        auto& rng = GetRNG();
-        std::uniform_int_distribution<unsigned int> dist(0, 255);
-        for (auto& byte : key)
-            byte = static_cast<uint8_t>(dist(rng));
-        SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Generated XOR prototype state (%zu bytes)", key.size());
-        return key;
-    }
-
-    ConnectionToken GenerateConnectionToken()
-    {
-        ConnectionToken token;
-        auto& rng = GetRNG();
-        std::uniform_int_distribution<unsigned int> dist(0, 255);
-        for (auto& byte : token)
-            byte = static_cast<uint8_t>(dist(rng));
-        SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Generated prototype token bytes (%zu bytes)", token.size());
-        return token;
-    }
-
-    // ============================================================================
-    // Deterministic XOR byte-stream generation (not a cipher)
-    // ============================================================================
-
-    static void GenerateKeyStream(const SessionKey& key, uint64_t nonce, uint8_t* stream, size_t length)
-    {
-        // Deterministic XOR obfuscation only. This is not cryptographically
-        // secure and provides no confidentiality or peer authentication.
-        uint8_t state[SESSION_KEY_SIZE];
-        std::memcpy(state, key.data(), SESSION_KEY_SIZE);
-
-        // Mix nonce into state
-        for (size_t i = 0; i < 8; ++i)
+        // A function-local static is initialized exactly once, even under
+        // concurrent first calls. sodium_init() returns 0 on first success, 1 when
+        // already initialized, and -1 on failure.
+        static const bool initialized = []
         {
-            state[i] ^= static_cast<uint8_t>((nonce >> (i * 8)) & 0xFF);
-            state[i + 8] ^= static_cast<uint8_t>((nonce >> (i * 8)) & 0xFF);
-            state[i + 16] ^= static_cast<uint8_t>((nonce >> ((7 - i) * 8)) & 0xFF);
-            state[i + 24] ^= static_cast<uint8_t>((nonce >> ((7 - i) * 8)) & 0xFF);
+            const bool ok = sodium_init() >= 0;
+            if (!ok)
+            {
+                SPARK_LOG_ERROR(Spark::LogCategory::Network, "sodium_init() failed: network crypto is unavailable");
+            }
+            return ok;
+        }();
+        return initialized;
+    }
+
+    namespace
+    {
+        void StoreLE64(uint8_t* p, uint64_t v)
+        {
+            for (size_t i = 0; i < 8; ++i)
+                p[i] = static_cast<uint8_t>(v >> (i * 8));
         }
 
-        // Generate key stream bytes using state mixing
-        for (size_t i = 0; i < length; ++i)
+        uint64_t LoadLE64(const uint8_t* p)
         {
-            size_t idx = i % SESSION_KEY_SIZE;
-            state[idx] = static_cast<uint8_t>(state[idx] + state[(idx + 13) % SESSION_KEY_SIZE] + 1);
-            stream[i] = state[idx];
-        }
-    }
-
-    // ============================================================================
-    // Forgeable keyed FNV tag (legacy code called this HMAC)
-    // ============================================================================
-
-    static uint32_t ComputePrototypeTag(const SessionKey& key, const uint8_t* data, size_t length)
-    {
-        // Simple keyed hash: FNV-1a with key mixing
-        uint32_t hash = 0x811C9DC5u; // FNV offset basis
-
-        // Mix in key first
-        for (size_t i = 0; i < SESSION_KEY_SIZE; ++i)
-        {
-            hash ^= key[i];
-            hash *= 0x01000193u; // FNV prime
+            uint64_t v = 0;
+            for (size_t i = 0; i < 8; ++i)
+                v |= static_cast<uint64_t>(p[i]) << (i * 8);
+            return v;
         }
 
-        // Hash data
-        for (size_t i = 0; i < length; ++i)
+        // ------------------------------------------------------------------------
+        // HKDF-SHA256 (RFC 5869) with a single 32-byte output block
+        // ------------------------------------------------------------------------
+
+        SessionKey HkdfSha256(std::span<const uint8_t> salt, std::span<const uint8_t> ikm, std::string_view info)
         {
-            hash ^= data[i];
-            hash *= 0x01000193u;
+            SessionKey okm{};
+            uint8_t prk[crypto_kdf_hkdf_sha256_KEYBYTES];
+            // Neither call can fail for these lengths (32-byte output, no oversize input).
+            crypto_kdf_hkdf_sha256_extract(prk, salt.data(), salt.size(), ikm.data(), ikm.size());
+            crypto_kdf_hkdf_sha256_expand(okm.data(), okm.size(), info.data(), info.size(), prk);
+            sodium_memzero(prk, sizeof(prk));
+            return okm;
         }
 
-        return hash;
-    }
+        constexpr std::string_view kHkdfSalt = "SparkNet/v1 channel salt";
+        constexpr std::string_view kClientToServerInfo = "SparkNet/v1 client->server";
+        constexpr std::string_view kServerToClientInfo = "SparkNet/v1 server->client";
+        constexpr std::string_view kRekeyInfo = "SparkNet/v1 rekey";
 
-    // ============================================================================
-    // Legacy transform / reverse transform
-    // ============================================================================
-
-    std::vector<uint8_t> EncryptPacket(const SessionKey& key, uint64_t sequence, const std::vector<uint8_t>& payload)
-    {
-        SPARK_TRACE_ENTER(Spark::LogCategory::Network);
-        // Output: [sequence 8B] [XOR-obfuscated payload] [prototype tag 4B]
-        std::vector<uint8_t> packet;
-        packet.reserve(NONCE_SIZE + payload.size() + HMAC_SIZE);
-
-        // Write nonce (sequence number as little-endian bytes)
-        for (size_t i = 0; i < NONCE_SIZE; ++i)
-            packet.push_back(static_cast<uint8_t>((sequence >> (i * 8)) & 0xFF));
-
-        // Generate a deterministic byte stream and apply XOR.
-        std::vector<uint8_t> keyStream(payload.size());
-        GenerateKeyStream(key, sequence, keyStream.data(), payload.size());
-
-        for (size_t i = 0; i < payload.size(); ++i)
-            packet.push_back(payload[i] ^ keyStream[i]);
-
-        // Compute the forgeable prototype tag over sequence + transformed bytes.
-        uint32_t prototypeTag = ComputePrototypeTag(key, packet.data(), packet.size());
-        for (size_t i = 0; i < HMAC_SIZE; ++i)
-            packet.push_back(static_cast<uint8_t>((prototypeTag >> (i * 8)) & 0xFF));
-
-        return packet;
-    }
-
-    bool DecryptPacket(const SessionKey& key, const std::vector<uint8_t>& packet, std::vector<uint8_t>& outPayload,
-                       uint64_t& outSequence)
-    {
-        SPARK_TRACE_ENTER(Spark::LogCategory::Network);
-        if (packet.size() < ENCRYPTION_OVERHEAD)
-            return false;
-
-        size_t payloadSize = packet.size() - ENCRYPTION_OVERHEAD;
-
-        // Extract and compare the prototype tag. This is not authentication.
-        size_t tagOffset = packet.size() - HMAC_SIZE;
-        uint32_t receivedTag = 0;
-        for (size_t i = 0; i < HMAC_SIZE; ++i)
-            receivedTag |= static_cast<uint32_t>(packet[tagOffset + i]) << (i * 8);
-
-        uint32_t computedTag = ComputePrototypeTag(key, packet.data(), tagOffset);
-        if (receivedTag != computedTag)
+        std::span<const uint8_t> AsBytes(std::string_view text)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Network, "XOR prototype packet tag mismatch");
+            return {reinterpret_cast<const uint8_t*>(text.data()), text.size()};
+        }
+
+        /// One-way ratchet: the next epoch key cannot be used to recover the previous one.
+        SessionKey NextEpochKey(const SessionKey& current)
+        {
+            return HkdfSha256(current, current, kRekeyInfo);
+        }
+
+        /// Nonce scheme: [epoch u8][0 0 0][sequence u64 LE]. Each epoch has its own
+        /// key, and a sender uses each sequence at most once per epoch, so a
+        /// (key, nonce) pair never repeats.
+        AeadNonce MakeNonce(uint8_t epoch, uint64_t sequence)
+        {
+            AeadNonce nonce{};
+            nonce[0] = epoch;
+            StoreLE64(nonce.data() + 4, sequence);
+            return nonce;
+        }
+    } // namespace
+
+    // ============================================================================
+    // Key / token generation and comparison
+    // ============================================================================
+
+    bool GenerateSessionKey(SessionKey& outKey)
+    {
+        if (!EnsureSodium())
+        {
+            sodium_memzero(outKey.data(), outKey.size());
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "CSPRNG unavailable: refusing to create a session key");
             return false;
         }
+        randombytes_buf(outKey.data(), outKey.size());
+        return true;
+    }
 
-        // Extract nonce (sequence number)
-        outSequence = 0;
-        for (size_t i = 0; i < NONCE_SIZE; ++i)
-            outSequence |= static_cast<uint64_t>(packet[i]) << (i * 8);
+    bool GenerateConnectionToken(ConnectionToken& outToken)
+    {
+        if (!EnsureSodium())
+        {
+            sodium_memzero(outToken.data(), outToken.size());
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "CSPRNG unavailable: refusing to create a connection token");
+            return false;
+        }
+        randombytes_buf(outToken.data(), outToken.size());
+        return true;
+    }
 
-        // Reverse the XOR transform.
-        std::vector<uint8_t> keyStream(payloadSize);
-        GenerateKeyStream(key, outSequence, keyStream.data(), payloadSize);
+    bool ValidateToken(const ConnectionToken& expected, const ConnectionToken& received)
+    {
+        return ConstantTimeEqual(expected, received);
+    }
 
-        outPayload.resize(payloadSize);
-        for (size_t i = 0; i < payloadSize; ++i)
-            outPayload[i] = packet[NONCE_SIZE + i] ^ keyStream[i];
+    bool ConstantTimeEqual(std::span<const uint8_t> a, std::span<const uint8_t> b)
+    {
+        if (a.size() != b.size())
+        {
+            return false;
+        }
+        if (a.empty())
+        {
+            return true;
+        }
+        return sodium_memcmp(a.data(), b.data(), a.size()) == 0;
+    }
 
+    // ============================================================================
+    // RFC 8439 AEAD (libsodium IETF ChaCha20-Poly1305)
+    // ============================================================================
+
+    std::vector<uint8_t> ChaCha20Poly1305Seal(const SessionKey& key, const AeadNonce& nonce,
+                                              std::span<const uint8_t> aad, std::span<const uint8_t> plaintext)
+    {
+        if (!EnsureSodium())
+        {
+            return {}; // shorter than a tag: callers treat it as a failed seal
+        }
+        std::vector<uint8_t> out(plaintext.size() + AEAD_TAG_SIZE);
+        unsigned long long outLen = 0;
+        crypto_aead_chacha20poly1305_ietf_encrypt(out.data(), &outLen, plaintext.data(), plaintext.size(), aad.data(),
+                                                  aad.size(), nullptr, nonce.data(), key.data());
+        return out;
+    }
+
+    bool ChaCha20Poly1305Open(const SessionKey& key, const AeadNonce& nonce, std::span<const uint8_t> aad,
+                              std::span<const uint8_t> ciphertextAndTag, std::vector<uint8_t>& outPlaintext)
+    {
+        outPlaintext.clear();
+        if (ciphertextAndTag.size() < AEAD_TAG_SIZE || !EnsureSodium())
+        {
+            return false;
+        }
+
+        // libsodium verifies the tag in constant time before it decrypts, so
+        // unauthenticated plaintext is never written.
+        outPlaintext.resize(ciphertextAndTag.size() - AEAD_TAG_SIZE);
+        unsigned long long plaintextLen = 0;
+        if (crypto_aead_chacha20poly1305_ietf_decrypt(outPlaintext.data(), &plaintextLen, nullptr,
+                                                      ciphertextAndTag.data(), ciphertextAndTag.size(), aad.data(),
+                                                      aad.size(), nonce.data(), key.data()) != 0)
+        {
+            outPlaintext.clear();
+            return false;
+        }
         return true;
     }
 
     // ============================================================================
-    // Token Validation (constant-time comparison)
+    // SecureChannel
     // ============================================================================
 
-    bool ValidateToken(const ConnectionToken& expected, const ConnectionToken& received)
+    SecureChannel::SecureChannel(const SessionKey& sharedSecret, ChannelRole role)
     {
-        uint8_t diff = 0;
-        for (size_t i = 0; i < TOKEN_SIZE; ++i)
-            diff |= expected[i] ^ received[i];
-        bool valid = (diff == 0);
-        if (!valid)
+        SessionKey clientToServer = HkdfSha256(AsBytes(kHkdfSalt), sharedSecret, kClientToServerInfo);
+        SessionKey serverToClient = HkdfSha256(AsBytes(kHkdfSalt), sharedSecret, kServerToClientInfo);
+        const bool isClient = role == ChannelRole::Client;
+        m_sendKey = isClient ? clientToServer : serverToClient;
+        m_recvKey = isClient ? serverToClient : clientToServer;
+        sodium_memzero(clientToServer.data(), clientToServer.size());
+        sodium_memzero(serverToClient.data(), serverToClient.size());
+    }
+
+    SecureChannel::~SecureChannel()
+    {
+        sodium_memzero(m_sendKey.data(), m_sendKey.size());
+        sodium_memzero(m_recvKey.data(), m_recvKey.size());
+    }
+
+    bool SecureChannel::Seal(std::span<const uint8_t> payload, std::vector<uint8_t>& outPacket,
+                             std::span<const uint8_t> aad)
+    {
+        outPacket.clear();
+        if (payload.size() > SECURE_MAX_PAYLOAD)
+            return false;
+
+        // Nonce uniqueness is structural: every sequence value is used at most once per epoch key.
+        if (m_nextSendSequence == UINT64_MAX)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Network, "Prototype token bytes did not match");
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "SecureChannel send sequence exhausted; rotate the key");
+            return false;
         }
-        else
+        const uint64_t sequence = m_nextSendSequence++;
+
+        uint8_t header[SECURE_HEADER_SIZE];
+        header[0] = SECURE_TRANSPORT_VERSION;
+        header[1] = m_sendEpoch;
+        StoreLE64(header + 2, sequence);
+
+        std::vector<uint8_t> fullAad(header, header + SECURE_HEADER_SIZE);
+        fullAad.insert(fullAad.end(), aad.begin(), aad.end());
+
+        const auto sealed = ChaCha20Poly1305Seal(m_sendKey, MakeNonce(m_sendEpoch, sequence), fullAad, payload);
+        if (sealed.size() != payload.size() + AEAD_TAG_SIZE)
         {
-            SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Prototype token bytes matched");
+            return false; // libsodium unavailable; the consumed sequence is never reused
         }
-        return valid;
+        outPacket.reserve(SECURE_HEADER_SIZE + sealed.size());
+        outPacket.assign(header, header + SECURE_HEADER_SIZE);
+        outPacket.insert(outPacket.end(), sealed.begin(), sealed.end());
+        return true;
+    }
+
+    OpenResult SecureChannel::Open(std::span<const uint8_t> packet, std::vector<uint8_t>& outPayload,
+                                   std::span<const uint8_t> aad)
+    {
+        outPayload.clear();
+        if (packet.size() < SECURE_PACKET_OVERHEAD || packet.size() > SECURE_PACKET_OVERHEAD + SECURE_MAX_PAYLOAD)
+            return OpenResult::Malformed;
+        if (packet[0] != SECURE_TRANSPORT_VERSION)
+            return OpenResult::UnsupportedVersion;
+
+        const uint8_t epoch = packet[1];
+        const uint64_t sequence = LoadLE64(packet.data() + 2);
+        if (sequence == 0)
+            return OpenResult::Malformed;
+
+        // Only the current epoch or the immediately following rotation is accepted.
+        const bool isNextEpoch = m_recvEpoch != UINT8_MAX && epoch == static_cast<uint8_t>(m_recvEpoch + 1);
+        if (epoch != m_recvEpoch && !isNextEpoch)
+            return OpenResult::UnknownKeyEpoch;
+
+        // Cheap pre-check; the window is only committed after authentication.
+        if (!isNextEpoch && !m_replay.IsFresh(sequence))
+            return OpenResult::Replayed;
+
+        SessionKey candidateKey = isNextEpoch ? NextEpochKey(m_recvKey) : m_recvKey;
+
+        std::vector<uint8_t> fullAad(packet.begin(), packet.begin() + SECURE_HEADER_SIZE);
+        fullAad.insert(fullAad.end(), aad.begin(), aad.end());
+
+        const bool authentic = ChaCha20Poly1305Open(candidateKey, MakeNonce(epoch, sequence), fullAad,
+                                                    packet.subspan(SECURE_HEADER_SIZE), outPayload);
+        if (!authentic)
+        {
+            sodium_memzero(candidateKey.data(), candidateKey.size());
+            return OpenResult::AuthenticationFailed;
+        }
+
+        if (isNextEpoch)
+        {
+            // The peer proved possession of the next key: ratchet forward and drop the old one.
+            sodium_memzero(m_recvKey.data(), m_recvKey.size());
+            m_recvKey = candidateKey;
+            m_recvEpoch = epoch;
+            m_replay.Reset();
+        }
+        sodium_memzero(candidateKey.data(), candidateKey.size());
+
+        m_replay.Accept(sequence);
+        return OpenResult::Ok;
+    }
+
+    bool SecureChannel::RotateSendKey()
+    {
+        if (m_sendEpoch == UINT8_MAX)
+            return false;
+        SessionKey next = NextEpochKey(m_sendKey);
+        m_sendKey = next;
+        sodium_memzero(next.data(), next.size());
+        ++m_sendEpoch;
+        m_nextSendSequence = 1;
+        return true;
     }
 
     // ============================================================================
@@ -241,18 +356,29 @@ namespace Spark::Net
     }
 
     // ============================================================================
-    // Sequence duplicate filter (not authenticated replay protection)
+    // Sequence replay window
     // ============================================================================
+
+    bool ReplayProtection::IsFresh(uint64_t sequence) const
+    {
+        if (sequence == 0)
+            return false;
+        if (sequence > m_maxSequence)
+            return true;
+        if (m_maxSequence - sequence >= WINDOW_SIZE)
+            return false;
+        return !m_window[sequence % WINDOW_SIZE];
+    }
 
     bool ReplayProtection::Accept(uint64_t sequence)
     {
-        if (sequence == 0)
+        if (!IsFresh(sequence))
             return false;
 
         if (sequence > m_maxSequence)
         {
             // New high water mark - clear window entries that are now too old
-            uint64_t diff = sequence - m_maxSequence;
+            const uint64_t diff = sequence - m_maxSequence;
             if (diff >= WINDOW_SIZE)
             {
                 m_window.fill(false);
@@ -260,32 +386,12 @@ namespace Spark::Net
             else
             {
                 for (uint64_t i = 0; i < diff; ++i)
-                {
                     m_window[(m_maxSequence + 1 + i) % WINDOW_SIZE] = false;
-                }
             }
             m_maxSequence = sequence;
-            m_window[sequence % WINDOW_SIZE] = true;
-            return true;
         }
 
-        // Check if sequence is within the window
-        if (m_maxSequence - sequence >= WINDOW_SIZE)
-        {
-            SPARK_LOG_WARN(Spark::LogCategory::Network, "Sequence filter: sequence %llu too old (max=%llu)",
-                           static_cast<unsigned long long>(sequence), static_cast<unsigned long long>(m_maxSequence));
-            return false;
-        }
-
-        size_t idx = sequence % WINDOW_SIZE;
-        if (m_window[idx])
-        {
-            SPARK_LOG_WARN(Spark::LogCategory::Network, "Sequence filter: duplicate sequence %llu detected",
-                           static_cast<unsigned long long>(sequence));
-            return false;
-        }
-
-        m_window[idx] = true;
+        m_window[sequence % WINDOW_SIZE] = true;
         return true;
     }
 

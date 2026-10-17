@@ -17,6 +17,8 @@
 
 #include "Spark/SparkSDK.h"
 #include <memory>
+#include <string>
+#include <vector>
 
 // Forward declarations
 namespace ARPG
@@ -29,6 +31,8 @@ namespace ARPG
     class ARPGMonsterSystem;
     class ARPGEngineSystems;
     class ARPGDemoEncounter;
+    class ARPGActorPresentation;
+    class ARPGHud;
 } // namespace ARPG
 
 /**
@@ -62,6 +66,7 @@ class SparkGameARPGModule : public Spark::IModule
 
   private:
     void RegisterConsoleCommands();
+    void UnregisterConsoleCommands();
     void UpdateDemoInput();
 
     Spark::IEngineContext* m_context{nullptr};
@@ -76,12 +81,15 @@ class SparkGameARPGModule : public Spark::IModule
     std::unique_ptr<ARPG::ARPGSkillSystem> m_skillSystem;
     std::unique_ptr<ARPG::ARPGMonsterSystem> m_monsterSystem;
 
-    // Engine system integrations (EventBus, SaveSystem, AI, Animation, Abilities, etc.)
+    // Engine system integrations (EventBus, Destruction, AI, Animation, Abilities, etc.)
     std::unique_ptr<ARPG::ARPGEngineSystems> m_engineSystems;
     std::unique_ptr<ARPG::ARPGDemoEncounter> m_demoEncounter;
+    std::unique_ptr<ARPG::ARPGActorPresentation> m_actorPresentation; ///< Hero/monster actors in the World
+    std::unique_ptr<ARPG::ARPGHud> m_hud; ///< Runtime UI HUD; null when the engine exposes no UISystem
     bool m_attackHeld{false};
     bool m_skillHeld{false};
     bool m_restartHeld{false};
+    std::vector<std::string> m_registeredConsoleCommands;
 };
 
 // Module exports

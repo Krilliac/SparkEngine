@@ -17,12 +17,21 @@
  * small-to-medium teams (2-10 editors). Editors lock nodes before editing,
  * and completed edits are broadcast to all connected sessions.
  *
+ * ## Peer-session authentication
+ * Host() generates a 256-bit join code (GetJoinCode()) that the hosting user
+ * shares out of band. A connecting editor must answer the host's per-connection
+ * nonce with HMAC-SHA256(joinCode, nonce || userName) before it is registered as
+ * a peer; nothing is queued or relayed for a connection until that proof
+ * verifies. Frames, queued bytes and concurrent connections are all bounded
+ * (see the kCollab* limits below).
+ *
  * ## Usage
  * @code
  *   CollaborativeEditSession session;
  *   session.Host(27030, "Alice");
+ *   const std::string code = session.GetJoinCode(); // share with collaborators
  *   // With SPARK_NETWORK_BIND_ADDRESS=192.168.1.20/24:
- *   // session.Connect("192.168.1.100", 27030, "Bob");
+ *   // session.Connect("192.168.1.100", 27030, "Bob", code);
  *
  *   if (session.RequestLock("Entity_42"))
  *   {
@@ -40,11 +49,13 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
@@ -68,6 +79,31 @@ namespace SparkEditor
 
     using PeerID = uint32_t;
     constexpr PeerID INVALID_PEER = 0;
+
+    // ============================================================================
+    // Legacy peer-session limits (trust boundary: every peer socket)
+    // ============================================================================
+
+    /// Random bytes behind a join code; the code itself is this many bytes as lowercase hex.
+    inline constexpr size_t kCollabJoinSecretBytes = 32;
+    /// Random bytes in the per-connection challenge nonce.
+    inline constexpr size_t kCollabChallengeNonceBytes = 32;
+    /// Largest frame accepted from an authenticated peer (edit payloads are small text).
+    inline constexpr uint32_t kCollabMaxFrameBytes = 1u << 20;
+    /// Largest frame accepted before a connection has authenticated.
+    inline constexpr uint32_t kCollabMaxHandshakeFrameBytes = 4096;
+    /// Largest identifier-like field (node id, user name, component, property) on the wire.
+    inline constexpr size_t kCollabMaxIdentifierBytes = 4096;
+    /// Largest display name a peer may announce.
+    inline constexpr size_t kCollabMaxUserNameBytes = 128;
+    /// Concurrent peer connections (pending + authenticated) a host will service.
+    inline constexpr size_t kCollabMaxPeerConnections = 16;
+    /// Byte budget for each of the incoming and outgoing message queues.
+    inline constexpr size_t kCollabMaxQueuedBytes = size_t{64} * 1024 * 1024;
+    /// Seconds a connection has to complete the join handshake.
+    inline constexpr int kCollabHandshakeTimeoutSeconds = 5;
+    /// Seconds a frame has to arrive in full once its first byte has been received.
+    inline constexpr int kCollabFrameCompletionSeconds = 10;
 
 #ifdef _WIN32
     // WinSock SOCKET is UINT_PTR on 64-bit Windows. Never narrow it to int.
@@ -178,7 +214,9 @@ namespace SparkEditor
         PeerConnect,      ///< New peer connected
         PeerDisconnect,   ///< Peer disconnected
         LockGranted,      ///< Authoritative grant from host (host -> peers)
-        LockDenied        ///< Authoritative denial from host (host -> requesting peer)
+        LockDenied,       ///< Authoritative denial from host (host -> requesting peer)
+        AuthChallenge,    ///< Host -> connecting peer: payload is the join-proof nonce
+        AuthAccepted      ///< Host -> peer: join proof verified; sourcePeer is the assigned PeerID
     };
 
     /**
@@ -202,8 +240,18 @@ namespace SparkEditor
     /// @brief Serializes an InternalMessage to a byte buffer for TCP transmission
     std::vector<uint8_t> SerializeMessage(const InternalMessage& msg);
 
-    /// @brief Deserializes bytes back into an InternalMessage
+    /// @brief Deserializes bytes back into an InternalMessage. Rejects unknown message or
+    ///        edit types and identifier fields longer than kCollabMaxIdentifierBytes.
     bool DeserializeMessage(const uint8_t* data, size_t size, InternalMessage& outMsg);
+
+    /// @brief True when @p joinCode is a well-formed join code (64 lowercase hex characters).
+    bool IsValidCollabJoinCode(std::string_view joinCode);
+
+    /**
+     * @brief Computes the join proof a peer returns for a host challenge.
+     * @return Lowercase hex HMAC-SHA256(joinCode, "SparkCollabJoin/v1" || nonce || userName).
+     */
+    std::string ComputeCollabJoinProof(std::string_view joinCode, std::string_view nonce, std::string_view userName);
 
     // ============================================================================
     // Collaborative Edit Session
@@ -230,24 +278,26 @@ namespace SparkEditor
 
         /**
          * @brief Host a new collaborative session on a TCP port
-         * @param port Port to listen on for incoming editor connections
+         * @param port Port to listen on (0 = OS-assigned; GetPort() reports the bound port)
          * @param userName Display name for this editor
-         * @return true if hosting started (listener thread spawned)
+         * @return true if hosting started (listener thread spawned). A fresh join code is
+         *         generated; peers must present a proof derived from it (see GetJoinCode()).
          */
         bool Host(uint16_t port, const std::string& userName);
-        bool Host(uint16_t port, const std::string& userName,
-                  const Spark::Net::NetworkEndpointPolicy& endpointPolicy);
+        bool Host(uint16_t port, const std::string& userName, const Spark::Net::NetworkEndpointPolicy& endpointPolicy);
 
         /**
          * @brief Connect to an existing collaborative session via TCP
          * @param address Host address (IP or hostname)
          * @param port Host port
          * @param userName Display name for this editor
-         * @return true if TCP connection succeeded and handshake completed
+         * @param joinCode The host's join code (GetJoinCode() on the host)
+         * @return true only if the TCP connection succeeded and the host accepted the join proof
          */
-        bool Connect(const std::string& address, uint16_t port, const std::string& userName);
         bool Connect(const std::string& address, uint16_t port, const std::string& userName,
-                     const Spark::Net::NetworkEndpointPolicy& endpointPolicy);
+                     const std::string& joinCode);
+        bool Connect(const std::string& address, uint16_t port, const std::string& userName,
+                     const std::string& joinCode, const Spark::Net::NetworkEndpointPolicy& endpointPolicy);
 
         /**
          * @brief Create and join a session hosted by SparkCollabServer.
@@ -331,6 +381,9 @@ namespace SparkEditor
         /// @brief Get the port this session is listening on (host) or connected to (client)
         uint16_t GetPort() const { return m_port; }
 
+        /// @brief Join code peers must prove knowledge of (host only; empty otherwise)
+        const std::string& GetJoinCode() const { return m_joinCode; }
+
         /// @brief Get the address this session is connected to (client only)
         const std::string& GetHostAddress() const { return m_hostAddress; }
 
@@ -352,10 +405,20 @@ namespace SparkEditor
         void ExpireStaleNodes();
         PeerID AllocatePeerID();
 
-        /// @brief Bounded enqueue onto a message queue; drops the oldest entry past
-        ///        kMaxQueuedMessages so a fast/malicious peer cannot exhaust memory.
-        void EnqueueMessage(std::queue<InternalMessage>& queue, InternalMessage&& msg, bool& overflowWarned,
-                            const char* queueName);
+        /// @brief A message queue bounded by both entry count and approximate bytes.
+        struct BoundedMessageQueue
+        {
+            std::queue<InternalMessage> messages;
+            size_t queuedBytes = 0;
+            bool overflowWarned = false;
+        };
+
+        /// @brief Bounded enqueue; drops the oldest entries past kMaxQueuedMessages or
+        ///        kCollabMaxQueuedBytes so a fast peer cannot exhaust memory.
+        void EnqueueMessage(BoundedMessageQueue& queue, InternalMessage&& msg, const char* queueName);
+
+        /// @brief Moves every queued message out under the queue lock, resetting its byte count.
+        std::queue<InternalMessage> TakeQueuedMessages(BoundedMessageQueue& queue);
 
         // Network I/O
         void SendToAllPeers(const InternalMessage& msg);
@@ -364,6 +427,10 @@ namespace SparkEditor
         void NetworkThreadClient();
         void HandleClientSocket(CollaborativeSocketHandle clientSocket, PeerID peerId,
                                 std::shared_ptr<std::atomic<bool>> finished);
+        /// @brief Runs the host side of the join handshake on an unregistered socket.
+        bool AuthenticatePeer(CollaborativeSocketHandle clientSocket, PeerID peerId, InternalMessage& outConnect);
+        /// @brief Runs the client side of the join handshake; returns the host-assigned PeerID.
+        PeerID AuthenticateToHost(const std::string& userName, const std::string& joinCode);
         void ReapFinishedClientThreads(); ///< Join+remove client handler threads that have exited
         void ShutdownAllSockets();        ///< shutdown() all sockets to unblock recv()/accept()
         void CloseAllSockets();
@@ -374,6 +441,7 @@ namespace SparkEditor
         bool m_isHost = false;
         PeerID m_localPeerID = INVALID_PEER;
         std::string m_localUserName;
+        std::string m_joinCode; ///< Host only: secret peers must prove knowledge of
         float m_sessionTime = 0.0f;
         uint16_t m_port = 0;
         std::string m_hostAddress;
@@ -407,13 +475,11 @@ namespace SparkEditor
         float m_presenceBroadcastInterval = 1.0f;
         float m_presenceBroadcastTimer = 0.0f;
 
-        // Message queues (bounded — see kMaxQueuedMessages / EnqueueMessage)
+        // Message queues (bounded — see kMaxQueuedMessages / kCollabMaxQueuedBytes / EnqueueMessage)
         static constexpr size_t kMaxQueuedMessages = 8192;
-        std::queue<InternalMessage> m_outgoingMessages;
-        std::queue<InternalMessage> m_incomingMessages;
+        BoundedMessageQueue m_outgoingMessages;
+        BoundedMessageQueue m_incomingMessages;
         mutable std::mutex m_messageMutex;
-        bool m_outgoingOverflowWarned = false;
-        bool m_incomingOverflowWarned = false;
 
         // Networking — TCP sockets and threads
         CollaborativeSocketHandle m_listenSocket = INVALID_COLLAB_SOCKET;

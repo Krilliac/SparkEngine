@@ -1,0 +1,346 @@
+{
+  "schema_version": 1,
+  "blender_version": "4.0.2",
+  "module": "SparkGamePlatformer",
+  "author_script": {
+    "path": "tools/blender/author_platformer_kit.py",
+    "sha256": "4c61778b95db096b65236e83b2b1cf949b1199b97552fbd566520c207b270de3"
+  },
+  "library": {
+    "path": "tools/blender/spark_kit.py",
+    "sha256": "f2635ad37db4874e568485beaef56654a67e25ee06294e3c7d4194d6cf8c856e"
+  },
+  "blend": {
+    "path": "Art/Blender/SparkGamePlatformer/platformer_kit.blend",
+    "sha256": "99f226ecc0e71984a45d42f041494050cb773abf56f0952e50d02dac1e479a11",
+    "scene_sha256": "a2a033dc1a201536b731d11243c30f9d5be9b6b3fbcde087cb4fa4c8a334b42e"
+  },
+  "license": {
+    "name": "Spark Open License 1.0",
+    "path": "LICENSE",
+    "sha256": "4d6e814541f2b8fbaef70c44d16a627b24d437e6983b58d90f1c2e00e6d89a45"
+  },
+  "export_convention": "meters, ground pivot, Y-up, forward_axis=Z (left-handed +Z-forward)",
+  "assets": [
+    {
+      "name": "floating_platform",
+      "obj_path": "Assets/Models/Platformer/Kit/floating_platform.obj",
+      "mtl_path": "Assets/Models/Platformer/Kit/floating_platform.mtl",
+      "bounds": {
+        "min": [
+          -1.57,
+          0.0,
+          -1.57
+        ],
+        "max": [
+          1.57,
+          1.0,
+          1.57
+        ]
+      },
+      "triangle_count": 672,
+      "obj_sha256": "e0e160888fc1c669f9b12803a17b2aa32602cacf85b16ff9b218de33befeaa07",
+      "mtl_sha256": "7273c425061f0d35e6b5b750d3661eec8783d77b048c1e7d7578a2b407eb0731",
+      "triangle_budget": 900,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/Platformer/Kit/floating_platform_lod1.obj",
+          "mtl_path": "Assets/Models/Platformer/Kit/floating_platform_lod1.mtl",
+          "bounds": {
+            "min": [
+              -1.57,
+              -0.006205,
+              -1.57
+            ],
+            "max": [
+              1.57,
+              0.990086,
+              1.57
+            ]
+          },
+          "triangle_count": 240,
+          "obj_sha256": "457d17e7f4583d75060b8a58f76aa19dac0a8efb45e0460c7a07a6ee88e17101",
+          "mtl_sha256": "7273c425061f0d35e6b5b750d3661eec8783d77b048c1e7d7578a2b407eb0731",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/Platformer/Kit/floating_platform_collision.obj",
+          "mtl_path": "Assets/Models/Platformer/Kit/floating_platform_collision.mtl",
+          "bounds": {
+            "min": [
+              -1.57,
+              0.0,
+              -1.57
+            ],
+            "max": [
+              1.57,
+              1.0,
+              1.57
+            ]
+          },
+          "triangle_count": 12,
+          "obj_sha256": "de300810d2089d7b259f4449971ae60148ca51d7dc4ae096e4fd5aecc6744c11",
+          "mtl_sha256": "2ec34c72316f5f86a3ce6688e75563b6889ad3c95ceb0418e74ca28351051cd5",
+          "kind": "box",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "coin",
+      "obj_path": "Assets/Models/Platformer/Kit/coin.obj",
+      "mtl_path": "Assets/Models/Platformer/Kit/coin.mtl",
+      "bounds": {
+        "min": [
+          -0.25,
+          0.0,
+          -0.045
+        ],
+        "max": [
+          0.25,
+          0.5,
+          0.045
+        ]
+      },
+      "triangle_count": 292,
+      "obj_sha256": "f7a5f18d42e68f727eccf37f77b57bbec1d0d65516830bf4907dcb0f1af1fd5b",
+      "mtl_sha256": "66bfa4e944cb6d58cbfc97abc7179f81afa2671306fcbae769d59f0885ae8806",
+      "triangle_budget": 300,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/Platformer/Kit/coin_lod1.obj",
+          "mtl_path": "Assets/Models/Platformer/Kit/coin_lod1.mtl",
+          "bounds": {
+            "min": [
+              -0.243825,
+              -0.00349,
+              -0.045
+            ],
+            "max": [
+              0.256245,
+              0.495636,
+              0.05678
+            ]
+          },
+          "triangle_count": 104,
+          "obj_sha256": "bbe33d84cefc507edeeea92fdbec91e69503ab8cf6ed86a0ea8e0cb76626219f",
+          "mtl_sha256": "66bfa4e944cb6d58cbfc97abc7179f81afa2671306fcbae769d59f0885ae8806",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/Platformer/Kit/coin_collision.obj",
+          "mtl_path": "Assets/Models/Platformer/Kit/coin_collision.mtl",
+          "bounds": {
+            "min": [
+              -0.25,
+              0.0,
+              -0.045
+            ],
+            "max": [
+              0.25,
+              0.5,
+              0.045
+            ]
+          },
+          "triangle_count": 124,
+          "obj_sha256": "fa9f8c949e6970c61660cfef8072eeed5d2297fd403c01b4e7b42edbba96f876",
+          "mtl_sha256": "2ec34c72316f5f86a3ce6688e75563b6889ad3c95ceb0418e74ca28351051cd5",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "spring_pad",
+      "obj_path": "Assets/Models/Platformer/Kit/spring_pad.obj",
+      "mtl_path": "Assets/Models/Platformer/Kit/spring_pad.mtl",
+      "bounds": {
+        "min": [
+          -0.5,
+          0.0,
+          -0.5
+        ],
+        "max": [
+          0.5,
+          0.58,
+          0.5
+        ]
+      },
+      "triangle_count": 768,
+      "obj_sha256": "8a025fd8ae3a9fb09f23a0bbc5260db203adaee57e1cd4bcff0a29e182ae514b",
+      "mtl_sha256": "3c9a529a40db5ffc5b5572ac2fe28d050adfdba02f9827e102467f016387ca5e",
+      "triangle_budget": 800,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/Platformer/Kit/spring_pad_lod1.obj",
+          "mtl_path": "Assets/Models/Platformer/Kit/spring_pad_lod1.mtl",
+          "bounds": {
+            "min": [
+              -0.491333,
+              0.007816,
+              -0.491333
+            ],
+            "max": [
+              0.491333,
+              0.574,
+              0.491333
+            ]
+          },
+          "triangle_count": 276,
+          "obj_sha256": "b41b01536b0ed676d394f412ebc8ee98b110b326d04d95f3e84f4d7f94018d63",
+          "mtl_sha256": "3c9a529a40db5ffc5b5572ac2fe28d050adfdba02f9827e102467f016387ca5e",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/Platformer/Kit/spring_pad_collision.obj",
+          "mtl_path": "Assets/Models/Platformer/Kit/spring_pad_collision.mtl",
+          "bounds": {
+            "min": [
+              -0.5,
+              0.0,
+              -0.5
+            ],
+            "max": [
+              0.5,
+              0.58,
+              0.5
+            ]
+          },
+          "triangle_count": 164,
+          "obj_sha256": "8f3d4910f3b8ed7971de51661a4becddd27feeb1e3a5c8d25ecc30d5414c7578",
+          "mtl_sha256": "2ec34c72316f5f86a3ce6688e75563b6889ad3c95ceb0418e74ca28351051cd5",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "spike_hazard",
+      "obj_path": "Assets/Models/Platformer/Kit/spike_hazard.obj",
+      "mtl_path": "Assets/Models/Platformer/Kit/spike_hazard.mtl",
+      "bounds": {
+        "min": [
+          -0.5,
+          0.0,
+          -0.5
+        ],
+        "max": [
+          0.5,
+          0.64,
+          0.5
+        ]
+      },
+      "triangle_count": 448,
+      "obj_sha256": "e5a018a249dfb819373c26d745c9a67a84a4feb9e16da02f59ddf35fa0bd882c",
+      "mtl_sha256": "71ee574eed59f160532d8da085c371b30393407d053459634e784df05c7b0053",
+      "triangle_budget": 500,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/Platformer/Kit/spike_hazard_lod1.obj",
+          "mtl_path": "Assets/Models/Platformer/Kit/spike_hazard_lod1.mtl",
+          "bounds": {
+            "min": [
+              -0.496774,
+              0.009344,
+              -0.489508
+            ],
+            "max": [
+              0.496774,
+              0.641303,
+              0.489508
+            ]
+          },
+          "triangle_count": 160,
+          "obj_sha256": "72199dbb048eba7376fe01b6846e9b11512aa2e97182b9c3d190cef8f00d24bf",
+          "mtl_sha256": "71ee574eed59f160532d8da085c371b30393407d053459634e784df05c7b0053",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/Platformer/Kit/spike_hazard_collision.obj",
+          "mtl_path": "Assets/Models/Platformer/Kit/spike_hazard_collision.mtl",
+          "bounds": {
+            "min": [
+              -0.5,
+              0.0,
+              -0.5
+            ],
+            "max": [
+              0.5,
+              0.64,
+              0.5
+            ]
+          },
+          "triangle_count": 12,
+          "obj_sha256": "90150a72e4ece3340dc200c103d85a89ffd1be9de35328815827223a626b0fc3",
+          "mtl_sha256": "2ec34c72316f5f86a3ce6688e75563b6889ad3c95ceb0418e74ca28351051cd5",
+          "kind": "box",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "goal_flag",
+      "obj_path": "Assets/Models/Platformer/Kit/goal_flag.obj",
+      "mtl_path": "Assets/Models/Platformer/Kit/goal_flag.mtl",
+      "bounds": {
+        "min": [
+          -1.336984,
+          0.0,
+          -0.45
+        ],
+        "max": [
+          0.45,
+          3.5,
+          0.45
+        ]
+      },
+      "triangle_count": 336,
+      "obj_sha256": "dce87c34bf4efdc09a81203fa8e331621c7a5b0a8c632dfc6ef36fc686238192",
+      "mtl_sha256": "09e69d920758455142da5d3497ac760143e9ad51fa559a80247ef6eb6dd8eabe",
+      "triangle_budget": 600,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/Platformer/Kit/goal_flag_lod1.obj",
+          "mtl_path": "Assets/Models/Platformer/Kit/goal_flag_lod1.mtl",
+          "bounds": {
+            "min": [
+              -1.335205,
+              0.016667,
+              -0.433333
+            ],
+            "max": [
+              0.434615,
+              3.499135,
+              0.433333
+            ]
+          },
+          "triangle_count": 120,
+          "obj_sha256": "34dddf19b00347216a9965a4745b1fa4672f1c43bbf523949b7efb19d0e8381a",
+          "mtl_sha256": "09e69d920758455142da5d3497ac760143e9ad51fa559a80247ef6eb6dd8eabe",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/Platformer/Kit/goal_flag_collision.obj",
+          "mtl_path": "Assets/Models/Platformer/Kit/goal_flag_collision.mtl",
+          "bounds": {
+            "min": [
+              -1.336984,
+              0.0,
+              -0.45
+            ],
+            "max": [
+              0.45,
+              3.5,
+              0.45
+            ]
+          },
+          "triangle_count": 12,
+          "obj_sha256": "643d722e3e5b26215c44040fe42f12b1f19566b02f2f40daad190c164baa0db8",
+          "mtl_sha256": "2ec34c72316f5f86a3ce6688e75563b6889ad3c95ceb0418e74ca28351051cd5",
+          "kind": "box",
+          "triangle_cap": 200
+        }
+      }
+    }
+  ]
+}

@@ -8,7 +8,6 @@ OUT="$ROOT/docs/screenshots"
 BIN="$ROOT/build/linux-gcc-release/bin"
 mkdir -p "$OUT"
 
-export DISPLAY=:99
 export LIBGL_ALWAYS_SOFTWARE=1
 export MESA_GL_VERSION_OVERRIDE=3.3
 export SDL_VIDEODRIVER=x11
@@ -16,28 +15,398 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/runtime-root}"
 mkdir -p "$XDG_RUNTIME_DIR" 2>/dev/null
 chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null || true
 
-pgrep -f "Xvfb :99" >/dev/null || (Xvfb :99 -screen 0 1600x900x24 -nolisten tcp >/tmp/xvfb.log 2>&1 &)
+# Every capture owns a separate process group and a persistent group leader.
+# The leader stays alive until cleanup, so even descendants whose immediate
+# parent exits remain attributable without looking up process names.
+owned_pids=()
+owned_start_times=()
+owned_pgids=()
+owned_native_pids=()
+owned_keepers=()
+owned_roles=()
+owned_active=()
+display_lock=""
+cleanup_failed=0
+
+use_process_groups=0
+if command -v setsid >/dev/null 2>&1 \
+    && setsid --wait true >/dev/null 2>&1 \
+    && ps -o pgid= -p "$$" >/dev/null 2>&1; then
+    use_process_groups=1
+fi
+
+read_start_time() {
+    local pid="$1"
+    local process_stat
+    local fields=()
+    if { IFS= read -r process_stat <"/proc/$pid/stat"; } 2>/dev/null; then
+        # The parenthesized command can contain spaces; field 22 is the
+        # twentieth field after it.  Builtin reads also avoid a ps/awk process
+        # for every identity check on Git Bash.
+        read -r -a fields <<< "${process_stat##*) }"
+        printf '%s\n' "${fields[19]-}"
+    fi
+}
+
+pid_is_live() {
+    local pid="$1"
+    kill -0 "$pid" 2>/dev/null || return 1
+    if [ -r "/proc/$pid/stat" ]; then
+        [ "$(awk '{print $3}' "/proc/$pid/stat" 2>/dev/null)" != Z ] || return 1
+    else
+        # Git Bash exposes Windows-backed children through its ps -W table,
+        # but does not provide a reliable /proc zombie state.
+        [ -n "$(read_windows_identity "$pid")" ] || return 1
+    fi
+    return 0
+}
+
+read_process_group() {
+    if [ "$use_process_groups" -eq 1 ]; then
+        ps -o pgid= -p "$1" 2>/dev/null | tr -d '[:space:]'
+    else
+        ps -l 2>/dev/null | awk -v wanted="$1" '$1 == wanted {print $3; exit}'
+    fi
+}
+
+read_native_pid() {
+    local native_pid
+    if { IFS= read -r native_pid <"/proc/$1/winpid"; } 2>/dev/null; then
+        printf '%s\n' "$native_pid"
+    fi
+}
+
+read_windows_identity() {
+    # PPID and process state change when a parent exits.  They must never be
+    # part of the identity used to reap an already snapshotted descendant.
+    ps -W -l 2>/dev/null | awk -v wanted="$1" \
+        'NR > 1 && $1 == wanted {print $1, $4, $6, $7; exit}'
+}
+
+read_identity() {
+    local pid="$1"
+    local start_time
+    start_time="$(read_start_time "$pid")"
+    if [ -n "$start_time" ]; then
+        printf 'start:%s\n' "$start_time"
+    else
+        read_windows_identity "$pid"
+    fi
+}
+
+collect_group_descendants() {
+    local pgid="$1"
+    local leader="$2"
+    local keeper="${3:-0}"
+    # Git Bash retains PGID after PPID becomes 1.  Snapshot all members of
+    # our still-owned group, with children before parents, before any signal.
+    if [ "$use_process_groups" -eq 1 ]; then
+        ps -eo pid=,ppid=,pgid=
+    else
+        ps -l
+    fi 2>/dev/null | awk -v group="$pgid" -v leader="$leader" -v keeper="$keeper" '
+        $3 == group {parents[$1]=$2}
+        END {
+            for (pid in parents) {
+                if (pid == leader || pid == keeper) continue
+                depth=0; parent=parents[pid]
+                while (parent in parents && parent != pid) {
+                    depth++; parent=parents[parent]
+                }
+                print depth, pid
+            }
+        }' | sort -rn | awk '{print $2}'
+}
+
+snapshot_group_descendants() {
+    local child expected native
+    while read -r child; do
+        [ -n "$child" ] || continue
+        pid_is_live "$child" || continue
+        expected="$(read_identity "$child")"
+        native="$(read_native_pid "$child")"
+        if [ -z "$expected" ]; then
+            pid_is_live "$child" || continue
+            return 1
+        fi
+        # A PID from the table may have exited and been reused while its
+        # identity was read.  Only admit an identity still in this owned group.
+        [ "$(read_process_group "$child")" = "$1" ] || continue
+        snapshot_pid_is_same "$child" "$expected" || continue
+        printf '%s|%s|%s\n' "$child" "$expected" "$native"
+    done < <(collect_group_descendants "$@")
+}
+
+snapshot_pid_is_same() {
+    local pid="$1"
+    local expected="$2"
+    [ -n "$expected" ] || return 1
+    pid_is_live "$pid" || return 1
+    [ "$(read_identity "$pid")" = "$expected" ]
+}
+
+signal_captured_descendants() {
+    local snapshot="$1"
+    local signal="$2"
+    local force="$3"
+    local child expected native
+    while IFS='|' read -r child expected native; do
+        [ -n "$child" ] || continue
+        if snapshot_pid_is_same "$child" "$expected"; then
+            if [ "$force" -eq 1 ] && [ -n "$native" ] \
+                && [ "$(read_native_pid "$child")" = "$native" ]; then
+                # Git Bash's builtin kill can leave a Windows-backed process
+                # alive.  Its external kill supports direct Win32 termination
+                # and works even with a PATH containing only /usr/bin:/bin.
+                /usr/bin/kill -f -W -KILL "$native" 2>/dev/null || true
+            fi
+            kill -"$signal" "$child" 2>/dev/null || true
+        fi
+    done <<< "$snapshot"
+}
+
+captured_descendants_are_live() {
+    local snapshot="$1"
+    local child expected native
+    while IFS='|' read -r child expected native; do
+        [ -n "$child" ] || continue
+        if snapshot_pid_is_same "$child" "$expected"; then
+            return 0
+        fi
+    done <<< "$snapshot"
+    return 1
+}
+
+process_group_is_alive() {
+    local snapshot
+    snapshot="$(snapshot_group_descendants "$1" 0)" || return 0
+    [ -n "$snapshot" ]
+}
+
+launch_owned() {
+    local role="$1"
+    local log_file="$2"
+    shift 2
+    local mode="tree"
+    local pid
+    local ownership_file
+    ownership_file="$(mktemp "$XDG_RUNTIME_DIR/spark-capture-owner.XXXXXX")" || exit 1
+    if [ "$use_process_groups" -eq 1 ]; then
+        mode="group"
+        # Create the keeper before the app; never spawn a replacement during
+        # cleanup.  It reserves the leader/group identity until signalled.
+        # shellcheck disable=SC2016 # positional arguments expand in the child Bash
+        setsid --wait bash -c '
+            ownership_file=$1; shift
+            /usr/bin/sleep 2147483647 & keeper=$!
+            printf "%s\n" "$keeper" >"$ownership_file"
+            "$@" &
+            wait "$keeper" || :
+        ' bash "$ownership_file" "$@" >"$log_file" 2>&1 &
+        pid=$!
+    else
+        # Job control creates a dedicated group before the command can fork.
+        # Keep its leader alive after the command exits so PGID cannot be
+        # reused and orphaned descendants can still be snapshotted safely.
+        local restore_monitor=0
+        [[ "$-" == *m* ]] || restore_monitor=1
+        set -m
+        (set +m; /usr/bin/sleep 2147483647 & keeper=$!
+            printf '%s\n' "$keeper" >"$ownership_file"
+            "$@" & wait "$keeper" || :) >"$log_file" 2>&1 &
+        pid=$!
+        [ "$restore_monitor" -eq 0 ] || set +m
+    fi
+    owned_pids+=("$pid")
+    local identity
+    identity=""
+    local native_pid=""
+    for _ in {1..50}; do
+        identity="$(read_identity "$pid")"
+        native_pid="$(read_native_pid "$pid")"
+        if [ -n "$identity" ] && { [ "$mode" = group ] || [ -n "$native_pid" ]; }; then
+            break
+        fi
+        # Completed helpers have no identity to discover.  Do not spend fifty
+        # Windows process-table scans waiting for an already reaped process.
+        kill -0 "$pid" 2>/dev/null || break
+        sleep 0.01
+    done
+    if [ -z "$identity" ]; then
+        if ! pid_is_live "$pid"; then
+            # A short-lived helper may have completed before Git Bash exposes
+            # its process row.  It is still safe to record and reap it; there
+            # is no live PID left that could be confused with a replacement.
+            identity="dead:$pid"
+        else
+            echo "ERROR: cannot establish identity for owned child PID $pid" >&2
+            exit 1
+        fi
+    fi
+    owned_start_times+=("$identity")
+    local pgid
+    pgid="$(read_process_group "$pid")"
+    if [ "$pgid" != "$pid" ]; then
+        echo "ERROR: owned capture group was not isolated (PID $pid, PGID $pgid)" >&2
+        exit 1
+    fi
+    owned_pgids+=("$pgid")
+    owned_native_pids+=("$native_pid")
+    local keeper_pid="" keeper_identity="" keeper_native=""
+    for _ in {1..50}; do
+        IFS= read -r keeper_pid <"$ownership_file" || true
+        if [[ "$keeper_pid" =~ ^[0-9]+$ ]]; then
+            keeper_identity="$(read_identity "$keeper_pid")"
+            keeper_native="$(read_native_pid "$keeper_pid")"
+            [ -z "$keeper_identity" ] || break
+        fi
+        /usr/bin/sleep 0.01
+    done
+    rm -f -- "$ownership_file"
+    owned_keepers+=("$keeper_pid|$keeper_identity|$keeper_native")
+    owned_roles+=("$role")
+    owned_active+=(1)
+    if ! snapshot_pid_is_same "$keeper_pid" "$keeper_identity"; then
+        echo "ERROR: cannot establish owned capture keeper identity" >&2
+        exit 1
+    fi
+}
+
+owned_pid_is_same() {
+    local index="$1"
+    local pid="${owned_pids[$index]}"
+    local expected="${owned_start_times[$index]}"
+    pid_is_live "$pid" || return 1
+    if [ -n "$expected" ]; then
+        [ "$(read_identity "$pid")" = "$expected" ] || return 1
+    fi
+    return 0
+}
+
+stop_owned_index() {
+    local index="$1"
+    local pid="${owned_pids[$index]}"
+    local pgid="${owned_pgids[$index]-}"
+    if [ "${owned_active[$index]-0}" -eq 0 ]; then
+        return
+    fi
+    owned_active[index]=0
+    local keeper keeper_identity keeper_native
+    IFS='|' read -r keeper keeper_identity keeper_native <<< "${owned_keepers[$index]}"
+    local snapshot="" signal force deadline quiet=0
+    # Keep both ownership anchors alive while app TERM handlers may fork.
+    # Every pass discovers current group members and validates fresh identities;
+    # KILL passes catch children created after an earlier snapshot as well.
+    for signal in TERM KILL; do
+        force=0
+        [ "$signal" != KILL ] || force=1
+        deadline=$((SECONDS + 3))
+        while [ "$SECONDS" -lt "$deadline" ]; do
+            if ! owned_pid_is_same "$index" \
+                || ! snapshot_pid_is_same "$keeper" "$keeper_identity" \
+                || ! snapshot="$(snapshot_group_descendants "$pgid" "$pid" "$keeper")"; then
+                echo "ERROR: owned capture group identity could not be verified (PID $pid)" >&2
+                cleanup_failed=1
+                return 1
+            fi
+            if [ -z "$snapshot" ]; then
+                quiet=1
+                break
+            fi
+            signal_captured_descendants "$snapshot" "$signal" "$force"
+            /usr/bin/sleep 0.1
+        done
+        [ "$quiet" -eq 0 ] || break
+    done
+    if [ "$quiet" -eq 0 ]; then
+        echo "ERROR: owned capture group did not quiesce (PID $pid)" >&2
+        cleanup_failed=1
+    fi
+
+    # The app group is settled (or cleanup has failed closed).  Stop only the
+    # verified keeper and leader last, then verify the entire group is empty.
+    snapshot="${owned_keepers[$index]}"$'\n'"$pid|${owned_start_times[$index]}|${owned_native_pids[$index]}"
+    signal_captured_descendants "$snapshot" TERM 0
+    deadline=$((SECONDS + 2))
+    while captured_descendants_are_live "$snapshot" && [ "$SECONDS" -lt "$deadline" ]; do
+        /usr/bin/sleep 0.1
+    done
+    signal_captured_descendants "$snapshot" KILL 1
+    deadline=$((SECONDS + 2))
+    while captured_descendants_are_live "$snapshot" && [ "$SECONDS" -lt "$deadline" ]; do
+        /usr/bin/sleep 0.1
+    done
+    if pid_is_live "$pid" || process_group_is_alive "$pgid"; then
+        echo "ERROR: owned capture process survived cleanup (PID $pid)" >&2
+        cleanup_failed=1
+        return 1
+    fi
+    wait "$pid" 2>/dev/null || true
+    [ "$quiet" -eq 1 ]
+}
+
+# shellcheck disable=SC2329 # invoked indirectly by the EXIT/INT/TERM traps
+cleanup() {
+    local status=$?
+    trap - EXIT INT TERM HUP
+    local index
+    for ((index=${#owned_pids[@]}-1; index>=0; index--)); do
+        stop_owned_index "$index"
+    done
+    if [ -n "$display_lock" ]; then
+        rmdir "$display_lock" 2>/dev/null || true
+    fi
+    if [ "$cleanup_failed" -ne 0 ]; then
+        status=1
+    fi
+    exit "$status"
+}
+
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM HUP
+
+# Lock a display number for this run instead of racing with another capture
+# invocation or attaching to an unrelated long-lived X server.
+for display_number in $(seq 90 199); do
+    candidate_lock="$XDG_RUNTIME_DIR/spark-capture-display-$display_number.lock"
+    if [ ! -e "/tmp/.X11-unix/X$display_number" ] && mkdir "$candidate_lock" 2>/dev/null; then
+        display_lock="$candidate_lock"
+        DISPLAY=":$display_number"
+        export DISPLAY
+        break
+    fi
+done
+if [ -z "$display_lock" ]; then
+    echo "ERROR: no free display could be locked" >&2
+    exit 1
+fi
+
+launch_owned display /tmp/xvfb.log Xvfb "$DISPLAY" -screen 0 1600x900x24 -nolisten tcp
 sleep 1
+
+capture_failures=0
 
 grab() {
     local out="$1"
-    import -window root -display :99 "$out" 2>/dev/null
+    import -window root -display "$DISPLAY" "$out" 2>/dev/null
     if [ -f "$out" ] && [ "$(stat -c%s "$out")" -gt 1000 ]; then
         echo "  saved: $out ($(stat -c%s "$out") bytes)"
         return 0
     else
         echo "  WARN: $out tiny or missing"
+        capture_failures=$((capture_failures + 1))
         return 1
     fi
 }
 
 kill_editor() {
-    pkill -9 -f SparkEditor 2>/dev/null || true
-    pkill -9 -f SparkEngine 2>/dev/null || true
-    pkill -9 -f SparkConsole 2>/dev/null || true
-    pkill -9 -f SparkBuild 2>/dev/null || true
-    pkill -9 xterm 2>/dev/null || true
-    sleep 1
+    local index
+    for ((index=${#owned_pids[@]}-1; index>=0; index--)); do
+        if [ "${owned_roles[$index]-}" = app ]; then
+            stop_owned_index "$index"
+        fi
+    done
 }
 
 capture_editor_theme() {
@@ -47,13 +416,11 @@ capture_editor_theme() {
     local img="$OUT/editor-theme-${slug}.png"
     echo ">>> Editor theme: $theme"
     kill_editor
-    "$BIN/SparkEditor" --test-mode --test-frames 100000 --theme "$theme" \
-        --project "$ROOT" </dev/null > "$OUT/.editor-${slug}.log" 2>&1 &
-    local pid=$!
+    launch_owned app "$OUT/.editor-${slug}.log" "$BIN/SparkEditor" \
+        --test-mode --test-frames 100000 --theme "$theme" --project "$ROOT" </dev/null
     sleep "$waitsec"
     grab "$img"
-    kill -9 "$pid" 2>/dev/null || true
-    wait "$pid" 2>/dev/null
+    stop_owned_index "$((${#owned_pids[@]} - 1))"
 }
 
 # Launch xterm running $cmd, capture full display after $wait seconds.
@@ -63,14 +430,12 @@ capture_xterm() {
     local waitsec="$3"
     shift 3
     kill_editor
-    xterm -display :99 -geometry 150x40 -fa DejaVuSansMono -fs 12 \
+    launch_owned app /dev/null xterm -display "$DISPLAY" -geometry 150x40 -fa DejaVuSansMono -fs 12 \
         -bg "#0d1117" -fg "#d7d7d7" -T "$title" -hold \
-        -e "$@" >/dev/null 2>&1 &
-    local pid=$!
+        -e "$@"
     sleep "$waitsec"
     grab "$img"
-    kill -9 "$pid" 2>/dev/null || true
-    wait "$pid" 2>/dev/null
+    stop_owned_index "$((${#owned_pids[@]} - 1))"
 }
 
 capture_console() {
@@ -148,5 +513,9 @@ esac
 kill_editor
 echo
 echo "=== Output summary ==="
-ls -la "$OUT"/*.png 2>/dev/null | sort -k9
-true
+find "$OUT" -maxdepth 1 -type f -name '*.png' -print 2>/dev/null | sort
+if [ "$capture_failures" -ne 0 ]; then
+    echo "ERROR: $capture_failures screenshot capture(s) failed"
+    exit 1
+fi
+exit 0

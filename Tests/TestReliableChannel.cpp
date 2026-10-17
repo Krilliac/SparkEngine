@@ -420,9 +420,11 @@ TEST(ReliableChannel_MaxRetriesExceeded)
 #if defined(SPARK_TEST_HAS_NETWORKING) && defined(ENABLE_NETWORKING)
 
 #include "Engine/Networking/NetworkManager.h"
+#include "Fixtures/SecureTestPeer.h"
 #include "Utils/ScopeGuard.h"
 #include "Utils/SecureMemory.h"
 #include <chrono>
+#include <memory>
 #include <thread>
 
 namespace TestReliablePerPeer
@@ -430,10 +432,12 @@ namespace TestReliablePerPeer
     namespace Net = Spark::Net;
 
     constexpr uint32_t kWireMagic = 0x5350524B; // "SPRK"
-    static_assert(Net::NETWORK_WIRE_HEADER_SIZE == 23, "version-1 wire header must remain byte-compatible");
+    static_assert(Net::NETWORK_WIRE_HEADER_SIZE == 23, "the inner message header must remain byte-compatible");
 
     /// Raw UDP endpoint speaking the engine wire format — lets one test process
-    /// simulate multiple independent clients against the singleton server.
+    /// simulate multiple independent clients against the singleton server. It runs
+    /// the NET-100 v2 handshake in Connect and seals/opens every later datagram, so
+    /// the reliability behaviour under test is exercised on the production path.
     class RawUdpClient
     {
       public:
@@ -503,26 +507,55 @@ namespace TestReliablePerPeer
             buf.WriteUint32(sequence);
             buf.WriteFloat(0.0f); // timestamp
             buf.WriteUint32(static_cast<uint32_t>(payload.size()));
+            // Protocol v3: ReliableOrdered carries its ordered-stream sequence. This raw peer
+            // sends only ordered traffic on that channel, so both streams share its numbering.
+            if (wireChannel == static_cast<uint8_t>(Net::ChannelType::ReliableOrdered))
+            {
+                buf.WriteUint32(sequence);
+            }
             if (!payload.empty())
                 buf.WriteBytes(payload.data(), payload.size());
 
-            const auto& data = buf.GetData();
+            const auto data = SparkTestFixtures::FrameForSend(m_channel.get(), buf.GetData());
+            return SendDatagram(data);
+        }
+
+        bool SendDatagram(std::span<const uint8_t> data)
+        {
+            if (data.empty())
+                return false;
             const int sent =
                 ::sendto(m_socket, reinterpret_cast<const char*>(data.data()), static_cast<int>(data.size()), 0,
                          reinterpret_cast<const sockaddr*>(&m_serverAddr), sizeof(m_serverAddr));
             return sent == static_cast<int>(data.size());
         }
 
+        std::optional<std::vector<uint8_t>> ReceiveDatagram()
+        {
+            std::vector<uint8_t> raw(Net::MAX_UDP_WIRE_DATAGRAM_SIZE);
+            sockaddr_in from{};
+            socklen_t fromLen = sizeof(from);
+            const int received = ::recvfrom(m_socket, reinterpret_cast<char*>(raw.data()), static_cast<int>(raw.size()),
+                                            0, reinterpret_cast<sockaddr*>(&from), &fromLen);
+            if (received <= 0)
+                return std::nullopt;
+            raw.resize(static_cast<size_t>(received));
+            return raw;
+        }
+
         /// Non-blocking receive of one engine-format message. False = nothing waiting.
         bool TryReceive(Net::NetworkMessage& outMsg)
         {
             outMsg.ClearSensitivePayload();
-            std::vector<uint8_t> raw(Net::MAX_UDP_WIRE_DATAGRAM_SIZE);
+            const auto datagram = ReceiveDatagram();
+            if (!datagram)
+                return false;
+            auto inner = SparkTestFixtures::OpenFrame(m_channel.get(), *datagram);
+            if (!inner)
+                return false;
+            std::vector<uint8_t> raw = std::move(*inner);
             const auto clearRaw = Spark::MakeScopeExit([&raw] { Spark::SecureClear(raw); });
-            sockaddr_in from{};
-            socklen_t fromLen = sizeof(from);
-            int received = ::recvfrom(m_socket, reinterpret_cast<char*>(raw.data()), static_cast<int>(raw.size()), 0,
-                                      reinterpret_cast<sockaddr*>(&from), &fromLen);
+            const int received = static_cast<int>(raw.size());
             if (received < static_cast<int>(Net::NETWORK_WIRE_HEADER_SIZE))
                 return false;
             m_lastWireSize = static_cast<size_t>(received);
@@ -544,8 +577,10 @@ namespace TestReliablePerPeer
             outMsg.sequence = buf.ReadUint32();
             outMsg.timestamp = buf.ReadFloat();
             uint32_t payloadLen = buf.ReadUint32();
+            outMsg.orderedSequence =
+                outMsg.channel == Net::ChannelType::ReliableOrdered ? buf.ReadUint32() : Net::SequenceNumber{0};
             if (!Net::IsNetworkPayloadSizeValid(payloadLen) ||
-                payloadLen > static_cast<size_t>(received) - Net::NETWORK_WIRE_HEADER_SIZE)
+                payloadLen > static_cast<size_t>(received) - buf.GetReadPosition())
                 return false;
             outMsg.payload.resize(payloadLen);
             if (payloadLen > 0)
@@ -553,31 +588,17 @@ namespace TestReliablePerPeer
             return buf.IsValid();
         }
 
-        /// Handshake: send Connect and pump the server until ConnectAccepted arrives.
+        /// Handshake: the v2 Connect / ConnectAccepted / sealed ClientFinished exchange.
         bool Connect(Net::NetworkManager& server, const std::string& name)
         {
-            Net::NetBuffer payload;
-            payload.WriteString(name);
-            for (int attempt = 0; attempt < 50; ++attempt)
-            {
-                Send(Net::MessageType::Connect, Net::ChannelType::Reliable, 0, payload.GetData());
-                std::this_thread::sleep_for(std::chrono::milliseconds(2));
-                server.Update(0.01f);
-                std::this_thread::sleep_for(std::chrono::milliseconds(2));
-
-                Net::NetworkMessage msg;
-                while (TryReceive(msg))
-                {
-                    if (msg.type == Net::MessageType::ConnectAccepted && msg.payload.size() >= 4)
-                    {
-                        Net::NetBuffer acceptBuf;
-                        acceptBuf.WriteBytes(msg.payload.data(), msg.payload.size());
-                        m_clientID = acceptBuf.ReadUint32();
-                        return true;
-                    }
-                }
-            }
-            return false;
+            auto session = SparkTestFixtures::RawHandshake(
+                server, [this](std::span<const uint8_t> data) { return SendDatagram(data); },
+                [this] { return ReceiveDatagram(); }, name);
+            if (!session)
+                return false;
+            m_clientID = session->id;
+            m_channel = std::move(session->channel);
+            return true;
         }
 
         /// Drain the socket; count messages of the given type and record the last sequence seen.
@@ -603,6 +624,7 @@ namespace TestReliablePerPeer
       private:
         SOCKET m_socket = INVALID_SOCKET;
         sockaddr_in m_serverAddr{};
+        std::unique_ptr<Net::SecureChannel> m_channel;
         Net::ClientID m_clientID = 0;
         uint8_t m_lastWireChannel = 0xFF;
         size_t m_lastWireSize = 0;
@@ -625,7 +647,8 @@ TEST(ReliablePerPeer_TwoClientsSameSequences_BothDispatched)
 {
     auto& nm = Net::NetworkManager::GetInstance();
     nm.Shutdown();
-    EXPECT_TRUE(nm.StartServer(28451, 8));
+    EXPECT_TRUE(nm.StartServer(0, 8));
+    EXPECT_NE(nm.GetBoundPort(), static_cast<uint16_t>(0));
 
     std::unordered_map<Net::ClientID, int> receivedBySender;
     nm.RegisterHandler(Net::MessageType::ChatMessage,
@@ -633,8 +656,8 @@ TEST(ReliablePerPeer_TwoClientsSameSequences_BothDispatched)
 
     RawUdpClient clientA;
     RawUdpClient clientB;
-    EXPECT_TRUE(clientA.Open(28451));
-    EXPECT_TRUE(clientB.Open(28451));
+    EXPECT_TRUE(clientA.Open(nm.GetBoundPort()));
+    EXPECT_TRUE(clientB.Open(nm.GetBoundPort()));
     EXPECT_TRUE(clientA.Connect(nm, "ClientA"));
     EXPECT_TRUE(clientB.Connect(nm, "ClientB"));
     EXPECT_NE(clientA.GetClientID(), clientB.GetClientID());
@@ -662,7 +685,8 @@ TEST(ReliablePerPeer_OrderedChannelIndependentPerPeer)
 {
     auto& nm = Net::NetworkManager::GetInstance();
     nm.Shutdown();
-    EXPECT_TRUE(nm.StartServer(28452, 8));
+    EXPECT_TRUE(nm.StartServer(0, 8));
+    EXPECT_NE(nm.GetBoundPort(), static_cast<uint16_t>(0));
 
     std::unordered_map<Net::ClientID, std::vector<uint8_t>> deliveredBySender;
     nm.RegisterHandler(Net::MessageType::UserDefined, [&deliveredBySender](const Net::NetworkMessage& msg)
@@ -670,8 +694,8 @@ TEST(ReliablePerPeer_OrderedChannelIndependentPerPeer)
 
     RawUdpClient clientA;
     RawUdpClient clientB;
-    EXPECT_TRUE(clientA.Open(28452));
-    EXPECT_TRUE(clientB.Open(28452));
+    EXPECT_TRUE(clientA.Open(nm.GetBoundPort()));
+    EXPECT_TRUE(clientB.Open(nm.GetBoundPort()));
     EXPECT_TRUE(clientA.Connect(nm, "ClientA"));
     EXPECT_TRUE(clientB.Connect(nm, "ClientB"));
 
@@ -708,17 +732,18 @@ TEST(ReliablePerPeer_AckFromOnePeerDoesNotClearAnothers)
 {
     auto& nm = Net::NetworkManager::GetInstance();
     nm.Shutdown();
-    EXPECT_TRUE(nm.StartServer(28453, 8));
+    EXPECT_TRUE(nm.StartServer(0, 8));
+    EXPECT_NE(nm.GetBoundPort(), static_cast<uint16_t>(0));
 
     RawUdpClient clientA;
     RawUdpClient clientB;
-    EXPECT_TRUE(clientA.Open(28453));
-    EXPECT_TRUE(clientB.Open(28453));
+    EXPECT_TRUE(clientA.Open(nm.GetBoundPort()));
+    EXPECT_TRUE(clientB.Open(nm.GetBoundPort()));
     EXPECT_TRUE(clientA.Connect(nm, "ClientA"));
     EXPECT_TRUE(clientB.Connect(nm, "ClientB"));
 
     // Server reliable broadcast: each peer gets its own sequence stream
-    // (seq 1 = ConnectAccepted, seq 2 = this chat message, per peer).
+    // (ConnectAccepted is unreliable, so this chat message is seq 1 per peer).
     Net::NetworkMessage chat;
     chat.type = Net::MessageType::ChatMessage;
     chat.channel = Net::ChannelType::Reliable;
@@ -730,14 +755,14 @@ TEST(ReliablePerPeer_AckFromOnePeerDoesNotClearAnothers)
     Net::SequenceNumber seqToB = 0;
     EXPECT_GE(clientA.DrainCount(Net::MessageType::ChatMessage, seqToA), 1);
     EXPECT_GE(clientB.DrainCount(Net::MessageType::ChatMessage, seqToB), 1);
-    EXPECT_EQ(seqToA, 2u);
-    EXPECT_EQ(seqToB, 2u);
+    EXPECT_EQ(seqToA, 1u);
+    EXPECT_EQ(seqToB, 1u);
 
-    // A acknowledges its whole stream: ackSeq=2 with bitfield bit 0 = seq 1.
+    // A acknowledges its whole stream: ackSeq=1, no older sequences.
     // This must clear ONLY A's unacked map — B never acked anything.
     std::vector<uint8_t> ackPayload(8);
     const uint32_t ackSeq = seqToA;
-    const uint32_t ackBits = 0x1u;
+    const uint32_t ackBits = 0x0u;
     std::memcpy(ackPayload.data(), &ackSeq, 4);
     std::memcpy(ackPayload.data() + 4, &ackBits, 4);
     clientA.Send(Net::MessageType::Ack, Net::ChannelType::Unreliable, 0, ackPayload);
@@ -762,10 +787,11 @@ TEST(NetworkWire_MaxPayload_LoopbackSendPreservesWholeDatagram)
 {
     auto& nm = Net::NetworkManager::GetInstance();
     nm.Shutdown();
-    EXPECT_TRUE(nm.StartServer(28454, 2));
+    EXPECT_TRUE(nm.StartServer(0, 2));
+    EXPECT_NE(nm.GetBoundPort(), static_cast<uint16_t>(0));
 
     RawUdpClient client;
-    EXPECT_TRUE(client.Open(28454));
+    EXPECT_TRUE(client.Open(nm.GetBoundPort()));
     EXPECT_TRUE(client.Connect(nm, "MaxPayloadClient"));
 
     Net::NetworkMessage outbound;
@@ -804,10 +830,11 @@ TEST(NetworkWire_MaxPlusOneReliableRejectedBeforeSequenceAllocation)
 {
     auto& nm = Net::NetworkManager::GetInstance();
     nm.Shutdown();
-    EXPECT_TRUE(nm.StartServer(28455, 2));
+    EXPECT_TRUE(nm.StartServer(0, 2));
+    EXPECT_NE(nm.GetBoundPort(), static_cast<uint16_t>(0));
 
     RawUdpClient client;
-    EXPECT_TRUE(client.Open(28455));
+    EXPECT_TRUE(client.Open(nm.GetBoundPort()));
     EXPECT_TRUE(client.Connect(nm, "OversizeClient"));
 
     const uint64_t droppedBefore = nm.GetStats().packetsDropped;
@@ -842,7 +869,7 @@ TEST(NetworkWire_MaxPlusOneReliableRejectedBeforeSequenceAllocation)
     }
 
     EXPECT_TRUE(found);
-    EXPECT_EQ(received.sequence, 2u); // ConnectAccepted consumed sequence 1.
+    EXPECT_EQ(received.sequence, 1u); // the rejected oversize message consumed no sequence
     EXPECT_TRUE(received.payload == valid.payload);
     EXPECT_EQ(nm.GetStats().packetsDropped, droppedBefore + 1);
     nm.Shutdown();
@@ -852,10 +879,11 @@ TEST(NetworkWire_5KiBReliableLoopbackReceiveIsNotTruncated)
 {
     auto& nm = Net::NetworkManager::GetInstance();
     nm.Shutdown();
-    EXPECT_TRUE(nm.StartServer(28456, 2));
+    EXPECT_TRUE(nm.StartServer(0, 2));
+    EXPECT_NE(nm.GetBoundPort(), static_cast<uint16_t>(0));
 
     RawUdpClient client;
-    EXPECT_TRUE(client.Open(28456));
+    EXPECT_TRUE(client.Open(nm.GetBoundPort()));
     EXPECT_TRUE(client.Connect(nm, "FiveKiBClient"));
 
     std::vector<uint8_t> expected(5 * 1024);
@@ -878,10 +906,11 @@ TEST(NetworkWire_SensitiveOwnershipIsLocalAndHighChannelBitsAreRejected)
 {
     auto& nm = Net::NetworkManager::GetInstance();
     nm.Shutdown();
-    EXPECT_TRUE(nm.StartServer(28457, 2));
+    EXPECT_TRUE(nm.StartServer(0, 2));
+    EXPECT_NE(nm.GetBoundPort(), static_cast<uint16_t>(0));
 
     RawUdpClient client;
-    EXPECT_TRUE(client.Open(28457));
+    EXPECT_TRUE(client.Open(nm.GetBoundPort()));
     EXPECT_TRUE(client.Connect(nm, "SensitiveOwnershipClient"));
 
     bool serverSawSensitive = false;
@@ -897,9 +926,9 @@ TEST(NetworkWire_SensitiveOwnershipIsLocalAndHighChannelBitsAreRejected)
         });
 
     std::vector<uint8_t> request{'p', 'l', 'a', 'i', 'n', 't', 'e', 'x', 't'};
-    // Version 1 reserves every channel value above 2. In particular, the
-    // formerly proposed 0x80 sensitivity bit must remain invalid so old and
-    // new peers enforce the same 23-byte format.
+    // The message format reserves every channel value above 2. In particular, the
+    // formerly proposed 0x80 sensitivity bit must remain invalid, even inside an
+    // authenticated sealed frame.
     EXPECT_TRUE(client.SendRawChannel(Net::MessageType::UserDefined, 0x81, 1, request, true));
     PumpServer(nm, 10);
     EXPECT_EQ(serverDispatchCount, 0);
@@ -955,6 +984,18 @@ TEST(NetworkWire_SensitiveOwnershipIsLocalAndHighChannelBitsAreRejected)
     EXPECT_TRUE(received.payload == reply.payload);
     Spark::SecureClear(request);
     Spark::SecureClear(serverPayload);
+    nm.Shutdown();
+}
+
+TEST(NetworkWire_StartServerRejectsOutOfRangeMaxClientsWithoutAborting)
+{
+    // maxClients comes from operator configuration: out of range is a startup
+    // failure the caller can report, not an always-on assertion that aborts.
+    auto& nm = Net::NetworkManager::GetInstance();
+    nm.Shutdown();
+    EXPECT_FALSE(nm.StartServer(0, 0));
+    EXPECT_FALSE(nm.StartServer(0, Net::MAX_SERVER_CLIENTS + 1));
+    EXPECT_FALSE(nm.StartServer(0, 100000));
     nm.Shutdown();
 }
 

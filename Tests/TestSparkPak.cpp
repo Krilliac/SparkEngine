@@ -1,6 +1,7 @@
 // TestSparkPak.cpp — Unit tests for SparkPak archive format (read, write, compress, VFS)
 // Standalone test: writes temp archives, reads them back, verifies round-trip correctness.
 
+#include "TestFilesystemLinks.h"
 #include "TestFramework.h"
 #include "Core/SparkPak.h"
 #include "Core/SparkPakWriter.h"
@@ -14,6 +15,12 @@
 #include <string>
 #include <thread>
 #include <vector>
+
+#if defined(_WIN32)
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
 
 // ============================================================================
 // Standalone reimplementation of SparkPak core types for test isolation
@@ -254,9 +261,19 @@ namespace
         std::unordered_map<uint64_t, TOCEntry> m_entries;
     };
 
+    std::filesystem::path TempRoot()
+    {
+#if defined(_WIN32)
+        const auto processId = static_cast<unsigned long>(::_getpid());
+#else
+        const auto processId = static_cast<unsigned long>(::getpid());
+#endif
+        return std::filesystem::temp_directory_path() / ("sparkpak_tests_" + std::to_string(processId));
+    }
+
     std::string TempPath(const std::string& name)
     {
-        auto dir = std::filesystem::temp_directory_path() / "sparkpak_tests";
+        const auto dir = TempRoot();
         std::filesystem::create_directories(dir);
         return (dir / name).string();
     }
@@ -264,7 +281,7 @@ namespace
     void Cleanup()
     {
         std::error_code ec;
-        std::filesystem::remove_all(std::filesystem::temp_directory_path() / "sparkpak_tests", ec);
+        std::filesystem::remove_all(TempRoot(), ec);
     }
 
 } // anonymous namespace
@@ -528,6 +545,51 @@ TEST(SparkPak_ProductionRejectsTinyArchiveWith2GiBEntryDeclaration)
     Cleanup();
 }
 
+TEST(SparkPak_ProductionRejectsUnsafeTOCEntryPath)
+{
+    const auto path = TempPath("unsafe_path.spk");
+    const std::string virtualPath = "../outside.bin";
+
+    Spark::PakHeader header;
+    header.fileCount = 1;
+    header.tocOffset = sizeof(Spark::PakHeader) + 1;
+    header.tocSize = static_cast<uint32_t>(27 + virtualPath.size());
+    header.tocRawSize = header.tocSize;
+
+    std::vector<uint8_t> toc(header.tocSize);
+    uint8_t* cursor = toc.data();
+    const uint64_t hash = Spark::PakFNV1a(virtualPath);
+    const uint64_t dataOffset = sizeof(Spark::PakHeader);
+    const uint32_t size = 1;
+    const uint8_t compression = static_cast<uint8_t>(Spark::PakCompression::Stored);
+    const uint16_t pathLen = static_cast<uint16_t>(virtualPath.size());
+    std::memcpy(cursor, &hash, sizeof(hash));
+    cursor += sizeof(hash);
+    std::memcpy(cursor, &dataOffset, sizeof(dataOffset));
+    cursor += sizeof(dataOffset);
+    std::memcpy(cursor, &size, sizeof(size));
+    cursor += sizeof(size);
+    std::memcpy(cursor, &size, sizeof(size));
+    cursor += sizeof(size);
+    std::memcpy(cursor, &compression, sizeof(compression));
+    cursor += sizeof(compression);
+    std::memcpy(cursor, &pathLen, sizeof(pathLen));
+    cursor += sizeof(pathLen);
+    std::memcpy(cursor, virtualPath.data(), virtualPath.size());
+
+    {
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        out.write(reinterpret_cast<const char*>(&header), sizeof(header));
+        const uint8_t payload = 0x5a;
+        out.write(reinterpret_cast<const char*>(&payload), 1);
+        out.write(reinterpret_cast<const char*>(toc.data()), static_cast<std::streamsize>(toc.size()));
+    }
+
+    Spark::SparkPakReader reader;
+    EXPECT_FALSE(reader.Open(path));
+    Cleanup();
+}
+
 TEST(SparkPak_ProductionRefusesHostileCompressionRatioPerEntry)
 {
     // A ~1 KB archive whose TOC declares a 100-byte deflate entry expanding to
@@ -673,20 +735,24 @@ TEST(SparkPak_ProductionAddDirectoryRejectsSymlinkOutsideRoot)
     const fs::path root = base / "root";
     const fs::path outside = base / "outside.bin";
     std::error_code ec;
+    // Start clean: unlink any link an aborted run left, then drop the rest.
+    SparkTestLinks::RemoveDirectoryLink(root / "linked-dir");
+    fs::remove_all(base, ec);
     fs::create_directories(root, ec);
     {
         std::ofstream(root / "inside.bin", std::ios::binary) << "inside";
         std::ofstream(outside, std::ios::binary) << "outside-secret";
     }
 
+    // A directory link out of the root runs on every host: an NTFS junction on
+    // Windows (no privilege needed), a symlink elsewhere.
+    fs::create_directories(base / "outside-dir", ec);
+    std::ofstream(base / "outside-dir" / "secret.bin", std::ios::binary) << "outside-secret";
+    ASSERT_TRUE(SparkTestLinks::MakeDirectoryLink(base / "outside-dir", root / "linked-dir"));
+
+    // A file symlink as well where the host allows one; Windows needs Developer
+    // Mode or elevated symlink rights for it, so its absence is not a failure.
     fs::create_symlink(outside, root / "outside-link.bin", ec);
-    if (ec)
-    {
-        // Windows commonly requires Developer Mode or elevated symlink rights.
-        // The containment test is exercised on platforms where creation succeeds.
-        Cleanup();
-        return;
-    }
 
     Spark::SparkPakWriter writer;
     writer.AddDirectory(root);
@@ -698,6 +764,193 @@ TEST(SparkPak_ProductionAddDirectoryRejectsSymlinkOutsideRoot)
     EXPECT_TRUE(reader.Open(pakPath));
     EXPECT_TRUE(reader.Exists("inside.bin"));
     EXPECT_FALSE(reader.Exists("outside-link.bin"));
+    EXPECT_FALSE(reader.Exists("linked-dir/secret.bin"));
+    reader.Close();
+    EXPECT_TRUE(SparkTestLinks::RemoveDirectoryLink(root / "linked-dir"));
+    Cleanup();
+}
+
+#ifdef SPARK_MINIZ_AVAILABLE
+TEST(SparkPak_ProductionRejectsTocHeaderThatOverstatesDeflateOutput)
+{
+    // Regression for the SEC-120 SparkPak fuzz target: ReadTOC allocated the
+    // header's tocRawSize (up to 256 MB) before inflating a TOC stream of any
+    // size, and accepted a stream that ended short of that size. A tiny archive
+    // could therefore demand a 256 MB zero-filled buffer at mount time and still
+    // open. Both forms are now refused before the entry parser runs.
+    const auto path = TempPath("toc_overstated.spk");
+    Spark::SparkPakWriter writer;
+    writer.AddFile("asset.bin", std::vector<uint8_t>(16, 0x42), false);
+    EXPECT_TRUE(writer.Finalize(path));
+
+    Spark::PakHeader header;
+    {
+        std::ifstream in(path, std::ios::binary);
+        in.read(reinterpret_cast<char*>(&header), sizeof(header));
+        EXPECT_TRUE(in.good());
+    }
+    EXPECT_TRUE(header.tocSize != header.tocRawSize); // the writer deflates the TOC
+
+    const auto rewriteRawSize = [&](uint32_t rawSize)
+    {
+        Spark::PakHeader patched = header;
+        patched.tocRawSize = rawSize;
+        std::fstream out(path, std::ios::binary | std::ios::in | std::ios::out);
+        out.seekp(0);
+        out.write(reinterpret_cast<const char*>(&patched), sizeof(patched));
+    };
+
+    {
+        Spark::SparkPakReader reader;
+        EXPECT_TRUE(reader.Open(path));
+        EXPECT_TRUE(reader.ReadFile("asset.bin") == std::vector<uint8_t>(16, 0x42));
+    }
+
+    // The stream inflates to fewer bytes than declared (still a plausible ratio).
+    rewriteRawSize(header.tocRawSize + 64u);
+    {
+        Spark::SparkPakReader reader;
+        EXPECT_FALSE(reader.Open(path));
+    }
+
+    // A declared expansion past deflate's ~1032:1 ceiling cannot be genuine.
+    rewriteRawSize(header.tocSize * 1032u + 1u);
+    {
+        Spark::SparkPakReader reader;
+        EXPECT_FALSE(reader.Open(path));
+    }
+
+    Cleanup();
+}
+#endif
+
+// ============================================================================
+// SEC-assets: TOC hash binding, duplicates and count/size agreement
+// ============================================================================
+
+namespace
+{
+    struct RawTocEntry
+    {
+        std::string path;
+        uint64_t hash = 0;
+    };
+
+    /// Write a stored-TOC archive whose entries all point at one shared payload
+    /// byte. extraTocBytes appends that many zero bytes after the last entry.
+    void WriteRawTocArchive(const std::string& archivePath, const std::vector<RawTocEntry>& entries,
+                            uint32_t declaredCount, size_t extraTocBytes = 0)
+    {
+        std::vector<uint8_t> toc;
+        const uint64_t dataOffset = sizeof(Spark::PakHeader);
+        const uint32_t size = 1;
+        const uint8_t compression = static_cast<uint8_t>(Spark::PakCompression::Stored);
+        for (const auto& entry : entries)
+        {
+            const uint16_t pathLen = static_cast<uint16_t>(entry.path.size());
+            const size_t offset = toc.size();
+            toc.resize(offset + 27 + pathLen);
+            uint8_t* cursor = toc.data() + offset;
+            std::memcpy(cursor, &entry.hash, 8);
+            cursor += 8;
+            std::memcpy(cursor, &dataOffset, 8);
+            cursor += 8;
+            std::memcpy(cursor, &size, 4);
+            cursor += 4;
+            std::memcpy(cursor, &size, 4);
+            cursor += 4;
+            *cursor = compression;
+            cursor += 1;
+            std::memcpy(cursor, &pathLen, 2);
+            cursor += 2;
+            std::memcpy(cursor, entry.path.data(), pathLen);
+        }
+        toc.resize(toc.size() + extraTocBytes, 0);
+
+        Spark::PakHeader header;
+        header.fileCount = declaredCount;
+        header.tocOffset = sizeof(Spark::PakHeader) + 1;
+        header.tocSize = static_cast<uint32_t>(toc.size());
+        header.tocRawSize = header.tocSize;
+
+        std::ofstream out(archivePath, std::ios::binary | std::ios::trunc);
+        out.write(reinterpret_cast<const char*>(&header), sizeof(header));
+        const uint8_t payload = 0x5a;
+        out.write(reinterpret_cast<const char*>(&payload), 1);
+        out.write(reinterpret_cast<const char*>(toc.data()), static_cast<std::streamsize>(toc.size()));
+    }
+} // namespace
+
+TEST(AssetSec_SparkPakRejectsHashNotBoundToStoredPath)
+{
+    // The stored hash of "b/benign.txt" is really the hash of "a/trusted.dds":
+    // before the fix the archive opened, listed only the benign name and served
+    // its payload for ReadFile("a/trusted.dds").
+    const auto path = TempPath("hash_unbound.spk");
+
+    WriteRawTocArchive(path, {{"b/benign.txt", Spark::PakFNV1a("b/benign.txt")}}, 1);
+    {
+        Spark::SparkPakReader control;
+        EXPECT_TRUE(control.Open(path));
+        EXPECT_TRUE(control.Exists("b/benign.txt"));
+    }
+
+    WriteRawTocArchive(path, {{"b/benign.txt", Spark::PakFNV1a("a/trusted.dds")}}, 1);
+    Spark::SparkPakReader reader;
+    EXPECT_FALSE(reader.Open(path));
+    EXPECT_FALSE(reader.Exists("a/trusted.dds"));
+    Cleanup();
+}
+
+TEST(AssetSec_SparkPakRejectsDuplicateTocEntries)
+{
+    // Two entries for one path: the second was silently dropped by emplace.
+    const auto path = TempPath("duplicate_entry.spk");
+    const uint64_t hash = Spark::PakFNV1a("dup.bin");
+    WriteRawTocArchive(path, {{"dup.bin", hash}, {"dup.bin", hash}}, 2);
+
+    Spark::SparkPakReader reader;
+    EXPECT_FALSE(reader.Open(path));
+    Cleanup();
+}
+
+TEST(AssetSec_SparkPakRejectsTocBytesBeyondDeclaredCount)
+{
+    // fileCount = 1 but the TOC holds two entries: the second was ignored and
+    // the archive mounted with a count that disagreed with its own TOC.
+    const auto path = TempPath("toc_trailing.spk");
+    WriteRawTocArchive(path, {{"one.bin", Spark::PakFNV1a("one.bin")}, {"two.bin", Spark::PakFNV1a("two.bin")}}, 1);
+    {
+        Spark::SparkPakReader reader;
+        EXPECT_FALSE(reader.Open(path));
+    }
+
+    // A count the TOC cannot hold is refused before any per-entry work.
+    WriteRawTocArchive(path, {{"one.bin", Spark::PakFNV1a("one.bin")}}, 1000);
+    {
+        Spark::SparkPakReader reader;
+        EXPECT_FALSE(reader.Open(path));
+    }
+    Cleanup();
+}
+
+TEST(AssetSec_SparkPakWriterRefusesDuplicatePaths)
+{
+    // The writer must not produce an archive the reader refuses to mount.
+    const auto path = TempPath("writer_duplicate.spk");
+    Spark::SparkPakWriter writer;
+    writer.AddFile("same.bin", std::vector<uint8_t>(4, 0x11), false);
+    writer.AddFile("same.bin", std::vector<uint8_t>(4, 0x22), false);
+    EXPECT_FALSE(writer.Finalize(path));
+    EXPECT_FALSE(std::filesystem::exists(path));
+
+    Spark::SparkPakWriter distinct;
+    distinct.AddFile("a.bin", std::vector<uint8_t>(4, 0x11), false);
+    distinct.AddFile("b.bin", std::vector<uint8_t>(4, 0x22), false);
+    EXPECT_TRUE(distinct.Finalize(path));
+    Spark::SparkPakReader reader;
+    EXPECT_TRUE(reader.Open(path));
+    EXPECT_TRUE(reader.ReadFile("b.bin") == std::vector<uint8_t>(4, 0x22));
     reader.Close();
     Cleanup();
 }

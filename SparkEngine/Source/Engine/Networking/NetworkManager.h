@@ -36,11 +36,13 @@
 #include <mutex>
 #include <optional>
 #include <queue>
+#include <deque>
 #include <cstdint>
 #include <chrono>
 #include <atomic>
 #include <array>
 #include "NetworkInterpolation.h"
+#include "NetworkTrustStore.h"
 #include "NetworkWireLimits.h"
 #include "PacketValidator.h"
 
@@ -90,7 +92,75 @@ namespace Spark::Net
     using SequenceNumber = uint32_t;
     using NetworkTime = float;
 
+    /// Successor of a reliable-channel sequence. Reliable streams start at 1 and a
+    /// sequence of 0 is never tracked (it bypasses dedup, ACK and ordering), so a
+    /// stream that runs past 0xFFFFFFFF continues at 1 instead of emitting 0.
+    [[nodiscard]] constexpr SequenceNumber NextReliableSequence(SequenceNumber sequence) noexcept
+    {
+        return sequence == 0xFFFFFFFFu ? 1u : sequence + 1u;
+    }
+
+    /// Return @p next and advance it with NextReliableSequence.
+    [[nodiscard]] constexpr SequenceNumber TakeReliableSequence(SequenceNumber& next) noexcept
+    {
+        const SequenceNumber taken = next;
+        next = NextReliableSequence(next);
+        return taken;
+    }
+
+    /// RFC 1982 serial-number comparison: true when @p lhs is newer than @p rhs,
+    /// including across the uint32 wrap (half-range window).
+    [[nodiscard]] constexpr bool IsSequenceNewer(SequenceNumber lhs, SequenceNumber rhs) noexcept
+    {
+        return lhs != rhs && static_cast<uint32_t>(lhs - rhs) < 0x80000000u;
+    }
+
     constexpr uint16_t DEFAULT_PORT = 27015;
+
+    /// Largest client count one server endpoint accepts. Configuration surfaces (SparkServer
+    /// CLI and INI, DedicatedServer) validate against this so an operator value outside
+    /// [1, MAX_SERVER_CLIENTS] is a configuration error, never a runtime abort.
+    constexpr int MAX_SERVER_CLIENTS = 256;
+
+    /// Magic that opens every Connect payload ("SPNH", Spark network handshake). A Connect
+    /// without it predates protocol negotiation and is rejected as ProtocolMissing.
+    constexpr uint32_t NETWORK_HANDSHAKE_MAGIC = 0x484E5053;
+
+    /// Session protocol version carried in Connect (inside the ClientHello, so it is bound into
+    /// the signed handshake transcript) and echoed in ConnectAccepted. Peers must match exactly;
+    /// bump it on every incompatible wire change (docs/specs/networking-wire-format.md).
+    /// Version 2 (NET-100): every datagram is framed, and everything but the handshake is sealed.
+    /// Version 3: a ReliableOrdered message carries its own ordered-stream sequence after the fixed
+    /// header, so ordered delivery no longer shares the per-peer reliability/ACK sequence.
+    constexpr uint16_t NETWORK_PROTOCOL_VERSION = 3;
+
+    /// Outer frame kind, the first byte of every v2 datagram (NET-100).
+    /// Handshake frames carry only Connect, ConnectAccepted and ConnectRejected in plaintext;
+    /// every other message travels in a Sealed frame: [0x02][SecureChannel packet], whose
+    /// plaintext is the serialized message and whose associated data is the frame-kind byte.
+    constexpr uint8_t NETWORK_FRAME_HANDSHAKE = 0x01;
+    constexpr uint8_t NETWORK_FRAME_SEALED = 0x02;
+
+    /// Send-key rotation policy for a SecureChannel (NET-100 nonce discipline). A sender rotates
+    /// after this many sealed packets or this much session time, whichever comes first; once the
+    /// 8-bit epoch space is exhausted the channel is dropped and the session must be re-established.
+    constexpr uint64_t SECURE_ROTATE_AFTER_PACKETS = uint64_t{1} << 31;
+    constexpr float SECURE_ROTATE_AFTER_SECONDS = 600.0f;
+
+    /// Typed reason carried in the ConnectRejected trailer (and recorded for client-side refusals).
+    enum class ConnectRejectReason : uint8_t
+    {
+        Unspecified = 0,            ///< Legacy or malformed rejection with no typed trailer
+        ServerFull = 1,             ///< Every client slot is occupied
+        ProtocolMissing = 2,        ///< Connect lacks the handshake magic and version
+        ProtocolTooOld = 3,         ///< Client protocol version is older than the server's
+        ProtocolTooNew = 4,         ///< Client protocol version is newer than the server's
+        MalformedHandshake = 5,     ///< Magic and version present but the rest of the payload is malformed
+        ProtocolMismatch = 6,       ///< Client-side: ConnectAccepted echoed a different version
+        UnsupportedSuite = 7,       ///< ClientHello names a cipher suite the server does not speak
+        ServerIdentityMismatch = 8, ///< Client-side: the server's key is not the pinned / recorded one
+        HandshakeAuthFailed = 9     ///< Client-side: bad signature, weak key, or unusable trust store
+    };
 
     enum class ChannelType
     {
@@ -119,7 +189,8 @@ namespace Spark::Net
         Disconnected,
         Connecting,
         Connected,
-        Disconnecting
+        Disconnecting,
+        Securing ///< Server-side: handshake answered, waiting for the client's sealed ClientFinished
     };
 
     // ============================================================================
@@ -162,6 +233,9 @@ namespace Spark::Net
         // acknowledged by MessageType::Ack; the two must never be mixed.
         DeltaAck,
 
+        // NET-100: first sealed client message; carries the player name and completes admission.
+        ClientFinished,
+
         // Custom
         UserDefined = 1000
     };
@@ -181,10 +255,14 @@ namespace Spark::Net
         MessageType type = MessageType::UserDefined;   ///< What kind of network event this message represents.
         ChannelType channel = ChannelType::Unreliable; ///< Delivery guarantee (reliable ordered, unreliable, etc.).
         ClientID senderID = INVALID_CLIENT; ///< Client that originated this message (INVALID on server-sent).
-        SequenceNumber sequence = 0;        ///< Monotonic counter for reliable-ordered delivery.
-        std::vector<uint8_t> payload;       ///< Raw serialized message body.
-        float timestamp = 0.0f;             ///< Server time when the message was created (seconds).
-        bool sensitive = false;             ///< Sensitive-payload ownership marker; never serialized onto the network.
+        SequenceNumber sequence = 0;        ///< Reliability/ACK sequence (Reliable and ReliableOrdered); 0 = untracked.
+        /// Ordered-stream sequence (ReliableOrdered only, on the wire after the fixed header). Each
+        /// peer and direction numbers its ordered stream from 1, independently of @ref sequence;
+        /// 0 = deliver without ordering.
+        SequenceNumber orderedSequence = 0;
+        std::vector<uint8_t> payload; ///< Raw serialized message body.
+        float timestamp = 0.0f;       ///< Server time when the message was created (seconds).
+        bool sensitive = false;       ///< Sensitive-payload ownership marker; never serialized onto the network.
         bool localOnly =
             false; ///< Refuse transmission to non-loopback destinations; never serialized onto the network.
         uint64_t ownerLifecycleEpoch = 0; ///< Owning connection lifecycle; process-local and never serialized.
@@ -238,6 +316,13 @@ namespace Spark::Net
         size_t m_readPos = 0;
         bool m_error = false;
     };
+
+    /// True for the three messages that travel in plaintext Handshake frames.
+    [[nodiscard]] constexpr bool IsHandshakeMessage(MessageType type) noexcept
+    {
+        return type == MessageType::Connect || type == MessageType::ConnectAccepted ||
+               type == MessageType::ConnectRejected;
+    }
 
     // ============================================================================
     // Entity Replication
@@ -389,6 +474,28 @@ namespace Spark::Net
         uint32_t fullEntitySyncs = 0; ///< Initial full snapshots sent to admitted clients.
         float bandwidthUp = 0.0f;     ///< KB/s
         float bandwidthDown = 0.0f;   ///< KB/s
+
+        /// NET-100: sealed frames dropped by SecureChannel::Open, indexed by OpenResult
+        /// (Malformed, UnsupportedVersion, UnknownKeyEpoch, AuthenticationFailed, Replayed; [0] unused).
+        std::array<uint32_t, 6> securityDrops{};
+        uint64_t sealedFramesSent = 0;           ///< Successfully sent keyed non-handshake frames
+        uint64_t sealedFramesReceived = 0;       ///< Authenticated and decoded non-handshake frames
+        uint32_t plaintextFramesDropped = 0;     ///< Unframed, unknown-kind or out-of-state plaintext frames refused
+        uint32_t unsealedSendsRefused = 0;       ///< Outgoing non-handshake messages with no SecureChannel to seal them
+        uint32_t keyRotations = 0;               ///< Send-key rotations performed
+        uint32_t handshakeFailures = 0;          ///< Handshakes refused or abandoned (either role)
+        uint32_t handshakeResponsesComputed = 0; ///< Server: ClientHellos that reached RespondToClientHello
+        uint32_t connectsRateLimited = 0;        ///< Server: unadmitted Connects dropped by ConnectRateLimiter
+        uint32_t unadmittedSendsRefused = 0;     ///< Server: non-handshake sends refused to a non-Connected slot
+
+        /// OPS-110: message-queue occupancy, read live by NetworkManager::GetStats (never part of a
+        /// diagnostics snapshot). Depths are the queue sizes when the stats were read; peaks are the
+        /// largest size since Initialize. Unreliable traffic is capped at kMaxQueuedMessages but
+        /// reliable traffic is not, so a peak that keeps rising across a soak is unbounded growth.
+        size_t incomingQueueDepth = 0;
+        size_t outgoingQueueDepth = 0;
+        size_t incomingQueuePeak = 0;
+        size_t outgoingQueuePeak = 0;
     };
 
     // ============================================================================
@@ -417,12 +524,42 @@ namespace Spark::Net
       public:
         static NetworkManager& GetInstance();
 
+        /// Upper bound on queued Unreliable messages per direction. A hostile or buggy peer that
+        /// spams packets cannot grow the queues past it; reliable traffic is never dropped here.
+        static constexpr size_t kMaxQueuedMessages = 4096;
+
         /// Initialize the networking subsystem (platform sockets).
         /// Must be called before StartServer() or Connect().
         bool Initialize() override;
 
         /// Shut down the networking subsystem and release all resources.
         void Shutdown() override;
+
+        /**
+         * @brief Replace the transport security configuration (NET-100)
+         *
+         * The configuration is not lifecycle state: it survives Shutdown(),
+         * StopServer() and Disconnect(). StartServer() refuses without an identity
+         * and Connect() refuses without a usable ServerTrust, so there is no
+         * unauthenticated mode to fall back to.
+         */
+        void SetSecurityConfig(NetworkSecurityConfig config);
+
+        /// Copy of the current security configuration (includes the server secret; handle with care).
+        [[nodiscard]] NetworkSecurityConfig GetSecurityConfig() const;
+
+        /**
+         * @brief Fill in only the missing security configuration from per-user defaults
+         *
+         * Server role: an unset identity is loaded or created at
+         * DefaultNetworkSecurityDirectory()/server_identity.key. Client role: an
+         * unusable trust becomes trust-on-first-use in .../known_hosts. Anything a
+         * caller configured explicitly (SetSecurityConfig) is kept.
+         *
+         * @param role Server or Client
+         * @return false (and logs) when no default can be established; the caller must not start
+         */
+        [[nodiscard]] bool UseDefaultSecurityConfig(NetworkRole role);
 
         /// Initialize as server
         bool StartServer(uint16_t port = DEFAULT_PORT, int maxClients = 32);
@@ -460,7 +597,53 @@ namespace Spark::Net
         void RegisterHandler(MessageType type, MessageHandler handler);
         /** Register a handler whose received payload copies must be erased on release. */
         void RegisterSensitiveHandler(MessageType type, MessageHandler handler);
+        /// Remove every application observer. Inside a ScopedRegistrationOwner only that owner's are removed.
         void ClearHandlers();
+
+        /**
+         * @brief Remove the application observer for @p type.
+         *
+         * Inside a ScopedRegistrationOwner, a slot owned by a different owner is left in place, so an
+         * outgoing module image cannot remove what its hot-reload replacement registered.
+         */
+        void UnregisterHandler(MessageType type);
+
+        /**
+         * @brief Remove every application observer and the timeout handler registered under @p ownerId.
+         *
+         * ModuleManager calls this after a module's OnUnload and before its image is unmapped, so no
+         * std::function whose invoker or destructor lives in that image outlives it. Handler copies taken
+         * by Update() exist only for the duration of one dispatch on the game thread; module reload and
+         * unload run on the game thread outside Update(), so no copy is in flight when the image goes away.
+         *
+         * @return Number of observers removed (the timeout handler counts as one).
+         */
+        size_t UnregisterHandlersByOwner(const std::string& ownerId);
+
+        /**
+         * @brief Attributes application handler writes on @p manager to @p ownerId for the scope's lifetime.
+         *
+         * Every RegisterHandler / RegisterSensitiveHandler / SetTimeoutHandler inside the scope records
+         * @p ownerId as the slot's owner. Removal (UnregisterHandler, ClearHandlers, clearing the timeout
+         * handler) never touches a slot owned by a different owner. A @p teardown scope additionally
+         * refuses to replace another owner's slot, so a module's OnUnload cannot overwrite the handler
+         * its already-initialized replacement installed. Scopes nest; the destructor restores the previous
+         * owner. Thread affinity: game thread (module lifecycle).
+         */
+        class ScopedRegistrationOwner final
+        {
+          public:
+            ScopedRegistrationOwner(NetworkManager& manager, std::string ownerId, bool teardown = false);
+            ~ScopedRegistrationOwner();
+
+            ScopedRegistrationOwner(const ScopedRegistrationOwner&) = delete;
+            ScopedRegistrationOwner& operator=(const ScopedRegistrationOwner&) = delete;
+
+          private:
+            NetworkManager& m_manager;
+            std::string m_previousOwner;
+            bool m_previousTeardown = false;
+        };
 
         // Entity replication
         uint32_t RegisterReplicatedEntity(const ReplicatedEntity& entity);
@@ -474,20 +657,28 @@ namespace Spark::Net
         /// Serialize and send full state for all replicated entities (server only)
         void SendFullEntitySync(ClientID targetClient);
 
+        /// Initial full syncs Update starts per call. Each costs O(replicated entities)
+        /// plus two reliable messages per entity, so admissions beyond this wait for
+        /// later Updates instead of letting a connect flood multiply that work per frame.
+        static constexpr size_t kMaxFullSyncsPerUpdate = 4;
+
         /// Serialize a single entity's replicated properties into a NetBuffer
         void SerializeEntityState(uint32_t networkID, NetBuffer& outBuffer) const;
 
-        /// Deserialize an entity state update from a NetBuffer and apply it
+        /// Deserialize an entity state update from a NetBuffer and apply it. Truncated or
+        /// non-finite transforms are rejected without touching the entity, and unknown
+        /// IDs create placeholders only while fewer than kMaxReplicatedEntities exist.
         void DeserializeEntityState(NetBuffer& inBuffer);
 
-        // Client input (for server-side processing)
+        /// Upper bound on entities a client tracks. A server EntityStateUpdate for an
+        /// unknown network ID creates a placeholder; past this cap it is dropped, so a
+        /// stream of unique IDs cannot grow client memory without limit.
+        static constexpr size_t kMaxReplicatedEntities = 16384;
+
+        /// Client -> server input send. The transport does not retain received
+        /// ClientInput: a server consumes it through an application observer
+        /// (RegisterHandler), which owns validation, attribution and bounding.
         void SendClientInput(const ClientInputState& input);
-        std::vector<ClientInputState> GetPendingInputs() const
-        {
-            std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
-            std::lock_guard<std::mutex> inputLock(m_inputMutex);
-            return m_pendingInputs;
-        }
 
         // Lag compensation. [game thread] Borrowed mutable subsystem reference.
         LagCompensator& GetLagCompensator() { return m_lagCompensator; }
@@ -511,6 +702,12 @@ namespace Spark::Net
             std::lock_guard<std::mutex> lock(m_stateMutex);
             return m_lastConnectionError;
         }
+        /// Typed reason for the last rejected or refused connection attempt.
+        ConnectRejectReason GetLastConnectRejectReason() const
+        {
+            std::lock_guard<std::mutex> lock(m_stateMutex);
+            return m_lastConnectRejectReason;
+        }
         float GetServerTime() const
         {
             std::lock_guard<std::recursive_mutex> lock(m_apiMutex);
@@ -519,7 +716,14 @@ namespace Spark::Net
         NetworkStats GetStats() const
         {
             std::lock_guard<std::recursive_mutex> lock(m_apiMutex);
-            return m_stats;
+            NetworkStats stats = m_stats;
+            // Documented lock order: m_apiMutex before m_queueMutex, never reversed.
+            std::lock_guard<std::mutex> queueLock(m_queueMutex);
+            stats.incomingQueueDepth = m_incomingQueue.size();
+            stats.outgoingQueueDepth = m_outgoingQueue.size();
+            stats.incomingQueuePeak = m_incomingQueuePeak;
+            stats.outgoingQueuePeak = m_outgoingQueuePeak;
+            return stats;
         }
         /// Replace the telemetry snapshot (diagnostic adapters/tests only).
         /// This never changes transport, connection, or wire state.
@@ -536,7 +740,28 @@ namespace Spark::Net
         bool IsInitialized() const override { return m_initialized; }
 
         // Client management (server only)
+        /**
+         * @brief [any thread] Admitted clients only (state Connected)
+         *
+         * A slot still Securing (handshake answered, no ClientFinished yet) is not a player:
+         * it has no name and has not proven its channel, so game code never sees it here.
+         */
         std::unordered_map<ClientID, ClientInfo> GetClients() const
+        {
+            std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
+            std::lock_guard<std::mutex> clientsLock(m_clientsMutex);
+            std::unordered_map<ClientID, ClientInfo> admitted;
+            for (const auto& [id, info] : m_clients)
+            {
+                if (info.state == ConnectionState::Connected)
+                {
+                    admitted.emplace(id, info);
+                }
+            }
+            return admitted;
+        }
+        /** @brief [any thread] Every occupied slot, including Securing ones (diagnostics and tests). */
+        std::unordered_map<ClientID, ClientInfo> GetClientSlots() const
         {
             std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
             std::lock_guard<std::mutex> clientsLock(m_clientsMutex);
@@ -572,12 +797,11 @@ namespace Spark::Net
         /// @brief Remove a client's visibility scope, reverting to "see everything".
         void ClearClientScope(ClientID client);
 
-        /// Register a callback for client timeout events (server-side).
-        void SetTimeoutHandler(std::function<void(ClientID)> handler)
-        {
-            std::lock_guard<std::recursive_mutex> lock(m_apiMutex);
-            m_timeoutHandler = std::move(handler);
-        }
+        /// Register (or, with an empty handler, clear) the callback for client timeout events (server-side).
+        /// A client whose server goes silent or closes the session instead transitions to Disconnected
+        /// (GetConnectionState/GetLastConnectionError) and auto-reconnect takes over.
+        /// Honors the ScopedRegistrationOwner ownership rules described on RegisterHandler's scope.
+        void SetTimeoutHandler(std::function<void(ClientID)> handler);
 
         /// Get estimated round-trip time in milliseconds.
         float GetEstimatedRTT() const
@@ -677,6 +901,7 @@ namespace Spark::Net
 
         friend struct NetworkManagerClientIdTestAccess;
         friend struct NetworkManagerEndpointLifecycleTestAccess;
+        friend struct NetworkManagerTransportSecurityTestAccess;
 
         // Outermost lock for public API/lifecycle access. Recursive because
         // Update dispatches user handlers which may call SendMessage or query
@@ -699,7 +924,32 @@ namespace Spark::Net
         void UpdateHeartbeat(float deltaTime);
         ClientID PrepareNextClientID();
         ClientID HandleConnect(const NetworkMessage& msg);
+        /// Send a typed ConnectRejected to a pre-registered pending endpoint and forget that endpoint.
+        void RejectPendingConnect(ClientID pendingID, ConnectRejectReason reason, const std::string& text);
+        /// Client-side: fail a Connecting handshake closed (state, socket, and queued lifecycle traffic).
+        void AbandonClientHandshake(ConnectRejectReason reason, std::string text);
+        /// Client-side: verify ConnectAccepted's ServerHello against the configured trust, install the
+        /// channel and send the sealed ClientFinished. Runs from the ConnectAccepted protocol handler.
+        void CompleteClientHandshake(const NetworkMessage& accepted);
+        /// Server-side: a Securing client proved its channel with ClientFinished; admit it.
+        /// @return false when the ClientFinished payload is malformed (the client stays Securing).
+        bool PromoteSecuringClient(ClientID clientID, const NetworkMessage& finished);
+        /// Client-side: end a Connecting/Connected session the server closed (Disconnect) or
+        /// that went silent past m_connectionTimeout. Closes the socket and discards the
+        /// lifecycle's queued traffic and replicated state. @p keepReconnectArmed is true only
+        /// for the silence timeout (m_wasConnected stays set so auto-reconnect can run); a
+        /// server-sent Disconnect is authoritative and disarms auto-reconnect. Requires m_apiMutex.
+        void TerminateClientSession(const std::string& reason, bool keepReconnectArmed);
         void HandleDisconnect(const NetworkMessage& msg);
+        /// Server-side: forget one client everywhere it is tracked (client/address tables,
+        /// reliability state, delta baselines, interest scope, owned entities). The single
+        /// removal path for graceful disconnect, heartbeat timeout and kick. Requires
+        /// m_apiMutex; must not be called with m_clientsMutex held.
+        void RemoveClientState(ClientID clientID);
+        /// Server-side: release the process-global per-connection state (delta baselines,
+        /// interest scope) and pending initial syncs of every admitted client before the
+        /// client table is cleared.
+        void ReleaseAllClientConnectionState();
         /// Requires m_apiMutex. There is no hidden network worker; Update owns the socket pump.
         [[nodiscard]] bool IsEndpointLifecycleIdle() const;
 
@@ -719,11 +969,41 @@ namespace Spark::Net
         /// Deserialize raw bytes into a NetworkMessage
         bool DeserializeMessage(const uint8_t* data, size_t length, NetworkMessage& outMsg) const;
 
-        /// Send raw bytes to a specific address
+        /// Send raw bytes to a specific address (final boundary; never called with an unframed message)
         bool SendRawTo(const std::vector<uint8_t>& data, const sockaddr_in& addr, bool localOnly = false);
+
+        /**
+         * @brief Frame one serialized message for @p peerKey and send it (NET-100)
+         *
+         * Handshake messages go out as [NETWORK_FRAME_HANDSHAKE][message]. Everything else is
+         * sealed with the peer's SecureChannel as [NETWORK_FRAME_SEALED][packet], or refused
+         * (unsealedSendsRefused) when the peer has none: there is no plaintext fallback. Sealing
+         * happens here, at transmit time, so delayed and retransmitted copies each get a fresh
+         * sequence number. Also applies the send-key rotation policy.
+         */
+        bool SendFrameTo(ClientID peerKey, const std::vector<uint8_t>& serialized, const sockaddr_in& addr,
+                         bool localOnly);
+
+        /// Server: answer an unframed (pre-v2) Connect with an unframed typed ConnectRejected it can parse.
+        void SendLegacyRejection(const sockaddr_in& addr, const NetworkMessage& legacyConnect);
+
+        /// Send one serialized datagram through the InstabilitySimulator: drop,
+        /// duplicate, reorder-hold or delay it, or send it now when impairment
+        /// is off. `destination` is the peer key (a ClientID on the server,
+        /// SERVER_PEER on a client) that FlushOutgoingQueue resolves again when
+        /// a delayed copy is released, so delayed unicasts never broadcast.
+        /// Disconnect bypasses impairment (it is terminal). Reliable tracking
+        /// stays with the caller. `serialized` may be moved from.
+        void SendImpaired(std::vector<uint8_t>& serialized, ClientID destination, const sockaddr_in& addr,
+                          const NetworkMessage& msg);
 
         /// Receive raw data from socket (non-blocking)
         int ReceiveRaw(std::vector<uint8_t>& outData, sockaddr_in& outSender);
+
+        /// ReceiveRaw's recvfrom target, sized to MAX_UDP_WIRE_DATAGRAM_SIZE once and reused so a
+        /// receive costs O(datagram), not a fresh 64 KiB value-initialised buffer per call. Each
+        /// datagram's bytes are erased from it as soon as they are copied out. Guarded by m_apiMutex.
+        std::vector<uint8_t> m_receiveScratch;
 
         SOCKET m_socket = INVALID_SOCKET;
         sockaddr_in m_serverAddress{};
@@ -732,6 +1012,31 @@ namespace Spark::Net
         std::unordered_map<ClientID, sockaddr_in> m_clientAddresses;
 #endif // ENABLE_NETWORKING
 
+        NetworkSecurityConfig m_securityConfig; ///< Guarded by m_apiMutex; survives lifecycles (SetSecurityConfig).
+
+        /// One established SecureChannel and its rotation bookkeeping (NET-100).
+        struct PeerChannel
+        {
+            std::unique_ptr<SecureChannel> channel;
+            uint64_t sealedSinceRotation = 0;
+            float rotatedAt = 0.0f; ///< m_serverTime of the last rotation (or establishment)
+        };
+        /// Channels keyed by peer (ClientID on a server, SERVER_PEER on a client). Guarded by
+        /// m_apiMutex; erased with the peer (RemoveClientState, lifecycle ends, epoch exhaustion).
+        std::unordered_map<ClientID, PeerChannel> m_secureChannels;
+        /// Client-side: the handshake in flight while Connecting (null otherwise).
+        std::unique_ptr<ClientHandshake> m_clientHandshake;
+        /// Server-side: the ClientHello and ConnectAccepted of each Securing client, so a retransmitted
+        /// identical Connect is answered once more (1:1, never amplified) instead of creating state.
+        struct PendingAccept
+        {
+            std::vector<uint8_t> clientHello;
+            NetworkMessage accept;
+        };
+        std::unordered_map<ClientID, PendingAccept> m_pendingAccepts;
+        /// Server-side: per-source budget for unadmitted Connects (configured from
+        /// m_securityConfig.connectRate at StartServer). Game thread only.
+        ConnectRateLimiter m_connectLimiter;
         NetworkEndpointPolicy m_endpointPolicy{}; ///< Captured once and unchanged for the active socket lifecycle.
         bool m_allowLanAdvertisement = false;     ///< Authoritative server option for discovery publishers.
 
@@ -746,7 +1051,8 @@ namespace Spark::Net
         float m_serverTime = 0.0f;
         float m_heartbeatInterval = 1.0f;
         float m_heartbeatTimer = 0.0f;
-        float m_connectionTimeout = 10.0f; ///< Seconds before a client is considered timed out
+        float m_connectionTimeout = 10.0f;   ///< Seconds before a client is considered timed out
+        float m_lastServerPacketTime = 0.0f; ///< Client-side: m_serverTime of the last datagram from the server
 
         NetworkStats m_stats;
         LagCompensator m_lagCompensator;
@@ -755,24 +1061,40 @@ namespace Spark::Net
         // Clients (server-side)
         std::unordered_map<ClientID, ClientInfo> m_clients;
         mutable std::mutex m_clientsMutex; ///< Protects m_clients, m_nextClientID
+        /// Admitted clients still owed their initial full sync (at most one entry per
+        /// admitted client; guarded by m_apiMutex, drained kMaxFullSyncsPerUpdate per Update).
+        std::deque<ClientID> m_pendingFullSyncs;
         ClientID m_nextClientID = 1;
         int m_maxClients = 32;
 
-        // Messages
-        // Upper bound protects against flood-induced memory exhaustion: a hostile or
-        // buggy peer that spams packets cannot grow these queues without limit.
-        static constexpr size_t kMaxQueuedMessages = 4096;
+        // Messages (Unreliable traffic is bounded by kMaxQueuedMessages).
         std::atomic<uint64_t> m_droppedIncomingMessages{0};
         std::atomic<uint64_t> m_droppedOutgoingMessages{0};
         std::queue<NetworkMessage> m_outgoingQueue;
         std::queue<NetworkMessage> m_incomingQueue;
+        size_t m_outgoingQueuePeak = 0; ///< Largest m_outgoingQueue size since Initialize (guarded by m_queueMutex).
+        size_t m_incomingQueuePeak = 0; ///< Largest m_incomingQueue size since Initialize (guarded by m_queueMutex).
         // Protocol handlers run first and are never exposed to application code.
         // Application observers may be replaced/cleared without disabling transport invariants.
         std::unordered_map<uint16_t, MessageHandler> m_internalHandlers;
         std::unordered_map<uint16_t, MessageHandler> m_handlers;
         std::unordered_set<uint16_t> m_sensitiveMessageTypes;
-        mutable std::mutex m_queueMutex;   ///< Protects m_outgoingQueue, m_incomingQueue
-        mutable std::mutex m_handlerMutex; ///< Protects m_handlers (lowest in lock order)
+        /// Registration owner of each application observer slot; absent means unowned (engine/host code).
+        std::unordered_map<uint16_t, std::string> m_handlerOwners;
+        mutable std::mutex m_queueMutex;   ///< Protects both queues and their peaks
+        mutable std::mutex m_handlerMutex; ///< Protects m_handlers, m_handlerOwners (lowest in lock order)
+
+        // Active ScopedRegistrationOwner state and the timeout handler's owner (guarded by m_apiMutex).
+        std::string m_registrationOwner;
+        bool m_registrationTeardown = false;
+        std::string m_timeoutHandlerOwner;
+
+        /// True when the current registration scope may replace (@p replacing) or remove the slot owned by
+        /// @p slotOwner. Callers hold m_apiMutex.
+        [[nodiscard]] bool MayWriteOwnedSlot(const std::string& slotOwner, bool replacing) const;
+        /// Detach every observer owned by @p ownerId. The caller destroys the returned callbacks after
+        /// m_handlerMutex is released (and while the owner's image is still mapped).
+        [[nodiscard]] std::vector<MessageHandler> TakeHandlersOwnedBy(const std::string& ownerId);
 
         // Reliable message tracking — all sequence-keyed reliability state is
         // per peer (see PeerState below). Two clients both numbering their
@@ -786,13 +1108,20 @@ namespace Spark::Net
         ///
         /// On the server the peer key is the ClientID of the remote client; on
         /// a client there is a single implicit peer — the server — keyed by
-        /// SERVER_PEER. Both the outgoing stream (sequence counter, unacked
+        /// SERVER_PEER. Both the outgoing stream (sequence counters, unacked
         /// map, retransmit counts) and the incoming stream (dedup window, ACK
         /// bitfield, ordered reorder buffer) live here.
+        ///
+        /// Two sequence spaces per direction: every Reliable and ReliableOrdered
+        /// message takes a reliability sequence (dedup, ACK, retransmit), and a
+        /// ReliableOrdered message also takes an ordered sequence, contiguous
+        /// from 1, that alone drives in-order delivery. Sharing one counter made
+        /// any earlier Reliable message leave a permanent gap in the ordered stream.
         struct PeerState
         {
             // Outgoing reliable stream (messages we sent to this peer)
-            SequenceNumber nextOutgoingSequence = 1; ///< Next reliable sequence to assign
+            SequenceNumber nextOutgoingSequence = 1;        ///< Next reliability sequence to assign
+            SequenceNumber nextOutgoingOrderedSequence = 1; ///< Next ordered sequence (ReliableOrdered only)
             std::unordered_map<SequenceNumber, NetworkMessage> unacknowledgedMessages; ///< Awaiting ACK
             std::unordered_map<SequenceNumber, float> reliableOriginalSendTime; ///< First-send time (RTT samples)
             std::unordered_map<SequenceNumber, int> retransmitCounts;           ///< Per-message retries (backoff)
@@ -801,8 +1130,8 @@ namespace Spark::Net
             SequenceNumber remoteSequenceHighest = 0; ///< Highest reliable sequence received
             uint32_t ackBitfield = 0;                 ///< Bitfield for sequences (highest-1) to (highest-32)
             std::unordered_map<SequenceNumber, float> receivedSequences;      ///< seq → receive time (dedup)
-            SequenceNumber expectedOrderedSequence = 1;                       ///< Next sequence to deliver in order
-            std::unordered_map<SequenceNumber, NetworkMessage> orderedBuffer; ///< Out-of-order holding buffer
+            SequenceNumber expectedOrderedSequence = 1;                       ///< Next ordered sequence to deliver
+            std::unordered_map<SequenceNumber, NetworkMessage> orderedBuffer; ///< Keyed by ordered sequence
         };
 
         /// @brief Peer key a client uses for its single implicit peer (the server).
@@ -830,7 +1159,7 @@ namespace Spark::Net
 
         // Connection timeout — handler + notification
         using TimeoutHandler = std::function<void(ClientID)>;
-        TimeoutHandler m_timeoutHandler; ///< Called when a client times out (server) or server times out (client)
+        TimeoutHandler m_timeoutHandler; ///< Server-side: called with each timed-out client ID
 
         /// @brief Checks heartbeat freshness, removes timed-out clients, and
         /// returns their IDs for callback delivery after m_apiMutex is released.
@@ -870,8 +1199,7 @@ namespace Spark::Net
         float m_replicationTimer = 0.0f;
 
         // Client input
-        std::vector<ClientInputState> m_pendingInputs;
-        mutable std::mutex m_inputMutex; ///< Protects m_pendingInputs and m_inputHistory
+        mutable std::mutex m_inputMutex; ///< Protects m_inputHistory
         SequenceNumber m_inputSequence = 0;
 
         // Prediction
@@ -884,12 +1212,13 @@ namespace Spark::Net
 
         // Auto-reconnect state
         AutoReconnectConfig m_autoReconnect;
-        uint32_t m_reconnectAttempts = 0;                ///< Current reconnect attempt count
-        float m_reconnectNextRetryTime = 0.0f;           ///< Server time when next reconnect allowed
-        std::string m_lastServerAddress;                 ///< Last server address for reconnect
-        uint16_t m_lastServerPort = 0;                   ///< Last server port for reconnect
-        std::string m_lastPlayerName;                    ///< Last player name for reconnect
-        std::string m_lastConnectionError;               ///< Last ConnectRejected reason
+        uint32_t m_reconnectAttempts = 0;      ///< Current reconnect attempt count
+        float m_reconnectNextRetryTime = 0.0f; ///< Server time when next reconnect allowed
+        std::string m_lastServerAddress;       ///< Last server address for reconnect
+        uint16_t m_lastServerPort = 0;         ///< Last server port for reconnect
+        std::string m_lastPlayerName;          ///< Last player name for reconnect
+        std::string m_lastConnectionError;     ///< Last ConnectRejected reason
+        ConnectRejectReason m_lastConnectRejectReason = ConnectRejectReason::Unspecified; ///< Typed form of the above
         bool m_wasConnected = false;                     ///< True if we were connected before disconnect
         std::function<void()> m_reconnectFailedCallback; ///< Called when max attempts exhausted
 

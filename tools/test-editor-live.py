@@ -13,7 +13,11 @@ Requirements:
 
 Usage:
   export DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 MESA_GL_VERSION_OVERRIDE=3.3
-  python3 tools/test-editor-live.py [--editor-path build/bin/SparkEditor]
+  python3 tools/test-editor-live.py [build/bin/SparkEditor] [--ui-scale 1.0]
+
+Click targets are measured at 100 % UI scale and multiplied by --ui-scale, which
+must match the editor's effective scale (DPI scale x user UI scale; --test-mode
+uses Auto, so under Xvfb at 96 DPI the default of 1.0 is correct).
 """
 
 import subprocess
@@ -180,7 +184,20 @@ def main():
         default="build/bin/SparkEditor",
         help="Path to SparkEditor binary (default: build/bin/SparkEditor)",
     )
+    parser.add_argument(
+        "--ui-scale",
+        type=float,
+        default=1.0,
+        help="Effective editor UI scale; click offsets are multiplied by it (default: 1.0)",
+    )
     args = parser.parse_args()
+    if not 0.5 <= args.ui_scale <= 4.0:
+        print(f"ERROR: --ui-scale {args.ui_scale} is outside 0.5-4.0")
+        sys.exit(1)
+
+    def px(value: float) -> int:
+        """Scale a 100 %-scale pixel offset to the editor's effective UI scale."""
+        return int(round(value * args.ui_scale))
 
     editor_path = os.path.abspath(args.editor_path)
     output_dir = Path("/tmp/spark-editor-test")
@@ -278,10 +295,15 @@ def main():
             except ValueError:
                 pass
 
-    menu_y = win_y + 8  # Menu bar is ~8px from window top
+    menu_y = win_y + px(8)  # Menu bar is ~8px from window top at 100 %
+
+    # Menu-bar label centres at 100 % scale: File, Edit, View, GameObject, Window, ...
+    file_menu_x = win_x + px(15)
+    edit_menu_x = win_x + px(42)
+    window_menu_x = win_x + px(192)  # shifted right by the View menu
 
     # Test File menu
-    click(win_x + 15, menu_y)  # "File"
+    click(file_menu_x, menu_y)  # "File"
     time.sleep(0.3)
     ss = str(output_dir / "02_file_menu.png")
     capture_screenshot(ss)
@@ -294,7 +316,7 @@ def main():
     time.sleep(0.3)
 
     # Test Edit menu
-    click(win_x + 42, menu_y)  # "Edit"
+    click(edit_menu_x, menu_y)  # "Edit"
     time.sleep(0.3)
     ss = str(output_dir / "03_edit_menu.png")
     capture_screenshot(ss)
@@ -305,7 +327,7 @@ def main():
     time.sleep(0.3)
 
     # Test Window menu
-    click(win_x + 155, menu_y)  # "Window"
+    click(window_menu_x, menu_y)  # "Window"
     time.sleep(0.3)
     ss = str(output_dir / "04_window_menu.png")
     capture_screenshot(ss)
@@ -328,11 +350,11 @@ def main():
 
     for panel_name, approx_index in panel_tests:
         # Open Window menu
-        click(win_x + 155, menu_y)
+        click(window_menu_x, menu_y)
         time.sleep(0.3)
         # Click panel item
-        item_y = menu_y + 14 + (approx_index * 19)
-        click(win_x + 155, item_y)
+        item_y = menu_y + px(14 + approx_index * 19)
+        click(window_menu_x, item_y)
         time.sleep(0.5)
         ss = str(output_dir / f"05_panel_{panel_name.replace(' ', '_').lower()}.png")
         capture_screenshot(ss)
@@ -375,14 +397,14 @@ def main():
     # y = win_y + 105 (tree items start)
 
     # Click on a tree item in hierarchy
-    click(win_x + 65, win_y + 115)
+    click(win_x + px(65), win_y + px(115))
     time.sleep(0.3)
     ss = str(output_dir / "07_hierarchy_click.png")
     capture_screenshot(ss)
     test("Hierarchy panel clickable", True, screenshot=ss)
 
     # Right-click for context menu
-    click(win_x + 65, win_y + 135, button=3)
+    click(win_x + px(65), win_y + px(135), button=3)
     time.sleep(0.3)
     ss = str(output_dir / "08_hierarchy_context.png")
     capture_screenshot(ss)

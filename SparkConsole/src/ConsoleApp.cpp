@@ -1,5 +1,6 @@
 #include "ConsoleApp.h"
 #include "CommandParser.h"
+#include "ConsoleHistoryPolicy.h"
 #include <iostream>
 #include <sstream>
 #include <filesystem>
@@ -24,6 +25,8 @@ namespace
     }
 } // namespace
 #else
+#include <cerrno>
+#include <fcntl.h>
 #include <unistd.h>
 #include <sys/select.h>
 #include <termios.h>
@@ -40,28 +43,34 @@ static constexpr const char* ANSI_GREEN_BOLD = "\033[1;32m";
 static constexpr const char* ANSI_YELLOW = "\033[33m";
 static constexpr const char* ANSI_CYAN = "\033[36m";
 
-static bool LinuxKbhit()
+// In engine-pipe mode stdin is the engine's log pipe, not the keyboard, so the
+// keyboard helpers take the terminal descriptor explicitly (see PipeKeyboardThreadFunc).
+static bool LinuxKbhit(int fd)
 {
     struct timeval tv = {0, 0};
     fd_set fds;
     FD_ZERO(&fds);
-    FD_SET(STDIN_FILENO, &fds);
-    return select(STDIN_FILENO + 1, &fds, nullptr, nullptr, &tv) > 0;
+    FD_SET(fd, &fds);
+    return select(fd + 1, &fds, nullptr, nullptr, &tv) > 0;
 }
 
-static char LinuxGetch()
+static char LinuxGetch(int fd)
 {
     char ch = 0;
     struct termios oldt, newt;
-    tcgetattr(STDIN_FILENO, &oldt);
-    newt = oldt;
-    newt.c_lflag &= ~(ICANON | ECHO);
-    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
-    if (read(STDIN_FILENO, &ch, 1) < 0)
+    const bool isTerminal = tcgetattr(fd, &oldt) == 0;
+    if (isTerminal)
+    {
+        newt = oldt;
+        newt.c_lflag &= ~(ICANON | ECHO);
+        tcsetattr(fd, TCSANOW, &newt);
+    }
+    if (read(fd, &ch, 1) < 0)
     {
         ch = 0;
     }
-    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+    if (isTerminal)
+        tcsetattr(fd, TCSANOW, &oldt);
     return ch;
 }
 
@@ -83,8 +92,8 @@ static bool LinuxIsStdinPipe()
 // ---------------------------------------------------------------------------
 namespace
 {
-    constexpr const char* kConsoleVersion = "2.0.0";
-    constexpr const wchar_t* kConsoleVersionW = L"2.0.0";
+    constexpr const char* kConsoleVersion = SPARK_CONSOLE_VERSION;
+    constexpr const wchar_t* kConsoleVersionW = SPARK_CONSOLE_VERSION_W;
 } // namespace
 
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -129,10 +138,11 @@ void ConsoleApp::ClearDisplay()
 }
 #endif // SPARK_PLATFORM_WINDOWS
 
-ConsoleApp::ConsoleApp(bool enginePipeRequested)
-    : m_running(true), m_enginePipeRequested(enginePipeRequested),
+ConsoleApp::ConsoleApp(bool enginePipeRequested, bool batchMode)
+    : m_running(true), m_enginePipeRequested(enginePipeRequested), m_batchMode(batchMode),
 #ifdef SPARK_PLATFORM_WINDOWS
-      m_consoleOutput(DisplayHandle()), m_consoleInput(GetStdHandle(STD_INPUT_HANDLE))
+      m_consoleOutput(batchMode ? GetStdHandle(STD_OUTPUT_HANDLE) : DisplayHandle()),
+      m_consoleInput(GetStdHandle(STD_INPUT_HANDLE))
 #else
       m_consoleOutput(STDOUT_FILENO), m_consoleInput(STDIN_FILENO)
 #endif
@@ -145,7 +155,10 @@ ConsoleApp::ConsoleApp(bool enginePipeRequested)
         m_engineInputThread = std::thread(&ConsoleApp::ReadEngineInput, this);
     }
 
-    PrintLog(L"Console initialized with engine communication support.");
+    if (!m_batchMode)
+    {
+        PrintLog(L"Console initialized with engine communication support.");
+    }
 }
 
 ConsoleApp::~ConsoleApp()
@@ -202,21 +215,24 @@ bool ConsoleApp::DetectPipeMode()
     return pipeMode;
 }
 
-void ConsoleApp::PollPipeModeInput(std::string& input, int& noInputCounter, bool& pipeMode,
-                                   std::atomic<bool>& keyboardThreadRunning)
+void ConsoleApp::PrintPipePrompt()
 {
+    std::lock_guard<std::mutex> lock(m_outputMutex);
 #ifdef SPARK_PLATFORM_WINDOWS
     HANDLE hConsoleOut = DisplayHandle();
-    CONSOLE_SCREEN_BUFFER_INFO csbi;
-    GetConsoleScreenBufferInfo(hConsoleOut, &csbi);
 
     SetConsoleTextAttribute(hConsoleOut, FOREGROUND_GREEN | FOREGROUND_INTENSITY);
     WriteConsoleW(hConsoleOut, L"> ", 2, NULL, NULL);
     SetConsoleTextAttribute(hConsoleOut, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
 #else
-    std::cout << ANSI_GREEN_BOLD << "> " << ANSI_RESET << std::flush;
+    // stderr: a prompt on stdout would prefix the next forwarded command with "> ".
+    std::cerr << ANSI_GREEN_BOLD << "> " << ANSI_RESET << std::flush;
 #endif
+}
 
+void ConsoleApp::PollPipeModeInput(std::string& input, int& noInputCounter, bool& pipeMode,
+                                   std::atomic<bool>& keyboardThreadRunning)
+{
     // Just sleep and let the keyboard thread and ReadEngineInput thread do their work
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
@@ -257,8 +273,8 @@ void ConsoleApp::PollStandaloneInput(std::string& input)
         input.erase(input.find_last_not_of(" \t") + 1);
         if (!input.empty())
         {
-            AddToHistory(input);
             std::string resolved = ResolveAlias(input);
+            AddToHistory(input, resolved);
             if (resolved == "exit" || resolved == "quit")
             {
                 PrintLog(L"Console shutting down...");
@@ -277,6 +293,18 @@ void ConsoleApp::PollStandaloneInput(std::string& input)
 
 void ConsoleApp::PipeKeyboardThreadFunc(std::string& input, std::atomic<bool>& keyboardThreadRunning)
 {
+#ifndef SPARK_PLATFORM_WINDOWS
+    // stdin carries the engine's log stream in pipe mode; reading keys from it
+    // would steal log bytes and forward whole log lines back to the engine as
+    // commands. Read the controlling terminal instead, and accept no keyboard
+    // input when there is none (headless, CI, or a detached engine).
+    const int keyboardFd = open("/dev/tty", O_RDONLY | O_NOCTTY | O_CLOEXEC);
+    if (keyboardFd < 0)
+    {
+        PrintLog(L"No controlling terminal: keyboard input is disabled in engine-pipe mode.");
+        return;
+    }
+#endif
     while (keyboardThreadRunning && m_running)
     {
 #ifdef SPARK_PLATFORM_WINDOWS
@@ -284,16 +312,16 @@ void ConsoleApp::PipeKeyboardThreadFunc(std::string& input, std::atomic<bool>& k
         {
             char ch = _getch();
 #else
-        if (LinuxKbhit())
+        if (LinuxKbhit(keyboardFd))
         {
-            char ch = LinuxGetch();
+            char ch = LinuxGetch(keyboardFd);
 #endif
             if (ch == '\r' || ch == '\n')
             {
                 if (!input.empty())
                 {
-                    AddToHistory(input);
                     std::string resolved = ResolveAlias(input);
+                    AddToHistory(input, resolved);
                     if (resolved == "exit" || resolved == "quit")
                     {
                         PrintLog(L"Console shutting down...");
@@ -309,8 +337,9 @@ void ConsoleApp::PipeKeyboardThreadFunc(std::string& input, std::atomic<bool>& k
                 HANDLE hConsoleOut = DisplayHandle();
                 WriteConsoleW(hConsoleOut, L"\n", 1, NULL, NULL);
 #else
-                std::cout << std::endl;
+                std::cerr << std::endl;
 #endif
+                PrintPipePrompt();
             }
             else if (ch == '\b' || ch == 127)
             {
@@ -323,6 +352,9 @@ void ConsoleApp::PipeKeyboardThreadFunc(std::string& input, std::atomic<bool>& k
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
+#ifndef SPARK_PLATFORM_WINDOWS
+    close(keyboardFd);
+#endif
 }
 
 void ConsoleApp::Run()
@@ -338,6 +370,7 @@ void ConsoleApp::Run()
 
     if (pipeMode)
     {
+        PrintPipePrompt();
         keyboardThreadRunning = true;
         keyboardThread =
             std::thread(&ConsoleApp::PipeKeyboardThreadFunc, this, std::ref(input), std::ref(keyboardThreadRunning));
@@ -366,6 +399,25 @@ void ConsoleApp::Run()
     }
 
     PrintLog(L"Console application terminated.");
+}
+
+void ConsoleApp::RunBatch(std::istream& input)
+{
+    std::string line;
+    while (m_running && std::getline(input, line))
+    {
+        line.erase(0, line.find_first_not_of(" \t\r\n"));
+        const size_t end = line.find_last_not_of(" \t\r\n");
+        if (end == std::string::npos)
+            continue;
+        line.resize(end + 1);
+        if (line == "exit" || line == "quit")
+        {
+            m_running = false;
+            break;
+        }
+        ExecuteCommand(line);
+    }
 }
 
 void ConsoleApp::ProcessPipeMessages(const std::string& message)
@@ -473,7 +525,7 @@ void ConsoleApp::ReadEngineInputWindows()
     }
 
     OutputDebugStringA("ReadEngineInput: Engine input reader thread terminated\n");
-    PrintLog(L"Engine input reader thread terminated.");
+    OnEnginePipeClosed();
 }
 #else
 void ConsoleApp::ReadEngineInputPosix()
@@ -511,17 +563,40 @@ void ConsoleApp::ReadEngineInputPosix()
                 PrintLog(L"Engine pipe connection closed.");
                 break;
             }
+            else if (errno != EINTR && errno != EAGAIN)
+            {
+                PrintLog(L"Engine pipe read error.");
+                break;
+            }
         }
-        else if (ret < 0)
+        else if (ret < 0 && errno != EINTR)
         {
             PrintLog(L"Engine pipe read error.");
             break;
         }
     }
 
-    PrintLog(L"Engine input reader thread terminated.");
+    OnEnginePipeClosed();
 }
 #endif // SPARK_PLATFORM_WINDOWS
+
+void ConsoleApp::OnEnginePipeClosed()
+{
+    PrintLog(L"Engine input reader thread terminated.");
+    if (!m_running)
+    {
+        return;
+    }
+
+    // The engine closed (or lost) its end of the pipe: it shut down or died.
+    // A pipe child has no reason to outlive it. Ending here lets the engine's
+    // Shutdown() see a graceful exit instead of killing us after its grace
+    // period, and stops an orphan from idling forever after an engine crash —
+    // headless there is no terminal to type "exit" into. Run() and the keyboard
+    // thread both poll m_running.
+    PrintLog(L"Engine disconnected. Console exiting.");
+    m_running = false;
+}
 
 void ConsoleApp::ReadEngineInput()
 {
@@ -541,7 +616,7 @@ void ConsoleApp::HandleBackspaceKey(std::string& input)
         HANDLE hOut = DisplayHandle();
         WriteConsoleW(hOut, L"\b \b", 3, NULL, NULL);
 #else
-        std::cout << "\b \b" << std::flush;
+        std::cerr << "\b \b" << std::flush; // Display only: stdout carries commands.
 #endif
     }
 }
@@ -554,7 +629,7 @@ void ConsoleApp::HandlePrintableChar(std::string& input, char ch)
     wchar_t wch = static_cast<wchar_t>(ch);
     WriteConsoleW(hOut, &wch, 1, NULL, NULL);
 #else
-    std::cout << ch << std::flush;
+    std::cerr << ch << std::flush; // Display only: stdout carries commands.
 #endif
 }
 
@@ -576,6 +651,12 @@ std::string ConsoleApp::ResolveAlias(const std::string& input)
 
 void ConsoleApp::PrintLog(const std::wstring& msg)
 {
+    if (m_batchMode)
+    {
+        std::string narrow(msg.begin(), msg.end());
+        std::cout << narrow << std::endl;
+        return;
+    }
     std::lock_guard<std::mutex> lock(m_outputMutex);
 
     // Add timestamp
@@ -633,7 +714,7 @@ void ConsoleApp::PrintDuplicateSkipNotice(int skippedCount)
     std::stringstream skipMsg;
     skipMsg << "[" << std::put_time(std::localtime(&time_t), "%H:%M:%S") << "] ENGINE: (Skipped " << skippedCount
             << " duplicate messages)";
-    std::cout << ANSI_YELLOW << skipMsg.str() << ANSI_RESET << std::endl;
+    std::cerr << ANSI_YELLOW << skipMsg.str() << ANSI_RESET << std::endl;
 #endif
 }
 
@@ -687,7 +768,9 @@ void ConsoleApp::PrintEngineLog(const std::wstring& msg)
     std::string narrowMsg(msg.begin(), msg.end());
     std::stringstream fullMsg;
     fullMsg << "[" << std::put_time(std::localtime(&time_t), "%H:%M:%S") << "] ENGINE: " << narrowMsg;
-    std::cout << ANSI_YELLOW << fullMsg.str() << ANSI_RESET << std::endl;
+    // stderr: echoing engine logs on stdout sent every log line back to the
+    // engine as a command, which logged "Unknown command", which was echoed...
+    std::cerr << ANSI_YELLOW << fullMsg.str() << ANSI_RESET << std::endl;
 #endif
 }
 
@@ -698,6 +781,11 @@ void ConsoleApp::PrintResult(const std::string& result)
     if (!result.empty())
     {
 #ifdef SPARK_PLATFORM_WINDOWS
+        if (m_batchMode)
+        {
+            std::cout << result << std::endl;
+            return;
+        }
         HANDLE hConsoleOut = DisplayHandle();
 
         SetConsoleTextAttribute(hConsoleOut, FOREGROUND_GREEN | FOREGROUND_BLUE);
@@ -709,7 +797,12 @@ void ConsoleApp::PrintResult(const std::string& result)
 
         SetConsoleTextAttribute(hConsoleOut, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
 #else
-        std::cout << ANSI_CYAN << result << ANSI_RESET << std::endl;
+        // Batch mode reports results on stdout (its CLI contract); interactive
+        // results are display text and must stay off the engine command channel.
+        if (m_batchMode)
+            std::cout << result << std::endl;
+        else
+            std::cerr << ANSI_CYAN << result << ANSI_RESET << std::endl;
 #endif
     }
 }
@@ -739,44 +832,14 @@ void ConsoleApp::ExecuteCommand(const std::string& cmdLine)
     if (!CommandParser::ParseCommandLine(cmdLine, command, args))
         return;
 
-    // Check if this is an engine command first, then forward it
-    if (ShouldForwardToEngine(command))
-    {
-        std::cout << cmdLine << std::endl;
-        std::cout.flush();
-        PrintResult("Command sent to engine: " + cmdLine);
-    }
-    else
-    {
-        std::string result = m_commandRegistry.ExecuteCommand(command, args);
-        PrintResult(result);
-    }
-}
-
-bool ConsoleApp::ShouldForwardToEngine(const std::string& command)
-{
-    static const std::vector<std::string> engineCommands = {"fps",
-                                                            "info",
-                                                            "test_assert",
-                                                            "test_null_access",
-                                                            "test_assert_not_null",
-                                                            "test_assert_range",
-                                                            "crash_mode",
-                                                            "memory_info",
-                                                            "assert_test",
-                                                            "crash_test",
-                                                            "assert_mode",
-                                                            "graphics_info",
-                                                            "engine_status",
-                                                            "render_debug",
-                                                            "shader_debug",
-                                                            "test_engine",
-                                                            "minimal_test",
-                                                            "console_status",
-                                                            "quit",
-                                                            "help"};
-
-    return std::find(engineCommands.begin(), engineCommands.end(), command) != engineCommands.end();
+    // Engine commands travel only on the engine-pipe keyboard path, which
+    // forwards EVERY line to the engine's full SimpleConsole registry
+    // (PipeKeyboardThreadFunc -> ConsoleProcessManager::DispatchConsoleCommand).
+    // This path serves standalone and batch mode, where stdout is not an engine
+    // channel, so only console-local commands can run here. The old hard-coded
+    // "forward these 20 names" list only echoed the line (credentials included)
+    // to a stdout nobody read.
+    PrintResult(m_commandRegistry.ExecuteCommand(command, args));
 }
 
 void ConsoleApp::RegisterDefaultCommands()
@@ -1100,8 +1163,20 @@ void ConsoleApp::RegisterAliasCommands()
     m_aliases["pt"] = "pipe_test";
 }
 
-void ConsoleApp::AddToHistory(const std::string& cmd)
+void ConsoleApp::AddToHistory(const std::string& typedLine, const std::string& resolvedLine)
 {
+    // Only a console-local command's arguments are known to be secret-free;
+    // engine commands may be credential commands (see ConsoleHistoryPolicy.h).
+    std::string resolvedName;
+    CommandArgs resolvedArgs;
+    const bool argumentsTrusted = CommandParser::ParseCommandLine(resolvedLine, resolvedName, resolvedArgs) &&
+                                  resolvedName != "alias" && m_commandRegistry.HasCommand(resolvedName);
+    const std::string cmd = ConsoleHistoryPolicy::EntryFor(typedLine, argumentsTrusted);
+    if (cmd.empty())
+    {
+        return;
+    }
+
     std::lock_guard<std::mutex> lock(m_historyMutex);
 
     if (!m_commandHistory.empty() && m_commandHistory.back() == cmd)

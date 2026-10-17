@@ -62,8 +62,8 @@ engine diagnostics/lifecycle, tested in `Tests/TestFreezeSystem.cpp`.
 ## Status matrix — implemented vs tested vs CI-enforced vs release-ready
 
 "Tested" means a named test exists in the `SparkTests` binary; those run under `ctest`
-in the required CI build jobs (`.github/workflows/build.yml` runs
-`ctest --test-dir build ...`), so tested ⇒ CI-enforced here unless noted.
+in the required CI build jobs (`.github/workflows/build.yml` configures `cmake -B build ...`
+and runs `ctest --test-dir build ...` there), so tested ⇒ CI-enforced here unless noted.
 
 | Claim | Status | Evidence anchor |
 |---|---|---|

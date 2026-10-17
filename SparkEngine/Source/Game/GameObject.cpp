@@ -13,7 +13,9 @@
 #include "../Utils/Assert.h"
 #include "../Utils/Validate.h"
 #include "../Graphics/GraphicsEngine.h"
+#include "../Graphics/ProjectAssetPath.h"
 #include "../Core/EngineContext.h"
+#include <filesystem>
 #include <iostream>
 
 using namespace DirectX;
@@ -70,7 +72,7 @@ void GameObject::Shutdown()
     SPARK_LOG_INFO(Spark::LogCategory::Game, "GameObject shutdown complete. ID=%u Name=%s", m_id, m_name.c_str());
 }
 
-void GameObject::Update(float dt)
+void GameObject::Update(float deltaTime)
 {
     // **FIXED: Removed per-frame logging that was causing performance issues**
     if (m_worldMatrixDirty)
@@ -97,14 +99,70 @@ void GameObject::Render(const XMMATRIX& view, const XMMATRIX& projection)
     // Get graphics engine via EngineContext
     GraphicsEngine* graphics = EngineContext::Get() ? EngineContext::Get()->GetGraphics() : nullptr;
 
-    if (graphics)
-    {
-        // Set up basic shaders and constant buffers
-        graphics->SetBasicShaders();
-        graphics->UpdateBasicConstants(m_worldMatrix, view, projection);
-    }
+    PrepareBasicMaterialRender(graphics, m_worldMatrix, view, projection);
 
     m_mesh->Render(m_context);
+}
+
+void GameObject::PrepareBasicMaterialRender(GraphicsEngine* graphics, const XMMATRIX& world, const XMMATRIX& view,
+                                            const XMMATRIX& projection)
+{
+    if (!graphics)
+        return;
+
+    // A fresh basic batch resets t0/t1/t2 to the white/flat/rough defaults,
+    // so an invalid or absent authored material cannot inherit a prior
+    // object's texture. The project root is supplied by trusted game code,
+    // never by scene or model content.
+    graphics->SetBasicShaders();
+    const GraphicsEngine::BasicMaterial* material = nullptr;
+    const bool supportedMaterialPath =
+        (m_materialPath.starts_with("Assets/Materials/") || m_materialPath.starts_with("Assets\\Materials\\")) &&
+        m_materialPath.ends_with(".json");
+    if (supportedMaterialPath && !m_materialProjectRoot.empty())
+        material = graphics->GetOrLoadBasicMaterial(m_materialPath, m_materialProjectRoot);
+
+    if (material)
+    {
+        graphics->UpdateBasicConstants(world, view, projection, XMFLOAT4(1, 1, 1, 1), material->tiling);
+        graphics->SetBasicTexture(material->srv.Get());
+        graphics->SetBasicMaterialTextures(material->normalSrv.Get(), material->roughnessSrv.Get());
+    }
+    else
+    {
+        graphics->UpdateBasicConstants(world, view, projection);
+    }
+}
+
+bool GameObject::SetMaterialProjectRoot(std::string_view projectRootUtf8)
+{
+    m_materialProjectRoot.clear();
+    try
+    {
+        const auto suppliedRoot = std::filesystem::u8path(projectRootUtf8.begin(), projectRootUtf8.end());
+        if (!suppliedRoot.is_absolute())
+            return false;
+    }
+    catch (const std::filesystem::filesystem_error&)
+    {
+        return false;
+    }
+
+    const auto root = Spark::CanonicalizeFilesystemPath(projectRootUtf8);
+    if (!root)
+        return false;
+
+    // Preserve the native spelling for filesystem operations; cacheKey folds
+    // case on Windows and is suitable for identity only, not an OS path.
+    const std::u8string nativeUtf8 = root->nativePath.generic_u8string();
+    const std::string nativeRoot(reinterpret_cast<const char*>(nativeUtf8.data()), nativeUtf8.size());
+    const auto assets = Spark::ResolveProjectAssetPath(nativeRoot, "Assets");
+    std::error_code error;
+    if (!assets || !std::filesystem::is_directory(assets->nativePath, error) || error)
+        return false;
+
+    m_materialProjectRoot = nativeRoot;
+    return true;
 }
 
 void GameObject::SetPosition(const XMFLOAT3& pos)
@@ -123,10 +181,10 @@ void GameObject::SetRotation(const XMFLOAT3& rot)
     m_worldMatrixDirty = true;
 }
 
-void GameObject::SetScale(const XMFLOAT3& scl)
+void GameObject::SetScale(const XMFLOAT3& scale)
 {
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, scl.x > 0 && scl.y > 0 && scl.z > 0, "Scale must be positive");
-    m_scale = scl;
+    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, scale.x > 0 && scale.y > 0 && scale.z > 0, "Scale must be positive");
+    m_scale = scale;
     m_worldMatrixDirty = true;
 }
 

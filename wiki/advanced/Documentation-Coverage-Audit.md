@@ -8,13 +8,13 @@
 
 ## Overview
 
-An audit of how completely SparkEngine is documented across three layers: the wiki, Doxygen header comments, and the `docs/` specifications. Coverage is strong and has continued to grow since the original audit (April 2026): the wiki has expanded from 125 to **~173 pages**, and Doxygen `@file`/`@brief` coverage remains effectively complete (522 of 523 engine headers).
+An audit of how completely SparkEngine is documented across three layers: the wiki, Doxygen header comments, and the `docs/` specifications. Coverage is strong and has continued to grow since the original audit (April 2026): the wiki has expanded substantially, and Doxygen `@file`/`@brief` coverage remains effectively complete (see the generated coverage report for current totals).
 
 ---
 
 ## Wiki Coverage (re-measured 2026-06-08)
 
-- **~173 wiki pages** (Markdown files under `wiki/`, excluding `_Sidebar.md`), up from 125 in the original audit.
+- The wiki's Markdown files under `wiki/` (excluding `_Sidebar.md`) cover all major subsystems and user-facing guides.
 - All engine subsystems, graphics subsystems, and user-facing guides are covered.
 - Graphics/rendering pages include: Render Graph, GPU Particles, GPU-Driven Rendering, Volumetric Fog, Global Illumination, Virtual Texturing, Water Rendering, Clustered Lighting, Mesh Shaders, Shader Graph, Post-Processing, Neural Rendering, Material System, Decal System, Particle System, Sky and Atmosphere, Shadow System, Foliage System.
 - User-facing docs: FAQ, Quick-Start Tutorial, Editor Walkthrough, Configuration Reference, Performance Tips.
@@ -32,7 +32,7 @@ find wiki -name '*.md' -type f ! -name '_Sidebar.md' | wc -l
 
 - **522 of 523** `SparkEngine/Source` headers carry an `@file` tag — effectively 100% coverage (one header outstanding).
 - Doxygen tags use the `@`-style convention throughout (not `\`-style).
-- `docs/api/` holds the auto-generated per-header API pages produced by `docs/generate-api-docs.sh`. **Note:** these are generated artifacts and may be absent from the working tree until the script is run (0 generated pages were present at re-measure time). The maintained coverage gate is `tools/check-doxygen-coverage.sh` (95% threshold).
+- `docs/api/` holds the auto-generated per-header API pages produced by `docs/generate-api-docs.sh`. **Note:** these are generated artifacts and may be absent from the working tree until the script is run (no generated pages were present at re-measure time). The maintained coverage gate is `tools/check-doxygen-coverage.sh` (95% threshold).
 
 Measurement:
 
@@ -77,7 +77,7 @@ The original audit's five standing gaps were all closed by the time of writing a
 
 ## What's Done Right
 
-- ~173 wiki pages covering all major subsystems, graphics, and rendering.
+- Wiki coverage spans all major subsystems, graphics, and rendering.
 - Effectively complete header Doxygen coverage (522/523).
 - `Codebase-Statistics.md` (metrics) and `Codebase-Health.md` (maturity) maintained.
 - Unified Error Handling and Hot Reload documentation.
@@ -104,7 +104,7 @@ tools/check-doxygen-coverage.sh     # header @file/@brief gate (95%)
 - OLD → NEW numbers updated:
   - Wiki pages OLD 125 → NEW ~173.
   - Doxygen header coverage OLD 246/246 → NEW 522/523 (header count grew as the codebase grew; coverage still effectively complete).
-  - Auto-generated API pages OLD "370 pages from 382 headers" → NEW 0 present in the working tree (generated on demand; not committed at re-measure time).
+  - Auto-generated API pages were absent from the working tree at re-measure time (generated on demand; not committed at re-measure time).
 - Findings now resolved since the original audit: all five top documentation gaps (wire format, asset format, plugin ABI, physics tuning, migration guide) were already resolved and remain so; verified the three `docs/specs/` files still exist.
 
 ## Related Pages

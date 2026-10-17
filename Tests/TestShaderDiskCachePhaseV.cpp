@@ -23,10 +23,14 @@
  */
 
 #include "TestFramework.h"
+#include "Fixtures/ScopedUnboundedFileSize.h"
+#include "Graphics/ShaderDaemonBridge.h"
 #include "Graphics/ShaderDiskCache.h"
 
+#include <chrono>
 #include <filesystem>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace
@@ -71,6 +75,44 @@ namespace
     void ResetDiskCache()
     {
         Spark::Graphics::GetShaderDiskCache().Shutdown();
+    }
+
+    std::filesystem::path MakeUnicodeCacheDir()
+    {
+        std::error_code error;
+        const auto root = std::filesystem::temp_directory_path(error);
+        if (error || root.empty())
+            return {};
+
+        const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+        const std::wstring prefix = L"spark_phaseV_Unicode_\x7528\x6237\x6570\x636E_";
+        for (int attempt = 0; attempt < 64; ++attempt)
+        {
+            const auto directory = root / (prefix + std::to_wstring(nonce) + L"_" + std::to_wstring(attempt));
+            error.clear();
+            if (std::filesystem::create_directory(directory, error))
+                return directory;
+            if (error && error != std::errc::file_exists)
+                return {};
+        }
+        return {};
+    }
+
+    void RemoveUnicodeCacheDir(const std::filesystem::path& directory)
+    {
+        std::error_code error;
+        const auto tempDirectory = std::filesystem::temp_directory_path(error);
+        if (error || tempDirectory.empty())
+            return;
+        const auto tempRoot = std::filesystem::weakly_canonical(tempDirectory, error);
+        if (error || std::filesystem::is_symlink(directory, error) || error)
+            return;
+        const auto resolved = std::filesystem::weakly_canonical(directory, error);
+        const auto filename = resolved.filename().wstring();
+        constexpr std::wstring_view Prefix = L"spark_phaseV_Unicode_";
+        if (error || resolved.parent_path() != tempRoot || filename.rfind(Prefix, 0) != 0)
+            return;
+        std::filesystem::remove_all(resolved, error);
     }
 
 } // namespace
@@ -337,6 +379,74 @@ TEST(ShaderDiskCachePhaseV_StoreEmptyBytecodeIgnored)
     std::filesystem::remove_all(dir);
 }
 
+TEST(ShaderDiskCachePhaseV_EmptyCachedBlobIsAMiss)
+{
+    // SEC-120 fuzz finding (SparkFuzzShaderDiskCache): a zero-length .blob, left by a crash
+    // between Store's truncating open and its write or planted in the user-writable cache,
+    // was returned as a successful blob with empty bytecode on every run, so the shader was
+    // handed to the driver empty and never recompiled.
+    ResetDiskCache();
+    auto dir = MakeCacheDir("emptyblob");
+
+    auto& cache = Spark::Graphics::GetShaderDiskCache();
+    cache.Initialize(dir);
+    const auto source = MakeSource("empty cached blob");
+    cache.Store(source, Spark::Graphics::ShaderTarget::DXBC, MakeBlob(0x5A, 16));
+    ASSERT_EQ(cache.GetEntryCount(), static_cast<size_t>(1));
+
+    for (const auto& entry : std::filesystem::directory_iterator(dir))
+    {
+        std::filesystem::resize_file(entry.path(), 0);
+    }
+    EXPECT_FALSE(cache.Lookup(source, Spark::Graphics::ShaderTarget::DXBC).has_value());
+
+    // The next compile's Store rewrites the entry and it hits again.
+    cache.Store(source, Spark::Graphics::ShaderTarget::DXBC, MakeBlob(0x5A, 16));
+    const auto retrieved = cache.Lookup(source, Spark::Graphics::ShaderTarget::DXBC);
+    ASSERT_TRUE(retrieved.has_value());
+    EXPECT_EQ(retrieved->bytecode.size(), static_cast<size_t>(16));
+
+    cache.Shutdown();
+    std::filesystem::remove_all(dir);
+}
+
+TEST(ShaderDiskCachePhaseV_OversizedCachedBlobIsAMiss)
+{
+    // The cache directory is writable by any process of the user, so the file length is
+    // untrusted: a planted blob one byte past the daemon bytecode cap (sparse where the file
+    // system allows) must be a miss, not an allocation handed to the driver. The POSIX daemon
+    // suite covers the same branch; this one also runs on Windows.
+    ResetDiskCache();
+    auto dir = MakeCacheDir("oversizedblob");
+
+    auto& cache = Spark::Graphics::GetShaderDiskCache();
+    cache.Initialize(dir);
+    const auto source = MakeSource("oversized cached blob");
+    cache.Store(source, Spark::Graphics::ShaderTarget::DXBC, MakeBlob(0x3C, 16));
+    ASSERT_EQ(cache.GetEntryCount(), static_cast<size_t>(1));
+
+    // cap + 1 exceeds the sanitizer wrapper's 16 MiB soft RLIMIT_FSIZE.
+    const SparkTestFixtures::ScopedUnboundedFileSize fileSizeLimit;
+    constexpr std::uintmax_t kCap = Spark::Graphics::kMaxShaderDaemonBytecodeBytes;
+    for (const auto& entry : std::filesystem::directory_iterator(dir))
+    {
+        std::filesystem::resize_file(entry.path(), kCap + 1);
+    }
+    EXPECT_FALSE(cache.Lookup(source, Spark::Graphics::ShaderTarget::DXBC).has_value());
+
+    // Exactly at the cap is still a hit.
+    for (const auto& entry : std::filesystem::directory_iterator(dir))
+    {
+        std::filesystem::resize_file(entry.path(), kCap);
+    }
+    const auto atCap = cache.Lookup(source, Spark::Graphics::ShaderTarget::DXBC);
+    ASSERT_TRUE(atCap.has_value());
+    EXPECT_EQ(atCap->bytecode.size(), static_cast<size_t>(kCap));
+
+    cache.Shutdown();
+    std::filesystem::remove_all(dir);
+}
+
 // ============================================================================
 // Clear / GetEntryCount / GetDiskUsage
 // ============================================================================
@@ -411,4 +521,30 @@ TEST(ShaderDiskCachePhaseV_PersistsAcrossShutdownInitialize)
 
     cache.Shutdown();
     std::filesystem::remove_all(dir);
+}
+
+TEST(ShaderDiskCachePhaseV_UnicodeDirectoryRoundTripsOnWindows)
+{
+#if !defined(SPARK_PLATFORM_WINDOWS)
+    SKIP_TEST("Unicode shader-cache path regression is Windows-specific");
+    return;
+#else
+    ResetDiskCache();
+    const auto directory = MakeUnicodeCacheDir();
+    ASSERT_FALSE(directory.empty());
+
+    auto& cache = Spark::Graphics::GetShaderDiskCache();
+    const auto source = MakeSource("unicode cache path");
+    cache.Initialize(directory);
+    ASSERT_TRUE(cache.IsInitialized());
+    cache.Store(source, Spark::Graphics::ShaderTarget::DXBC, MakeBlob(0xA5, 48));
+
+    const auto retrieved = cache.Lookup(source, Spark::Graphics::ShaderTarget::DXBC);
+    ASSERT_TRUE(retrieved.has_value());
+    EXPECT_EQ(retrieved->bytecode.size(), static_cast<size_t>(48));
+    EXPECT_EQ(retrieved->bytecode.front(), static_cast<uint8_t>(0xA5));
+
+    cache.Shutdown();
+    RemoveUnicodeCacheDir(directory);
+#endif
 }

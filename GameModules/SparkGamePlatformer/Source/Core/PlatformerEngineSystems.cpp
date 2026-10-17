@@ -6,15 +6,8 @@
  * Uses IEngineContext (SDK v2) for subsystem access instead of singletons.
  */
 
-#include "Core/Platform.h"
-#ifdef SPARK_PLATFORM_WINDOWS
-#include <windows.h>
-#include "Core/Platform.h"
-#endif
-
 #include "PlatformerEngineSystems.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include "Spark/ModuleLog.h"
 
 // Engine systems
 #include "Audio/MusicManager.h"
@@ -24,6 +17,9 @@
 #include "Engine/Replay/ReplaySystem.h"
 #include "Engine/Localization/LocalizationSystem.h"
 
+#include <string>
+#include <unordered_map>
+
 namespace Platformer
 {
 
@@ -31,16 +27,15 @@ namespace Platformer
     // Initialize / Update / Shutdown
     // =========================================================================
 
-    bool PlatformerEngineSystems::Initialize(Spark::IEngineContext* context)
+    bool PlatformerEngineSystems::Initialize(Spark::IEngineContext* context, const PlatformerProgressSystems& progress)
     {
         if (!context)
             return false;
 
         m_context = context;
+        m_progressSystems = progress;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        console.LogInfo("[Platformer] Wiring engine systems...");
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer wiring engine systems");
+        Spark::ModuleLog::Info(m_context, "[Platformer] Wiring engine systems...");
 
         SetupAudio();
         SetupEvents();
@@ -50,8 +45,7 @@ namespace Platformer
         SetupCoroutines();
         SetupLocalization();
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer engine systems wired (7 subsystems)");
-        console.LogInfo("[Platformer] Engine systems wired (7 subsystems)");
+        Spark::ModuleLog::Info(m_context, "[Platformer] Engine systems wired (7 subsystems)");
         return true;
     }
 
@@ -62,7 +56,8 @@ namespace Platformer
         if (m_autosaveTimer >= AutosaveInterval)
         {
             m_autosaveTimer = 0.0f;
-            SaveProgress("__platformer_autosave");
+            if (!SaveProgress("__platformer_autosave"))
+                Spark::ModuleLog::Warn(m_context, "[Platformer] Autosave failed");
         }
     }
 
@@ -75,6 +70,7 @@ namespace Platformer
             StopReplayRecording();
 
         m_context = nullptr;
+        m_progressSystems = {};
     }
 
     // =========================================================================
@@ -89,11 +85,11 @@ namespace Platformer
 
         // World theme tracks
         const std::pair<std::string, std::string> tracks[] = {
-            {"world_1_theme", "Assets/Audio/Music/world_1_theme.ogg"},
-            {"world_2_theme", "Assets/Audio/Music/world_2_theme.ogg"},
-            {"boss_theme", "Assets/Audio/Music/boss_theme.ogg"},
-            {"victory_jingle", "Assets/Audio/Music/victory_jingle.ogg"},
-            {"game_over", "Assets/Audio/Music/game_over.ogg"},
+            {"world_1_theme", "Assets/Audio/Platformer/Music/world_1_theme.wav"},
+            {"world_2_theme", "Assets/Audio/Platformer/Music/world_2_theme.wav"},
+            {"boss_theme", "Assets/Audio/Platformer/Music/boss_theme.wav"},
+            {"victory_jingle", "Assets/Audio/Platformer/Music/victory_jingle.wav"},
+            {"game_over", "Assets/Audio/Platformer/Music/game_over.wav"},
         };
 
         for (const auto& [name, path] : tracks)
@@ -116,8 +112,7 @@ namespace Platformer
         // Start with world 1 theme
         music->Play("world_1_theme", 1.0f);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer audio: 5 music tracks registered");
-        Spark::SimpleConsole::GetInstance().LogInfo("[Platformer] Audio: 5 music tracks + dynamic state registered");
+        Spark::ModuleLog::Info(m_context, "[Platformer] Audio: 5 music tracks + dynamic state registered");
     }
 
     // =========================================================================
@@ -144,14 +139,10 @@ namespace Platformer
         // coroutine header bugs). The respawn delay (1.5s wait → PlayerRespawnEvent)
         // is handled engine-side; we log the kill here for module awareness.
         m_eventHandles.push_back(eventBus->Subscribe<Spark::EntityKilledEvent>(
-            [](const Spark::EntityKilledEvent& e)
-            {
-                Spark::SimpleConsole::GetInstance().LogInfo(
-                    "[Platformer] Entity killed: " + std::to_string(e.entityId) + " — respawn pending");
-            }));
+            [this](const Spark::EntityKilledEvent& e)
+            { Spark::ModuleLog::Info(m_context, "[Platformer] Entity killed: {}, respawn pending", e.entityId); }));
 
-        Spark::SimpleConsole::GetInstance().LogInfo(
-            "[Platformer] Events: subscribed to CollisionEvent, EntityKilledEvent");
+        Spark::ModuleLog::Info(m_context, "[Platformer] Events: subscribed to CollisionEvent, EntityKilledEvent");
     }
 
     // =========================================================================
@@ -167,33 +158,86 @@ namespace Platformer
         save->Initialize("Saves/Platformer");
         save->SetMaxAutoSaves(3);
 
-        Spark::SimpleConsole::GetInstance().LogInfo(
-            "[Platformer] Save system: initialized (Saves/Platformer, 3 auto-slots)");
+        Spark::ModuleLog::Info(m_context, "[Platformer] Save system: initialized (Saves/Platformer, 3 auto-slots)");
     }
 
     bool PlatformerEngineSystems::SaveProgress(const std::string& slotName) const
     {
-        auto* save = m_context->GetSaveSystem();
-        if (!save)
+        if (!PlatformerProgress::IsValidSlotName(slotName))
+        {
+            Spark::ModuleLog::Error(m_context, "[Platformer] Invalid save slot: {}", slotName);
             return false;
+        }
+
+        auto* save = m_context ? m_context->GetSaveSystem() : nullptr;
+        auto* world = m_context ? m_context->GetWorld() : nullptr;
+        if (!save || !world || !m_progressSystems.IsComplete())
+        {
+            Spark::ModuleLog::Error(m_context, "[Platformer] SaveSystem, World, or gameplay systems not available");
+            return false;
+        }
 
         Spark::SaveMetadata meta;
         meta.saveName = "Platformer - " + slotName;
         meta.sceneName = "platformer";
+        meta.playTime = static_cast<float>(m_context->GetElapsedTime());
 
-        // Custom state: coins, stars, unlocked levels, best times
-        World world;
-        return save->Save(slotName, world, meta);
+        const std::unordered_map<std::string, std::string> customState = {
+            {std::string(PlatformerProgress::StateKey),
+             PlatformerProgress::Serialize(PlatformerProgress::Capture(m_progressSystems))}};
+        if (!save->Save(slotName, *world, meta, customState))
+        {
+            Spark::ModuleLog::Error(m_context, "[Platformer] Failed to write save slot: {}", slotName);
+            return false;
+        }
+        return true;
     }
 
     bool PlatformerEngineSystems::LoadProgress(const std::string& slotName) const
     {
-        auto* save = m_context->GetSaveSystem();
-        if (!save || !save->SaveExists(slotName))
+        if (!PlatformerProgress::IsValidSlotName(slotName))
+        {
+            Spark::ModuleLog::Error(m_context, "[Platformer] Invalid save slot: {}", slotName);
             return false;
+        }
 
-        World world;
-        return save->Load(slotName, world);
+        auto* save = m_context ? m_context->GetSaveSystem() : nullptr;
+        auto* world = m_context ? m_context->GetWorld() : nullptr;
+        if (!save || !world || !m_progressSystems.IsComplete())
+        {
+            Spark::ModuleLog::Error(m_context, "[Platformer] SaveSystem, World, or gameplay systems not available");
+            return false;
+        }
+        if (!save->SaveExists(slotName))
+        {
+            Spark::ModuleLog::Error(m_context, "[Platformer] Save slot not found: {}", slotName);
+            return false;
+        }
+
+        // Decode and validate progress before the SaveSystem commits the world, so a bad entry changes nothing.
+        PlatformerProgressSnapshot snapshot;
+        std::string error;
+        const auto decodeProgress = [&](const std::unordered_map<std::string, std::string>& state)
+        {
+            const auto encoded = state.find(std::string(PlatformerProgress::StateKey));
+            if (encoded == state.end())
+            {
+                error = "slot has no platformer progress";
+                return false;
+            }
+            return PlatformerProgress::Deserialize(encoded->second, snapshot, error) &&
+                   PlatformerProgress::Validate(snapshot, m_progressSystems, error);
+        };
+
+        std::unordered_map<std::string, std::string> customState;
+        if (!save->Load(slotName, *world, customState, decodeProgress) ||
+            !PlatformerProgress::Apply(snapshot, m_progressSystems, error))
+        {
+            Spark::ModuleLog::Error(m_context, "[Platformer] Failed to load slot '{}': {}", slotName,
+                                    error.empty() ? std::string("unreadable save") : error);
+            return false;
+        }
+        return true;
     }
 
     // =========================================================================
@@ -248,8 +292,7 @@ namespace Platformer
         wallPattern.SetParticleEffect("vfx_dust_cloud");
         destruction->RegisterPattern("crumbly_wall", wallPattern);
 
-        Spark::SimpleConsole::GetInstance().LogInfo(
-            "[Platformer] Destruction: 3 fracture patterns (platform, crate, wall)");
+        Spark::ModuleLog::Info(m_context, "[Platformer] Destruction: 3 fracture patterns (platform, crate, wall)");
     }
 
     // =========================================================================
@@ -266,7 +309,7 @@ namespace Platformer
         replay->SetRecordInterval(1.0f / 20.0f);
         replay->SetMetadata("platformer", "speedrun");
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[Platformer] Replay: configured (20fps, speedrun mode)");
+        Spark::ModuleLog::Info(m_context, "[Platformer] Replay: configured (20fps, speedrun mode)");
     }
 
     void PlatformerEngineSystems::StartReplayRecording()
@@ -277,7 +320,7 @@ namespace Platformer
 
         replay->StartRecording();
         m_recording = true;
-        Spark::SimpleConsole::GetInstance().LogInfo("[Platformer] Replay: recording started");
+        Spark::ModuleLog::Info(m_context, "[Platformer] Replay: recording started");
     }
 
     void PlatformerEngineSystems::StopReplayRecording()
@@ -289,7 +332,7 @@ namespace Platformer
         replay->StopRecording();
         replay->SaveToFile("Replays/platformer_last.replay");
         m_recording = false;
-        Spark::SimpleConsole::GetInstance().LogInfo("[Platformer] Replay: recording saved");
+        Spark::ModuleLog::Info(m_context, "[Platformer] Replay: recording saved");
     }
 
     void PlatformerEngineSystems::ToggleGhostPlayback()
@@ -302,7 +345,7 @@ namespace Platformer
         {
             replay->StopPlayback();
             m_ghostActive = false;
-            Spark::SimpleConsole::GetInstance().LogInfo("[Platformer] Ghost playback stopped");
+            Spark::ModuleLog::Info(m_context, "[Platformer] Ghost playback stopped");
         }
         else
         {
@@ -310,7 +353,7 @@ namespace Platformer
             {
                 replay->StartPlayback();
                 m_ghostActive = true;
-                Spark::SimpleConsole::GetInstance().LogInfo("[Platformer] Ghost playback started");
+                Spark::ModuleLog::Info(m_context, "[Platformer] Ghost playback started");
             }
         }
     }
@@ -325,8 +368,7 @@ namespace Platformer
         // (C++20 coroutine header bugs with GCC 13). Coroutine sequences:
         // power-up timers (magnet 10s, invincibility 5s), death/respawn (1.5s),
         // level-clear celebration (0.5s wait → celebration → 2s → results).
-        Spark::SimpleConsole::GetInstance().LogInfo(
-            "[Platformer] Coroutines: power-ups, death/respawn, celebrations configured");
+        Spark::ModuleLog::Info(m_context, "[Platformer] Coroutines: power-ups, death/respawn, celebrations configured");
     }
 
     // =========================================================================
@@ -345,7 +387,7 @@ namespace Platformer
         localization->LoadLanguage("de", "Data/Localization/platformer_de.json");
         localization->LoadLanguage("ja", "Data/Localization/platformer_ja.json");
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[Platformer] Localization: 4 languages loaded (en, fr, de, ja)");
+        Spark::ModuleLog::Info(m_context, "[Platformer] Localization: 4 languages loaded (en, fr, de, ja)");
     }
 
 } // namespace Platformer

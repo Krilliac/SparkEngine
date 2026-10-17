@@ -6,6 +6,7 @@
 #include "ConsoleProcessManager.h"
 #include "Core/Platform.h"
 #include "LogMacros.h"
+#include "SparkConsole.h"
 #include "Validate.h"
 
 #include <chrono>
@@ -13,6 +14,7 @@
 #include <filesystem>
 #include <iostream>
 #include <mutex>
+#include <sstream>
 #include <thread>
 #include <utility>
 
@@ -211,14 +213,30 @@ namespace Spark
         return false;
     }
 
-    bool ConsoleProcessManager::WriteToConsole(const std::string& message)
+    void ConsoleProcessManager::AppendForConsole(const std::string& message)
     {
-        if (!m_process)
-            return false;
+        m_pendingWrite += message;
+        m_pendingWrite += '\n';
+    }
 
-        std::string data = message + "\n";
-        m_process->WriteStdin(data);
-        return true;
+    bool ConsoleProcessManager::FlushPendingWrite()
+    {
+        if (m_pendingWrite.empty())
+            return true;
+        if (!m_process)
+        {
+            m_pendingWrite.clear();
+            return true;
+        }
+
+        // Bounded: a child that stopped draining its stdin (a held QuickEdit
+        // selection, a suspended or hung SparkConsole) must never pin this
+        // thread inside a pipe write, because Shutdown() joins it. The unwritten
+        // tail stays here and is retried on the next pass, so a line is never
+        // split or reordered; new lines wait in the capped m_messageQueue.
+        const size_t written = m_process->WriteStdinFor(m_pendingWrite, kConsoleWriteSlice);
+        m_pendingWrite.erase(0, written);
+        return m_pendingWrite.empty();
     }
 
     // =========================================================================
@@ -269,7 +287,7 @@ namespace Spark
 
             try
             {
-                std::string result = m_commandRegistry->ExecuteCommand(command);
+                std::string result = DispatchConsoleCommand(command);
                 if (!result.empty())
                 {
                     std::wstring wResult(result.begin(), result.end());
@@ -285,8 +303,42 @@ namespace Spark
         }
     }
 
+    std::string ConsoleProcessManager::DispatchConsoleCommand(const std::string& commandLine)
+    {
+        std::istringstream tokens(commandLine);
+        std::string name;
+        tokens >> name;
+        if (name.empty())
+        {
+            return {};
+        }
+
+        // quit/assert_mode/assert_test/crash_test belong to this manager (quit
+        // routes into the platform loop through m_shutdownRequestHandler). Every
+        // other line — including help — is an engine command: run it through the
+        // same SimpleConsole the in-process console uses, so module and subsystem
+        // commands, cvars, permissions and argument redaction all apply. The
+        // result and any error reach the SparkConsole window through the
+        // SimpleConsole -> QueueEngineLog mirror.
+        const bool managerCommand = name != "help" && m_commandRegistry && m_commandRegistry->HasCommand(name);
+        SimpleConsole& console = SimpleConsole::GetInstance();
+        if (!managerCommand && console.IsInitialized())
+        {
+            console.ExecuteCommand(commandLine);
+            return {};
+        }
+        return m_commandRegistry ? m_commandRegistry->ExecuteCommand(commandLine) : std::string{};
+    }
+
     void ConsoleProcessManager::ProcessQueuedMessages()
     {
+        // Finish the previous batch before taking a new one; while the child is
+        // not draining, the queue keeps absorbing lines under its drop-oldest cap.
+        if (!FlushPendingWrite())
+        {
+            return;
+        }
+
         std::queue<std::string> messagesToSend;
         uint64_t dropped = 0;
         {
@@ -300,14 +352,15 @@ namespace Spark
         {
             // One notice per burst, not one per dropped line — the same shape
             // SimpleConsole uses for its duplicate-suppression notice.
-            WriteToConsole("[WARN] SparkConsole mirror dropped " + std::to_string(dropped) +
-                           " log line(s): outgoing queue full (" + std::to_string(kMaxQueuedMessages) + ")");
+            AppendForConsole("[WARN] SparkConsole mirror dropped " + std::to_string(dropped) +
+                             " log line(s): outgoing queue full (" + std::to_string(kMaxQueuedMessages) + ")");
         }
         while (!messagesToSend.empty())
         {
-            WriteToConsole(messagesToSend.front());
+            AppendForConsole(messagesToSend.front());
             messagesToSend.pop();
         }
+        FlushPendingWrite();
     }
 
 } // namespace Spark

@@ -9,7 +9,7 @@ SparkEngine provides a handle-based tween system for smoothly interpolating valu
 
 **Source:** `SparkEngine/Source/Engine/Tween/TweenSystem.h`
 **Namespace:** `Spark`
-**Tests:** `Tests/TestTween.cpp` (14 test cases)
+**Tests:** `Tests/TestTween.cpp` (`TEST` cases for easing and tween lifecycle)
 
 ---
 

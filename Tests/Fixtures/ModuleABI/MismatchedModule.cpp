@@ -8,12 +8,23 @@
 #include <windows.h>
 #endif
 
+// The same image is built as the N+1 fixture (offset 1) and the N-1 fixture
+// (offset -1); Tests/CMakeLists.txt sets the offset and the matching sidecar.
+#ifndef SPARK_FIXTURE_SDK_VERSION_OFFSET
+#error SPARK_FIXTURE_SDK_VERSION_OFFSET must select the declared SDK version relative to the host
+#endif
+
 namespace
 {
+    static_assert(SPARK_FIXTURE_SDK_VERSION_OFFSET != 0, "a mismatched fixture must not declare the host SDK version");
+    static_assert(static_cast<long long>(SPARK_SDK_VERSION) + SPARK_FIXTURE_SDK_VERSION_OFFSET >= 0,
+                  "the declared SDK version must be representable");
+
     constexpr SparkModuleCompatibilityDescriptor MakeMismatchedDescriptor()
     {
         auto descriptor = Spark::kExpectedModuleCompatibility;
-        ++descriptor.sdkVersion;
+        descriptor.sdkVersion =
+            static_cast<uint32_t>(static_cast<long long>(descriptor.sdkVersion) + SPARK_FIXTURE_SDK_VERSION_OFFSET);
         return descriptor;
     }
 

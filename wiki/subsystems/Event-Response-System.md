@@ -11,6 +11,14 @@ The Event Response System lets designers and modders assemble gameplay rules out
 
 ---
 
+## Rules-file resource ownership
+
+The gameplay rules reader uses `Utils/ScopeGuard.h` to close its native Windows
+handle or POSIX descriptor on every exit path. Gameplay does not depend on
+Modding's handle wrapper. Existing regular-file checks, size bounds, read errors
+and file-identity checks are retained. Production-class coverage is in
+`Tests/TestEventResponseSystemPhaseEE.cpp`; its FIFO case is Linux-only.
+
 ## Rule model
 
 Every rule has the same three pieces:
@@ -131,3 +139,9 @@ The two systems compose — an action can call a script, and a script can fire a
 - [Gameplay Systems](../gameplay-tools/Gameplay-Systems.md) — ConditionSystem, abilities, and quests all feed into conditions.
 - [Visual Scripting](Visual-Scripting.md) — graph-based alternative for richer logic.
 - [Dialogue System](Dialogue-System.md) — can emit custom events that rules react to.
+
+### Measured static-analysis allowance
+
+The EventResponseSystem.cpp budget records the hosted measurement of zero
+branch-clone findings and one braces finding after the scoped cleanup.
+These per-file reductions do not resolve inherited findings elsewhere.

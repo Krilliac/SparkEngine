@@ -16,6 +16,9 @@
 #include <cmath>
 #include "Utils/LogMacros.h"
 
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
+
 namespace SparkEditor
 {
 
@@ -110,9 +113,8 @@ namespace SparkEditor
             // Auto-slice dialog
             if (m_showAutoSlice)
                 RenderAutoSliceDialog();
-
-            EndPanel();
         }
+        EndPanel();
     }
 
     void SpriteAnimationEditorPanel::Shutdown()
@@ -162,7 +164,7 @@ namespace SparkEditor
         ImGui::Spacing();
         ImGui::SameLine();
 
-        ImGui::SetNextItemWidth(80);
+        ImGui::SetNextItemWidth(Spark::Ui::Px(80));
         ImGui::DragFloat("Speed", &m_previewSpeed, 0.05f, 0.1f, 5.0f, "%.1fx");
 
         ImGui::SameLine();
@@ -170,7 +172,7 @@ namespace SparkEditor
         if (m_onionSkinning)
         {
             ImGui::SameLine();
-            ImGui::SetNextItemWidth(60);
+            ImGui::SetNextItemWidth(Spark::Ui::Px(60));
             ImGui::DragInt("Frames", &m_onionSkinFrames, 0.1f, 1, 5);
         }
 
@@ -183,8 +185,7 @@ namespace SparkEditor
 
     void SpriteAnimationEditorPanel::RenderClipList()
     {
-        ImGui::Text(ICON_FA_FILM " Animation Clips");
-        ImGui::Separator();
+        Spark::Ui::SubHeader(ICON_FA_FILM " Animation Clips");
 
         if (ImGui::Button(ICON_FA_PLUS " Add Clip"))
         {
@@ -243,11 +244,11 @@ namespace SparkEditor
 
     void SpriteAnimationEditorPanel::RenderTimeline()
     {
-        ImGui::Text(ICON_FA_STREAM " Timeline");
+        Spark::Ui::SubHeader(ICON_FA_STREAM " Timeline");
 
         if (m_selectedClipIndex < 0 || m_selectedClipIndex >= static_cast<int>(m_clips.size()))
         {
-            ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Select a clip to edit its timeline");
+            Spark::Ui::SecondaryText("Select a clip to edit its timeline");
             return;
         }
 
@@ -267,68 +268,78 @@ namespace SparkEditor
         }
         ImGui::SameLine();
 
-        ImGui::Text("Frames: %d", static_cast<int>(clip.frames.size()));
+        Spark::Ui::KeyValue("Frames:", "%d", static_cast<int>(clip.frames.size()));
 
         float totalDuration = 0.0f;
         for (const auto& f : clip.frames)
             totalDuration += f.duration;
         ImGui::SameLine();
-        ImGui::Text("| Duration: %.2fs", totalDuration);
+        Spark::Ui::KeyValue("| Duration:", "%.2fs", totalDuration);
 
         ImGui::Separator();
 
         // Draw timeline frames
-        float frameWidth = 60.0f * m_timelineZoom;
-        float frameHeight = 50.0f;
+        const float frameWidth = Spark::Ui::Px(60.0f) * m_timelineZoom;
+        const float frameHeight = Spark::Ui::Px(50.0f);
+        const float frameGap = Spark::Ui::Px(4.0f);
+        const float rounding = Spark::Ui::Px(4.0f);
+        const float textInset = Spark::Ui::Px(4.0f);
+        const float lineHeight = ImGui::GetTextLineHeight();
         ImVec2 timelinePos = ImGui::GetCursorScreenPos();
         ImDrawList* drawList = ImGui::GetWindowDrawList();
 
         for (int i = 0; i < static_cast<int>(clip.frames.size()); ++i)
         {
-            float px = timelinePos.x + i * (frameWidth + 4.0f);
+            float px = timelinePos.x + i * (frameWidth + frameGap);
             float py = timelinePos.y;
 
-            // Frame background
+            // Frame background: selection wins over the playhead frame.
             bool isCurrentPreview = (i == m_previewFrame);
             bool isSelected = (i == m_selectedFrameIndex);
 
-            ImU32 bgCol = IM_COL32(60, 60, 80, 255);
+            Spark::Ui::Role bgRole = Spark::Ui::Role::SurfaceRaised;
             if (isCurrentPreview)
-                bgCol = IM_COL32(80, 120, 200, 255);
+                bgRole = Spark::Ui::Role::SurfaceSelected;
             if (isSelected)
-                bgCol = IM_COL32(200, 120, 40, 255);
+                bgRole = Spark::Ui::Role::AccentFill;
+            const Spark::Ui::Role textRole = isSelected ? Spark::Ui::Role::TextOnAccent : Spark::Ui::Role::TextPrimary;
 
-            drawList->AddRectFilled(ImVec2(px, py), ImVec2(px + frameWidth, py + frameHeight), bgCol, 4.0f);
-            drawList->AddRect(ImVec2(px, py), ImVec2(px + frameWidth, py + frameHeight), IM_COL32(180, 180, 180, 200),
-                              4.0f);
+            drawList->AddRectFilled(ImVec2(px, py), ImVec2(px + frameWidth, py + frameHeight), Spark::Ui::Col(bgRole),
+                                    rounding);
+            drawList->AddRect(ImVec2(px, py), ImVec2(px + frameWidth, py + frameHeight),
+                              Spark::Ui::Col(Spark::Ui::Role::BorderStrong), rounding);
 
             // Frame number
             char frameLabel[32];
             std::snprintf(frameLabel, sizeof(frameLabel), "%d", i);
-            drawList->AddText(ImVec2(px + 4, py + 2), IM_COL32(255, 255, 255, 200), frameLabel);
+            drawList->AddText(ImVec2(px + textInset, py + Spark::Ui::Px(2.0f)), Spark::Ui::Col(textRole), frameLabel);
 
             // Duration label
             char durLabel[32];
             std::snprintf(durLabel, sizeof(durLabel), "%.0fms", clip.frames[i].duration * 1000.0f);
-            drawList->AddText(ImVec2(px + 4, py + frameHeight - 16), IM_COL32(200, 200, 200, 180), durLabel);
+            drawList->AddText(ImVec2(px + textInset, py + frameHeight - lineHeight - Spark::Ui::Px(2.0f)),
+                              Spark::Ui::Col(textRole, 0.72f), durLabel);
 
             // Playhead indicator
             if (isCurrentPreview && m_isPlaying)
             {
-                drawList->AddTriangleFilled(ImVec2(px + frameWidth * 0.5f - 5, py - 8),
-                                            ImVec2(px + frameWidth * 0.5f + 5, py - 8),
-                                            ImVec2(px + frameWidth * 0.5f, py - 2), IM_COL32(0, 255, 100, 255));
+                const float halfBase = Spark::Ui::Px(5.0f);
+                const float centerX = px + frameWidth * 0.5f;
+                drawList->AddTriangleFilled(ImVec2(centerX - halfBase, py - Spark::Ui::Px(8.0f)),
+                                            ImVec2(centerX + halfBase, py - Spark::Ui::Px(8.0f)),
+                                            ImVec2(centerX, py - Spark::Ui::Px(2.0f)),
+                                            Spark::Ui::Col(Spark::Ui::Role::AccentText));
             }
         }
 
-        float totalWidth = clip.frames.size() * (frameWidth + 4.0f);
-        ImGui::Dummy(ImVec2(totalWidth, frameHeight + 12.0f));
+        float totalWidth = clip.frames.size() * (frameWidth + frameGap);
+        ImGui::Dummy(ImVec2(totalWidth, frameHeight + Spark::Ui::Px(12.0f)));
 
         // Handle click to select frame
         if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
             ImVec2 mousePos = ImGui::GetIO().MousePos;
-            int clickedFrame = static_cast<int>((mousePos.x - timelinePos.x) / (frameWidth + 4.0f));
+            int clickedFrame = static_cast<int>((mousePos.x - timelinePos.x) / (frameWidth + frameGap));
             if (clickedFrame >= 0 && clickedFrame < static_cast<int>(clip.frames.size()))
             {
                 m_selectedFrameIndex = clickedFrame;
@@ -350,24 +361,25 @@ namespace SparkEditor
 
     void SpriteAnimationEditorPanel::RenderPreview()
     {
-        ImGui::Text(ICON_FA_EYE " Preview");
-        ImGui::Separator();
+        Spark::Ui::SubHeader(ICON_FA_EYE " Preview");
 
         ImVec2 avail = ImGui::GetContentRegionAvail();
-        float previewSize = (std::min)(avail.x, avail.y - 20) * 0.9f;
+        float previewSize = (std::min)(avail.x, avail.y - Spark::Ui::Px(20.0f)) * 0.9f;
 
         ImVec2 canvasPos = ImGui::GetCursorScreenPos();
         ImDrawList* drawList = ImGui::GetWindowDrawList();
 
-        // Checkerboard background
-        float gridStep = 8.0f;
+        // Transparency checkerboard in two neutral surface tones.
+        const ImU32 checkerLight = Spark::Ui::Col(Spark::Ui::Role::SurfaceHover);
+        const ImU32 checkerDark = Spark::Ui::Col(Spark::Ui::Role::SurfaceRaised);
+        const float gridStep = Spark::Ui::Px(8.0f);
         for (float y = 0; y < previewSize; y += gridStep)
         {
             for (float x = 0; x < previewSize; x += gridStep)
             {
                 int ix = static_cast<int>(x / gridStep);
                 int iy = static_cast<int>(y / gridStep);
-                ImU32 col = ((ix + iy) % 2 == 0) ? IM_COL32(200, 200, 200, 255) : IM_COL32(150, 150, 150, 255);
+                ImU32 col = ((ix + iy) % 2 == 0) ? checkerLight : checkerDark;
                 drawList->AddRectFilled(ImVec2(canvasPos.x + x, canvasPos.y + y),
                                         ImVec2(canvasPos.x + (std::min)(x + gridStep, previewSize),
                                                canvasPos.y + (std::min)(y + gridStep, previewSize)),
@@ -388,13 +400,14 @@ namespace SparkEditor
                     continue;
 
                 float alpha = 0.15f / std::abs(static_cast<float>(offset));
-                ImU32 ghostCol = (offset < 0) ? IM_COL32(100, 100, 255, static_cast<int>(alpha * 255))
-                                              : IM_COL32(255, 100, 100, static_cast<int>(alpha * 255));
+                // Earlier frames ghost in the info hue, later frames in the warning hue.
+                ImU32 ghostCol = (offset < 0) ? Spark::Ui::Col(Spark::Ui::Role::InfoText, alpha)
+                                              : Spark::Ui::Col(Spark::Ui::Role::WarningText, alpha);
 
                 float margin = previewSize * 0.1f;
                 drawList->AddRectFilled(ImVec2(canvasPos.x + margin, canvasPos.y + margin),
                                         ImVec2(canvasPos.x + previewSize - margin, canvasPos.y + previewSize - margin),
-                                        ghostCol, 4.0f);
+                                        ghostCol, Spark::Ui::Px(4.0f));
             }
         }
 
@@ -402,27 +415,27 @@ namespace SparkEditor
         float margin = previewSize * 0.1f;
         drawList->AddRectFilled(ImVec2(canvasPos.x + margin, canvasPos.y + margin),
                                 ImVec2(canvasPos.x + previewSize - margin, canvasPos.y + previewSize - margin),
-                                IM_COL32(100, 150, 255, 200), 4.0f);
+                                Spark::Ui::Col(Spark::Ui::Role::AccentFill, 0.8f), Spark::Ui::Px(4.0f));
 
         // Frame counter
         char frameText[64];
         std::snprintf(frameText, sizeof(frameText), "Frame: %d", m_previewFrame);
-        drawList->AddText(ImVec2(canvasPos.x + 4, canvasPos.y + previewSize - 16), IM_COL32(255, 255, 255, 200),
-                          frameText);
+        drawList->AddText(ImVec2(canvasPos.x + Spark::Ui::Px(4.0f),
+                                 canvasPos.y + previewSize - ImGui::GetTextLineHeight() - Spark::Ui::Px(2.0f)),
+                          Spark::Ui::Col(Spark::Ui::Role::TextPrimary, .78f), frameText);
 
         ImGui::Dummy(ImVec2(previewSize, previewSize));
     }
 
     void SpriteAnimationEditorPanel::RenderFrameProperties()
     {
-        ImGui::Text(ICON_FA_SLIDERS_H " Frame Properties");
-        ImGui::Separator();
+        Spark::Ui::SubHeader(ICON_FA_SLIDERS_H " Frame Properties");
 
         if (m_selectedClipIndex < 0 || m_selectedClipIndex >= static_cast<int>(m_clips.size()) ||
             m_selectedFrameIndex < 0 ||
             m_selectedFrameIndex >= static_cast<int>(m_clips[m_selectedClipIndex].frames.size()))
         {
-            ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Select a frame");
+            Spark::Ui::SecondaryText("Select a frame");
             return;
         }
 
@@ -444,7 +457,7 @@ namespace SparkEditor
 
         ImGui::Spacing();
 
-        if (ImGui::Button("Delete Frame"))
+        if (Spark::Ui::DangerButton("Delete Frame"))
         {
             auto& frames = m_clips[m_selectedClipIndex].frames;
             if (m_selectedFrameIndex < static_cast<int>(frames.size()))
@@ -466,10 +479,9 @@ namespace SparkEditor
         }
 
         ImGui::Spacing();
-        ImGui::Separator();
 
         // Batch operations
-        ImGui::Text("Batch Operations:");
+        Spark::Ui::SubHeader("Batch Operations");
         static float batchDuration = 0.1f;
         ImGui::DragFloat("Batch Duration", &batchDuration, 0.01f, 0.001f, 10.0f);
         if (ImGui::Button("Set All Frame Durations"))
@@ -487,7 +499,7 @@ namespace SparkEditor
 
     void SpriteAnimationEditorPanel::RenderAutoSliceDialog()
     {
-        ImGui::SetNextWindowSize(ImVec2(350, 200), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(Spark::Ui::Px2(350, 200), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Auto-Slice Sprite Sheet", &m_showAutoSlice, ImGuiWindowFlags_NoDocking))
         {
             ImGui::Text("Automatically create animation frames from a sprite sheet grid.");

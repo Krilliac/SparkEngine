@@ -194,7 +194,7 @@ TEST(MaterialSystemReal_MetricsDefaults)
 {
     MaterialSystem::MaterialMetrics metrics{};
     EXPECT_EQ(metrics.loadedMaterials, 0);
-    EXPECT_EQ(metrics.textureCount, 0);
-    EXPECT_EQ(metrics.textureMemory, size_t(0));
     EXPECT_EQ(metrics.materialSwitches, 0);
+    EXPECT_EQ(metrics.textureBinds, 0);
+    EXPECT_EQ(metrics.variantCount, 0);
 }

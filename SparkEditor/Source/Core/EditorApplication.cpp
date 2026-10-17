@@ -12,8 +12,12 @@
  */
 
 #include "EditorApplication.h"
+#include "EditorAppearanceWindow.h"
 #include "EditorUI.h"
 #include "EditorFonts.h"
+#include "EditorTheme.h"
+#include "EditorPreferences.h"
+#include "SparkUI/Runtime.h"
 #include "EditorWindowManager.h"
 #include "Core/FaultIsolation.h"
 #include "EditorCrashHandler.h"
@@ -25,6 +29,7 @@
 #include <memory>
 #include <iostream>
 #include <stdexcept>
+#include <utility>
 
 // Dear ImGui includes
 #include <imgui.h>
@@ -51,7 +56,6 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 
 namespace SparkEditor
 {
-
     // Out-of-class definition of the static application pointer. The
     // declaration lives in EditorApplication.h so WindowProc and other
     // methods defined in EditorApplicationWindows.cpp can reach it via
@@ -101,6 +105,7 @@ namespace SparkEditor
         m_config = config;
         m_windowWidth = config.windowWidth;
         m_windowHeight = config.windowHeight;
+        ApplyStartupPreferences(m_config);
 
         // Create main editor window
         console.LogInfo("Creating main editor window...");
@@ -147,10 +152,31 @@ namespace SparkEditor
         // Initialize EditorUI (this creates all panels including console)
         console.LogInfo("Initializing EditorUI...");
         m_ui = std::make_unique<EditorUI>();
-        if (!m_ui->Initialize(config))
+        // The preferences read once at startup move into EditorUI, which owns the live copy from here on.
+        // Test-mode launches never read or write the user's file.
+        m_ui->AdoptPreferences(std::move(m_preferences), !m_config.testMode && m_preferencesLoad.CanSave());
+        m_preferences = EditorPreferences{};
+        if (!m_ui->Initialize(m_config))
         {
             console.LogError("Failed to initialize EditorUI");
             return failInitialization();
+        }
+        NotifyPreferencesLoadProblem();
+        // A --project that did not open used to drop the user into the Project Browser with only a console line.
+        // Say why, in the log and as an error notification that stays until dismissed.
+        if (!m_config.projectPath.empty() && m_config.projectPath != ".")
+        {
+            const ProjectManager* projects = m_ui->GetProjectManager();
+            if (projects != nullptr && !projects->HasOpenProject())
+            {
+                const std::string reason = projects->GetLastOpenError().empty()
+                                               ? "The project at '" + m_config.projectPath + "' was not opened."
+                                               : projects->GetLastOpenError();
+                SPARK_LOG_ERROR(Spark::LogCategory::Editor, "Startup project '%s' was not opened: %s",
+                                m_config.projectPath.c_str(), reason.c_str());
+                console.LogError("Startup project was not opened: " + reason);
+                m_ui->Notify(NotificationSeverity::Error, "Could not open project", reason);
+            }
         }
         // Give EditorUI access to the plugin manager for menu bar rendering
         m_ui->SetPluginManager(&m_pluginManager);
@@ -208,6 +234,69 @@ namespace SparkEditor
         console.LogInfo("All editor operations will be logged to external console");
 
         return true;
+    }
+
+    void EditorApplication::ApplyStartupPreferences(EditorConfig& config)
+    {
+        // Bounded/test launches stay deterministic: they never read the user's preferences. This is the only
+        // place the file is read; EditorUI adopts the result once it exists.
+        if (!config.testMode)
+        {
+            m_preferencesLoad = LoadEditorPreferencesForSession(EditorPreferencesPath(), m_preferences);
+            if (m_preferencesLoad.status == EditorPreferencesLoadStatus::MovedAside)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Editor, "Editor preferences were rejected (%s); kept as '%s'",
+                               m_preferencesLoad.error.c_str(), m_preferencesLoad.backupPath.string().c_str());
+            }
+            else if (m_preferencesLoad.status == EditorPreferencesLoadStatus::Unreadable)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Editor,
+                               "Editor preferences '%s' were not loaded and will not be saved this session: %s",
+                               EditorPreferencesPath().string().c_str(), m_preferencesLoad.error.c_str());
+            }
+        }
+        EditorAppearanceWindow::NormalizePalette(m_preferences);
+
+        // --theme applies to this session only and leaves the saved appearance and density alone.
+        if (config.startupTheme.empty())
+        {
+            config.startupTheme = m_preferences.palette;
+            EditorTheme::SetAppearanceOverride(EditorAppearanceWindow::AppearanceOverrideFor(m_preferences.appearance));
+            EditorTheme::SetDensity(m_preferences.density);
+        }
+    }
+
+    void EditorApplication::NotifyPreferencesLoadProblem()
+    {
+        if (!m_ui)
+        {
+            return;
+        }
+        if (m_preferencesLoad.status == EditorPreferencesLoadStatus::MovedAside)
+        {
+            m_ui->Notify(NotificationSeverity::Warning, "Preferences reset to defaults",
+                         "The preferences file could not be read (" + m_preferencesLoad.error + "). It was kept as " +
+                             m_preferencesLoad.backupPath.string() + ".");
+        }
+        else if (m_preferencesLoad.status == EditorPreferencesLoadStatus::Unreadable)
+        {
+            m_ui->Notify(NotificationSeverity::Warning, "Preferences not loaded",
+                         "Using defaults; changes will not be saved this session (" + m_preferencesLoad.error + ").");
+        }
+    }
+
+    void EditorApplication::OnDpiChanged(float dpiScale)
+    {
+        if (!(dpiScale > 0.0f) || dpiScale == m_dpiScale)
+        {
+            return;
+        }
+        m_dpiScale = dpiScale;
+        if (m_imguiInitialized)
+        {
+            // Only the DPI factor: a user-scale step queued earlier this frame keeps its pending value.
+            Spark::Ui::RequestDpiScale(dpiScale);
+        }
     }
 
     // Platform-specific methods (CreateMainWindow, InitializeGraphics, Run, Shutdown)

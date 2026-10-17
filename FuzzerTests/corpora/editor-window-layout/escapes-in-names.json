@@ -1,0 +1,29 @@
+{
+  "windowLayout": {
+    "name": "Tab\there",
+    "version": 1,
+    "dockLayoutINI": "a\\b\\nc",
+    "panels": [
+      {
+        "panelName": "Back\\slash",
+        "isOpen": true,
+        "isFloating": false,
+        "posX": 0,
+        "posY": 0,
+        "width": 400,
+        "height": 300,
+        "monitorIndex": -1
+      },
+      {
+        "panelName": "Quote\"d",
+        "isOpen": true,
+        "isFloating": false,
+        "posX": 0,
+        "posY": 0,
+        "width": 400,
+        "height": 300,
+        "monitorIndex": -1
+      }
+    ]
+  }
+}

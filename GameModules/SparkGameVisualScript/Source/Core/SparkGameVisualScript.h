@@ -23,12 +23,11 @@
 
 #pragma once
 
-#include "Engine/ECS/Components/CoreComponents.h"
 #include "Spark/SparkSDK.h"
+#include "VisualScriptDemoWorld.h"
 
-#include <filesystem>
+#include <memory>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 /**
@@ -55,18 +54,17 @@ class SparkGameVisualScriptModule : public Spark::IModule
     void OnImGui() override;
 
   private:
-    bool LoadAndCompileScripts();
-    bool SpawnGameEntities();
-    bool AttachScript(EntityID entity, const std::string& className);
-    void DestroyGameEntities();
+    void LoadSoundCues();
+    void UnloadSoundCues();
     void RegisterConsoleCommands();
     void UnregisterConsoleCommands();
     std::string GetStatusString() const;
 
     Spark::IEngineContext* m_context{nullptr};
-    std::filesystem::path m_scriptRoot;
-    std::unordered_map<std::string, std::string> m_scriptSources;
-    std::vector<EntityID> m_scriptEntities;
+    std::unique_ptr<Spark::VisualScriptDemo::DemoWorld> m_demo; ///< Script entities; null until a load succeeds
+    std::vector<std::string> m_loadedSoundCues;                 ///< Cues this load registered with the AudioEngine
+    std::vector<std::string> m_consoleCommands; ///< Registered through m_context->GetConsole(); removed in OnUnload
+    std::vector<EntityID> m_pausedScripts;      ///< Enabled scripts suspended by this module
     bool m_initialized{false};
     bool m_paused{false};
 };

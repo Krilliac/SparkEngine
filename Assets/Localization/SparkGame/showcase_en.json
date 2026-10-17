@@ -1,0 +1,14 @@
+{
+  "showcase.status.title": "=== Gameplay Showcase Status ===",
+  "showcase.status.spawned": "Spawned entities",
+  "showcase.status.damage_events": "Damage events",
+  "showcase.status.kill_events": "Kill events",
+  "showcase.status.weather_changes": "Weather changes",
+  "showcase.status.total_damage": "Total damage dealt",
+  "showcase.status.coroutine": "Coroutine sequence",
+  "showcase.status.weather": "Current weather",
+  "showcase.status.weather_timer": "Weather timer",
+  "showcase.status.time_of_day": "Time of day",
+  "showcase.status.day_count": "Day count",
+  "showcase.status.language": "Language"
+}

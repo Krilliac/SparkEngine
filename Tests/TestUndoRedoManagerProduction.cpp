@@ -3,6 +3,8 @@
 #include "TestFramework.h"
 #include "UndoRedo/UndoRedoManager.h"
 
+#include <stdexcept>
+
 namespace
 {
     std::unique_ptr<SparkEditor::EditorCommand> SetValue(int& value, int next)
@@ -51,4 +53,23 @@ TEST(UndoRedoProduction_TransientRollbackRestoresPreexistingRedo)
     EXPECT_TRUE(history.CanRedo());
     EXPECT_TRUE(history.Redo());
     EXPECT_EQ(value, 1);
+}
+
+TEST(UndoRedoProduction_CommandExceptionRestoresDispatchBoundary)
+{
+    SparkEditor::UndoRedoManager history;
+    auto throwingCommand = std::make_unique<SparkEditor::LambdaEditorCommand>(
+        []() { throw std::runtime_error("editor command failed"); }, []() {}, "Throwing command");
+
+    EXPECT_FALSE(SparkEditor::UndoRedoManager::IsDispatchingCommand());
+    try
+    {
+        history.ExecuteCommand(std::move(throwingCommand));
+    }
+    catch (const std::runtime_error&)
+    {
+    }
+
+    EXPECT_FALSE(SparkEditor::UndoRedoManager::IsDispatchingCommand());
+    EXPECT_FALSE(history.CanUndo());
 }

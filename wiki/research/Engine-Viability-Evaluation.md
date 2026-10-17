@@ -34,7 +34,7 @@ wWinMain() / main()
   -> RunWindowedMainLoop()     -- Real message pump, per-frame:
        Input.Update()
        ModuleManager.UpdateAll(dt) / RenderAll()
-       UpdateGameplaySystems(dt)   -- 40+ subsystems ticked
+       UpdateGameplaySystems(dt)   -- gameplay subsystems ticked
        UpdateDebugSystems(dt)
        ConsoleProcessManager.ProcessCommands()
   -> ShutdownEngine()
@@ -58,7 +58,7 @@ with fault isolation, and test frame limits for CI.
 | Lighting + shadows | Working | Directional / point / spot |
 | Particle system | Working | GPU-friendly emitters with collision |
 | 2D sprites | Working | Batched rendering with blend modes |
-| Render graph | Working | Topological sort, resource aliasing, 150+ tests |
+| Render graph | Working | Topological sort, resource aliasing, dedicated test coverage |
 | NullRHIDevice | Working | Headless CI without GPU |
 
 **Backend reality (updated 2026-06-08):**
@@ -101,8 +101,10 @@ FABRIK), ragdoll integration, compression, retargeting.
 ### 8. Networking — Experimental Local Development
 
 UDP transport, reliable messaging, entity replication with delta snapshots, client
-prediction + server reconciliation, lag compensation, legacy XOR/FNV security prototypes, instability
-simulator, AreaServer/WorldServer architecture.
+prediction + server reconciliation, lag compensation, instability simulator, AreaServer/WorldServer
+architecture. The legacy XOR/FNV security prototypes listed at evaluation time were removed (the FNV tag by
+the ChaCha20-Poly1305 replacement, the XOR transport prototype under NET-100 on 2026-09-25); secure
+networking remains unclaimed.
 
 ### 9. Game Module System — Working
 
@@ -122,7 +124,7 @@ Many panels, collaborative multi-user editing.
 
 ### 12. Tests — Large Suite
 
-~6,000 unit tests across ~480 files, all green on Linux.
+The repository contains unit tests; current execution status requires exact-commit CI evidence.
 
 ## What's Missing or Incomplete
 
@@ -163,7 +165,7 @@ Many panels, collaborative multi-user editing.
 ## Bottom Line
 
 SparkEngine is a real engine. The core loop runs, draw calls hit the GPU, physics
-simulates, AI pathfinds, networking replicates entities, and ~6,000 tests validate it.
+simulates, AI pathfinds, networking replicates entities, with dedicated test coverage for those paths.
 The game modules prove a game can load, run, and process logic through the module
 interface.
 
@@ -191,8 +193,7 @@ Updates / status changes since the original:
   Original listed these as a remaining gap (game-module level only).
 - **Cross-platform audio** — IAudioBackend / OpenAL / Null delivered; XAudio2-only
   limitation resolved.
-- **Test count** — grown to ~6,000 tests across ~480 files (original cited 2,577 /
-  211 files).
+- **Test count** — see generated metrics for current suite totals; the original counts are historical.
 
 ## Related Pages
 

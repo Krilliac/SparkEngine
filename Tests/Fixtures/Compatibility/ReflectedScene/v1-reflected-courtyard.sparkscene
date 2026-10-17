@@ -1,0 +1,132 @@
+{
+  "entities": [
+    {
+      "components": [
+        {
+          "fields": {
+            "farPlane": "1500.000000",
+            "fov": "75.000000",
+            "isMainCamera": "true",
+            "nearPlane": "0.250000"
+          },
+          "type": "Camera"
+        },
+        {
+          "fields": {
+            "position": "0.000000,2.000000,-6.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "1.000000,1.000000,1.000000"
+          },
+          "type": "Transform"
+        }
+      ],
+      "id": 3,
+      "name": "Main Camera",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "castShadows": "true",
+            "color": "1.000000,1.000000,1.000000",
+            "intensity": "1.250000",
+            "range": "10.000000",
+            "shadowMapResolution": "2048",
+            "spotAngle": "45.000000",
+            "spotInnerAngle": "30.000000",
+            "type": "0"
+          },
+          "type": "LightComponent"
+        },
+        {
+          "fields": {
+            "position": "0.000000,0.000000,0.000000",
+            "rotation": "50.000000,-30.000000,0.000000",
+            "scale": "1.000000,1.000000,1.000000"
+          },
+          "type": "Transform"
+        }
+      ],
+      "id": 2,
+      "name": "Sun",
+      "parent": -1
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "castShadows": "false",
+            "color": "0.200000,0.400000,1.000000",
+            "intensity": "3.500000",
+            "range": "12.000000",
+            "shadowMapResolution": "1024",
+            "spotAngle": "45.000000",
+            "spotInnerAngle": "30.000000",
+            "type": "1"
+          },
+          "type": "LightComponent"
+        },
+        {
+          "fields": {
+            "position": "-4.500000,0.125000,0.000000",
+            "rotation": "0.000000,0.000000,0.000000",
+            "scale": "1.000000,1.000000,1.000000"
+          },
+          "type": "Transform"
+        }
+      ],
+      "id": 1,
+      "name": "Fountain",
+      "parent": 0
+    },
+    {
+      "components": [
+        {
+          "fields": {
+            "fromMask": "32",
+            "intoMask": "3"
+          },
+          "type": "CollisionMaskComponent"
+        },
+        {
+          "fields": {
+            "angularDamping": "0.100000",
+            "friction": "0.800000",
+            "gravityFactor": "1.000000",
+            "isTrigger": "false",
+            "linearDamping": "0.100000",
+            "mass": "1.000000",
+            "motionQuality": "0",
+            "restitution": "0.100000",
+            "type": "0"
+          },
+          "type": "RigidBodyComponent"
+        },
+        {
+          "fields": {
+            "castShadows": "false",
+            "emissive": "0.000000",
+            "materialPath": "Assets/Materials/stone.json",
+            "meshPath": "Assets/Models/courtyard.obj",
+            "receiveShadows": "true",
+            "visible": "true"
+          },
+          "type": "MeshRenderer"
+        },
+        {
+          "fields": {
+            "position": "1.000000,2.000000,3.000000",
+            "rotation": "0.000000,45.000000,0.000000",
+            "scale": "2.000000,2.000000,2.000000"
+          },
+          "type": "Transform"
+        }
+      ],
+      "id": 0,
+      "name": "Courtyard Root",
+      "parent": -1
+    }
+  ],
+  "version": 1
+}

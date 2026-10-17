@@ -1,0 +1,7 @@
+SPARKPREFAB 3
+name "Guard Tower"
+components 1
+component "Transform"
+properties 1
+  "orientation" quat 0 0.38268343 0 0.9238795
+end

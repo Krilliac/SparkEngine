@@ -17,7 +17,10 @@
  *
  * To add a new pattern:
  *   1. Add a {pattern, reason} entry to g_testWarningPatterns below
- *   2. The pattern is a substring match against the full test name
+ *   2. Add the exact pattern to Tests/test-warning-waivers.json with a named
+ *      owner and a future YYYY-MM-DD expiry date
+ *   3. Run `python Tools/validate_test_warnings.py`
+ *   4. The pattern is a substring match against the full test name
  *
  * To promote a warning back to a hard failure:
  *   Remove its entry from this list. --warn-is-error does it for every entry.

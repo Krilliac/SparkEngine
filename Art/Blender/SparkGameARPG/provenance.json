@@ -1,0 +1,282 @@
+{
+  "schema_version": 1,
+  "blender_version": "4.0.2",
+  "module": "SparkGameARPG",
+  "author_script": {
+    "path": "tools/blender/author_arpg_kit.py",
+    "sha256": "1bcf8e2d2313936d80958d0b8eae9f9739653be7d7ce6aeed198086924ecda20"
+  },
+  "library": {
+    "path": "tools/blender/spark_kit.py",
+    "sha256": "f2635ad37db4874e568485beaef56654a67e25ee06294e3c7d4194d6cf8c856e"
+  },
+  "blend": {
+    "path": "Art/Blender/SparkGameARPG/arpg_kit.blend",
+    "sha256": "fe198b60f4ec57ad2ea3a1f8abf508a2af4421d2ed9aa631747708484405eccc",
+    "scene_sha256": "cd5b05bba8dcdb52a97b9f512c552725e67d2977e6ad2392609f8d5164acb8e5"
+  },
+  "license": {
+    "name": "Spark Open License 1.0",
+    "path": "LICENSE",
+    "sha256": "4d6e814541f2b8fbaef70c44d16a627b24d437e6983b58d90f1c2e00e6d89a45"
+  },
+  "export_convention": "meters, ground pivot, Y-up, forward_axis=Z (left-handed +Z-forward)",
+  "assets": [
+    {
+      "name": "spike_trap",
+      "obj_path": "Assets/Models/ARPG/Kit/spike_trap.obj",
+      "mtl_path": "Assets/Models/ARPG/Kit/spike_trap.mtl",
+      "bounds": {
+        "min": [
+          -1.0,
+          0.0,
+          -1.0
+        ],
+        "max": [
+          1.0,
+          0.525833,
+          1.0
+        ]
+      },
+      "triangle_count": 1196,
+      "obj_sha256": "e5a5dbb97b5883339bb3f95cd359dda48b6a62a0cc5f0552a6a317a3a47f101f",
+      "mtl_sha256": "0de3ec905f70b67351c316ef1ad1995f1feaaa29a66fdfa072ccb3162cabc1cb",
+      "triangle_budget": 1400,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/ARPG/Kit/spike_trap_lod1.obj",
+          "mtl_path": "Assets/Models/ARPG/Kit/spike_trap_lod1.mtl",
+          "bounds": {
+            "min": [
+              -0.988462,
+              0.01,
+              -0.9875
+            ],
+            "max": [
+              0.988462,
+              0.526234,
+              0.9875
+            ]
+          },
+          "triangle_count": 426,
+          "obj_sha256": "944dd5768b4d91a32da4219cfb4ceec53015f4e0af5992c8a96071842a987c15",
+          "mtl_sha256": "0de3ec905f70b67351c316ef1ad1995f1feaaa29a66fdfa072ccb3162cabc1cb",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/ARPG/Kit/spike_trap_collision.obj",
+          "mtl_path": "Assets/Models/ARPG/Kit/spike_trap_collision.mtl",
+          "bounds": {
+            "min": [
+              -1.0,
+              0.0,
+              -1.0
+            ],
+            "max": [
+              1.0,
+              0.525833,
+              1.0
+            ]
+          },
+          "triangle_count": 104,
+          "obj_sha256": "41f6d9e7fb2dc206ba7df3555d545946d991c4fc0b24082bebd5c9415a16aeed",
+          "mtl_sha256": "bb0b0cf67090555e6b454f327087c897e51f9e99fe684a2190fdeefb429fd80d",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "destructible_urn",
+      "obj_path": "Assets/Models/ARPG/Kit/destructible_urn.obj",
+      "mtl_path": "Assets/Models/ARPG/Kit/destructible_urn.mtl",
+      "bounds": {
+        "min": [
+          -0.32,
+          0.0,
+          -0.302436
+        ],
+        "max": [
+          0.32,
+          0.9,
+          0.311436
+        ]
+      },
+      "triangle_count": 676,
+      "obj_sha256": "21e82d9cdcbd26e02b0ea230cf91b25ca1d0377768d16624990f2e5d1c8a7925",
+      "mtl_sha256": "54ccaec076952e97ef7217fb251a992743c8247b8855b6ddf4cc0baf90212572",
+      "triangle_budget": 900,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/ARPG/Kit/destructible_urn_lod1.obj",
+          "mtl_path": "Assets/Models/ARPG/Kit/destructible_urn_lod1.mtl",
+          "bounds": {
+            "min": [
+              -0.318,
+              -0.000866,
+              -0.296984
+            ],
+            "max": [
+              0.318,
+              0.901566,
+              0.308103
+            ]
+          },
+          "triangle_count": 242,
+          "obj_sha256": "7111b6821a2d47195797635fac125dda51517840e9c7b69f68ef3c80d230283a",
+          "mtl_sha256": "54ccaec076952e97ef7217fb251a992743c8247b8855b6ddf4cc0baf90212572",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/ARPG/Kit/destructible_urn_collision.obj",
+          "mtl_path": "Assets/Models/ARPG/Kit/destructible_urn_collision.mtl",
+          "bounds": {
+            "min": [
+              -0.32,
+              0.0,
+              -0.302436
+            ],
+            "max": [
+              0.32,
+              0.9,
+              0.311436
+            ]
+          },
+          "triangle_count": 188,
+          "obj_sha256": "c8655e591e3ba6f93afdf397999461f7538e705d7115757ac3a10e7a94af94a9",
+          "mtl_sha256": "bb0b0cf67090555e6b454f327087c897e51f9e99fe684a2190fdeefb429fd80d",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "loot_pile",
+      "obj_path": "Assets/Models/ARPG/Kit/loot_pile.obj",
+      "mtl_path": "Assets/Models/ARPG/Kit/loot_pile.mtl",
+      "bounds": {
+        "min": [
+          -0.597037,
+          -0.001647,
+          -0.593185
+        ],
+        "max": [
+          0.598228,
+          0.858008,
+          0.597111
+        ]
+      },
+      "triangle_count": 994,
+      "obj_sha256": "e0db779d0146eccc64dae8b4c1be930c89a017dca542c71794eb2fc62708b4e3",
+      "mtl_sha256": "bc8923e37b56b3f48cf0a829a46a2c8fbc53f7f5f8190f5a438f846ed5d53b80",
+      "triangle_budget": 1600,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/ARPG/Kit/loot_pile_lod1.obj",
+          "mtl_path": "Assets/Models/ARPG/Kit/loot_pile_lod1.mtl",
+          "bounds": {
+            "min": [
+              -0.595906,
+              0.0,
+              -0.592586
+            ],
+            "max": [
+              0.597293,
+              0.857412,
+              0.596454
+            ]
+          },
+          "triangle_count": 338,
+          "obj_sha256": "a9b4509a9745ee6b24264aea35c6ff63c4086c5326acf5f069787a0d70fd3920",
+          "mtl_sha256": "bc8923e37b56b3f48cf0a829a46a2c8fbc53f7f5f8190f5a438f846ed5d53b80",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/ARPG/Kit/loot_pile_collision.obj",
+          "mtl_path": "Assets/Models/ARPG/Kit/loot_pile_collision.mtl",
+          "bounds": {
+            "min": [
+              -0.597037,
+              -0.001647,
+              -0.593185
+            ],
+            "max": [
+              0.598228,
+              0.858008,
+              0.597111
+            ]
+          },
+          "triangle_count": 132,
+          "obj_sha256": "ac0ee54728442dcf62a50e184aac598819ce874474be34326d3bf8bbe88441a5",
+          "mtl_sha256": "bb0b0cf67090555e6b454f327087c897e51f9e99fe684a2190fdeefb429fd80d",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "portal_gate",
+      "obj_path": "Assets/Models/ARPG/Kit/portal_gate.obj",
+      "mtl_path": "Assets/Models/ARPG/Kit/portal_gate.mtl",
+      "bounds": {
+        "min": [
+          -2.005,
+          0.0,
+          -0.8
+        ],
+        "max": [
+          2.005,
+          4.0,
+          1.21
+        ]
+      },
+      "triangle_count": 1072,
+      "obj_sha256": "dfe93bd8b7f03cb75bd53da0182276da218ab5a73e423c6a8bb10f64ccc40d83",
+      "mtl_sha256": "8e96e6d0cadd604da759634d4d0afa13d5340ea6df94683d8666f6809b408af6",
+      "triangle_budget": 2600,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/ARPG/Kit/portal_gate_lod1.obj",
+          "mtl_path": "Assets/Models/ARPG/Kit/portal_gate_lod1.mtl",
+          "bounds": {
+            "min": [
+              -1.993462,
+              0.0125,
+              -0.7875
+            ],
+            "max": [
+              1.993462,
+              4.002053,
+              1.207602
+            ]
+          },
+          "triangle_count": 384,
+          "obj_sha256": "02abb8cdd3178c22d7135297711238eac989bfba3509a7e2d3b42bae3a560265",
+          "mtl_sha256": "8e96e6d0cadd604da759634d4d0afa13d5340ea6df94683d8666f6809b408af6",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/ARPG/Kit/portal_gate_collision.obj",
+          "mtl_path": "Assets/Models/ARPG/Kit/portal_gate_collision.mtl",
+          "bounds": {
+            "min": [
+              -2.005,
+              0.0,
+              -0.8
+            ],
+            "max": [
+              2.005,
+              4.0,
+              1.21
+            ]
+          },
+          "triangle_count": 152,
+          "obj_sha256": "551133c8c1d801f10129faea47fbe773869942f6a35d9ab5c18b4aa153e715a8",
+          "mtl_sha256": "bb0b0cf67090555e6b454f327087c897e51f9e99fe684a2190fdeefb429fd80d",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    }
+  ]
+}

@@ -485,6 +485,13 @@ ThirdParty/dxvk/
 
 # Runtime test locks are process-local output and must never enter source control.
 Saves/*.db.lock
+# TERRAFRONT test databases written by SparkTests runs started from the repository root.
+Saves/test_*.db
+# libFuzzer writes crash-/leak-/timeout- reproducers into its working directory; keep the
+# minimized ones as seeds under FuzzerTests/corpora instead.
+/crash-*
+/leak-*
+/timeout-*
 
 # Transient screenshots captured by live editor/engine test runs under
 # Xvfb — these are ephemeral artifacts and should never be committed.

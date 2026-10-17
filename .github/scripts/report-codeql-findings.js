@@ -15,6 +15,7 @@ const TRUSTED_STATUS_CONTEXT = 'CodeQL Trusted / Exact Source';
 const AGGREGATE_STATUS_CONTEXT = 'Trusted Exact-Source CI / Aggregate';
 const TRUSTED_STATUS_EVENTS = Object.freeze(['pull_request', 'push', 'workflow_dispatch']);
 const TRUSTED_STATUS_STATES = Object.freeze(['pending', 'success', 'failure']);
+const PENDING_SOURCE_STATUSES = Object.freeze(['queued', 'in_progress']);
 const MAX_FINALIZER_SUMMARY_BYTES = 2 * 1024 * 1024;
 const SUPPORTED_LANGUAGES = Object.freeze({ actions: true, 'c-cpp': true, python: true });
 const SOURCE_JOB_NAMES = Object.freeze({
@@ -326,6 +327,8 @@ async function inspectSourceRun({ github, context }, options = {}) {
     }
 
     const allowInProgress = options.allowInProgress === true;
+    const eventAllowsPendingLifecycle = allowInProgress && event?.action === 'in_progress' &&
+        PENDING_SOURCE_STATUSES.includes(eventRun?.status);
     if (event) {
         if (event.action !== 'completed' && !(allowInProgress && event.action === 'in_progress')) {
             identityErrors.push(`Unexpected workflow_run action '${event.action || 'unknown'}'.`);
@@ -341,8 +344,7 @@ async function inspectSourceRun({ github, context }, options = {}) {
         if (eventRun.name !== SOURCE_WORKFLOW_NAME) identityErrors.push(`Unexpected source workflow name '${eventRun.name || 'unknown'}'.`);
         if (workflowPath(eventRun.path) !== SOURCE_WORKFLOW_PATH) identityErrors.push(`Unexpected source workflow path '${eventRun.path || 'unknown'}'.`);
         if (!SHA_PATTERN.test(eventRun.head_sha || '')) identityErrors.push('The event source run has an invalid head SHA.');
-        if (eventRun.status !== 'completed' &&
-            !(allowInProgress && event?.action === 'in_progress' && eventRun.status === 'in_progress')) {
+        if (eventRun.status !== 'completed' && !eventAllowsPendingLifecycle) {
             identityErrors.push(`Unexpected event source status '${eventRun.status || 'unknown'}'.`);
         }
         if (!['pull_request', 'push', 'schedule', 'workflow_dispatch'].includes(eventRun.event)) {
@@ -393,13 +395,14 @@ async function inspectSourceRun({ github, context }, options = {}) {
         if (run.name !== SOURCE_WORKFLOW_NAME || workflowPath(run.path) !== SOURCE_WORKFLOW_PATH) {
             identityErrors.push('API source workflow identity is not the trusted scanner workflow.');
         }
-        if (run.status !== 'completed' &&
-            !(allowInProgress && event?.action === 'in_progress' && run.status === 'in_progress')) {
+        const pendingLifecycleRace = eventAllowsPendingLifecycle &&
+            PENDING_SOURCE_STATUSES.includes(run.status);
+        if (run.status !== 'completed' && !pendingLifecycleRace) {
             evidenceErrors.push(`Source workflow status is '${run.status || 'unknown'}', not accepted.`);
         }
-        if (run.status !== eventRun.status || run.event !== eventRun.event ||
+        if ((!pendingLifecycleRace && run.status !== eventRun.status) || run.event !== eventRun.event ||
             run.head_branch !== eventRun.head_branch) {
-            identityErrors.push('API source workflow metadata does not match the completed event.');
+            identityErrors.push('API source workflow metadata does not match the source event.');
         }
         if (run.conclusion !== eventRun.conclusion) staleReasons.push('The source workflow conclusion changed after this event.');
         if (run.run_attempt !== eventRun.run_attempt) staleReasons.push('A newer attempt exists for this source workflow run.');
@@ -1325,8 +1328,11 @@ async function revalidateCommitStatusTarget(args, inspection, state) {
     const repository = inspection.repository;
     const targetSha = normalizedSha(run?.head_sha);
     const eventEligible = TRUSTED_STATUS_EVENTS.includes(run?.event);
+    const pendingLifecycleRace = state === 'pending' && inspection.event?.action === 'in_progress' &&
+        PENDING_SOURCE_STATUSES.includes(eventRun?.status) &&
+        PENDING_SOURCE_STATUSES.includes(run?.status);
     const lifecycleAccepted = inspection.event?.action === 'completed' && run?.status === 'completed' ||
-        state === 'pending' && inspection.event?.action === 'in_progress' && run?.status === 'in_progress';
+        pendingLifecycleRace;
 
     if (!inspection.trustedSource || !isObject(run) || !isObject(eventRun) || !isObject(repository) ||
         !eventEligible || !targetSha || !lifecycleAccepted || inspection.staleReasons.length) {
@@ -1338,12 +1344,15 @@ async function revalidateCommitStatusTarget(args, inspection, state) {
     const latestRun = (await github.rest.actions.getWorkflowRun({
         owner: inspection.owner, repo: inspection.repo, run_id: run.id
     })).data;
+    const latestStatusMatches = isObject(latestRun) &&
+        (latestRun.status === run.status && latestRun.status === eventRun.status ||
+            pendingLifecycleRace && PENDING_SOURCE_STATUSES.includes(latestRun.status));
     if (!isObject(latestRun) || latestRun.id !== run.id || latestRun.workflow_id !== run.workflow_id ||
         latestRun.run_number !== run.run_number || latestRun.run_attempt !== run.run_attempt ||
         latestRun.run_attempt !== eventRun.run_attempt || latestRun.name !== SOURCE_WORKFLOW_NAME ||
         workflowPath(latestRun.path) !== SOURCE_WORKFLOW_PATH || latestRun.event !== run.event ||
         latestRun.head_branch !== run.head_branch || normalizedSha(latestRun.head_sha) !== targetSha ||
-        latestRun.status !== run.status || latestRun.status !== eventRun.status ||
+        !latestStatusMatches ||
         latestRun.conclusion !== run.conclusion ||
         latestRun.conclusion !== eventRun.conclusion ||
         !exactRepository(latestRun.repository, repository) ||

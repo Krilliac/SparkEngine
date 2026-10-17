@@ -1,0 +1,5 @@
+# tinyobj reads "nan" as 0; 1e999 overflows float to infinity
+v 0 0 0
+v 1e999 0 0
+v 0 1 0
+f 1 2 3

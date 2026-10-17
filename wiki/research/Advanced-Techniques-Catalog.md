@@ -8,7 +8,7 @@
 
 ## Overview
 
-A catalog of **34 advanced techniques across 7 subsystems**, prioritized by effort/impact, produced from a three-agent sweep (rendering; runtime/ECS/physics/AI; networking/streaming/scripting). The sweep catalogued what already exists, what's missing vs. modern AAA engines, and where each new technique would slot into existing code, so any item can be picked up without repeating the research.
+A catalog of **34 advanced techniques across engine subsystems**, prioritized by effort/impact, produced from a three-agent sweep (rendering; runtime/ECS/physics/AI; networking/streaming/scripting). The sweep catalogued what already exists, what's missing vs. modern AAA engines, and where each new technique would slot into existing code, so any item can be picked up without repeating the research.
 
 **Baseline strengths already shipped** (confirmed 2026-06-08): render graph + transient aliasing, GPU-driven culling + HiZ, mesh shaders + mesh clusters (Nanite building blocks), DDGI + Adaptive Probe Volumes, TAA, FSR 1/2, neural inference substrate, SparkSR temporal upsampler, Jolt physics, EnTT ECS with parallel dependency-aware executor, snapshot netcode + CSP + lag compensation + AOI, DirectStorage, WorldOriginSystem rebasing, AngelScript hot-reload, async DB persistence, coroutine scheduler, `AIBudgetLimiter` distance-prioritised tick scaling.
 
@@ -78,8 +78,8 @@ The original session checked several active plan-doc items against the codebase 
 
 | Item | Verdict (original) |
 |---|---|
-| `AssetTypes.cpp` split | DONE / obsolete (file now ~55 lines) |
-| `GPUParticleSystem.cpp` split | DONE / obsolete (~15 lines) |
+| `AssetTypes.cpp` split | DONE / obsolete after source reduction |
+| `GPUParticleSystem.cpp` split | DONE / obsolete after source reduction |
 | `MaterialSystem.cpp` split | Obsolete — under bloat threshold |
 | `PBRMaterialLighting.cpp` split | Obsolete — under threshold |
 | Unguard `DynamicQualityTypes.h` / `TemporalEffectsTypes.h` / `DrawSortKey.h` | DONE — portable |

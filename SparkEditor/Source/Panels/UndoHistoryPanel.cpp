@@ -8,8 +8,10 @@
 #include "UndoHistoryPanel.h"
 #include "../Core/EditorIcons.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
-#include <imgui.h>
+#include "SparkUI/Widgets.h"
 #include "Utils/LogMacros.h"
+#include <imgui.h>
+#include <string>
 
 namespace SparkEditor
 {
@@ -53,44 +55,53 @@ namespace SparkEditor
 
     void UndoHistoryPanel::RenderToolbar()
     {
+        if (!Spark::Ui::BeginPanelToolbar("##UndoHistoryToolbar"))
+        {
+            return;
+        }
+
         bool canUndo = m_undoRedoManager && m_undoRedoManager->CanUndo();
         bool canRedo = m_undoRedoManager && m_undoRedoManager->CanRedo();
 
-        ImGui::BeginDisabled(!canUndo);
-        if (ImGui::Button(ICON_FA_UNDO " Undo"))
+        if (Spark::Ui::IconButton("Undo", ICON_FA_UNDO, canUndo ? "Undo" : "Nothing to undo.", false, canUndo))
         {
             m_undoRedoManager->Undo();
         }
-        ImGui::EndDisabled();
 
         ImGui::SameLine();
 
-        ImGui::BeginDisabled(!canRedo);
-        if (ImGui::Button(ICON_FA_REDO " Redo"))
+        if (Spark::Ui::IconButton("Redo", ICON_FA_REDO, canRedo ? "Redo" : "Nothing to redo.", false, canRedo))
         {
             m_undoRedoManager->Redo();
         }
-        ImGui::EndDisabled();
 
-        ImGui::SameLine();
+        Spark::Ui::ToolbarSeparator();
 
-        if (ImGui::Button(ICON_FA_TRASH " Clear"))
+        constexpr const char* kClearPopupId = "Clear undo history?##UndoHistoryPanel";
+        const bool hasHistory = canUndo || canRedo;
+        if (Spark::Ui::IconButton("Clear", ICON_FA_TRASH,
+                                  hasHistory ? "Clear undo history" : "Undo history is already empty.", false,
+                                  hasHistory))
         {
-            if (m_undoRedoManager)
-            {
-                m_undoRedoManager->Clear();
-            }
+            ImGui::OpenPopup(kClearPopupId);
+        }
+        if (Spark::Ui::ConfirmDestructive(kClearPopupId, "Clear undo history?",
+                                          "Every undo and redo step is discarded. This cannot be undone.", "Clear"))
+        {
+            m_undoRedoManager->Clear();
         }
 
         ImGui::SameLine();
         ImGui::Checkbox("Auto-scroll", &m_autoScroll);
+        Spark::Ui::EndPanelToolbar();
     }
 
     void UndoHistoryPanel::RenderHistoryList()
     {
         if (!m_undoRedoManager)
         {
-            ImGui::TextDisabled("No undo/redo manager available");
+            Spark::Ui::EmptyState(ICON_FA_HISTORY, "No undo/redo manager available",
+                                  "Undo history appears here once the editor wires in its undo manager.");
             return;
         }
 
@@ -98,21 +109,23 @@ namespace SparkEditor
         const auto& redoStack = m_undoRedoManager->GetRedoStack();
         size_t currentIndex = m_undoRedoManager->GetCurrentIndex();
 
+        if (undoStack.empty() && redoStack.empty())
+        {
+            Spark::Ui::EmptyState(ICON_FA_HISTORY, "No edits yet", "Changes you make in the editor are listed here.");
+            return;
+        }
+
         ImGui::BeginChild("HistoryList", ImVec2(0, 0), true);
 
-        // Initial state entry
+        // The current position is marked by the selection highlight; the success colour only reinforces it.
         bool isAtInitial = (currentIndex == 0);
-        if (isAtInitial)
         {
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.3f, 0.8f, 0.3f, 1.0f));
-        }
-        if (ImGui::Selectable(ICON_FA_HOME " Initial State", isAtInitial))
-        {
-            m_undoRedoManager->UndoToIndex(0);
-        }
-        if (isAtInitial)
-        {
-            ImGui::PopStyleColor();
+            const Spark::Ui::ScopedRoleColor current(ImGuiCol_Text, isAtInitial ? Spark::Ui::Role::SuccessText
+                                                                                : Spark::Ui::Role::TextPrimary);
+            if (ImGui::Selectable(ICON_FA_HOME " Initial State", isAtInitial))
+            {
+                m_undoRedoManager->UndoToIndex(0);
+            }
         }
 
         // Undo stack entries (executed commands)
@@ -120,42 +133,36 @@ namespace SparkEditor
         {
             bool isCurrent = (i == currentIndex - 1);
 
-            if (isCurrent)
-            {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.3f, 0.8f, 0.3f, 1.0f));
-            }
-
             std::string label = ICON_FA_EDIT " " + undoStack[i]->GetDescription();
-            if (ImGui::Selectable(label.c_str(), isCurrent))
             {
-                m_undoRedoManager->UndoToIndex(i + 1);
+                const Spark::Ui::ScopedRoleColor current(ImGuiCol_Text, isCurrent ? Spark::Ui::Role::SuccessText
+                                                                                  : Spark::Ui::Role::TextPrimary);
+                if (ImGui::Selectable(label.c_str(), isCurrent))
+                {
+                    m_undoRedoManager->UndoToIndex(i + 1);
+                }
             }
 
-            if (isCurrent)
+            if (isCurrent && m_autoScroll)
             {
-                ImGui::PopStyleColor();
-                if (m_autoScroll)
-                {
-                    ImGui::SetScrollHereY();
-                }
+                ImGui::SetScrollHereY();
             }
         }
 
-        // Redo stack entries (grayed out, shown in reverse since they're future commands)
+        // Redo stack entries (secondary text and a "(redo)" suffix, shown in reverse since they're future commands)
         if (!redoStack.empty())
         {
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 0.7f));
+            const Spark::Ui::ScopedRoleColor future(ImGuiCol_Text, Spark::Ui::Role::TextSecondary);
             for (auto it = redoStack.rbegin(); it != redoStack.rend(); ++it)
             {
                 std::string label = ICON_FA_REDO " " + (*it)->GetDescription() + " (redo)";
                 ImGui::Selectable(label.c_str(), false);
             }
-            ImGui::PopStyleColor();
         }
 
         // Status line
         ImGui::Separator();
-        ImGui::TextDisabled("Commands: %zu | Redo available: %zu", undoStack.size(), redoStack.size());
+        Spark::Ui::SecondaryText("Commands: %zu | Redo available: %zu", undoStack.size(), redoStack.size());
 
         ImGui::EndChild();
     }

@@ -188,7 +188,14 @@ int main(int argc, char** argv)
     auto statsProvider = [&server] { return server.SnapshotStats(); };
     server.AddService(std::make_unique<Spark::Daemon::ControlService>(server.GetShouldStopFlag(), statsProvider));
 
+    // Each cache's byte cap is applied before Initialize so the startup scan honours it.
     auto shader = std::make_unique<Spark::Daemon::ShaderService>();
+    if (shaderMaxBytes > 0)
+    {
+        shader->SetMaxBytes(shaderMaxBytes);
+        std::printf("SparkDaemon: shader cache capped at %llu MB (LRU eviction)\n",
+                    static_cast<unsigned long long>(shaderMaxBytes / (1024ull * 1024ull)));
+    }
     if (!cacheDir.empty())
     {
         auto loaded = shader->Initialize(std::filesystem::path{cacheDir});
@@ -199,15 +206,15 @@ int main(int argc, char** argv)
         }
         std::printf("SparkDaemon: shader cache %s (%zu entries loaded)\n", cacheDir.c_str(), *loaded);
     }
-    if (shaderMaxBytes > 0)
-    {
-        shader->SetMaxBytes(shaderMaxBytes);
-        std::printf("SparkDaemon: shader cache capped at %llu MB (LRU eviction)\n",
-                    static_cast<unsigned long long>(shaderMaxBytes / (1024ull * 1024ull)));
-    }
     server.AddService(std::move(shader));
 
     auto asset = std::make_unique<Spark::Daemon::AssetService>();
+    if (assetMaxBytes > 0)
+    {
+        asset->SetMaxBytes(assetMaxBytes);
+        std::printf("SparkDaemon: asset cache capped at %llu MB (LRU eviction)\n",
+                    static_cast<unsigned long long>(assetMaxBytes / (1024ull * 1024ull)));
+    }
     if (!assetCacheDir.empty())
     {
         auto loaded = asset->Initialize(std::filesystem::path{assetCacheDir});
@@ -217,12 +224,6 @@ int main(int argc, char** argv)
             return 1;
         }
         std::printf("SparkDaemon: asset cache %s (%zu entries loaded)\n", assetCacheDir.c_str(), *loaded);
-    }
-    if (assetMaxBytes > 0)
-    {
-        asset->SetMaxBytes(assetMaxBytes);
-        std::printf("SparkDaemon: asset cache capped at %llu MB (LRU eviction)\n",
-                    static_cast<unsigned long long>(assetMaxBytes / (1024ull * 1024ull)));
     }
     server.AddService(std::move(asset));
 

@@ -6,6 +6,7 @@ import importlib
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -53,14 +54,78 @@ class CrashSecurityTests(unittest.TestCase):
     def test_runtime_limit_constants_remain_source_anchored(self) -> None:
         source = (ROOT / "SparkCrashReporter" / "src" / "CrashReporterApp.cpp").read_text(encoding="utf-8")
         for declaration in (
-            "kMaxManifestBytes = 1024 * 1024",
-            "kMaxJsonStringBytes = 256 * 1024",
+            "kMaxManifestBytes = static_cast<size_t>(1024 * 1024)",
+            "kMaxJsonStringBytes = static_cast<size_t>(256 * 1024)",
             "kMaxJsonDepth = 16",
             "kMaxCollectionEntries = 4096",
             "kMaxReadyManifests = 32",
-            "kMaxCrashLogBytes = 8 * 1024 * 1024",
+            "kMaxCrashLogBytes = static_cast<size_t>(8 * 1024 * 1024)",
         ):
             self.assertIn(declaration, source)
+
+    def test_crash_handler_has_no_in_process_transport_fallback(self) -> None:
+        source = (ROOT / "SparkEngine" / "Source" / "Utils" / "CrashHandler.cpp").read_text(encoding="utf-8")
+        self.assertNotIn('"Utils/CrashReportUploader.h"', source)
+        self.assertNotRegex(source, re.compile(r"\bUploadCrashReport\s*\("))
+        self.assertNotIn("Reporter-unavailable fallback", source)
+        self.assertNotIn(
+            "ShouldLaunchReadOnlyReporter(g_cfg.enableCrashReporting, g_cfg.headlessMode)",
+            source,
+        )
+        self.assertIn("if (!g_cfg.headlessMode)", source)
+
+    def test_posix_crash_handler_disables_kernel_core_files_by_default(self) -> None:
+        source = (ROOT / "SparkEngine" / "Source" / "Utils" / "CrashHandler.cpp").read_text(encoding="utf-8")
+        self.assertIn("setrlimit(RLIMIT_CORE", source)
+        self.assertIn("const struct rlimit disabledCore = {0, 0};", source)
+        self.assertIn("prctl(PR_SET_DUMPABLE, 0L", source)
+        self.assertIn("ApplyPosixCoreDumpPolicy(cfg.includeStackMemory)", source)
+        self.assertIn("if (allowFullDump)", source)
+        self.assertIn("if (!g_posixCoreDumpPolicyEnforced)", source)
+        self.assertIn("Cannot enforce kernel core-dump privacy; terminating startup.", source)
+        self.assertIn("_exit(EXIT_FAILURE);", source)
+
+    def test_full_dump_opt_in_is_explicit_and_source_anchored(self) -> None:
+        engine = (ROOT / "SparkEngine" / "Source" / "Core" / "SparkEngine.cpp").read_text(encoding="utf-8")
+        handler = (ROOT / "SparkEngine" / "Source" / "Utils" / "CrashHandler.cpp").read_text(encoding="utf-8")
+        self.assertIn('std::getenv("SPARK_CRASH_FULL_DUMP")', engine)
+        self.assertIn('std::string_view(envFullDump) == "1"', engine)
+        self.assertIn("if (g_cfg.includeStackMemory)", handler)
+
+    def test_engine_accepts_no_reusable_crash_transport_credentials(self) -> None:
+        # The in-process uploader (GitHub PAT, SMTP, FTP, Dropbox, HTTP, relay)
+        # is gone; nothing in the engine may reintroduce a credential-bearing
+        # crash configuration, environment override, or transport call.
+        utils = ROOT / "SparkEngine" / "Source" / "Utils"
+        self.assertFalse((utils / "CrashReportUploader.cpp").exists())
+        self.assertFalse((utils / "CrashReportUploader.h").exists())
+
+        forbidden = re.compile(
+            r"api\.github\.com|CURLOPT_(?:PASSWORD|USERPWD|USERNAME|MAIL_RCPT)|"
+            r"SPARK_(?:GITHUB_TOKEN|GITHUB_REPO|SMTP_USER|SMTP_PASS|CRASH_UPLOAD_URL|CRASH_PROXY_URL|CRASH_EMAIL_TO)|"
+            r"\b(?:githubToken|smtpPass|smtpUser|proxyURL|uploadURL)\b"
+        )
+        offenders = []
+        for path in sorted((ROOT / "SparkEngine" / "Source").rglob("*")):
+            if path.suffix not in {".h", ".hpp", ".cpp", ".mm"} or not path.is_file():
+                continue
+            for number, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+                if forbidden.search(line):
+                    offenders.append(f"{path.relative_to(ROOT)}:{number}: {line.strip()}")
+        self.assertEqual(offenders, [])
+
+    def test_shipped_settings_carry_no_crash_transport_keys(self) -> None:
+        retired = re.compile(
+            r"^\s*(?:UploadURL|ProxyURL|GitHubRepo|GitHubToken|GitHubLabels|AttachDump|TimeoutSeconds|"
+            r"SmtpUser|SmtpPass|EmailTo|EmailFrom)\s*=",
+            re.IGNORECASE,
+        )
+        for relative in ("Resources/Config/settings.ini", "SparkEngine/Resources/Config/settings.ini"):
+            text = (ROOT / relative).read_text(encoding="utf-8")
+            section = text.split("[CrashReporting]", 1)[1].split("\n[", 1)[0]
+            with self.subTest(settings=relative):
+                self.assertEqual([line for line in section.splitlines() if retired.match(line)], [])
+                self.assertNotIn("ghp_", text)
 
     def test_missing_referenced_log_is_fatal(self) -> None:
         manifest = self.write_manifest({"logFile": "missing.log"})
@@ -114,8 +179,9 @@ class CrashSecurityTests(unittest.TestCase):
 
     def test_manifest_hardlink_is_rejected_before_json_read(self) -> None:
         outside = self.root.parent / f"manifest-outside-{self.root.name}.json"
-        secret = "ghp_" + "A" * 40
-        outside.write_text(json.dumps({"logFile": secret}), encoding="utf-8")
+        # Deliberately generated token-shaped test data, never a credential.
+        token_shaped_fixture = "ghp_" + "A" * 40
+        outside.write_text(json.dumps({"logFile": token_shaped_fixture}), encoding="utf-8")
         try:
             os.link(outside, self.root / READY)
             validator = crash.CrashPackageValidator()
@@ -284,6 +350,17 @@ class CrashSecurityTests(unittest.TestCase):
         archive = io.BytesIO()
         with zipfile.ZipFile(archive, "w") as output:
             output.writestr("../outside.log", "safe")
+        (self.root / "crash.log").write_text("safe", encoding="utf-8")
+        (self.root / "package.zip").write_bytes(archive.getvalue())
+        manifest = self.write_manifest({"logFile": "crash.log", "zipFile": "package.zip"})
+        validator = crash.CrashPackageValidator()
+        validator.validate_manifest_file(manifest)
+        self.assertIn("binary-policy", self.checks(validator))
+
+    def test_zip_traversal_directory_member_is_rejected(self) -> None:
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w") as output:
+            output.writestr("../", "")
         (self.root / "crash.log").write_text("safe", encoding="utf-8")
         (self.root / "package.zip").write_bytes(archive.getvalue())
         manifest = self.write_manifest({"logFile": "crash.log", "zipFile": "package.zip"})

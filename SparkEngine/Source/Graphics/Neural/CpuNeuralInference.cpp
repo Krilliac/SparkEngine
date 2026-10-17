@@ -194,8 +194,10 @@ namespace Spark::Graphics::Neural
         variants.variants[static_cast<size_t>(ISALevel::AVX2)] = EvaluateLayer_AVX2;
 #endif
 
-        s_evalLayerFunc = dispatch.Select(variants.variants);
-        s_activeISA = dispatch.GetDetectedLevel();
+        // Record the level of the kernel that runs, not the CPU's capability:
+        // a floor build has no AVX2 variant even on an AVX2 CPU.
+        s_activeISA = dispatch.SelectLevel(variants.variants);
+        s_evalLayerFunc = variants.variants[static_cast<size_t>(s_activeISA)];
         s_initialized.store(true, std::memory_order_release);
     }
 

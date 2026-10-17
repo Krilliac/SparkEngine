@@ -17,6 +17,8 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <process.h>
+
+#include "Utils/ProcessWin32HandleList.h"
 #else
 #include <cerrno>
 #include <unistd.h>
@@ -530,26 +532,24 @@ namespace SparkEditor
             std::cout << "=== LAUNCHING SPARKCONSOLE.EXE ===" << "\n";
             std::cout << "Console path: " << consolePath << "\n";
 
-            // Create pipes for communication
-            SECURITY_ATTRIBUTES sa = {};
-            sa.nLength = sizeof(SECURITY_ATTRIBUTES);
-            sa.bInheritHandle = TRUE;
-            sa.lpSecurityDescriptor = NULL;
-
+            // Create pipes for communication. They start non-inheritable; only
+            // the child ends are marked inheritable and handed over through an
+            // explicit handle list, so no other inheritable editor handle (or
+            // a concurrent launch's pipe end) reaches SparkConsole.
             HANDLE hChildStdInRead = INVALID_HANDLE_VALUE;
             HANDLE hChildStdInWrite = INVALID_HANDLE_VALUE;
             HANDLE hChildStdOutRead = INVALID_HANDLE_VALUE;
             HANDLE hChildStdOutWrite = INVALID_HANDLE_VALUE;
 
             // Create pipes
-            if (!CreatePipe(&hChildStdInRead, &hChildStdInWrite, &sa, 0))
+            if (!CreatePipe(&hChildStdInRead, &hChildStdInWrite, nullptr, 0))
             {
                 DWORD err = GetLastError();
                 std::cout << "Failed to create stdin pipe (Error: " << err << ")\n";
                 return false;
             }
 
-            if (!CreatePipe(&hChildStdOutRead, &hChildStdOutWrite, &sa, 0))
+            if (!CreatePipe(&hChildStdOutRead, &hChildStdOutWrite, nullptr, 0))
             {
                 DWORD err = GetLastError();
                 std::cout << "Failed to create stdout pipe (Error: " << err << ")\n";
@@ -558,22 +558,36 @@ namespace SparkEditor
                 return false;
             }
 
-            // Set handle inheritance
-            SetHandleInformation(hChildStdOutRead, HANDLE_FLAG_INHERIT, 0);
-            SetHandleInformation(hChildStdInWrite, HANDLE_FLAG_INHERIT, 0);
+            Spark::ProcessDetail::InheritedHandleList inherited;
+            DWORD inheritError = ERROR_SUCCESS;
+            if (!inherited.AddInheritable(hChildStdInRead) || !inherited.AddInheritable(hChildStdOutWrite))
+                inheritError = GetLastError();
+            else
+                inheritError = inherited.Build();
+            if (inheritError != ERROR_SUCCESS)
+            {
+                std::cout << "Failed to restrict SparkConsole handle inheritance (Error: " << inheritError << ")\n";
+                CloseHandle(hChildStdInRead);
+                CloseHandle(hChildStdInWrite);
+                CloseHandle(hChildStdOutRead);
+                CloseHandle(hChildStdOutWrite);
+                return false;
+            }
 
             // Create the console process
-            STARTUPINFOA si = {};
-            si.cb = sizeof(STARTUPINFOA);
+            STARTUPINFOEXA siEx = {};
+            STARTUPINFOA& si = siEx.StartupInfo;
+            si.cb = sizeof(siEx);
             si.hStdError = hChildStdOutWrite;
             si.hStdOutput = hChildStdOutWrite;
             si.hStdInput = hChildStdInRead;
             si.dwFlags |= STARTF_USESTDHANDLES;
+            siEx.lpAttributeList = inherited.Attributes();
 
             PROCESS_INFORMATION pi = {};
 
             std::string commandLine = "\"" + consolePath + "\" --engine-pipe";
-            DWORD creationFlags = CREATE_NEW_CONSOLE;
+            DWORD creationFlags = CREATE_NEW_CONSOLE | EXTENDED_STARTUPINFO_PRESENT;
 
             std::cout << "Creating console process: " << commandLine << "\n";
 

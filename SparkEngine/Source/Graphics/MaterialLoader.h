@@ -24,6 +24,7 @@
 
 #pragma once
 
+#include <iosfwd>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -53,6 +54,26 @@ namespace Spark::Graphics
         std::string emissiveTexture;
         std::string occlusionTexture;
     };
+
+    /**
+     * @brief Parse .sparkmat text into a material definition.
+     *
+     * This is the reader MaterialLoader::LoadMaterial runs on every .sparkmat file, kept in
+     * its own translation unit (SparkMatParser.cpp) so it carries no MaterialSystem, console
+     * or device dependency. Lines are `key = value`; blank lines, `//` comments, lines without
+     * '=' and unknown keys are skipped, and a later key overrides an earlier one. A numeric
+     * factor that does not parse as a whole finite float keeps its previous value, so a NaN
+     * or infinite factor never reaches RegisterMaterial (std::clamp passes NaN through) or
+     * the GPU constant buffers.
+     *
+     * Thread affinity: none (pure function over caller-owned objects).
+     * Allocation: one string per line and per assigned field.
+     *
+     * @param input  Material text (the untrusted file contents).
+     * @param outDef Reset to defaults, then filled from @p input.
+     * @return true when the text names a material (a non-empty `name`).
+     */
+    bool ParseSparkMatDefinition(std::istream& input, SparkMatDefinition& outDef);
 
     /**
      * @class MaterialLoader

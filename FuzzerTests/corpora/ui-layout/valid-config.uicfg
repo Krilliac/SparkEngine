@@ -1,0 +1,6 @@
+# HUD widgets
+panel id="hud" bind="hud.visible" layout="vertical"
+label id="title" text="Spark" size="24"
+button{ id="ok" label="OK" onClick="close"
+	progressBar id="health" bind="player.health"
+image id="logo" src="Textures/logo.png"

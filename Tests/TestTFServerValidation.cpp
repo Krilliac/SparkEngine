@@ -23,6 +23,9 @@
 
 #include "Game/TFServerValidation.h"
 
+#include <cstddef>
+#include <string>
+
 using namespace Terrafront;
 
 namespace
@@ -367,7 +370,7 @@ TEST(TFServerValidation_ShouldKick_TripsOnlyAtThresholdNeverOnASingleEvent)
         // log's own kSpikeLogThrottleSec(5s) throttle -- that only gates the
         // WARN log line, not the movementSpikes counter itself.
         TFServerValidation::Get().ValidateMovementTick(kPlayer, prevPos, pos, 5.0f, 1.0f / 60.0f,
-                                                        static_cast<double>(i));
+                                                       static_cast<double>(i));
     }
     EXPECT_EQ(StatsFor(kPlayer).movementSpikes, uint32_t{3});
     EXPECT_EQ(TFServerValidation::Get().ViolationScore(kPlayer), uint32_t{13});
@@ -394,4 +397,84 @@ TEST(TFServerValidation_ClearPlayer_ResetsViolationScoreAndShouldKick)
     // can be reused).
     EXPECT_EQ(TFServerValidation::Get().ViolationScore(kPlayer), uint32_t{0});
     EXPECT_FALSE(TFServerValidation::Get().ShouldKick(kPlayer));
+}
+
+// ---------------------------------------------------------------------------
+// TF-110: forged client state is rejected at the call site and audited here.
+// The audit ring is process-wide, so these tests assert on the records they
+// just appended (back(), or the whole ring after overfilling it), never on
+// its size before they ran.
+// ---------------------------------------------------------------------------
+
+TEST(TF110_ForgedState_CountsAndAudits)
+{
+    constexpr PlayerId kPlayer = 90101;
+    auto& validation = TFServerValidation::Get();
+    validation.ClearPlayer(kPlayer);
+
+    validation.RecordForgedStateReject(kPlayer, TFForgedState::LoadoutUnknownWeapon, 12.5);
+    EXPECT_EQ(StatsFor(kPlayer).forgedStateRejects, uint32_t{1});
+    ASSERT_FALSE(validation.AuditTrail().empty());
+    EXPECT_EQ(validation.AuditTrail().back().player, kPlayer);
+    EXPECT_TRUE(validation.AuditTrail().back().kind == TFForgedState::LoadoutUnknownWeapon);
+    EXPECT_NEAR(validation.AuditTrail().back().time, 12.5, 1.0e-9);
+
+    validation.RecordForgedStateReject(kPlayer, TFForgedState::FireWeaponLocked, 13.0);
+    EXPECT_EQ(StatsFor(kPlayer).forgedStateRejects, uint32_t{2});
+    EXPECT_TRUE(validation.AuditTrail().back().kind == TFForgedState::FireWeaponLocked);
+    EXPECT_EQ(std::string(ForgedStateName(TFForgedState::FireWeaponLocked)), std::string("fire-weapon-locked"));
+    EXPECT_EQ(std::string(ForgedStateName(TFForgedState::LoadoutUnknownWeapon)), std::string("loadout-unknown-weapon"));
+}
+
+TEST(TF110_ForgedState_WeightsIntoKick)
+{
+    constexpr PlayerId kPlayer = 90102;
+    auto& validation = TFServerValidation::Get();
+    validation.ClearPlayer(kPlayer);
+
+    for (int i = 0; i < 3; ++i)
+        validation.RecordForgedStateReject(kPlayer, TFForgedState::FireWeaponNotInLoadout, static_cast<double>(i));
+    EXPECT_EQ(validation.ViolationScore(kPlayer), uint32_t{9});
+    EXPECT_FALSE(validation.ShouldKick(kPlayer));
+
+    validation.RecordForgedStateReject(kPlayer, TFForgedState::LoadoutIneligible, 3.0);
+    EXPECT_EQ(validation.ViolationScore(kPlayer), uint32_t{12});
+    EXPECT_TRUE(validation.ShouldKick(kPlayer));
+}
+
+TEST(TF110_ForgedState_AuditRingIsBounded)
+{
+    constexpr PlayerId kPlayer = 90103;
+    auto& validation = TFServerValidation::Get();
+    validation.ClearPlayer(kPlayer);
+
+    for (int i = 0; i < 300; ++i)
+        validation.RecordForgedStateReject(kPlayer, TFForgedState::LoadoutExtIneligible, static_cast<double>(i));
+
+    const auto& audit = validation.AuditTrail();
+    ASSERT_EQ(audit.size(), std::size_t{256});
+    EXPECT_EQ(TFServerValidation::kForgedAuditCapacity, std::size_t{256});
+    // The 44 oldest of this test's 300 records were evicted, in order.
+    EXPECT_EQ(audit.front().player, kPlayer);
+    EXPECT_NEAR(audit.front().time, 44.0, 1.0e-9);
+    EXPECT_NEAR(audit.back().time, 299.0, 1.0e-9);
+    EXPECT_EQ(StatsFor(kPlayer).forgedStateRejects, uint32_t{300});
+}
+
+TEST(TF110_ForgedState_ClearPlayerResetsCounterKeepsAudit)
+{
+    constexpr PlayerId kPlayer = 90104;
+    auto& validation = TFServerValidation::Get();
+    validation.ClearPlayer(kPlayer);
+
+    for (int i = 0; i < 4; ++i)
+        validation.RecordForgedStateReject(kPlayer, TFForgedState::LoadoutUnknownWeapon, 100.0 + i);
+    EXPECT_TRUE(validation.ShouldKick(kPlayer));
+
+    validation.ClearPlayer(kPlayer);
+    EXPECT_EQ(StatsFor(kPlayer).forgedStateRejects, uint32_t{0});
+    EXPECT_FALSE(validation.ShouldKick(kPlayer));
+    ASSERT_FALSE(validation.AuditTrail().empty());
+    EXPECT_EQ(validation.AuditTrail().back().player, kPlayer);
+    EXPECT_NEAR(validation.AuditTrail().back().time, 103.0, 1.0e-9);
 }

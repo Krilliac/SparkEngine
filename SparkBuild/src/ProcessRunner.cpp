@@ -1,4 +1,5 @@
 #include "ProcessRunner.h"
+#include "PathSecurity.h"
 #include <cctype>
 #include <chrono>
 #include <cstring>
@@ -59,20 +60,66 @@ namespace SparkBuild
             }
 
             if (!current.empty())
+            {
                 args.push_back(current);
+            }
 
             return args;
         }
 
+        // A bare program name is resolved through PathSecurity so neither the
+        // application directory nor the current directory can supply the tool
+        // (CreateProcess, and execvp given an empty PATH entry, search them).
+        // Returns false when a bare name has no trusted match.
+        bool ResolveProgram(std::vector<std::string>& args, std::string& resolved)
+        {
+            resolved.clear();
+            if (!PathSecurity::IsBareProgramName(args[0]))
+            {
+                return true;
+            }
+            resolved = PathSecurity::ResolveExecutable(args[0]);
+            if (resolved.empty())
+            {
+                return false;
+            }
+            args[0] = resolved;
+            return true;
+        }
+
 #ifdef SPARK_PLATFORM_WINDOWS
+        // cmd.exe resolves a command's first word in its current directory
+        // before PATH unless this variable exists; children inherit it.
+        void DisableCurrentDirectoryCommandSearch()
+        {
+            static std::once_flag once;
+            std::call_once(once, [] { (void)::SetEnvironmentVariableW(L"NoDefaultCurrentDirectoryInExePath", L"1"); });
+        }
+
+        // The absolute System32 cmd.exe, so the shell itself is never looked up.
+        std::string SystemCommandInterpreter()
+        {
+            char systemDirectory[MAX_PATH] = {};
+            const UINT length = ::GetSystemDirectoryA(systemDirectory, MAX_PATH);
+            if (length == 0 || length >= MAX_PATH)
+            {
+                return {};
+            }
+            return std::string(systemDirectory, length) + "\\cmd.exe";
+        }
+
         std::string QuoteWindowsArgument(const std::string& argument)
         {
             if (argument.empty())
+            {
                 return "\"\"";
+            }
 
             const bool needsQuotes = argument.find_first_of(" \t\"") != std::string::npos;
             if (!needsQuotes)
+            {
                 return argument;
+            }
 
             std::string quoted = "\"";
             size_t backslashes = 0;
@@ -103,9 +150,13 @@ namespace SparkBuild
         bool ProcessGroupExists(pid_t processGroup) noexcept
         {
             if (processGroup <= 1)
+            {
                 return false;
+            }
             if (::kill(-processGroup, 0) == 0)
+            {
                 return true;
+            }
             return errno == EPERM;
         }
 
@@ -113,18 +164,24 @@ namespace SparkBuild
         {
             const auto deadline = std::chrono::steady_clock::now() + timeout;
             while (ProcessGroupExists(processGroup) && std::chrono::steady_clock::now() < deadline)
+            {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
         }
 
         void TerminateProcessGroup(pid_t processGroup) noexcept
         {
             if (processGroup <= 1 || !ProcessGroupExists(processGroup))
+            {
                 return;
+            }
 
             (void)::kill(-processGroup, SIGTERM);
             WaitForProcessGroupExit(processGroup, std::chrono::milliseconds(500));
             if (!ProcessGroupExists(processGroup))
+            {
                 return;
+            }
 
             (void)::kill(-processGroup, SIGKILL);
             WaitForProcessGroupExit(processGroup, std::chrono::milliseconds(500));
@@ -146,9 +203,13 @@ namespace SparkBuild
         if (activeThread.joinable())
         {
             if (activeThread.get_id() == std::this_thread::get_id())
+            {
                 activeThread.detach();
+            }
             else
+            {
                 activeThread.join();
+            }
         }
     }
 
@@ -157,12 +218,16 @@ namespace SparkBuild
     {
         std::lock_guard<std::mutex> lock(m_threadMutex);
         if (m_shuttingDown.load() || m_running.load())
+        {
             return false;
+        }
 
         // CompleteAsync detaches a finishing worker before it invokes the
         // callback, so callback reentry never encounters its own thread here.
         if (m_thread.joinable())
+        {
             return false;
+        }
 
         m_cancelRequested.store(false);
         m_running.store(true);
@@ -185,7 +250,9 @@ namespace SparkBuild
         {
             std::lock_guard<std::mutex> lock(m_threadMutex);
             if (m_thread.joinable() && m_thread.get_id() == std::this_thread::get_id())
+            {
                 m_thread.detach();
+            }
             m_running.store(false);
         }
 
@@ -193,7 +260,9 @@ namespace SparkBuild
         // replacement run or destroy the runner; do not touch object state
         // after invoking it.
         if (onComplete)
+        {
             onComplete(exitCode, success);
+        }
     }
 
     void ProcessRunner::Cancel()
@@ -205,21 +274,33 @@ namespace SparkBuild
         {
             std::lock_guard<std::mutex> lock(m_processMutex);
             if (m_hProcess)
+            {
                 (void)::DuplicateHandle(::GetCurrentProcess(), m_hProcess, ::GetCurrentProcess(), &process, SYNCHRONIZE,
                                         FALSE, 0);
+            }
             if (m_hJob)
+            {
                 (void)::DuplicateHandle(::GetCurrentProcess(), m_hJob, ::GetCurrentProcess(), &job,
                                         JOB_OBJECT_TERMINATE, FALSE, 0);
+            }
         }
 
         if (job)
+        {
             (void)::TerminateJobObject(job, 1);
+        }
         if (process)
+        {
             (void)::WaitForSingleObject(process, 5000);
+        }
         if (job)
+        {
             ::CloseHandle(job);
+        }
         if (process)
+        {
             ::CloseHandle(process);
+        }
 #else
         pid_t processGroup = -1;
         {
@@ -238,8 +319,11 @@ namespace SparkBuild
     int ProcessRunner::RunSync(const std::string& command, const std::string& workingDir, std::string& output)
     {
         std::vector<std::string> args = SplitCommandLine(command);
-        if (args.empty())
+        std::string resolvedProgram;
+        if (args.empty() || !ResolveProgram(args, resolvedProgram))
+        {
             return -1;
+        }
 
         SECURITY_ATTRIBUTES sa = {};
         sa.nLength = sizeof(sa);
@@ -247,7 +331,9 @@ namespace SparkBuild
 
         HANDLE hReadPipe = nullptr, hWritePipe = nullptr;
         if (!CreatePipe(&hReadPipe, &hWritePipe, &sa, 0))
+        {
             return -1;
+        }
         SetHandleInformation(hReadPipe, HANDLE_FLAG_INHERIT, 0);
 
         STARTUPINFOA si = {};
@@ -262,13 +348,17 @@ namespace SparkBuild
         for (size_t i = 0; i < args.size(); ++i)
         {
             if (i > 0)
+            {
                 cmdLine.push_back(' ');
+            }
             cmdLine += QuoteWindowsArgument(args[i]);
         }
         const char* dir = workingDir.empty() ? nullptr : workingDir.c_str();
 
-        BOOL ok =
-            CreateProcessA(nullptr, cmdLine.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, dir, &si, &pi);
+        // A resolved absolute application name disables the implicit search entirely.
+        const char* application = resolvedProgram.empty() ? nullptr : resolvedProgram.c_str();
+        BOOL ok = CreateProcessA(application, cmdLine.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, dir,
+                                 &si, &pi);
         CloseHandle(hWritePipe);
 
         if (!ok)
@@ -280,10 +370,9 @@ namespace SparkBuild
         output.clear();
         char buf[4096];
         DWORD bytesRead;
-        while (ReadFile(hReadPipe, buf, sizeof(buf) - 1, &bytesRead, nullptr) && bytesRead > 0)
+        while (ReadFile(hReadPipe, buf, sizeof(buf), &bytesRead, nullptr) && bytesRead > 0)
         {
-            buf[bytesRead] = '\0';
-            output += buf;
+            output.append(buf, bytesRead);
         }
 
         WaitForSingleObject(pi.hProcess, INFINITE);
@@ -322,6 +411,15 @@ namespace SparkBuild
         PROCESS_INFORMATION pi = {};
         const char* dir = workingDir.empty() ? nullptr : workingDir.c_str();
         std::string cmdLine = "cmd /c " + command;
+        const std::string interpreter = SystemCommandInterpreter();
+        if (interpreter.empty())
+        {
+            ::CloseHandle(hWritePipe);
+            ::CloseHandle(hReadPipe);
+            CompleteAsync(-1, false, onComplete);
+            return;
+        }
+        DisableCurrentDirectoryCommandSearch();
 
         HANDLE job = ::CreateJobObjectW(nullptr, nullptr);
         if (!job)
@@ -343,7 +441,7 @@ namespace SparkBuild
             return;
         }
 
-        const BOOL ok = ::CreateProcessA(nullptr, cmdLine.data(), nullptr, nullptr, TRUE,
+        const BOOL ok = ::CreateProcessA(interpreter.c_str(), cmdLine.data(), nullptr, nullptr, TRUE,
                                          CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr, dir, &si, &pi);
         ::CloseHandle(hWritePipe);
 
@@ -421,7 +519,9 @@ namespace SparkBuild
         {
             BOOL ok = ReadFile(hPipe, buf, sizeof(buf) - 1, &bytesRead, nullptr);
             if (!ok || bytesRead == 0)
+            {
                 break;
+            }
 
             buf[bytesRead] = '\0';
             lineBuffer += buf;
@@ -431,9 +531,13 @@ namespace SparkBuild
             {
                 std::string line = lineBuffer.substr(0, pos);
                 if (!line.empty() && line.back() == '\r')
+                {
                     line.pop_back();
+                }
                 if (onOutput)
+                {
                     onOutput(line);
+                }
                 lineBuffer = lineBuffer.substr(pos + 1);
             }
         }
@@ -447,12 +551,17 @@ namespace SparkBuild
     int ProcessRunner::RunSync(const std::string& command, const std::string& workingDir, std::string& output)
     {
         std::vector<std::string> args = SplitCommandLine(command);
-        if (args.empty())
+        std::string resolvedProgram;
+        if (args.empty() || !ResolveProgram(args, resolvedProgram))
+        {
             return -1;
+        }
 
         int pipefd[2];
         if (pipe(pipefd) != 0)
+        {
             return -1;
+        }
 
         pid_t pid = fork();
         if (pid == -1)
@@ -470,12 +579,16 @@ namespace SparkBuild
             close(pipefd[1]);
 
             if (!workingDir.empty() && chdir(workingDir.c_str()) != 0)
+            {
                 _exit(127);
+            }
 
             std::vector<char*> argv;
             argv.reserve(args.size() + 1);
             for (auto& arg : args)
+            {
                 argv.push_back(arg.data());
+            }
             argv.push_back(nullptr);
 
             execvp(args[0].c_str(), argv.data());
@@ -487,13 +600,16 @@ namespace SparkBuild
         char buf[4096];
         while (true)
         {
-            ssize_t n = read(pipefd[0], buf, sizeof(buf) - 1);
+            ssize_t n = read(pipefd[0], buf, sizeof(buf));
             if (n < 0 && errno == EINTR)
+            {
                 continue;
+            }
             if (n <= 0)
+            {
                 break;
-            buf[n] = '\0';
-            output += buf;
+            }
+            output.append(buf, static_cast<size_t>(n));
         }
         close(pipefd[0]);
 
@@ -504,7 +620,9 @@ namespace SparkBuild
             waited = waitpid(pid, &status, 0);
         } while (waited < 0 && errno == EINTR);
         if (waited != pid)
+        {
             return -1;
+        }
 
         if (WIFEXITED(status))
         {
@@ -536,7 +654,9 @@ namespace SparkBuild
         {
             // Child process
             if (setpgid(0, 0) != 0)
+            {
                 _exit(127);
+            }
             close(pipefd[0]); // Close read end
             dup2(pipefd[1], STDOUT_FILENO);
             dup2(pipefd[1], STDERR_FILENO);
@@ -578,7 +698,9 @@ namespace SparkBuild
         }
 
         if (m_cancelRequested.load())
+        {
             TerminateProcessGroup(pid);
+        }
 
         std::string lineBuffer;
         ReadPipeOutput(pipefd[0], onOutput, lineBuffer);
@@ -623,7 +745,9 @@ namespace SparkBuild
         {
             ssize_t n = read(fd, buf, sizeof(buf) - 1);
             if (n <= 0)
+            {
                 break;
+            }
 
             buf[n] = '\0';
             lineBuffer += buf;
@@ -633,9 +757,13 @@ namespace SparkBuild
             {
                 std::string line = lineBuffer.substr(0, pos);
                 if (!line.empty() && line.back() == '\r')
+                {
                     line.pop_back();
+                }
                 if (onOutput)
+                {
                     onOutput(line);
+                }
                 lineBuffer = lineBuffer.substr(pos + 1);
             }
         }

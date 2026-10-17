@@ -6,7 +6,6 @@
 #pragma once
 
 #include "../Core/EditorPanel.h"
-#include <imgui.h>
 #include <string>
 #include <vector>
 #include <chrono>
@@ -18,8 +17,9 @@ namespace SparkEditor
      * @brief Panel for monitoring the engine's EventBus in real-time
      *
      * Shows a scrolling log of events fired during Play mode,
-     * with filtering by event type and category. Color-codes events
-     * by category and supports a circular buffer to cap memory usage.
+     * with filtering by event type and category. Tints each category name
+     * with its categorical token colour (Spark::Ui::CategoryColor) and
+     * supports a circular buffer to cap memory usage.
      */
     class EventMonitorPanel : public EditorPanel
     {
@@ -56,7 +56,6 @@ namespace SparkEditor
         void RenderEventLog();
         void RenderStats();
 
-        static ImVec4 GetCategoryColor(EventCategory category);
         static const char* GetCategoryName(EventCategory category);
 
         std::vector<EventEntry> m_events;

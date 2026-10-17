@@ -30,6 +30,34 @@ COMMIT = "a" * 40
 DIGEST = "b" * 64
 
 
+def bash_executable() -> str | None:
+    """Use the Windows Git Bash shell, not the WindowsApps WSL launcher."""
+
+    if os.name == "nt":
+        candidates = (
+            Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
+            / "Git"
+            / "bin"
+            / "bash.exe",
+            Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"))
+            / "Git"
+            / "bin"
+            / "bash.exe",
+        )
+        for candidate in candidates:
+            if candidate.is_file():
+                return str(candidate)
+
+    found = shutil.which("bash")
+    if found:
+        if os.name == "nt" and any(
+            part.casefold() == "windowsapps" for part in Path(found).parts
+        ):
+            return None
+        return found
+    return None
+
+
 def provenance(profile: str) -> dict[str, Any]:
     return {
         "state": "unavailable",
@@ -97,18 +125,10 @@ def valid_documents() -> tuple[dict[str, Any], dict[str, Any]]:
         "profile": "stable-v1",
         "state": "blocked",
         "errorCount": 3,
-        "warningCount": 2,
+        "warningCount": 3,
         "findings": [
-            {
-                "category": pending.EXPECTED_WARNING_CATEGORY,
-                "severity": "warning",
-                "message": "Target name '${TARGET_NAME}' cannot be resolved statically",
-            },
-            {
-                "category": pending.EXPECTED_WARNING_CATEGORY,
-                "severity": "warning",
-                "message": "Another target name cannot be resolved statically",
-            },
+            dict(pending.EXPECTED_OUTSIDE_OPTION_WARNING),
+            *(dict(item) for item in pending.EXPECTED_UNRESOLVED_TARGET_WARNINGS),
             *[
                 {
                     "category": pending.EXPECTED_ERROR_CATEGORY,
@@ -156,15 +176,7 @@ class PendingAuthorityTests(unittest.TestCase):
     def test_cli_stdout_bytes_match_atomic_output_through_git_bash_redirect(self) -> None:
         if os.name != "nt":
             self.skipTest("Windows Git Bash redirection contract")
-        bash = shutil.which("bash")
-        if bash is None:
-            git = shutil.which("git")
-            if git is not None:
-                candidates = (
-                    Path(git).resolve().parent.parent / "bin" / "bash.exe",
-                    Path(git).resolve().parent.parent.parent / "bin" / "bash.exe",
-                )
-                bash = next((str(candidate) for candidate in candidates if candidate.is_file()), None)
+        bash = bash_executable()
         if bash is None:
             self.skipTest("Git Bash is unavailable")
 
@@ -288,6 +300,22 @@ class PendingAuthorityTests(unittest.TestCase):
         self.assertEqual(receipt["sourceCommit"], COMMIT)
         self.assertEqual([entry["id"] for entry in receipt["profiles"]], list(pending.EXPECTED_PROFILES))
 
+    def test_reviewed_outside_fuzz_option_is_accepted_as_one_warning(self) -> None:
+        inventory_document, report = valid_documents()
+        receipt = self.receipt(inventory_document, report)
+        self.assertEqual(receipt["parity"]["warningCount"], 3)
+        self.assertEqual(receipt["parity"]["warningCategories"], ["cmake-only", "target-name-unresolved"])
+
+        report["findings"][0]["message"] = "CMake option 'UNREVIEWED' is not representable in SparkBuild"
+        with self.assertRaisesRegex(pending.PendingAuthorityError, "reviewed static"):
+            self.receipt(inventory_document, report)
+
+    def test_unresolved_target_warning_must_match_reviewed_identity(self) -> None:
+        inventory_document, report = valid_documents()
+        report["findings"][1]["message"] = "Target name '${FORGED}' cannot be resolved statically"
+        with self.assertRaisesRegex(pending.PendingAuthorityError, "reviewed static"):
+            self.receipt(inventory_document, report)
+
     def test_utility_target_with_empty_artifact_identities_is_accepted(self) -> None:
         inventory_document, report = valid_documents()
         for evidence in inventory_document["configuredTargetEvidence"]:
@@ -302,6 +330,21 @@ class PendingAuthorityTests(unittest.TestCase):
         receipt = self.receipt(inventory_document, report)
         self.assertEqual(receipt["state"], "pending-external-attestation")
 
+    def test_non_artifact_library_targets_with_empty_artifact_identities_are_accepted(self) -> None:
+        inventory_document, report = valid_documents()
+        for kind in ("object_library", "interface_library"):
+            for evidence in inventory_document["configuredTargetEvidence"]:
+                evidence["targets"].append(
+                    {
+                        "target": f"NoArtifact{kind}",
+                        "kind": kind,
+                        "artifactState": "locally-observed-post-build",
+                        "artifactIdentities": [],
+                    }
+                )
+        receipt = self.receipt(inventory_document, report)
+        self.assertEqual(receipt["state"], "pending-external-attestation")
+
     def test_non_utility_target_with_empty_artifact_identities_is_rejected(self) -> None:
         inventory_document, report = valid_documents()
         inventory_document["configuredTargetEvidence"][0]["targets"].append(
@@ -312,7 +355,10 @@ class PendingAuthorityTests(unittest.TestCase):
                 "artifactIdentities": [],
             }
         )
-        with self.assertRaisesRegex(pending.PendingAuthorityError, "no artifact identities"):
+        with self.assertRaisesRegex(
+            pending.PendingAuthorityError,
+            r"target 'BrokenTarget' has no artifact identities",
+        ):
             self.receipt(inventory_document, report)
 
     def test_old_job_local_verified_state_is_rejected(self) -> None:

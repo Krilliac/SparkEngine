@@ -17,10 +17,16 @@
 #include "Core/EngineRuntime.h"
 #include "Core/Lifecycle/GameplayLifecycleShared.h"
 #include "Core/Lifecycle/LifecycleStages.h"
+#include "Engine/AI/AISystem.h"
+#include "Engine/AI/BehaviorTree.h"
+#include "Engine/Animation/AnimationSystem.h"
+#include "Engine/Destruction/DestructionSystem.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/Events/EventSystem.h"
 #include "Engine/Localization/LocalizationSystem.h"
+#include "Engine/Rendering/MovieRenderPipeline.h"
 #include "Engine/Replay/ReplaySystem.h"
+#include "Engine/Scripting/AngelScriptEngine.h"
 #include "Engine/World/ProximityTriggerSystem.h"
 #include "Input/InputActionSystem.h"
 #include "Input/InputManager.h"
@@ -197,6 +203,35 @@ TEST(EngineWiring_LifecycleRegistersEngineLifetimeServices)
     EXPECT_TRUE(ctx->GetComponentSerializers() == nullptr);
 }
 
+TEST(EngineWiring_MovieRenderPipelineRequiresExplicitOwnership)
+{
+    SetupContextWithWorld();
+    auto& pipeline = Spark::Rendering::MovieRenderPipeline::GetInstance();
+    pipeline.Shutdown();
+
+    InitializeProductionLifecycle();
+
+    Spark::Rendering::MovieRenderSettings settings;
+    settings.qualityPreset = Spark::Rendering::RenderQuality::Custom;
+    settings.aaSamples = 1;
+    settings.motionBlurSubFrames = 1;
+    settings.startFrame = 0;
+    settings.endFrame = 1;
+
+    // Ordinary engine startup must not silently opt into an offline tool.
+    EXPECT_FALSE(pipeline.StartRender(settings));
+
+    pipeline.Initialize();
+    ASSERT_TRUE(pipeline.StartRender(settings));
+    Spark::Core::Lifecycle::UpdateGameplaySystemsImpl(1.0f / 60.0f);
+    EXPECT_EQ(pipeline.GetCurrentJob().currentFrame, 0);
+
+    // The engine must not stop a job owned by an explicit caller either.
+    Spark::Core::Lifecycle::ShutdownGameplaySystemsImpl();
+    EXPECT_TRUE(pipeline.IsRendering());
+    pipeline.Shutdown();
+}
+
 // ============================================================================
 // engine-longtail-05: ProximityTriggerSystem::Update defers callbacks
 // ============================================================================
@@ -294,6 +329,53 @@ TEST(EngineWiring_TriggerVolumeComponentPublishesEnterEventFromLifecycleTick)
 }
 
 // ============================================================================
+// ENG-200: the lifecycle connects the script runtime to the engine EventBus, so
+// physics contact events reach entity scripts with no game-module glue
+// ============================================================================
+
+#ifdef SPARK_ANGELSCRIPT_SUPPORT
+TEST(EngineWiring_LifecycleConnectsScriptContactDispatch)
+{
+    World& world = SetupContextWithWorld();
+    InitializeProductionLifecycle();
+    auto* ctx = EngineContext::Get();
+    AngelScriptEngine* scripts = ctx->GetScriptEngine();
+    ASSERT_TRUE(scripts != nullptr);
+
+    ASSERT_TRUE(
+        scripts->CompileScriptFromString("class WiringContactProbe\n"
+                                         "{\n"
+                                         "    void OnCollision(EntityID other) { fireEvent(\"wired:\" + other); }\n"
+                                         "}\n",
+                                         "EngineWiringContactProbe"));
+    // Entity 0 is the physics "no entity" id and never takes part in script contacts. Only the first entity a fresh
+    // World creates has that id, so the filler absorbs it and both participants are real entities.
+    const EntityID filler = world.CreateEntity("wiring_contact_filler");
+    const EntityID probe = world.CreateEntity("wiring_contact_probe");
+    const EntityID other = world.CreateEntity("wiring_contact_other");
+    ASSERT_TRUE(scripts->AttachScript(probe, "WiringContactProbe", "EngineWiringContactProbe"));
+
+    std::vector<Spark::ScriptEvent> received;
+    auto subscription = ContextEventBus().Subscribe<Spark::ScriptEvent>([&received](const Spark::ScriptEvent& e)
+                                                                        { received.push_back(e); });
+
+    // Published exactly as PhysicsSystem publishes it after a step. Only the lifecycle's ConnectEventBus() call
+    // routes it to the script: nothing in this test connects the script engine to the bus.
+    ContextEventBus().Publish(Spark::CollisionEvent{static_cast<uint32_t>(probe), static_cast<uint32_t>(other), 0.0f});
+
+    ASSERT_EQ(received.size(), static_cast<size_t>(1));
+    EXPECT_EQ(received.front().sourceEntity, static_cast<uint32_t>(probe));
+    EXPECT_EQ(received.front().eventName, "wired:" + std::to_string(static_cast<uint32_t>(other)));
+
+    scripts->DetachScript(probe);
+    world.DestroyEntity(probe);
+    world.DestroyEntity(other);
+    world.DestroyEntity(filler);
+    Spark::Core::Lifecycle::ShutdownGameplaySystemsImpl();
+}
+#endif
+
+// ============================================================================
 // engine-longtail-03: the lifecycle produces RecordFrame while recording
 // ============================================================================
 
@@ -384,15 +466,29 @@ TEST(EngineWiring_ConsoleSimulatedKeyReleaseIsAppliedOnTheInputThread)
     EXPECT_TRUE(input.IsKeyDown('A'));
     EXPECT_EQ(input.GetPendingTimedKeyReleaseCount(), 1u);
 
-#ifndef _WIN32
-    // The frame tick drains due releases too (the Windows Update() needs a window).
-    input.Console_SimulateKeyPress("C", 20);
-    std::this_thread::sleep_for(std::chrono::milliseconds(60));
+    // The frame tick drains due releases too. Edges are latched per Update(), so
+    // a frame must observe C down before a later frame can see it released. The
+    // deadline is generous so a loaded host cannot release C before the first
+    // frame; frames then tick until the release lands, bounded well past it.
+    constexpr auto releaseAfter = std::chrono::milliseconds(1000);
+    const auto pressedAt = std::chrono::steady_clock::now();
+    input.Console_SimulateKeyPress("C", static_cast<int>(releaseAfter.count()));
     input.Update();
+    ASSERT_TRUE(input.IsKeyDown('C'));
+    EXPECT_TRUE(input.WasKeyPressed('C'));
+    const auto giveUpAt = pressedAt + releaseAfter + std::chrono::seconds(30);
+    while (input.IsKeyDown('C') && std::chrono::steady_clock::now() < giveUpAt)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        input.Update();
+        if (input.IsKeyDown('C'))
+            EXPECT_FALSE(input.WasKeyPressed('C')); // held, not re-pressed, until the release frame
+    }
     EXPECT_FALSE(input.IsKeyDown('C'));
     EXPECT_TRUE(input.WasKeyReleased('C'));
+    // Released by the tick no earlier than its deadline.
+    EXPECT_TRUE(std::chrono::steady_clock::now() - pressedAt >= releaseAfter);
     EXPECT_EQ(input.GetPendingTimedKeyReleaseCount(), 1u);
-#endif
 
     // Clearing the input states also forgets the pending timed releases.
     input.Console_ClearInputStates();
@@ -403,4 +499,106 @@ TEST(EngineWiring_ConsoleSimulatedKeyReleaseIsAppliedOnTheInputThread)
     input.Console_SimulateKeyPress("D", 0);
     EXPECT_FALSE(input.IsKeyDown('D'));
     EXPECT_EQ(input.GetPendingTimedKeyReleaseCount(), 0u);
+}
+
+// Uncaptured mouse motion delivered by the pump before the tick is that frame's
+// delta. The Windows Update() used to advance the previous position before
+// measuring against it, so every uncaptured delta there was zero.
+TEST(EngineWiring_UncapturedMouseMoveIsTheFrameDelta)
+{
+    InputManager input; // No window and no capture: WM_MOUSEMOVE carries client coordinates.
+    const auto mouseMove = [&input](int x, int y)
+    {
+        const uint32_t packed = (static_cast<uint32_t>(y) << 16) | static_cast<uint32_t>(x);
+        input.HandleMessage(WM_MOUSEMOVE, 0, static_cast<LPARAM>(packed));
+    };
+
+    input.Update(); // an idle frame at the origin
+    mouseMove(100, 40);
+    input.Update();
+    EXPECT_EQ(input.GetMousePosition().x, 100);
+    EXPECT_EQ(input.GetMousePosition().y, 40);
+    EXPECT_EQ(input.GetMouseDelta().x, 100);
+    EXPECT_EQ(input.GetMouseDelta().y, 40);
+
+    // Several moves in one frame add up to one delta from the previous frame.
+    mouseMove(110, 30);
+    mouseMove(130, 25);
+    input.Update();
+    EXPECT_EQ(input.GetMouseDelta().x, 30);
+    EXPECT_EQ(input.GetMouseDelta().y, -15);
+
+    // A frame without motion has no delta.
+    input.Update();
+    EXPECT_EQ(input.GetMouseDelta().x, 0);
+    EXPECT_EQ(input.GetMouseDelta().y, 0);
+}
+
+// ============================================================================
+// Module teardown: registries a game module fills with objects built in its own
+// image must be emptied by gameplay teardown, which runs after module OnUnload
+// and before FreeLibrary. Left to the singletons' process-exit destructors, the
+// installed ARPG and RPG packages crashed with an access violation after their
+// DLL was unmapped (behavior-tree node vtables, a make_shared clip control block).
+// ============================================================================
+
+namespace
+{
+    // Static, not a test-frame local: when the release regresses, the nodes are
+    // destroyed at process exit and must not write into a dead stack frame.
+    int s_destroyedTeardownProbeNodes = 0;
+
+    class TeardownProbeNode final : public Spark::AI::BTNode
+    {
+      public:
+        ~TeardownProbeNode() override { ++s_destroyedTeardownProbeNodes; }
+
+        Spark::AI::NodeStatus Tick(float, Spark::AI::Blackboard&) override
+        {
+            return m_status = Spark::AI::NodeStatus::Success;
+        }
+
+        std::unique_ptr<Spark::AI::BTNode> Clone() const override { return std::make_unique<TeardownProbeNode>(); }
+    };
+} // namespace
+
+TEST(EngineWiring_GameplayTeardownReleasesModuleBuiltRegistryEntries)
+{
+    SetupContextWithWorld();
+    auto* ctx = EngineContext::Get();
+    ASSERT_TRUE(ctx != nullptr);
+
+    InitializeProductionLifecycle();
+    ASSERT_TRUE(ctx->GetAI() != nullptr);
+    ASSERT_TRUE(ctx->GetAnimation() != nullptr);
+    ASSERT_TRUE(ctx->GetDestruction() != nullptr);
+
+    // What SparkGameARPG/SparkGameRPG register through IEngineContext at OnLoad:
+    // a behavior template (plus the per-agent clone the AI tick makes from it)...
+    s_destroyedTeardownProbeNodes = 0;
+    auto tree = std::make_unique<Spark::AI::BehaviorTree>("teardown_probe");
+    tree->SetRoot(std::make_unique<TeardownProbeNode>());
+    ctx->GetAI()->RegisterBehavior("teardown_probe", std::move(tree));
+    ASSERT_TRUE(ctx->GetAI()->CreateBehaviorInstance("teardown_probe") != nullptr);
+
+    // ...an animation clip...
+    auto clip = std::make_shared<Spark::Animation::AnimationClip>();
+    const std::weak_ptr<Spark::Animation::AnimationClip> clipWatch = clip;
+    ctx->GetAnimation()->RegisterClip("teardown_probe", std::move(clip));
+
+    // ...and a destruction callback.
+    auto callbackState = std::make_shared<int>(0);
+    const std::weak_ptr<int> callbackWatch = callbackState;
+    ctx->GetDestruction()->OnDestruction([callbackState](const Spark::DestructionEvent&) { ++*callbackState; });
+    callbackState.reset();
+
+    EXPECT_EQ(s_destroyedTeardownProbeNodes, 0);
+    EXPECT_FALSE(clipWatch.expired());
+    EXPECT_FALSE(callbackWatch.expired());
+
+    Spark::Core::Lifecycle::ShutdownGameplaySystemsImpl();
+
+    EXPECT_EQ(s_destroyedTeardownProbeNodes, 2); // the template root and its clone
+    EXPECT_TRUE(clipWatch.expired());
+    EXPECT_TRUE(callbackWatch.expired());
 }

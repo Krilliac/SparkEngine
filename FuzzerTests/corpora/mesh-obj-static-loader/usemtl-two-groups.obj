@@ -1,0 +1,11 @@
+mtllib lib.mtl
+v 0 0 0
+v 1 0 0
+v 0 1 0
+v 1 1 0
+usemtl inroot_red
+f 1 2 3
+usemtl inroot_green
+f 2 4 3
+usemtl inroot_red
+f 1 2 4

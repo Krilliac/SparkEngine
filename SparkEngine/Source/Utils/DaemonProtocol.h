@@ -157,13 +157,11 @@ namespace Spark::Daemon
      * @brief Default socket path for daemon discovery on POSIX systems.
      *
      * Relative to the build directory root. The engine forms the full path at
-     * runtime (typically `<build>/.spark-daemon.sock`). On Windows, the daemon
-     * listens on a named pipe at `\\.\pipe\spark-daemon` instead.
+     * runtime (typically `<build>/.spark-daemon.sock`). On Windows the daemon
+     * listens on a named pipe whose name NormalizePipeName() derives from the
+     * resolved path and the current user (DaemonFraming.h).
      */
     inline constexpr const char* kDefaultSocketName = ".spark-daemon.sock";
-
-    /// Default Windows named-pipe name (full path).
-    inline constexpr const char* kDefaultPipeName = R"(\\.\pipe\spark-daemon)";
 
     /**
      * @brief Serialise a frame header into a fixed-size byte array.

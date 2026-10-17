@@ -20,10 +20,13 @@
 #include "../../Utils/ScopeGuard.h"
 #include "../../Utils/SecureMemory.h"
 #include "../../Utils/Validate.h"
+#include <format>
+#include <span>
 #include <sstream>
 #include <cstring>
 #include <algorithm>
 #include <utility>
+#include <vector>
 
 #ifdef SendMessage
 #undef SendMessage
@@ -32,6 +35,10 @@
 using namespace DirectX;
 namespace Spark::Net
 {
+    static_assert(NETWORK_FRAME_OVERHEAD == 1 + SECURE_PACKET_OVERHEAD,
+                  "NetworkWireLimits.h must reserve one frame-kind byte plus the SecureChannel overhead");
+    static_assert(static_cast<size_t>(OpenResult::Replayed) < std::tuple_size_v<decltype(NetworkStats::securityDrops)>);
+
 #ifdef ENABLE_NETWORKING
     namespace
     {
@@ -82,6 +89,11 @@ namespace Spark::Net
         m_bytesSentSinceSample = 0;
         m_bytesReceivedSinceSample = 0;
         m_stats = {};
+        {
+            std::lock_guard<std::mutex> queueLock(m_queueMutex);
+            m_outgoingQueuePeak = 0;
+            m_incomingQueuePeak = 0;
+        }
 
         // Mandatory protocol handlers are intentionally separate from application
         // observers. RegisterHandler/ClearHandlers must never replace or erase
@@ -94,57 +106,40 @@ namespace Spark::Net
                          {
                              if (GetRole() == NetworkRole::Client)
                              {
-                                 NetBuffer buf;
-                                 buf.WriteBytes(msg.payload.data(), msg.payload.size());
-                                 const ClientID assignedID = buf.ReadUint32();
-                                 if (buf.HasError() || assignedID == INVALID_CLIENT)
-                                 {
-                                     SPARK_LOG_WARN(Spark::LogCategory::Network,
-                                                    "Ignoring malformed ConnectAccepted packet");
-                                     return;
-                                 }
-
-                                 std::lock_guard<std::mutex> stateLock(m_stateMutex);
-                                 m_localClientID = assignedID;
-                                 m_connectionState = ConnectionState::Connected;
-
-                                 // Mark as connected for auto-reconnect tracking
-                                 m_wasConnected = true;
-                                 m_reconnectAttempts = 0;
+                                 CompleteClientHandshake(msg);
                              }
                          });
+        // Admission happens in ProcessIncoming (PromoteSecuringClient); the dispatched copy only
+        // exists so the reliable layer acknowledges it.
+        registerInternal(MessageType::ClientFinished, [](const NetworkMessage&) {});
         registerInternal(MessageType::ConnectRejected,
                          [this](const NetworkMessage& msg)
                          {
-                             std::string reason = "Connection rejected";
+                             // Payload: reason text, then a typed trailer (reason code + the
+                             // server's protocol version). Any rejection is terminal, so a missing
+                             // or malformed trailer still fails the handshake, just untyped.
+                             std::string text = "Connection rejected";
+                             ConnectRejectReason reason = ConnectRejectReason::Unspecified;
                              if (!msg.payload.empty())
                              {
                                  NetBuffer buf;
                                  buf.WriteBytes(msg.payload.data(), msg.payload.size());
-                                 std::string suppliedReason = buf.ReadString();
-                                 if (!buf.HasError() && !suppliedReason.empty())
-                                     reason = std::move(suppliedReason);
+                                 std::string suppliedText = buf.ReadString();
+                                 if (!buf.HasError() && !suppliedText.empty())
+                                     text = std::move(suppliedText);
+                                 const uint8_t code = buf.ReadUint8();
+                                 const uint16_t serverVersion = buf.ReadUint16();
+                                 if (!buf.HasError() &&
+                                     (code <= static_cast<uint8_t>(ConnectRejectReason::MalformedHandshake) ||
+                                      code == static_cast<uint8_t>(ConnectRejectReason::UnsupportedSuite)))
+                                 {
+                                     reason = static_cast<ConnectRejectReason>(code);
+                                     SPARK_LOG_DEBUG(Spark::LogCategory::Network,
+                                                     "ConnectRejected reason %u from server protocol version %u",
+                                                     static_cast<unsigned>(code), static_cast<unsigned>(serverVersion));
+                                 }
                              }
-
-                             uint64_t rejectedLifecycleEpoch = 0;
-                             {
-                                 std::lock_guard<std::mutex> stateLock(m_stateMutex);
-                                 if (m_role.load(std::memory_order_acquire) != NetworkRole::Client ||
-                                     m_connectionState != ConnectionState::Connecting)
-                                     return;
-                                 rejectedLifecycleEpoch = m_lifecycleEpoch;
-                                 m_lastConnectionError = reason;
-                                 m_connectionState = ConnectionState::Disconnected;
-                                 m_role = NetworkRole::None;
-                                 m_localClientID = INVALID_CLIENT;
-                                 m_wasConnected = false;
-                             }
-                             ++m_lifecycleEpoch;
-#ifdef ENABLE_NETWORKING
-                             CloseSocket();
-#endif
-                             DiscardClientLifecycleTraffic(rejectedLifecycleEpoch);
-                             SPARK_LOG_WARN(Spark::LogCategory::Network, "Connection rejected: %s", reason.c_str());
+                             AbandonClientHandshake(reason, std::move(text));
                          });
         registerInternal(MessageType::Heartbeat,
                          [this](const NetworkMessage& msg)
@@ -218,38 +213,11 @@ namespace Spark::Net
                              buf.WriteBytes(msg.payload.data(), msg.payload.size());
                              DeltaSnapshotManager::GetInstance().AcknowledgeSequence(msg.senderID, buf.ReadUint32());
                          });
-        registerInternal(MessageType::ClientInput,
-                         [this](const NetworkMessage& msg)
-                         {
-                             NetworkRole role;
-                             {
-                                 std::lock_guard<std::mutex> lock(m_stateMutex);
-                                 role = m_role;
-                             }
-                             if (role == NetworkRole::Server)
-                             {
-                                 NetBuffer buf;
-                                 buf.WriteBytes(msg.payload.data(), msg.payload.size());
-                                 ClientInputState input;
-                                 input.inputSequence = buf.ReadUint32();
-                                 input.moveForward = buf.ReadFloat();
-                                 input.moveRight = buf.ReadFloat();
-                                 input.lookYaw = buf.ReadFloat();
-                                 input.lookPitch = buf.ReadFloat();
-                                 uint8_t flags = buf.ReadUint8();
-                                 input.jump = (flags & 1) != 0;
-                                 input.fire = (flags & 2) != 0;
-                                 input.reload = (flags & 4) != 0;
-                                 input.sprint = (flags & 8) != 0;
-                                 input.crouch = (flags & 16) != 0;
-                                 input.deltaTime = buf.ReadFloat();
-                                 input.timestamp = m_serverTime;
-                                 {
-                                     std::lock_guard<std::mutex> lock(m_inputMutex);
-                                     m_pendingInputs.push_back(input);
-                                 }
-                             }
-                         });
+        // ClientInput deliberately has no protocol handler. The transport used to
+        // parse every datagram into an unbounded, unattributed, never-drained
+        // server queue (a remote memory-exhaustion sink with no consumer). Input
+        // is gameplay data: an application observer owns its validation, its
+        // per-client attribution (msg.senderID) and its bounds.
 
         SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "Network", 0.0);
         return true;
@@ -287,6 +255,7 @@ namespace Spark::Net
             m_connectionState = ConnectionState::Disconnected;
             m_localClientID = INVALID_CLIENT;
         }
+        ReleaseAllClientConnectionState();
         {
             std::lock_guard<std::mutex> clientLock(m_clientsMutex);
             m_clients.clear();
@@ -297,6 +266,8 @@ namespace Spark::Net
                 m_outgoingQueue.pop();
             while (!m_incomingQueue.empty())
                 m_incomingQueue.pop();
+            m_outgoingQueuePeak = 0;
+            m_incomingQueuePeak = 0;
         }
         {
             std::lock_guard<std::mutex> replicationLock(m_replicationMutex);
@@ -305,7 +276,6 @@ namespace Spark::Net
         }
         {
             std::lock_guard<std::mutex> inputLock(m_inputMutex);
-            m_pendingInputs.clear();
             m_inputHistory.clear();
         }
         {
@@ -313,9 +283,14 @@ namespace Spark::Net
             m_internalHandlers.clear();
             m_handlers.clear();
             m_sensitiveMessageTypes.clear();
+            m_handlerOwners.clear();
         }
 
         m_peers.clear();
+        m_secureChannels.clear();
+        m_pendingAccepts.clear();
+        m_connectLimiter.Clear();
+        m_clientHandshake.reset();
         m_lagCompensator.Clear();
         m_serverTime = 0.0f;
         m_nextClientID = 1;
@@ -330,6 +305,63 @@ namespace Spark::Net
         m_allowLanAdvertisement = false;
         m_initialized = false;
         SPARK_DEBUG_HOOK_SYSTEM(SystemPostShutdown, "Network", 0.0);
+    }
+
+    // --------------------------------------------------------------------------
+    // Security configuration (NET-100)
+    // --------------------------------------------------------------------------
+
+    void NetworkManager::SetSecurityConfig(NetworkSecurityConfig config)
+    {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
+        m_securityConfig = std::move(config);
+    }
+
+    NetworkSecurityConfig NetworkManager::GetSecurityConfig() const
+    {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
+        return m_securityConfig;
+    }
+
+    bool NetworkManager::UseDefaultSecurityConfig(NetworkRole role)
+    {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
+        if (role == NetworkRole::Server && m_securityConfig.identity)
+        {
+            return true;
+        }
+        if (role == NetworkRole::Client && m_securityConfig.trust.IsUsable())
+        {
+            return true;
+        }
+        if (role == NetworkRole::None)
+        {
+            return false;
+        }
+
+        const std::filesystem::path directory = DefaultNetworkSecurityDirectory();
+        if (directory.empty())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network,
+                            "No per-user data directory: cannot establish the default network security configuration");
+            return false;
+        }
+        if (role == NetworkRole::Client)
+        {
+            m_securityConfig.trust = ServerTrust::TrustOnFirstUseAt(directory / DEFAULT_KNOWN_HOSTS_FILE);
+            return true;
+        }
+
+        const std::filesystem::path identityPath = directory / DEFAULT_SERVER_IDENTITY_FILE;
+        auto identity = LoadOrCreateServerIdentity(identityPath);
+        if (!identity)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Server identity '%s' unusable: %s",
+                            identityPath.string().c_str(), TrustStoreErrorText(identity.error()));
+            return false;
+        }
+        m_securityConfig.identity = std::move(*identity);
+        return true;
     }
 
     // --------------------------------------------------------------------------
@@ -353,12 +385,27 @@ namespace Spark::Net
         SPARK_TRACE_ENTER(Spark::LogCategory::Network);
         // Port 0 requests an OS-assigned ephemeral port and is the only
         // conflict-free choice for parallel tests/tools.
-        SPARK_REQUIRE_MSG(Spark::LogCategory::Network, maxClients > 0 && maxClients <= 256,
-                          "maxClients must be in [1, 256]");
+        // maxClients comes from operator configuration, so an out-of-range value is a
+        // recoverable startup error rather than an always-on assertion that aborts.
+        if (maxClients < 1 || maxClients > MAX_SERVER_CLIENTS)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Refusing server startup: maxClients %d outside [1, %d]",
+                            maxClients, MAX_SERVER_CLIENTS);
+            return false;
+        }
         if (!IsEndpointLifecycleIdle())
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Network,
                             "Refusing server startup while another endpoint lifecycle is active");
+            return false;
+        }
+        if (!m_securityConfig.identity)
+        {
+            // NET-100: the handshake signs with this identity. Without it no client could
+            // authenticate this server, and there is deliberately no plaintext fallback.
+            SPARK_LOG_ERROR(Spark::LogCategory::Network,
+                            "Refusing server startup: no server identity configured (SetSecurityConfig or "
+                            "UseDefaultSecurityConfig)");
             return false;
         }
         if (!endpointPolicy.IsValid())
@@ -388,6 +435,7 @@ namespace Spark::Net
         }
         m_maxClients = maxClients;
         m_serverTime = 0.0f;
+        m_connectLimiter.Configure(m_securityConfig.connectRate);
         m_heartbeatTimer = 0.0f;
         m_replicationTimer = 0.0f;
         m_allowLanAdvertisement = allowLanAdvertisement;
@@ -439,6 +487,7 @@ namespace Spark::Net
         m_clientAddresses.clear();
 #endif // ENABLE_NETWORKING
 
+        ReleaseAllClientConnectionState();
         {
             std::lock_guard<std::mutex> lock(m_clientsMutex);
             m_clients.clear();
@@ -449,11 +498,9 @@ namespace Spark::Net
             ++m_replicationMutationEpoch;
         }
         m_lagCompensator.Clear();
-        {
-            std::lock_guard<std::mutex> lock(m_inputMutex);
-            m_pendingInputs.clear();
-        }
         m_peers.clear();
+        m_secureChannels.clear();
+        m_pendingAccepts.clear();
         m_allowLanAdvertisement = false;
 
         {
@@ -483,8 +530,11 @@ namespace Spark::Net
         }
 
         // A client has one remote peer. Clearing its reliability state destroys
-        // sensitive unacknowledged and ordered-buffer copies from this lifecycle.
+        // sensitive unacknowledged and ordered-buffer copies from this lifecycle,
+        // and its channel keys are wiped with the SecureChannel.
         m_peers.clear();
+        m_secureChannels.clear();
+        m_clientHandshake.reset();
 
         // The simulator is process-global, so discard only manager-owned packets
         // from completed lifecycles and preserve epoch-zero generic traffic.
@@ -510,6 +560,13 @@ namespace Spark::Net
                             "Refusing client startup while another endpoint lifecycle is active");
             return false;
         }
+        if (!m_securityConfig.trust.IsUsable())
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network,
+                            "Refusing client startup: server trust is not configured (pin a server key or enable "
+                            "trust-on-first-use)");
+            return false;
+        }
         if (!endpointPolicy.IsValid())
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Network, "Refusing client startup: %s",
@@ -525,6 +582,16 @@ namespace Spark::Net
         }
         SPARK_LOG_INFO(Spark::LogCategory::Network, "Connecting to %s:%u as '%s'", address.c_str(), port,
                        playerName.c_str());
+
+        // The ephemeral key is generated before any socket exists, so a CSPRNG failure
+        // leaves no half-started lifecycle behind.
+        auto handshake = std::make_unique<ClientHandshake>();
+        auto clientHello = handshake->Begin(NETWORK_PROTOCOL_VERSION);
+        if (!clientHello)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Refusing client startup: handshake key generation failed");
+            return false;
+        }
 
         // Save connection params for auto-reconnect
         m_lastServerAddress = address;
@@ -553,19 +620,22 @@ namespace Spark::Net
             m_role = NetworkRole::Client;
             m_connectionState = ConnectionState::Connecting;
             m_lastConnectionError.clear();
+            m_lastConnectRejectReason = ConnectRejectReason::Unspecified;
         }
+        m_lastServerPacketTime = m_serverTime;
         m_allowLanAdvertisement = false;
+        m_secureChannels.clear();
+        m_clientHandshake = std::move(handshake);
         ++m_lifecycleEpoch;
 
-        // Send connect request
+        // Connect carries only the ClientHello (NET-100 v2): magic, version, suite, the
+        // ephemeral X25519 key and a nonce. The player name waits for the sealed ClientFinished.
         NetworkMessage connectMsg;
         connectMsg.type = MessageType::Connect;
         connectMsg.channel = ChannelType::Reliable;
         connectMsg.senderID = INVALID_CLIENT;
         connectMsg.timestamp = 0.0f;
-        NetBuffer buf;
-        buf.WriteString(playerName);
-        connectMsg.payload = buf.GetData();
+        connectMsg.payload.assign(clientHello->begin(), clientHello->end());
         SendMessage(connectMsg);
 
         return true;
@@ -625,6 +695,7 @@ namespace Spark::Net
             m_role = NetworkRole::None;
             m_localClientID = INVALID_CLIENT;
         }
+        ReleaseAllClientConnectionState();
         {
             std::lock_guard<std::mutex> lock(m_clientsMutex);
             m_clients.clear();
@@ -636,10 +707,12 @@ namespace Spark::Net
         m_lagCompensator.Clear();
         {
             std::lock_guard<std::mutex> lock(m_inputMutex);
-            m_pendingInputs.clear();
             m_inputHistory.clear();
         }
         m_peers.clear();
+        m_secureChannels.clear();
+        m_pendingAccepts.clear();
+        m_clientHandshake.reset();
         m_allowLanAdvertisement = false;
     }
 
@@ -685,6 +758,15 @@ namespace Spark::Net
             m_stats.packetsDropped++;
             return;
         }
+        // NET-100 invariant: sensitive payloads only ever leave inside an established channel.
+        if (msg.sensitive && GetRole() == NetworkRole::Client && !m_secureChannels.contains(SERVER_PEER))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network,
+                            "Refusing a sensitive network message: no secure channel to the server yet");
+            m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+            m_stats.unsealedSendsRefused++;
+            return;
+        }
 #endif
 
         // Server-side reliable broadcasts must fan out per client: each peer
@@ -716,10 +798,16 @@ namespace Spark::Net
         // reaches here for reliable traffic, so the peer is always the server.
         if (queued.channel != ChannelType::Unreliable)
         {
-            queued.sequence = GetPeerState(SERVER_PEER).nextOutgoingSequence++;
+            PeerState& serverPeer = GetPeerState(SERVER_PEER);
+            queued.sequence = TakeReliableSequence(serverPeer.nextOutgoingSequence);
+            if (queued.channel == ChannelType::ReliableOrdered)
+            {
+                queued.orderedSequence = TakeReliableSequence(serverPeer.nextOutgoingOrderedSequence);
+            }
         }
 
         m_outgoingQueue.push(queued);
+        m_outgoingQueuePeak = std::max(m_outgoingQueuePeak, m_outgoingQueue.size());
         m_stats.packetsSent++;
     }
 
@@ -748,6 +836,24 @@ namespace Spark::Net
         auto addrIt = m_clientAddresses.find(client);
         if (addrIt == m_clientAddresses.end())
             return;
+        // Admission fence (NET-100): until ClientFinished promotes a slot to Connected, it may
+        // receive only the handshake's own answer. This holds for every caller -- replication,
+        // game systems, heartbeats -- so a spoofed Connect never draws game traffic.
+        if (!IsHandshakeMessage(copy.type))
+        {
+            bool admitted = false;
+            {
+                std::lock_guard<std::mutex> clientsLock(m_clientsMutex);
+                const auto slot = m_clients.find(client);
+                admitted = slot != m_clients.end() && slot->second.state == ConnectionState::Connected;
+            }
+            if (!admitted)
+            {
+                m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+                m_stats.unadmittedSendsRefused++;
+                return;
+            }
+        }
         if (!IsEndpointAllowed(addrIt->second))
         {
             SPARK_LOG_ERROR(Spark::LogCategory::Network, "Rejecting network message for a disallowed client endpoint");
@@ -763,6 +869,14 @@ namespace Spark::Net
             m_stats.packetsDropped++;
             return;
         }
+        if (copy.sensitive && !m_secureChannels.contains(client))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Network,
+                            "Refusing a sensitive network message: client %u has no secure channel", client);
+            m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+            m_stats.unsealedSendsRefused++;
+            return;
+        }
 
         // Assign this client's own reliable sequence and track for
         // retransmission — sequence streams and unacked maps are per peer, so
@@ -770,7 +884,11 @@ namespace Spark::Net
         if (copy.channel != ChannelType::Unreliable)
         {
             PeerState& peer = GetPeerState(client);
-            copy.sequence = peer.nextOutgoingSequence++;
+            copy.sequence = TakeReliableSequence(peer.nextOutgoingSequence);
+            if (copy.channel == ChannelType::ReliableOrdered)
+            {
+                copy.orderedSequence = TakeReliableSequence(peer.nextOutgoingOrderedSequence);
+            }
             peer.unacknowledgedMessages[copy.sequence] = copy;
             peer.reliableOriginalSendTime.try_emplace(copy.sequence, m_serverTime);
         }
@@ -782,7 +900,7 @@ namespace Spark::Net
                 if (sensitive)
                     Spark::SecureClear(serialized);
             });
-        SendRawTo(serialized, addrIt->second, copy.localOnly);
+        SendImpaired(serialized, client, addrIt->second, copy);
         m_stats.packetsSent++;
 #else
         // Without networking, just enqueue for local testing
@@ -795,9 +913,15 @@ namespace Spark::Net
         }
         if (copy.channel != ChannelType::Unreliable)
         {
-            copy.sequence = GetPeerState(client).nextOutgoingSequence++;
+            PeerState& peer = GetPeerState(client);
+            copy.sequence = TakeReliableSequence(peer.nextOutgoingSequence);
+            if (copy.channel == ChannelType::ReliableOrdered)
+            {
+                copy.orderedSequence = TakeReliableSequence(peer.nextOutgoingOrderedSequence);
+            }
         }
         m_outgoingQueue.push(copy);
+        m_outgoingQueuePeak = std::max(m_outgoingQueuePeak, m_outgoingQueue.size());
         m_stats.packetsSent++;
 #endif // ENABLE_NETWORKING
     }
@@ -808,7 +932,14 @@ namespace Spark::Net
         std::vector<ClientID> clientIDs;
         clientIDs.reserve(m_clients.size());
         for (const auto& [id, info] : m_clients)
-            clientIDs.push_back(id);
+        {
+            // A Securing client has not proven its channel yet (NET-100): it receives
+            // nothing but its ConnectAccepted until ClientFinished promotes it.
+            if (info.state == ConnectionState::Connected)
+            {
+                clientIDs.push_back(id);
+            }
+        }
         return clientIDs;
     }
 
@@ -835,44 +966,214 @@ namespace Spark::Net
         SendToAll(msg);
     }
 
+    NetworkManager::ScopedRegistrationOwner::ScopedRegistrationOwner(NetworkManager& manager, std::string ownerId,
+                                                                     bool teardown)
+        : m_manager(manager)
+    {
+        std::lock_guard<std::recursive_mutex> apiLock(manager.m_apiMutex);
+        m_previousOwner = std::move(manager.m_registrationOwner);
+        m_previousTeardown = manager.m_registrationTeardown;
+        manager.m_registrationOwner = std::move(ownerId);
+        manager.m_registrationTeardown = teardown;
+    }
+
+    NetworkManager::ScopedRegistrationOwner::~ScopedRegistrationOwner()
+    {
+        std::lock_guard<std::recursive_mutex> apiLock(m_manager.m_apiMutex);
+        m_manager.m_registrationOwner = std::move(m_previousOwner);
+        m_manager.m_registrationTeardown = m_previousTeardown;
+    }
+
+    bool NetworkManager::MayWriteOwnedSlot(const std::string& slotOwner, bool replacing) const
+    {
+        // Host/engine code outside any scope keeps the historical unrestricted behavior.
+        if (m_registrationOwner.empty() || slotOwner.empty() || slotOwner == m_registrationOwner)
+        {
+            return true;
+        }
+        // An initializing owner may take over another owner's slot (a hot-reload replacement installs its
+        // handlers before the outgoing image is torn down). Nobody may remove another owner's slot, and a
+        // tearing-down owner may not overwrite one either.
+        return replacing && !m_registrationTeardown;
+    }
+
     void NetworkManager::RegisterHandler(MessageType type, MessageHandler handler)
     {
         std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         ASSERT_MSG(handler != nullptr, "NetworkManager::RegisterHandler — handler must not be null");
-        std::lock_guard<std::mutex> lock(m_handlerMutex);
-        const uint16_t value = static_cast<uint16_t>(type);
-        // Complete the potentially-allocating handler insertion first. A
-        // normal registration replaces both the callback and its local
-        // classification; allocation failure must leave the old pair intact.
-        m_handlers[value] = std::move(handler);
-        m_sensitiveMessageTypes.erase(value);
+        MessageHandler displaced;
+        {
+            std::lock_guard<std::mutex> lock(m_handlerMutex);
+            const auto value = static_cast<uint16_t>(type);
+            const auto ownerIt = m_handlerOwners.find(value);
+            const std::string& slotOwner = ownerIt != m_handlerOwners.end() ? ownerIt->second : std::string();
+            if (!MayWriteOwnedSlot(slotOwner, true))
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Network,
+                               "RegisterHandler: '%s' is tearing down and may not replace message type %u owned by "
+                               "'%s'",
+                               m_registrationOwner.c_str(), static_cast<unsigned>(value), slotOwner.c_str());
+                return;
+            }
+            // Complete the potentially-allocating handler insertion first. A
+            // normal registration replaces both the callback and its local
+            // classification; allocation failure must leave the old pair intact.
+            MessageHandler& slot = m_handlers[value];
+            if (!m_registrationOwner.empty())
+            {
+                m_handlerOwners[value] = m_registrationOwner;
+            }
+            else
+            {
+                m_handlerOwners.erase(value);
+            }
+            displaced = std::exchange(slot, std::move(handler));
+            m_sensitiveMessageTypes.erase(value);
+        }
+        // `displaced` is destroyed here, outside m_handlerMutex, while its owner's image is still mapped.
     }
 
     void NetworkManager::RegisterSensitiveHandler(MessageType type, MessageHandler handler)
     {
         std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
         ASSERT_MSG(handler != nullptr, "NetworkManager::RegisterSensitiveHandler — handler must not be null");
+        MessageHandler displaced;
+        {
+            std::lock_guard<std::mutex> lock(m_handlerMutex);
+            const auto value = static_cast<uint16_t>(type);
+            const auto ownerIt = m_handlerOwners.find(value);
+            const std::string& slotOwner = ownerIt != m_handlerOwners.end() ? ownerIt->second : std::string();
+            if (!MayWriteOwnedSlot(slotOwner, true))
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Network,
+                               "RegisterSensitiveHandler: '%s' is tearing down and may not replace message type %u "
+                               "owned by '%s'",
+                               m_registrationOwner.c_str(), static_cast<unsigned>(value), slotOwner.c_str());
+                return;
+            }
+            const auto [sensitiveIt, inserted] = m_sensitiveMessageTypes.insert(value);
+            try
+            {
+                MessageHandler& slot = m_handlers[value];
+                if (!m_registrationOwner.empty())
+                {
+                    m_handlerOwners[value] = m_registrationOwner;
+                }
+                else
+                {
+                    m_handlerOwners.erase(value);
+                }
+                displaced = std::exchange(slot, std::move(handler));
+            }
+            catch (...)
+            {
+                if (inserted)
+                {
+                    m_sensitiveMessageTypes.erase(sensitiveIt);
+                }
+                throw;
+            }
+        }
+    }
+
+    void NetworkManager::UnregisterHandler(MessageType type)
+    {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
+        MessageHandler removed;
+        {
+            std::lock_guard<std::mutex> lock(m_handlerMutex);
+            const auto value = static_cast<uint16_t>(type);
+            const auto ownerIt = m_handlerOwners.find(value);
+            const std::string slotOwner = ownerIt != m_handlerOwners.end() ? ownerIt->second : std::string();
+            if (!MayWriteOwnedSlot(slotOwner, false))
+            {
+                return;
+            }
+            const auto handlerIt = m_handlers.find(value);
+            if (handlerIt != m_handlers.end())
+            {
+                removed = std::move(handlerIt->second);
+                m_handlers.erase(handlerIt);
+            }
+            m_handlerOwners.erase(value);
+            m_sensitiveMessageTypes.erase(value);
+        }
+    }
+
+    std::vector<NetworkManager::MessageHandler> NetworkManager::TakeHandlersOwnedBy(const std::string& ownerId)
+    {
+        std::vector<MessageHandler> removed;
         std::lock_guard<std::mutex> lock(m_handlerMutex);
-        const uint16_t value = static_cast<uint16_t>(type);
-        const auto [sensitiveIt, inserted] = m_sensitiveMessageTypes.insert(value);
-        try
+        for (auto ownerIt = m_handlerOwners.begin(); ownerIt != m_handlerOwners.end();)
         {
-            m_handlers[value] = std::move(handler);
+            if (ownerIt->second != ownerId)
+            {
+                ++ownerIt;
+                continue;
+            }
+            const auto handlerIt = m_handlers.find(ownerIt->first);
+            if (handlerIt != m_handlers.end())
+            {
+                removed.push_back(std::move(handlerIt->second));
+                m_handlers.erase(handlerIt);
+            }
+            m_sensitiveMessageTypes.erase(ownerIt->first);
+            ownerIt = m_handlerOwners.erase(ownerIt);
         }
-        catch (...)
+        return removed;
+    }
+
+    size_t NetworkManager::UnregisterHandlersByOwner(const std::string& ownerId)
+    {
+        if (ownerId.empty())
         {
-            if (inserted)
-                m_sensitiveMessageTypes.erase(sensitiveIt);
-            throw;
+            return 0;
         }
+
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
+        const std::vector<MessageHandler> removed = TakeHandlersOwnedBy(ownerId);
+        size_t removedCount = removed.size();
+        if (m_timeoutHandlerOwner == ownerId)
+        {
+            m_timeoutHandler = nullptr;
+            m_timeoutHandlerOwner.clear();
+            ++removedCount;
+        }
+        // `removed` destroys the owner's callbacks here, outside m_handlerMutex, before its image is unmapped.
+        return removedCount;
+    }
+
+    void NetworkManager::SetTimeoutHandler(std::function<void(ClientID)> handler)
+    {
+        std::lock_guard<std::recursive_mutex> lock(m_apiMutex);
+        const bool clearing = !handler;
+        if (!MayWriteOwnedSlot(m_timeoutHandlerOwner, !clearing))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network,
+                           "SetTimeoutHandler: '%s' may not %s the timeout handler owned by '%s'",
+                           m_registrationOwner.c_str(), clearing ? "clear" : "replace", m_timeoutHandlerOwner.c_str());
+            return;
+        }
+        m_timeoutHandler = std::move(handler);
+        m_timeoutHandlerOwner = clearing ? std::string() : m_registrationOwner;
     }
 
     void NetworkManager::ClearHandlers()
     {
         std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
-        std::lock_guard<std::mutex> lock(m_handlerMutex);
-        m_handlers.clear();
-        m_sensitiveMessageTypes.clear();
+        if (!m_registrationOwner.empty())
+        {
+            // A scoped owner clears only the observers it registered (never the timeout handler, as before).
+            [[maybe_unused]] const std::vector<MessageHandler> removed = TakeHandlersOwnedBy(m_registrationOwner);
+            return;
+        }
+        std::unordered_map<uint16_t, MessageHandler> removed;
+        {
+            std::lock_guard<std::mutex> lock(m_handlerMutex);
+            removed.swap(m_handlers);
+            m_sensitiveMessageTypes.clear();
+            m_handlerOwners.clear();
+        }
     }
 
     // --------------------------------------------------------------------------
@@ -885,10 +1186,13 @@ namespace Spark::Net
         ASSERT_MSG(client != INVALID_CLIENT, "NetworkManager::KickClient — client ID must not be INVALID_CLIENT");
         SPARK_LOG_INFO(Spark::LogCategory::Network, "Kicking client %u: %s", client, reason.c_str());
 
-        std::lock_guard<std::mutex> lock(m_clientsMutex);
-        auto it = m_clients.find(client);
-        if (it == m_clients.end())
-            return;
+        {
+            std::lock_guard<std::mutex> lock(m_clientsMutex);
+            if (!m_clients.contains(client))
+            {
+                return;
+            }
+        }
 
         NetworkMessage msg;
         msg.type = MessageType::Disconnect;
@@ -898,16 +1202,7 @@ namespace Spark::Net
         msg.payload = buf.GetData();
         SendToClient(client, msg);
 
-        m_clients.erase(it);
-#ifdef ENABLE_NETWORKING
-        m_clientAddresses.erase(client);
-#endif
-        // Drop the peer's reliability state so a future client reusing the ID
-        // starts with fresh sequence/dedup/ordered bookkeeping.
-        m_peers.erase(client);
-        // Drop any interest-management scope tied to this connection so
-        // a future client reusing the ID starts with "see everything".
-        ConnectionScopeFilter::GetInstance().RemoveConnection(static_cast<uint32_t>(client));
+        RemoveClientState(client);
     }
 
     // --------------------------------------------------------------------------
@@ -935,85 +1230,416 @@ namespace Spark::Net
         return INVALID_CLIENT;
     }
 
+    void NetworkManager::RejectPendingConnect(ClientID pendingID, ConnectRejectReason reason, const std::string& text)
+    {
+        NetworkMessage reject;
+        reject.type = MessageType::ConnectRejected;
+        reject.channel = ChannelType::Reliable;
+        NetBuffer rejectBuf;
+        rejectBuf.WriteString(text);
+        rejectBuf.WriteUint8(static_cast<uint8_t>(reason));
+        rejectBuf.WriteUint16(NETWORK_PROTOCOL_VERSION);
+        reject.payload = rejectBuf.GetData();
+
+        // Send rejection only to the connecting client (not broadcast)
+        SPARK_LOG_WARN(Spark::LogCategory::Network, "Connection rejected for pending client %u: %s", pendingID,
+                       text.c_str());
+        SendToClient(pendingID, reject);
+
+#ifdef ENABLE_NETWORKING
+        // Clean up the pre-registered address so the rejected client
+        // doesn't receive broadcast traffic meant for real clients
+        m_clientAddresses.erase(pendingID);
+#endif
+    }
+
+    void NetworkManager::AbandonClientHandshake(ConnectRejectReason reason, std::string text)
+    {
+        uint64_t rejectedLifecycleEpoch = 0;
+        {
+            std::lock_guard<std::mutex> stateLock(m_stateMutex);
+            if (m_role.load(std::memory_order_acquire) != NetworkRole::Client ||
+                m_connectionState != ConnectionState::Connecting)
+                return;
+            rejectedLifecycleEpoch = m_lifecycleEpoch;
+            m_lastConnectionError = text;
+            m_lastConnectRejectReason = reason;
+            m_connectionState = ConnectionState::Disconnected;
+            m_role = NetworkRole::None;
+            m_localClientID = INVALID_CLIENT;
+            m_wasConnected = false;
+        }
+        ++m_lifecycleEpoch;
+#ifdef ENABLE_NETWORKING
+        CloseSocket();
+#endif
+        DiscardClientLifecycleTraffic(rejectedLifecycleEpoch);
+        SPARK_LOG_WARN(Spark::LogCategory::Network, "Connection rejected: %s", text.c_str());
+    }
+
+    void NetworkManager::TerminateClientSession(const std::string& reason, bool keepReconnectArmed)
+    {
+        uint64_t endedLifecycleEpoch = 0;
+        {
+            std::lock_guard<std::mutex> stateLock(m_stateMutex);
+            if (m_role.load(std::memory_order_acquire) != NetworkRole::Client ||
+                m_connectionState == ConnectionState::Disconnected)
+            {
+                return;
+            }
+            endedLifecycleEpoch = m_lifecycleEpoch;
+            m_lastConnectionError = reason;
+            m_connectionState = ConnectionState::Disconnected;
+            m_role = NetworkRole::None;
+            m_localClientID = INVALID_CLIENT;
+            if (!keepReconnectArmed)
+            {
+                // The server ended the session on purpose (kick, ban, shutdown). Its
+                // decision is authoritative: reconnecting would loop admit -> kick
+                // forever, because every ConnectAccepted resets the attempt counter.
+                m_wasConnected = false;
+                m_reconnectAttempts = 0;
+            }
+            // Otherwise m_wasConnected is left as-is: a lost session that was
+            // established keeps auto-reconnect armed, a handshake that never
+            // completed does not.
+        }
+        // The epoch bump stops the rest of the Update batch that delivered the
+        // terminal packet, exactly like an application-initiated Disconnect().
+        ++m_lifecycleEpoch;
+#ifdef ENABLE_NETWORKING
+        CloseSocket();
+#endif
+        DiscardClientLifecycleTraffic(endedLifecycleEpoch);
+        {
+            std::lock_guard<std::mutex> lock(m_replicationMutex);
+            m_replicatedEntities.clear();
+            ++m_replicationMutationEpoch;
+        }
+        m_lagCompensator.Clear();
+        {
+            std::lock_guard<std::mutex> lock(m_inputMutex);
+            m_inputHistory.clear();
+        }
+        m_allowLanAdvertisement = false;
+        SPARK_LOG_WARN(Spark::LogCategory::Network, "Client session ended: %s", reason.c_str());
+    }
+
     ClientID NetworkManager::HandleConnect(const NetworkMessage& msg)
     {
         if (GetRole() != NetworkRole::Server)
             return INVALID_CLIENT;
 
         // ProcessIncoming pre-registers m_clientAddresses[m_nextClientID] so
-        // that SendToClient can reach the new client. If we reject, we must
-        // clean up that entry to avoid stale addresses receiving broadcasts.
-        ClientID pendingID = m_nextClientID;
+        // that SendToClient can reach the new client. Every rejection below
+        // must clean up that entry to avoid stale addresses receiving broadcasts.
+        const ClientID pendingID = m_nextClientID;
 
-        if (static_cast<int>(m_clients.size()) >= m_maxClients)
+        // Protocol negotiation happens before any slot is considered: a peer that
+        // cannot speak this exact wire version never occupies server state.
+        NetBuffer request;
+        request.WriteBytes(msg.payload.data(), msg.payload.size());
+        const uint32_t magic = request.ReadUint32();
+        const uint16_t clientVersion = request.ReadUint16();
+        if (request.HasError() || magic != NETWORK_HANDSHAKE_MAGIC)
         {
-            NetworkMessage reject;
-            reject.type = MessageType::ConnectRejected;
-            reject.channel = ChannelType::Reliable;
-            NetBuffer rejectBuf;
-            rejectBuf.WriteString("Server full");
-            reject.payload = rejectBuf.GetData();
-
-            // Send rejection only to the connecting client (not broadcast)
-            SPARK_LOG_WARN(Spark::LogCategory::Network,
-                           "Connection rejected for pending client %u: server full (%d/%d)", pendingID,
-                           static_cast<int>(m_clients.size()), m_maxClients);
-            SendToClient(pendingID, reject);
-
-#ifdef ENABLE_NETWORKING
-            // Clean up the pre-registered address so the rejected client
-            // doesn't receive broadcast traffic meant for real clients
-            m_clientAddresses.erase(pendingID);
-#endif
+            RejectPendingConnect(pendingID, ConnectRejectReason::ProtocolMissing,
+                                 std::format("Protocol version required (server speaks {})", NETWORK_PROTOCOL_VERSION));
+            return INVALID_CLIENT;
+        }
+        if (clientVersion != NETWORK_PROTOCOL_VERSION)
+        {
+            const bool older = clientVersion < NETWORK_PROTOCOL_VERSION;
+            RejectPendingConnect(pendingID,
+                                 older ? ConnectRejectReason::ProtocolTooOld : ConnectRejectReason::ProtocolTooNew,
+                                 std::format("Client protocol version {} is {} than server version {}", clientVersion,
+                                             older ? "older" : "newer", NETWORK_PROTOCOL_VERSION));
+            return INVALID_CLIENT;
+        }
+        // v2 Connect is exactly one ClientHello (NET-100). Its suite byte is checked here, before
+        // the capacity check and before any signature work, so a wrong or downgraded suite is
+        // refused with its own reason and costs the server nothing.
+        if (msg.payload.size() != CLIENT_HELLO_SIZE)
+        {
+            RejectPendingConnect(pendingID, ConnectRejectReason::MalformedHandshake, "Malformed connect request");
+            m_stats.handshakeFailures++;
+            return INVALID_CLIENT;
+        }
+        if (msg.payload[6] != HANDSHAKE_SUITE_X25519_ED25519_CHACHAPOLY_HKDF_SHA256)
+        {
+            RejectPendingConnect(pendingID, ConnectRejectReason::UnsupportedSuite,
+                                 std::format("Unsupported handshake suite {}", static_cast<unsigned>(msg.payload[6])));
+            m_stats.handshakeFailures++;
+            return INVALID_CLIENT;
+        }
+        // A small-order ephemeral key can never yield a session. Refuse it by comparison alone,
+        // before the capacity check and before any curve operation or signature.
+        if (IsLowOrderX25519PublicKey(
+                std::span(msg.payload).subspan(CLIENT_HELLO_EPHEMERAL_OFFSET, HANDSHAKE_PUBLIC_KEY_SIZE)))
+        {
+            RejectPendingConnect(pendingID, ConnectRejectReason::MalformedHandshake, "Malformed connect request");
+            m_stats.handshakeFailures++;
             return INVALID_CLIENT;
         }
 
-        const ClientID newID = m_nextClientID;
+        if (static_cast<int>(m_clients.size()) >= m_maxClients)
+        {
+            RejectPendingConnect(pendingID, ConnectRejectReason::ServerFull,
+                                 std::format("Server full ({}/{})", m_clients.size(), m_maxClients));
+            return INVALID_CLIENT;
+        }
+        if (!m_securityConfig.identity)
+        {
+            // StartServer refuses without an identity; a caller that cleared it since gets no sessions.
+            RejectPendingConnect(pendingID, ConnectRejectReason::Unspecified, "Server has no identity");
+            return INVALID_CLIENT;
+        }
+
+        // ConnectAccepted: [client id u32][server time f32][echoed version u16][ServerHello].
+        // The prefix is signed with the ServerHello (SPNH-v3 transcript), so the client can
+        // trust the id it is assigned: rewriting it breaks the handshake.
+        const ClientID newID = pendingID;
+        NetBuffer prefixBuf;
+        prefixBuf.WriteUint32(newID);
+        prefixBuf.WriteFloat(m_serverTime);
+        prefixBuf.WriteUint16(NETWORK_PROTOCOL_VERSION);
+        std::vector<uint8_t> acceptPayload = prefixBuf.GetData();
+
+        m_stats.handshakeResponsesComputed++;
+        auto response = RespondToClientHello(msg.payload, acceptPayload, *m_securityConfig.identity);
+        if (!response)
+        {
+            const ConnectRejectReason reason = response.error() == HandshakeError::UnsupportedSuite
+                                                   ? ConnectRejectReason::UnsupportedSuite
+                                                   : ConnectRejectReason::MalformedHandshake;
+            RejectPendingConnect(pendingID, reason, "Handshake refused");
+            m_stats.handshakeFailures++;
+            return INVALID_CLIENT;
+        }
+
         m_nextClientID = AdvanceGeneratedClientID(newID);
         ClientInfo info;
         info.id = newID;
-        info.state = ConnectionState::Connected;
-        info.lastHeartbeatTime = m_serverTime;
-
-        // Parse player name from connection request payload
-        if (!msg.payload.empty())
-        {
-            NetBuffer buf;
-            buf.WriteBytes(msg.payload.data(), msg.payload.size());
-            info.name = buf.ReadString();
-        }
-        if (info.name.empty())
-        {
-            info.name = "Player_" + std::to_string(newID);
-        }
+        info.state = ConnectionState::Securing; // admitted only once ClientFinished opens under this channel
+        info.lastHeartbeatTime = m_serverTime;  // a client that never finishes times out like a silent one
         {
             std::lock_guard<std::mutex> lock(m_clientsMutex);
             m_clients[newID] = info;
         }
+        m_secureChannels[newID] = PeerChannel{std::move(response->channel), 0, m_serverTime};
 
-        // Register the new connection for delta snapshot tracking
-        DeltaSnapshotManager::GetInstance().RegisterConnection(newID);
-
-        // Send acceptance with assigned client ID
+        // ConnectAccepted is unreliable: a lost one is answered again when the client
+        // retransmits its Connect, so the server never sends more than one datagram per
+        // datagram received.
         NetworkMessage accept;
         accept.type = MessageType::ConnectAccepted;
-        accept.channel = ChannelType::Reliable;
-        NetBuffer respBuf;
-        respBuf.WriteUint32(newID);
-        respBuf.WriteFloat(m_serverTime);
-        accept.payload = respBuf.GetData();
+        accept.channel = ChannelType::Unreliable;
+        acceptPayload.insert(acceptPayload.end(), response->serverHello.begin(), response->serverHello.end());
+        accept.payload = std::move(acceptPayload);
+        m_pendingAccepts[newID] = PendingAccept{msg.payload, accept};
         SendToClient(newID, accept);
-        SPARK_LOG_INFO(Spark::LogCategory::Network, "Client %u accepted ('%s'), %d/%d slots used", newID,
-                       info.name.c_str(), static_cast<int>(m_clients.size()), m_maxClients);
+        SPARK_LOG_INFO(Spark::LogCategory::Network, "Client %u securing, %d/%d slots used", newID,
+                       static_cast<int>(m_clients.size()), m_maxClients);
         return newID;
+    }
+
+    bool NetworkManager::PromoteSecuringClient(ClientID clientID, const NetworkMessage& finished)
+    {
+        // ClientFinished: [player name, u16 length + bytes] and nothing else.
+        NetBuffer buf;
+        buf.WriteBytes(finished.payload.data(), finished.payload.size());
+        std::string playerName = buf.ReadString();
+        constexpr size_t kMaxPlayerNameBytes = 64;
+        if (buf.HasError() || buf.RemainingBytes() != 0 || playerName.size() > kMaxPlayerNameBytes)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Malformed ClientFinished from securing client %u", clientID);
+            return false;
+        }
+
+        std::string admittedName;
+        {
+            std::lock_guard<std::mutex> lock(m_clientsMutex);
+            auto it = m_clients.find(clientID);
+            if (it == m_clients.end() || it->second.state != ConnectionState::Securing)
+            {
+                return false;
+            }
+            it->second.state = ConnectionState::Connected;
+            it->second.lastHeartbeatTime = m_serverTime;
+            it->second.name = playerName.empty() ? "Player_" + std::to_string(clientID) : std::move(playerName);
+            admittedName = it->second.name;
+        }
+        m_pendingAccepts.erase(clientID);
+
+        // Register the new connection for delta snapshot tracking
+        DeltaSnapshotManager::GetInstance().RegisterConnection(clientID);
+        SPARK_LOG_INFO(Spark::LogCategory::Network, "Client %u accepted ('%s'), %d/%d slots used", clientID,
+                       admittedName.c_str(), static_cast<int>(m_clients.size()), m_maxClients);
+        return true;
+    }
+
+    void NetworkManager::CompleteClientHandshake(const NetworkMessage& accepted)
+    {
+        {
+            std::lock_guard<std::mutex> stateLock(m_stateMutex);
+            if (m_connectionState != ConnectionState::Connecting)
+            {
+                return;
+            }
+        }
+        if (!m_clientHandshake)
+        {
+            return; // a duplicate ConnectAccepted after the handshake already finished
+        }
+
+        NetBuffer buf;
+        buf.WriteBytes(accepted.payload.data(), accepted.payload.size());
+        const ClientID assignedID = buf.ReadUint32();
+        buf.ReadFloat(); // server time; informational (signed with the rest of the prefix)
+        const uint16_t serverVersion = buf.ReadUint16();
+        if (buf.HasError() || assignedID == INVALID_CLIENT)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Ignoring malformed ConnectAccepted packet");
+            return;
+        }
+
+        // The server must echo the version this client offered. Anything else means the peers
+        // disagree about the wire format, so refuse the session instead of exchanging traffic
+        // neither side can trust.
+        if (serverVersion != NETWORK_PROTOCOL_VERSION)
+        {
+            m_stats.handshakeFailures++;
+            AbandonClientHandshake(ConnectRejectReason::ProtocolMismatch,
+                                   std::format("Server accepted with protocol version {}, client requires {}",
+                                               serverVersion, NETWORK_PROTOCOL_VERSION));
+            return;
+        }
+        constexpr size_t kAcceptPrefix = CONNECT_ACCEPT_PREFIX_SIZE;
+        if (accepted.payload.size() != kAcceptPrefix + SERVER_HELLO_SIZE)
+        {
+            // Not a v2 ConnectAccepted (e.g. a legacy 10-byte echo): it can never authenticate
+            // a server, so it is ignored without consuming the handshake.
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Ignoring ConnectAccepted without a ServerHello");
+            return;
+        }
+        const std::span<const uint8_t> serverHello = std::span(accepted.payload).subspan(kAcceptPrefix);
+
+        std::string endpoint;
+#ifdef ENABLE_NETWORKING
+        endpoint = FormatKnownHostsEndpoint(ntohl(m_serverAddress.sin_addr.s_addr), ntohs(m_serverAddress.sin_port));
+#endif
+        ServerPublicKey presented{};
+        std::copy_n(serverHello.begin() + 1, presented.size(), presented.begin());
+        const auto expected = ResolveExpectedServerKey(m_securityConfig.trust, endpoint, presented);
+        if (!expected)
+        {
+            m_stats.handshakeFailures++;
+            AbandonClientHandshake(ConnectRejectReason::HandshakeAuthFailed,
+                                   std::format("Server trust unusable: {}", TrustStoreErrorText(expected.error())));
+            return;
+        }
+
+        // The assigned id is adopted only because Finish verified it inside the signed transcript.
+        auto channel =
+            m_clientHandshake->Finish(std::span(accepted.payload).first(kAcceptPrefix), serverHello, expected->key);
+        m_clientHandshake.reset();
+        if (!channel)
+        {
+            m_stats.handshakeFailures++;
+            const bool identityMismatch = channel.error() == HandshakeError::ServerIdentityMismatch;
+            AbandonClientHandshake(identityMismatch ? ConnectRejectReason::ServerIdentityMismatch
+                                                    : ConnectRejectReason::HandshakeAuthFailed,
+                                   identityMismatch ? "Server identity does not match the trusted key"
+                                                    : "Server handshake failed authentication");
+            return;
+        }
+        if (expected->firstUse)
+        {
+            // Trust on first use records the key only after its signature verified.
+            if (auto recorded = RecordKnownHost(m_securityConfig.trust.knownHostsPath, endpoint, expected->key);
+                !recorded)
+            {
+                m_stats.handshakeFailures++;
+                AbandonClientHandshake(
+                    ConnectRejectReason::HandshakeAuthFailed,
+                    std::format("Cannot record server key: {}", TrustStoreErrorText(recorded.error())));
+                return;
+            }
+            SPARK_LOG_INFO(Spark::LogCategory::Network, "Trusting server %s on first use", endpoint.c_str());
+        }
+
+        m_secureChannels[SERVER_PEER] = PeerChannel{std::move(*channel), 0, m_serverTime};
+        // The Connect has been answered: stop retransmitting it.
+        PeerState& serverPeer = GetPeerState(SERVER_PEER);
+        for (auto it = serverPeer.unacknowledgedMessages.begin(); it != serverPeer.unacknowledgedMessages.end();)
+        {
+            if (it->second.type == MessageType::Connect)
+            {
+                serverPeer.reliableOriginalSendTime.erase(it->first);
+                serverPeer.retransmitCounts.erase(it->first);
+                it = serverPeer.unacknowledgedMessages.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+
+        {
+            std::lock_guard<std::mutex> stateLock(m_stateMutex);
+            m_localClientID = assignedID;
+            m_connectionState = ConnectionState::Connected;
+
+            // Mark as connected for auto-reconnect tracking
+            m_wasConnected = true;
+            m_reconnectAttempts = 0;
+        }
+
+        // First sealed message: proves this client holds the channel and carries the name.
+        NetworkMessage finished;
+        finished.type = MessageType::ClientFinished;
+        finished.channel = ChannelType::Reliable;
+        finished.senderID = assignedID;
+        NetBuffer nameBuf;
+        nameBuf.WriteString(m_lastPlayerName);
+        finished.payload = nameBuf.GetData();
+        SendMessage(finished);
     }
 
     void NetworkManager::HandleDisconnect(const NetworkMessage& msg)
     {
-        ClientID clientID = msg.senderID;
-        SPARK_LOG_INFO(Spark::LogCategory::Network, "Client %u disconnecting", clientID);
+        // A client only hears Disconnect from its own server endpoint (ProcessIncoming
+        // drops every other source): the server kicked it or shut down, so the session
+        // is over. The server-side cleanup below must never run here -- it would erase
+        // the client's SERVER_PEER reliability state and INVALID_CLIENT-owned entities
+        // while leaving the session Connected with its socket open.
+        if (GetRole() == NetworkRole::Client)
+        {
+            std::string reason = "Disconnected by server";
+            if (!msg.payload.empty())
+            {
+                NetBuffer buf;
+                buf.WriteBytes(msg.payload.data(), msg.payload.size());
+                const std::string supplied = buf.ReadString();
+                if (!buf.HasError() && !supplied.empty())
+                {
+                    reason += ": " + supplied;
+                }
+            }
+            TerminateClientSession(reason, /*keepReconnectArmed=*/false);
+            return;
+        }
 
-        // Unregister from delta snapshot tracking before removing the client
+        const ClientID clientID = msg.senderID;
+        SPARK_LOG_INFO(Spark::LogCategory::Network, "Client %u disconnecting", clientID);
+        RemoveClientState(clientID);
+    }
+
+    void NetworkManager::RemoveClientState(ClientID clientID)
+    {
+        // Every per-connection record is dropped here, so a timed-out, kicked or
+        // departed client leaves nothing behind in the process-global singletons
+        // and a future connection reusing the ID starts fresh.
         DeltaSnapshotManager::GetInstance().UnregisterConnection(clientID);
 
         // Drop interest-management scope so a future connection reusing this
@@ -1029,8 +1655,16 @@ namespace Spark::Net
         }
 
         // Drop the peer's reliability state (sequence streams, unacked maps,
-        // dedup window) so a reused ClientID starts fresh.
+        // dedup window) and its channel keys so a reused ClientID starts fresh.
         m_peers.erase(clientID);
+        m_secureChannels.erase(clientID);
+        m_pendingAccepts.erase(clientID);
+        // Each admitted client is queued for its initial sync at most once.
+        const auto pendingSync = std::find(m_pendingFullSyncs.begin(), m_pendingFullSyncs.end(), clientID);
+        if (pendingSync != m_pendingFullSyncs.end())
+        {
+            m_pendingFullSyncs.erase(pendingSync);
+        }
 
         // Remove entities owned by this client
         SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Cleaning up entities owned by client %u", clientID);
@@ -1053,6 +1687,27 @@ namespace Spark::Net
         {
             SPARK_LOG_INFO(Spark::LogCategory::Network, "Removed %zu entities owned by disconnected client %u",
                            ownedEntities.size(), clientID);
+        }
+    }
+
+    void NetworkManager::ReleaseAllClientConnectionState()
+    {
+        std::vector<ClientID> clientIDs;
+        {
+            std::lock_guard<std::mutex> lock(m_clientsMutex);
+            clientIDs.reserve(m_clients.size());
+            for (const auto& [id, info] : m_clients)
+            {
+                clientIDs.push_back(id);
+            }
+        }
+        m_pendingFullSyncs.clear();
+        auto& deltaManager = DeltaSnapshotManager::GetInstance();
+        auto& scopeFilter = ConnectionScopeFilter::GetInstance();
+        for (const ClientID id : clientIDs)
+        {
+            deltaManager.UnregisterConnection(id);
+            scopeFilter.RemoveConnection(static_cast<uint32_t>(id));
         }
     }
 
@@ -1080,43 +1735,26 @@ namespace Spark::Net
             {
                 SPARK_LOG_WARN(Spark::LogCategory::Network, "Client %u timed out (no heartbeat for %.1fs)", id,
                                m_connectionTimeout);
-
-                // Clean up owned entities
-                std::vector<uint32_t> ownedEntities;
-                {
-                    std::lock_guard<std::mutex> replicationLock(m_replicationMutex);
-                    for (const auto& [netID, entity] : m_replicatedEntities)
-                    {
-                        if (entity.ownerID == id)
-                            ownedEntities.push_back(netID);
-                    }
-                }
-                for (uint32_t netID : ownedEntities)
-                    UnregisterReplicatedEntity(netID);
-
-                {
-                    std::lock_guard<std::mutex> lock(m_clientsMutex);
-                    m_clients.erase(id);
-#ifdef ENABLE_NETWORKING
-                    m_clientAddresses.erase(id);
-#endif
-                }
-
-                // Drop the timed-out peer's reliability state.
-                m_peers.erase(id);
-
-                // Drop interest-management scope for timed-out clients.
-                ConnectionScopeFilter::GetInstance().RemoveConnection(static_cast<uint32_t>(id));
+                RemoveClientState(id);
             }
         }
+#ifdef ENABLE_NETWORKING
         else if (m_role == NetworkRole::Client)
         {
-            // Client-side: detect server timeout (no heartbeat received)
-            // The client tracks server liveness via m_serverTime advancing and
-            // heartbeat responses. If no messages arrive for connectionTimeout,
-            // the connection is considered lost.
-            // (Server heartbeat responses update m_serverTime via Update())
+            // The server heartbeats every m_heartbeatInterval, so a client that has
+            // heard nothing from its server endpoint for m_connectionTimeout (while
+            // handshaking or connected) has lost the session. Ending it here closes
+            // the socket and lets auto-reconnect run instead of idling forever.
+            const ConnectionState state = GetConnectionState();
+            if ((state == ConnectionState::Connecting || state == ConnectionState::Connected) &&
+                m_serverTime - m_lastServerPacketTime > m_connectionTimeout)
+            {
+                TerminateClientSession(
+                    std::format("Server timed out (no traffic for {:.1f}s)", m_serverTime - m_lastServerPacketTime),
+                    /*keepReconnectArmed=*/true);
+            }
         }
+#endif // ENABLE_NETWORKING
 
         return timedOut;
     }
@@ -1160,10 +1798,6 @@ namespace Spark::Net
                 continue;
             }
 
-            NetworkMessage msg;
-            if (!DeserializeMessage(rawData.data(), rawData.size(), msg))
-                continue;
-
             ClientID trustedSender = INVALID_CLIENT;
             if (role == NetworkRole::Server)
             {
@@ -1175,6 +1809,85 @@ namespace Spark::Net
                         break;
                     }
                 }
+            }
+
+            // NET-100 framing. Only a Sealed frame that SecureChannel::Open authenticates for this
+            // exact peer, or a plaintext Handshake frame of the one type this role and state
+            // expect, ever reaches deserialization. Everything else is dropped and counted.
+            NetworkMessage msg;
+            std::vector<uint8_t> opened;
+            const auto clearOpened = Spark::MakeScopeExit([&opened] { Spark::SecureClear(opened); });
+            const uint8_t frameKind = rawData[0];
+            if (frameKind == NETWORK_FRAME_SEALED)
+            {
+                const ClientID peerKey = role == NetworkRole::Server ? trustedSender : SERVER_PEER;
+                const auto channelIt = peerKey == INVALID_CLIENT && role == NetworkRole::Server
+                                           ? m_secureChannels.end()
+                                           : m_secureChannels.find(peerKey);
+                if (channelIt == m_secureChannels.end() || !channelIt->second.channel)
+                {
+                    m_stats.plaintextFramesDropped++;
+                    continue;
+                }
+                const uint8_t aad[1] = {NETWORK_FRAME_SEALED};
+                const OpenResult opening =
+                    channelIt->second.channel->Open(std::span(rawData).subspan(1), opened, std::span(aad));
+                if (opening != OpenResult::Ok)
+                {
+                    m_stats.securityDrops[static_cast<size_t>(opening)]++;
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Dropping sealed datagram (open result %u)",
+                                    static_cast<unsigned>(opening));
+                    continue;
+                }
+                if (!DeserializeMessage(opened.data(), opened.size(), msg) || IsHandshakeMessage(msg.type))
+                {
+                    m_stats.plaintextFramesDropped++;
+                    continue;
+                }
+                ++m_stats.sealedFramesReceived;
+            }
+            else if (frameKind == NETWORK_FRAME_HANDSHAKE)
+            {
+                if (!DeserializeMessage(rawData.data() + 1, rawData.size() - 1, msg))
+                {
+                    continue;
+                }
+                const bool expected =
+                    (role == NetworkRole::Server && msg.type == MessageType::Connect) ||
+                    (role == NetworkRole::Client && GetConnectionState() == ConnectionState::Connecting &&
+                     (msg.type == MessageType::ConnectAccepted || msg.type == MessageType::ConnectRejected));
+                if (!expected)
+                {
+                    m_stats.plaintextFramesDropped++;
+                    SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Dropping plaintext %u outside the handshake",
+                                    static_cast<unsigned>(msg.type));
+                    continue;
+                }
+            }
+            else
+            {
+                // A pre-v2 peer sends an unframed "SPRK" message. Its Connect gets one unframed,
+                // typed ConnectRejected it can parse; nothing else from it is read.
+                m_stats.plaintextFramesDropped++;
+                constexpr uint8_t kLegacyMagic[4] = {0x4B, 0x52, 0x50, 0x53}; // "SPRK" little-endian
+                const bool legacyShaped = rawData.size() >= sizeof(kLegacyMagic) &&
+                                          std::equal(std::begin(kLegacyMagic), std::end(kLegacyMagic), rawData.begin());
+                if (role == NetworkRole::Server && trustedSender == INVALID_CLIENT && legacyShaped &&
+                    DeserializeMessage(rawData.data(), rawData.size(), msg) && msg.type == MessageType::Connect)
+                {
+                    if (m_connectLimiter.Allow(ntohl(senderAddr.sin_addr.s_addr), m_serverTime))
+                    {
+                        SendLegacyRejection(senderAddr, msg);
+                    }
+                    else
+                    {
+                        m_stats.connectsRateLimited++;
+                    }
+                }
+                continue;
+            }
+            if (role == NetworkRole::Server)
+            {
                 msg.senderID = trustedSender;
             }
 
@@ -1207,6 +1920,13 @@ namespace Spark::Net
             }
             SPARK_BRANCH_GUARD_END("network_packet_gateway")
 
+            // Client liveness: any validated datagram from the server endpoint
+            // (heartbeats included) proves the session is still alive.
+            if (role == NetworkRole::Client)
+            {
+                m_lastServerPacketTime = m_serverTime;
+            }
+
             // On the server, map sender address to a client ID
             if (role == NetworkRole::Server)
             {
@@ -1215,11 +1935,28 @@ namespace Spark::Net
                 {
                     msg.senderID = INVALID_CLIENT;
 
+                    // Every unadmitted Connect costs work and a reply to an address that may be
+                    // spoofed; a source over its budget is dropped with no answer at all.
+                    if (!m_connectLimiter.Allow(ntohl(senderAddr.sin_addr.s_addr), m_serverTime))
+                    {
+                        m_stats.connectsRateLimited++;
+                        continue;
+                    }
+
                     // Duplicate-address detection: if this address already has
                     // an active connection, ignore the redundant Connect to
-                    // prevent slot exhaustion from repeated packets.
+                    // prevent slot exhaustion from repeated packets. A Securing
+                    // client retransmitting the same ClientHello lost our
+                    // ConnectAccepted: answer it once more (one reply per request).
                     if (trustedSender != INVALID_CLIENT)
                     {
+                        const auto pending = m_pendingAccepts.find(trustedSender);
+                        if (pending != m_pendingAccepts.end() && pending->second.clientHello == msg.payload)
+                        {
+                            const NetworkMessage accept = pending->second.accept;
+                            SendToClient(trustedSender, accept);
+                            continue;
+                        }
                         SPARK_LOG_DEBUG(Spark::LogCategory::Network,
                                         "Ignoring duplicate Connect from already-connected address");
                         continue;
@@ -1236,12 +1973,9 @@ namespace Spark::Net
                     }
                     m_clientAddresses[pendingID] = senderAddr;
 
-                    const ClientID admittedID = HandleConnect(msg);
-                    if (admittedID != INVALID_CLIENT)
-                    {
-                        msg.senderID = admittedID;
-                        newlyConnected.push_back(std::move(msg));
-                    }
+                    // HandleConnect answers with ConnectAccepted and leaves the client Securing;
+                    // it is surfaced as newly connected only when its ClientFinished opens.
+                    [[maybe_unused]] const ClientID securingID = HandleConnect(msg);
                     continue;
                 }
 
@@ -1249,6 +1983,39 @@ namespace Spark::Net
                 {
                     SPARK_LOG_DEBUG(Spark::LogCategory::Network, "Dropping packet from unknown client endpoint");
                     continue;
+                }
+
+                ConnectionState senderState = ConnectionState::Disconnected;
+                {
+                    std::lock_guard<std::mutex> lock(m_clientsMutex);
+                    const auto it = m_clients.find(trustedSender);
+                    if (it != m_clients.end())
+                    {
+                        senderState = it->second.state;
+                    }
+                }
+                if (senderState == ConnectionState::Securing)
+                {
+                    if (msg.type == MessageType::ClientFinished)
+                    {
+                        if (!PromoteSecuringClient(trustedSender, msg))
+                        {
+                            continue;
+                        }
+                        // The admission event observers see (senderID = the new client).
+                        NetworkMessage admitted;
+                        admitted.type = MessageType::Connect;
+                        admitted.channel = ChannelType::Reliable;
+                        admitted.senderID = trustedSender;
+                        admitted.timestamp = m_serverTime;
+                        newlyConnected.push_back(std::move(admitted));
+                        // Fall through: the reliable layer still acknowledges ClientFinished.
+                    }
+                    else if (msg.type != MessageType::Ack)
+                    {
+                        // Nothing but ClientFinished (and ACKs of our ConnectAccepted) before admission.
+                        continue;
+                    }
                 }
             }
 
@@ -1263,6 +2030,7 @@ namespace Spark::Net
             else
             {
                 m_incomingQueue.push(msg);
+                m_incomingQueuePeak = std::max(m_incomingQueuePeak, m_incomingQueue.size());
             }
         }
 
@@ -1335,14 +2103,22 @@ namespace Spark::Net
                         m_stats.packetsDropped++;
                         continue;
                     }
-                    SendRawTo(packet.data, m_serverAddress, packet.localOnly);
+                    SendFrameTo(SERVER_PEER, packet.data, m_serverAddress, packet.localOnly);
                 }
                 else if (m_role == NetworkRole::Server)
                 {
-                    for (const auto& [id, addr] : m_clientAddresses)
+                    // Delayed packets are per destination (SendImpaired): a
+                    // unicast must never fan out, and a client that left while
+                    // its packet was held simply loses it.
+                    const auto addrIt = m_clientAddresses.find(static_cast<ClientID>(packet.destinationKey));
+                    if (addrIt == m_clientAddresses.end())
                     {
-                        SendRawTo(packet.data, addr, packet.localOnly);
+                        m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+                        m_stats.packetsDropped++;
+                        continue;
                     }
+                    SendFrameTo(static_cast<ClientID>(packet.destinationKey), packet.data, addrIt->second,
+                                packet.localOnly);
                 }
             }
         }
@@ -1379,51 +2155,42 @@ namespace Spark::Net
                 continue;
             }
 
-            // Disconnect is a terminal control packet: Disconnect() immediately
-            // closes the socket and purges this lifecycle after this flush, so
-            // delaying or dropping it here would guarantee that it is never
-            // transmitted. Other traffic continues to use the configured
-            // impairment simulation.
-            if (instability.GetSettings().enabled && msg.type != MessageType::Disconnect)
-            {
-                // Simulated packet loss
-                if (instability.ShouldDropPacket())
-                {
-                    m_stats.packetsDropped++;
-                    // Track reliable messages even if "dropped" (for retransmission)
-                    trackReliable(msg);
-                    toSend.pop();
-                    continue;
-                }
-
-                // Simulated latency + jitter: queue for delayed delivery
-                float delayMs = instability.GetDelayMs();
-                if (delayMs > 0.0f)
-                {
-                    instability.QueuePacket(std::move(serialized), currentTimeMs + delayMs, msg.localOnly, msg.sequence,
-                                            msg.ownerLifecycleEpoch);
-
-                    // Track reliable messages for retransmission
-                    trackReliable(msg);
-                    toSend.pop();
-                    continue;
-                }
-            }
-
-            // No instability or zero delay — send immediately
             if (m_role == NetworkRole::Client)
             {
-                SendRawTo(serialized, m_serverAddress, msg.localOnly);
+                SendImpaired(serialized, SERVER_PEER, m_serverAddress, msg);
             }
             else if (m_role == NetworkRole::Server)
             {
+                // Impairment decisions are per destination, so each client
+                // gets its own copy to drop, delay or duplicate independently.
+                // Each destination is sealed under its own channel; clients still
+                // Securing receive no broadcast traffic.
+                const bool impaired = instability.GetSettings().enabled;
+                const std::vector<ClientID> admitted = GetConnectedClientIDs();
                 for (const auto& [id, addr] : m_clientAddresses)
                 {
-                    SendRawTo(serialized, addr, msg.localOnly);
+                    if (std::find(admitted.begin(), admitted.end(), id) == admitted.end())
+                    {
+                        continue;
+                    }
+                    if (!impaired)
+                    {
+                        SendFrameTo(id, serialized, addr, msg.localOnly);
+                        continue;
+                    }
+                    std::vector<uint8_t> perClient = serialized;
+                    const auto clearPerClient = Spark::MakeScopeExit(
+                        [sensitive = msg.sensitive, &perClient]
+                        {
+                            if (sensitive)
+                                Spark::SecureClear(perClient);
+                        });
+                    SendImpaired(perClient, id, addr, msg);
                 }
             }
 
-            // Track reliable messages for retransmission
+            // Track reliable messages for retransmission, including ones the
+            // simulator dropped or is still holding.
             trackReliable(msg);
 
             toSend.pop();
@@ -1436,6 +2203,53 @@ namespace Spark::Net
         }
 #endif // ENABLE_NETWORKING
     }
+
+#ifdef ENABLE_NETWORKING
+    void NetworkManager::SendImpaired(std::vector<uint8_t>& serialized, ClientID destination, const sockaddr_in& addr,
+                                      const NetworkMessage& msg)
+    {
+        auto& instability = InstabilitySimulator::GetInstance();
+        const InstabilitySettings settings = instability.GetSettings();
+
+        // Disconnect is a terminal control packet: Disconnect() immediately
+        // closes the socket and purges this lifecycle after this flush, so
+        // delaying or dropping it would guarantee it is never transmitted.
+        if (!settings.enabled || msg.type == MessageType::Disconnect)
+        {
+            SendFrameTo(destination, serialized, addr, msg.localOnly);
+            return;
+        }
+
+        if (instability.ShouldDropPacket())
+        {
+            m_stats.packetsDropped++;
+            return;
+        }
+
+        const float nowMs = m_serverTime * 1000.0f;
+        float delayMs = instability.GetDelayMs();
+        // A reordered packet is held past the normal delay so packets sent
+        // after it overtake it on the wire.
+        if (instability.ShouldReorder())
+            delayMs += settings.reorderHoldMs;
+
+        // The duplicate trails the original by 1 ms and carries the same
+        // reliable sequence, so the receiver's dedup must deliver it once.
+        if (instability.ShouldDuplicate())
+        {
+            instability.QueuePacket(std::vector<uint8_t>(serialized), nowMs + delayMs + 1.0f, msg.localOnly,
+                                    msg.sequence, msg.ownerLifecycleEpoch, destination);
+        }
+
+        if (delayMs > 0.0f)
+        {
+            instability.QueuePacket(std::move(serialized), nowMs + delayMs, msg.localOnly, msg.sequence,
+                                    msg.ownerLifecycleEpoch, destination);
+            return;
+        }
+        SendFrameTo(destination, serialized, addr, msg.localOnly);
+    }
+#endif // ENABLE_NETWORKING
 
     void NetworkManager::HandleRetransmissions()
     {
@@ -1536,7 +2350,8 @@ namespace Spark::Net
                         if (sensitive)
                             Spark::SecureClear(serialized);
                     });
-                SendRawTo(serialized, *destination, retransmitMsg.localOnly);
+                SendFrameTo(role == NetworkRole::Client ? SERVER_PEER : peerKey, serialized, *destination,
+                            retransmitMsg.localOnly);
             }
         }
 #endif // ENABLE_NETWORKING
@@ -1549,6 +2364,11 @@ namespace Spark::Net
     void NetworkManager::UpdateHeartbeat(float deltaTime)
     {
         m_heartbeatTimer += deltaTime;
+        // A client only heartbeats inside its channel; while Connecting it has none.
+        if (GetRole() == NetworkRole::Client && GetConnectionState() != ConnectionState::Connected)
+        {
+            return;
+        }
         if (m_heartbeatTimer >= m_heartbeatInterval)
         {
             m_heartbeatTimer = 0.0f;

@@ -40,7 +40,8 @@ SOURCE_SUFFIXES, HEADER_SUFFIXES, IMPLEMENTATION_SUFFIXES = source_suffix_contra
 # first-party roots are assigned to the closest existing reporting category so
 # category line totals still add up exactly to total_lines.
 CATEGORIES = {
-    "engine": ("SparkEngine/Source", "SparkSDK"),
+    # SparkUI is the shared UI library (tokens, kit) linked by the engine and its tools.
+    "engine": ("SparkEngine/Source", "SparkSDK", "SparkUI"),
     "editor": ("SparkEditor",),
     "game": ("GameModules", "Templates"),
     "services": ("SparkServer", "SparkGateway", "SparkDaemon"),
@@ -50,7 +51,7 @@ CATEGORIES = {
         "SparkWorker",
         "SparkAutomation",
     ),
-    "tests": ("Tests",),
+    "tests": ("Tests", "FuzzerTests"),
     "tools": (
         "SparkConsole",
         "SparkShaderCompiler",

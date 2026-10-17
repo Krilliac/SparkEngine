@@ -1,10 +1,8 @@
 #include "Rocket.h"
+#include "Core/FPSLog.h"
 #include "Core/Platform.h"
 // Rocket.cpp
-#include "Utils/Assert.h"
-#include "Utils/Validate.h"
-#include "Utils/MathUtils.h"
-#include "Utils/LogMacros.h"
+#include "Core/FPSAssert.h"
 #include "Physics/PhysicsSystem.h"
 
 using DirectX::XMFLOAT3;
@@ -13,7 +11,7 @@ using DirectX::XMMATRIX;
 
 Rocket::Rocket() : m_explosionRadius(5.0f), m_hasExploded(false), m_trailTimer(0.0f)
 {
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, m_explosionRadius > 0.0f, "Rocket explosion radius must be positive");
+    FPS_REQUIRE_MSG(m_explosionRadius > 0.0f, "Rocket explosion radius must be positive");
 
     m_damage = 75.0f;
     m_speed = 30.0f;
@@ -23,26 +21,23 @@ Rocket::Rocket() : m_explosionRadius(5.0f), m_hasExploded(false), m_trailTimer(0
     SetGravity(true, 0.3f);
 
     XMFLOAT3 scale{0.2f, 0.2f, 0.8f};
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, scale.x > 0 && scale.y > 0 && scale.z > 0,
-                      "Rocket scale must be positive");
+    FPS_REQUIRE_MSG(scale.x > 0 && scale.y > 0 && scale.z > 0, "Rocket scale must be positive");
     SetScale(scale);
 }
 
 HRESULT Rocket::Initialize(ID3D11Device* device, ID3D11DeviceContext* context)
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
-    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, device);
-    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, context);
+    FPS_REQUIRE_NOT_NULL(device);
+    FPS_REQUIRE_NOT_NULL(context);
 
     HRESULT hr = Projectile::Initialize(device, context);
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, SUCCEEDED(hr), "Projectile::Initialize failed in Rocket");
+    FPS_REQUIRE_MSG(SUCCEEDED(hr), "Projectile::Initialize failed in Rocket");
     return hr;
 }
 
 void Rocket::Update(float deltaTime)
 {
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, deltaTime >= 0.0f && std::isfinite(deltaTime),
-                      "Invalid deltaTime in Rocket::Update");
+    FPS_REQUIRE_MSG(deltaTime >= 0.0f && std::isfinite(deltaTime), "Invalid deltaTime in Rocket::Update");
     Projectile::Update(deltaTime);
 
     // Trail effect: record positions at intervals for visual trail rendering
@@ -64,14 +59,17 @@ void Rocket::Render(const XMMATRIX& view, const XMMATRIX& projection)
 {
     if (!m_active)
         return;
-    SPARK_VALIDATE_NOT_NULL(Spark::LogCategory::Game, m_mesh);
+    if (m_mesh == nullptr)
+    {
+        FPS_LOG_ERROR("{}: 'm_mesh' must not be null", __func__);
+        return;
+    }
     Projectile::Render(view, projection);
 }
 
 void Rocket::Fire(const XMFLOAT3& startPosition, const XMFLOAT3& direction, float speed)
 {
-    SPARK_TRACE_ENTER(Spark::LogCategory::Game);
-    SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Rocket launched: speed=%.1f, radius=%.1f", speed, m_explosionRadius);
+    FPS_LOG_DEBUG("Rocket launched: speed={:.1f}, radius={:.1f}", speed, m_explosionRadius);
     m_hasExploded = false;
     m_trailPositions.clear();
     m_trailTimer = 0.0f;
@@ -80,25 +78,23 @@ void Rocket::Fire(const XMFLOAT3& startPosition, const XMFLOAT3& direction, floa
 
 void Rocket::OnHit(GameObject* target)
 {
-    SPARK_REQUIRE_NOT_NULL(Spark::LogCategory::Game, target);
+    FPS_REQUIRE_NOT_NULL(target);
     if (!m_hasExploded)
         Explode(GetPosition());
 }
 
 void Rocket::OnHitWorld(const XMFLOAT3& hitPoint, const XMFLOAT3& normal)
 {
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Game,
-                      std::isfinite(hitPoint.x) && std::isfinite(hitPoint.y) && std::isfinite(hitPoint.z),
-                      "Invalid hitPoint in Rocket::OnHitWorld");
+    FPS_REQUIRE_MSG(std::isfinite(hitPoint.x) && std::isfinite(hitPoint.y) && std::isfinite(hitPoint.z),
+                    "Invalid hitPoint in Rocket::OnHitWorld");
     if (!m_hasExploded)
         Explode(hitPoint);
 }
 
 void Rocket::Explode(const XMFLOAT3& position)
 {
-    SPARK_REQUIRE_MSG(Spark::LogCategory::Game, !m_hasExploded, "Rocket exploded multiple times");
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Rocket exploded at (%.1f, %.1f, %.1f)", position.x, position.y,
-                   position.z);
+    FPS_REQUIRE_MSG(!m_hasExploded, "Rocket exploded multiple times");
+    FPS_LOG_INFO("Rocket exploded at ({:.1f}, {:.1f}, {:.1f})", position.x, position.y, position.z);
     m_hasExploded = true;
 
     // Apply area damage to all physics bodies within explosion radius

@@ -5,14 +5,27 @@
 
 #include "EventMonitorPanel.h"
 #include "../Core/EditorIcons.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #include "Utils/LogMacros.h"
 #include <imgui.h>
-#include <iostream>
 #include <cstring>
 #include <cstdio>
 
 namespace SparkEditor
 {
+
+    namespace
+    {
+        /// Category name tinted with its categorical colour; the word carries the meaning, the
+        /// colour only helps scanning. Categories start at 1 (0 is "All").
+        void CategoryLabel(int category, const char* text)
+        {
+            ImGui::PushStyleColor(ImGuiCol_Text, Spark::Ui::CategoryColor(category - 1));
+            ImGui::TextUnformatted(text);
+            ImGui::PopStyleColor();
+        }
+    } // namespace
 
     EventMonitorPanel::EventMonitorPanel() : EditorPanel("Event Monitor", "event_monitor_panel") {}
 
@@ -25,13 +38,17 @@ namespace SparkEditor
     void EventMonitorPanel::Update(float deltaTime)
     {
         if (!m_paused)
+        {
             m_elapsed += deltaTime;
+        }
     }
 
     void EventMonitorPanel::Render()
     {
         if (!IsVisible())
+        {
             return;
+        }
 
         if (BeginPanel())
         {
@@ -51,11 +68,19 @@ namespace SparkEditor
 
     void EventMonitorPanel::RenderToolbar()
     {
-        if (ImGui::Button(m_paused ? ICON_FA_PLAY " Resume" : ICON_FA_PAUSE " Pause"))
+        if (!Spark::Ui::BeginPanelToolbar("EventMonitorToolbar"))
+        {
+            return;
+        }
+
+        if (Spark::Ui::IconButton("pause", m_paused ? ICON_FA_PLAY : ICON_FA_PAUSE,
+                                  m_paused ? "Resume capture" : "Pause capture", m_paused))
+        {
             m_paused = !m_paused;
+        }
 
         ImGui::SameLine();
-        if (ImGui::Button(ICON_FA_TRASH " Clear"))
+        if (Spark::Ui::IconButton("clear", ICON_FA_TRASH, "Clear the event log"))
         {
             SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "EventMonitorPanel: cleared %d events",
                             static_cast<int>(m_events.size()));
@@ -63,50 +88,50 @@ namespace SparkEditor
             memset(m_categoryCounts, 0, sizeof(m_categoryCounts));
         }
 
-        ImGui::SameLine();
+        Spark::Ui::ToolbarSeparator();
         ImGui::Checkbox("Auto-scroll", &m_autoScroll);
-
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(200);
-        ImGui::InputText(ICON_FA_FILTER " Filter", m_filterText, sizeof(m_filterText));
 
         // Category filter
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(120);
+        ImGui::SetNextItemWidth(Spark::Ui::Px(120));
         const char* categories[] = {"All", "Entity", "Physics", "Gameplay", "Audio", "UI"};
         ImGui::Combo("##Category", &m_categoryFilter, categories, IM_ARRAYSIZE(categories));
 
         // Max entries slider
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(100);
+        ImGui::SetNextItemWidth(Spark::Ui::Px(100));
         ImGui::DragInt("Max", &m_maxEntries, 10.0f, 100, 5000);
+
+        // Event-type search fills the rest of the row.
+        ImGui::SameLine();
+        Spark::Ui::SearchField("EventFilter", m_filterText, sizeof(m_filterText), "Filter event types");
+
+        Spark::Ui::EndPanelToolbar();
     }
 
     void EventMonitorPanel::RenderStats()
     {
-        ImGui::Text("Events: %d / %d", static_cast<int>(m_events.size()), m_maxEntries);
-        ImGui::SameLine();
+        Spark::Ui::KeyValue("Events", "%d / %d", static_cast<int>(m_events.size()), m_maxEntries);
 
         // Per-category counts
         for (int c = 1; c < 6; ++c)
         {
-            ImGui::SameLine();
-            ImVec4 color = GetCategoryColor(static_cast<EventCategory>(c));
-            ImGui::TextColored(color, "%s: %d", GetCategoryName(static_cast<EventCategory>(c)), m_categoryCounts[c]);
+            ImGui::SameLine(0.0f, Spark::Ui::Em(1.0f));
+            char label[48];
+            std::snprintf(label, sizeof(label), "%s: %d", GetCategoryName(static_cast<EventCategory>(c)),
+                          m_categoryCounts[c]);
+            CategoryLabel(c, label);
         }
     }
 
     void EventMonitorPanel::RenderEventLog()
     {
-        ImGui::BeginChild("EventLog", ImVec2(0, 0), true);
-
-        if (ImGui::BeginTable("EventTable", 4,
-                              ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable |
-                                  ImGuiTableFlags_Sortable))
+        if (Spark::Ui::BeginDataTable("EventTable", 4))
         {
-            ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 80);
-            ImGui::TableSetupColumn("Category", ImGuiTableColumnFlags_WidthFixed, 80);
-            ImGui::TableSetupColumn("Event Type", ImGuiTableColumnFlags_WidthFixed, 200);
+            ImGui::TableSetupScrollFreeze(0, 1);
+            ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(80));
+            ImGui::TableSetupColumn("Category", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(80));
+            ImGui::TableSetupColumn("Event Type", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(200));
             ImGui::TableSetupColumn("Details");
             ImGui::TableHeadersRow();
 
@@ -116,11 +141,15 @@ namespace SparkEditor
             {
                 // Text filter
                 if (hasFilter && strstr(evt.eventType, m_filterText) == nullptr)
+                {
                     continue;
+                }
 
                 // Category filter
                 if (m_categoryFilter > 0 && static_cast<int>(evt.category) != m_categoryFilter)
+                {
                     continue;
+                }
 
                 ImGui::TableNextRow();
 
@@ -130,12 +159,11 @@ namespace SparkEditor
                 int mins = totalSeconds / 60;
                 int secs = totalSeconds % 60;
                 int ms = static_cast<int>((evt.timestamp - totalSeconds) * 1000) % 1000;
-                ImGui::Text("%02d:%02d.%03d", mins, secs, ms);
+                Spark::Ui::TableNumber("%02d:%02d.%03d", mins, secs, ms);
 
-                // Category column — color-coded
+                // Category column — tinted with its categorical colour
                 ImGui::TableNextColumn();
-                ImVec4 color = GetCategoryColor(evt.category);
-                ImGui::TextColored(color, "%s", GetCategoryName(evt.category));
+                CategoryLabel(static_cast<int>(evt.category), GetCategoryName(evt.category));
 
                 // Event type
                 ImGui::TableNextColumn();
@@ -146,35 +174,19 @@ namespace SparkEditor
                 ImGui::TextUnformatted(evt.details);
             }
 
+            // The table scrolls itself (ScrollY), so auto-scroll targets its inner window.
+            if (m_autoScroll)
+            {
+                ImGui::SetScrollHereY(1.0f);
+            }
+
             ImGui::EndTable();
         }
 
-        if (m_autoScroll)
-            ImGui::SetScrollHereY(1.0f);
-
-        ImGui::EndChild();
-
         // Enforce circular buffer cap
         while (static_cast<int>(m_events.size()) > m_maxEntries)
-            m_events.erase(m_events.begin());
-    }
-
-    ImVec4 EventMonitorPanel::GetCategoryColor(EventCategory category)
-    {
-        switch (category)
         {
-        case EventCategory::Entity:
-            return ImVec4(0.4f, 0.8f, 0.4f, 1.0f);
-        case EventCategory::Physics:
-            return ImVec4(0.3f, 0.6f, 1.0f, 1.0f);
-        case EventCategory::Gameplay:
-            return ImVec4(1.0f, 0.8f, 0.2f, 1.0f);
-        case EventCategory::Audio:
-            return ImVec4(0.8f, 0.4f, 0.8f, 1.0f);
-        case EventCategory::UI:
-            return ImVec4(0.6f, 0.6f, 0.6f, 1.0f);
-        default:
-            return ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+            m_events.erase(m_events.begin());
         }
     }
 

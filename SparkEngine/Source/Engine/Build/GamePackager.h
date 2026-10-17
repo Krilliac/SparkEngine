@@ -33,10 +33,12 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <unordered_set>
 #include <vector>
 
+#include "Utils/FileUtils.h"
 #include "Utils/LogMacros.h"
 
 namespace Spark::Build
@@ -77,8 +79,8 @@ namespace Spark::Build
     /** @brief A single file entry in the package manifest */
     struct ManifestEntry
     {
-        std::string sourcePath;    ///< Absolute source path
-        std::string relativePath;  ///< Path within the package
+        std::string sourcePath;    ///< Source path (UTF-8; reopened through FileUtils::PathFromUtf8)
+        std::string relativePath;  ///< Path within the package (UTF-8)
         uint64_t sizeBytes = 0;    ///< File size
         bool isExecutable = false; ///< Whether to set executable bit (Linux/macOS)
     };
@@ -87,12 +89,37 @@ namespace Spark::Build
     struct PackageResult
     {
         bool success = false;              ///< Whether packaging succeeded
-        std::string outputPath;            ///< Path to the output directory or zip
+        std::string outputPath;            ///< Output directory (UTF-8; open via FileUtils::PathFromUtf8)
         uint32_t filesCopied = 0;          ///< Number of files in the package
         uint64_t totalSizeBytes = 0;       ///< Total package size
         double durationSeconds = 0.0;      ///< Time taken for the operation
         std::string errorMessage;          ///< Error description on failure
         std::vector<std::string> warnings; ///< Non-fatal warnings
+    };
+
+    /** @brief Compatibility request for the historical Core packaging surface. */
+    struct LegacyPackageConfig
+    {
+        std::string outputDirectory = "Build/Package";
+        std::string projectName = "SparkGame";
+        PackagePlatform platform = PackagePlatform::WindowsX64;
+        bool debugBuild = false;
+        bool stripDebugSymbols = true;
+        bool compressAssets = true;
+        bool includeEditor = false;
+    };
+
+    /** @brief Compatibility result retaining the historical Core fields. */
+    struct LegacyPackageResult
+    {
+        bool success = false;
+        std::string outputPath; ///< Absolute output directory (UTF-8; open via FileUtils::PathFromUtf8)
+        float totalSizeMB = 0.0f;
+        std::vector<std::string> errors;
+        std::vector<std::string> warnings;
+        uint32_t assetCount = 0;
+        uint32_t dllCount = 0;
+        uint32_t filesCopied = 0; ///< Payload files copied; excludes generated manifest metadata.
     };
 
     /**
@@ -113,7 +140,7 @@ namespace Spark::Build
             return instance;
         }
 
-        /** @brief Initialize the packaging system */
+        /** @brief Initialize the packaging system. [game thread, non-thread-safe] */
         void Initialize()
         {
             m_initialized = true;
@@ -122,13 +149,14 @@ namespace Spark::Build
             SPARK_LOG_INFO(Spark::LogCategory::Core, "GamePackager initialized");
         }
 
-        /** @brief Shut down */
+        /** @brief Shut down. [game thread, non-thread-safe] */
         void Shutdown() { m_initialized = false; }
 
         /**
          * @brief Package a game build into a distributable directory
          * @param config Packaging configuration
          * @return Result of the packaging operation
+         * [game thread, non-thread-safe]
          */
         PackageResult Package(const PackageConfig& config)
         {
@@ -146,6 +174,14 @@ namespace Spark::Build
             if (config.projectName.empty())
             {
                 result.errorMessage = "Project name is empty";
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "GamePackager: %s", result.errorMessage.c_str());
+                m_lastResult = result;
+                return result;
+            }
+            if (config.projectName.find_first_of("/\\") != std::string::npos || config.projectName == "." ||
+                config.projectName == "..")
+            {
+                result.errorMessage = "Project name must be a single safe path component";
                 SPARK_LOG_ERROR(Spark::LogCategory::Core, "GamePackager: %s", result.errorMessage.c_str());
                 m_lastResult = result;
                 return result;
@@ -174,12 +210,13 @@ namespace Spark::Build
             for (const auto& extra : config.extraFiles)
             {
                 std::error_code ec;
-                if (std::filesystem::exists(extra, ec))
+                const std::filesystem::path extraPath = FileUtils::PathFromUtf8(extra);
+                if (std::filesystem::exists(extraPath, ec))
                 {
                     ManifestEntry entry;
                     entry.sourcePath = extra;
-                    entry.relativePath = std::filesystem::path(extra).filename().string();
-                    entry.sizeBytes = std::filesystem::file_size(extra, ec);
+                    entry.relativePath = FileUtils::GetFilename(extra);
+                    entry.sizeBytes = std::filesystem::file_size(extraPath, ec);
                     manifest.push_back(std::move(entry));
                 }
                 else
@@ -195,8 +232,12 @@ namespace Spark::Build
             }
 
             // 7. Create output directory
-            std::filesystem::path outDir = config.outputDirectory;
-            outDir /= config.projectName;
+            // Paths are UTF-8 end to end. The narrow std::filesystem::path(std::string)
+            // and path::string() conversions go through the Windows ANSI code page and
+            // throw std::system_error for a name it cannot spell, which used to abort
+            // packaging on the first such asset.
+            std::filesystem::path outDir = FileUtils::PathFromUtf8(config.outputDirectory);
+            outDir /= FileUtils::PathFromUtf8(config.projectName);
             std::error_code ec;
             std::filesystem::create_directories(outDir, ec);
             if (ec)
@@ -207,17 +248,21 @@ namespace Spark::Build
                 return result;
             }
 
-            // 8. Copy files
+            // 8. Copy files. Every collected file is part of the package, so any
+            // copy failure makes the package incomplete: collect all of them and
+            // fail rather than publishing a partial directory as a success.
+            std::vector<std::string> copyFailures;
             for (const auto& entry : manifest)
             {
-                std::filesystem::path destPath = outDir / entry.relativePath;
+                std::filesystem::path destPath = outDir / FileUtils::PathFromUtf8(entry.relativePath);
                 std::filesystem::create_directories(destPath.parent_path(), ec);
 
-                std::filesystem::copy_file(entry.sourcePath, destPath,
+                std::filesystem::copy_file(FileUtils::PathFromUtf8(entry.sourcePath), destPath,
                                            std::filesystem::copy_options::overwrite_existing, ec);
                 if (ec)
                 {
-                    result.warnings.push_back("Failed to copy: " + entry.sourcePath + " (" + ec.message() + ")");
+                    copyFailures.push_back(entry.sourcePath + " (" + ec.message() + ")");
+                    ec.clear();
                     continue;
                 }
 
@@ -227,7 +272,25 @@ namespace Spark::Build
 
             auto endTime = std::chrono::steady_clock::now();
             result.durationSeconds = std::chrono::duration<double>(endTime - startTime).count();
-            result.outputPath = outDir.string();
+
+            if (!copyFailures.empty())
+            {
+                result.errorMessage = "Failed to copy " + std::to_string(copyFailures.size()) + " file(s): ";
+                for (size_t i = 0; i < copyFailures.size(); ++i)
+                {
+                    if (i > 0)
+                        result.errorMessage += "; ";
+                    result.errorMessage += copyFailures[i];
+                }
+                SPARK_LOG_ERROR(Spark::LogCategory::Core, "GamePackager: %s", result.errorMessage.c_str());
+                // Counts are kept for diagnostics, but an incomplete package has
+                // no publishable output and does not count as a built package.
+                result.success = false;
+                m_lastResult = result;
+                return result;
+            }
+
+            result.outputPath = FileUtils::TryPathToUtf8(outDir).value_or(config.outputDirectory);
             result.success = (result.filesCopied > 0) && result.errorMessage.empty();
 
             SPARK_LOG_INFO(Spark::LogCategory::Core, "GamePackager: Packaging complete (%u files, %llu bytes, %.2fs)",
@@ -238,7 +301,13 @@ namespace Spark::Build
             return result;
         }
 
-        /** @brief Validate a config without actually packaging */
+        /**
+         * @brief Package the legacy build-tree layout through this canonical owner.
+         * [game thread] This compatibility operation is not thread-safe.
+         */
+        LegacyPackageResult PackageLegacy(const LegacyPackageConfig& config);
+
+        /** @brief Validate a config without actually packaging. [game thread, non-thread-safe] */
         std::vector<std::string> ValidateConfig(const PackageConfig& config) const
         {
             std::vector<std::string> errors;
@@ -246,25 +315,30 @@ namespace Spark::Build
 
             if (config.projectName.empty())
                 errors.push_back("Project name is empty");
+            else if (config.projectName.find_first_of("/\\") != std::string::npos || config.projectName == "." ||
+                     config.projectName == "..")
+                errors.push_back("Project name must be a single safe path component");
             if (config.executablePath.empty())
                 errors.push_back("Executable path is empty");
-            else if (!std::filesystem::exists(config.executablePath, ec))
+            else if (!std::filesystem::exists(FileUtils::PathFromUtf8(config.executablePath), ec))
                 errors.push_back("Executable not found: " + config.executablePath);
-            if (!config.moduleDirectory.empty() && !std::filesystem::exists(config.moduleDirectory, ec))
+            if (!config.moduleDirectory.empty() &&
+                !std::filesystem::exists(FileUtils::PathFromUtf8(config.moduleDirectory), ec))
                 errors.push_back("Module directory not found: " + config.moduleDirectory);
-            if (!config.assetDirectory.empty() && !std::filesystem::exists(config.assetDirectory, ec))
+            if (!config.assetDirectory.empty() &&
+                !std::filesystem::exists(FileUtils::PathFromUtf8(config.assetDirectory), ec))
                 errors.push_back("Asset directory not found: " + config.assetDirectory);
 
             return errors;
         }
 
-        /** @brief Get the result of the last packaging operation */
+        /** @brief Get the result of the last packaging operation. [game thread, non-thread-safe] */
         const PackageResult& GetLastResult() const { return m_lastResult; }
 
-        /** @brief Get total number of packages created */
+        /** @brief Get total number of packages created. [game thread, non-thread-safe] */
         uint32_t GetPackageCount() const { return m_packageCount; }
 
-        /** @brief Get the platform-specific DLL extension */
+        /** @brief Get the platform-specific DLL extension. [any thread, pure] */
         static std::string GetModuleExtension(PackagePlatform platform)
         {
             switch (platform)
@@ -280,7 +354,7 @@ namespace Spark::Build
             return ".dll";
         }
 
-        /** @brief Get the platform-specific executable extension */
+        /** @brief Get the platform-specific executable extension. [any thread, pure] */
         static std::string GetExecutableExtension(PackagePlatform platform)
         {
             switch (platform)
@@ -292,7 +366,7 @@ namespace Spark::Build
             }
         }
 
-        /** @brief Get console-friendly status string */
+        /** @brief Get console-friendly status string. [game thread, non-thread-safe] */
         std::string Console_GetStatus() const
         {
             if (!m_initialized)
@@ -315,7 +389,8 @@ namespace Spark::Build
                                PackageResult& result) const
         {
             std::error_code ec;
-            if (!std::filesystem::exists(config.executablePath, ec))
+            const std::filesystem::path executable = FileUtils::PathFromUtf8(config.executablePath);
+            if (!std::filesystem::exists(executable, ec))
             {
                 result.errorMessage = "Executable not found: " + config.executablePath;
                 SPARK_LOG_ERROR(Spark::LogCategory::Core, "GamePackager: %s", result.errorMessage.c_str());
@@ -326,21 +401,21 @@ namespace Spark::Build
                            config.executablePath.c_str());
             ManifestEntry entry;
             entry.sourcePath = config.executablePath;
-            entry.relativePath = std::filesystem::path(config.executablePath).filename().string();
-            entry.sizeBytes = std::filesystem::file_size(config.executablePath, ec);
+            entry.relativePath = FileUtils::GetFilename(config.executablePath);
+            entry.sizeBytes = std::filesystem::file_size(executable, ec);
             entry.isExecutable = true;
             manifest.push_back(std::move(entry));
 
             // Collect debug symbols if requested
             if (config.includeDebugSymbols)
             {
-                auto pdbPath = std::filesystem::path(config.executablePath).replace_extension(".pdb");
-                if (std::filesystem::exists(pdbPath, ec))
+                const std::string pdbPath = FileUtils::ChangeExtension(config.executablePath, ".pdb");
+                if (std::filesystem::exists(FileUtils::PathFromUtf8(pdbPath), ec))
                 {
                     ManifestEntry pdb;
-                    pdb.sourcePath = pdbPath.string();
-                    pdb.relativePath = pdbPath.filename().string();
-                    pdb.sizeBytes = std::filesystem::file_size(pdbPath, ec);
+                    pdb.sourcePath = pdbPath;
+                    pdb.relativePath = FileUtils::GetFilename(pdbPath);
+                    pdb.sizeBytes = std::filesystem::file_size(FileUtils::PathFromUtf8(pdbPath), ec);
                     manifest.push_back(std::move(pdb));
                 }
             }
@@ -355,7 +430,8 @@ namespace Spark::Build
                 return;
 
             std::error_code ec;
-            if (!std::filesystem::exists(config.moduleDirectory, ec))
+            const std::filesystem::path moduleDirectory = FileUtils::PathFromUtf8(config.moduleDirectory);
+            if (!std::filesystem::exists(moduleDirectory, ec))
             {
                 result.warnings.push_back("Module directory not found: " + config.moduleDirectory);
                 return;
@@ -364,20 +440,26 @@ namespace Spark::Build
             std::string ext = GetModuleExtension(config.platform);
             std::unordered_set<std::string> required(config.requiredModules.begin(), config.requiredModules.end());
 
-            for (const auto& entry : std::filesystem::directory_iterator(config.moduleDirectory, ec))
+            for (const auto& entry : std::filesystem::directory_iterator(moduleDirectory, ec))
             {
                 if (!entry.is_regular_file())
                     continue;
                 if (entry.path().extension() != ext)
                     continue;
 
-                std::string stem = entry.path().stem().string();
-                if (!required.empty() && required.find(stem) == required.end())
+                const std::optional<std::string> sourcePath = ToManifestPath(entry.path(), result);
+                const std::optional<std::string> stem = FileUtils::TryPathToUtf8(entry.path().stem());
+                const std::optional<std::string> filename = FileUtils::TryPathToUtf8(entry.path().filename());
+                if (!sourcePath || !stem || !filename)
                     continue;
+                if (!required.empty() && required.find(*stem) == required.end())
+                {
+                    continue;
+                }
 
                 ManifestEntry me;
-                me.sourcePath = entry.path().string();
-                me.relativePath = "Modules/" + entry.path().filename().string();
+                me.sourcePath = *sourcePath;
+                me.relativePath = "Modules/" + *filename;
                 me.sizeBytes = std::filesystem::file_size(entry.path(), ec);
                 manifest.push_back(std::move(me));
             }
@@ -402,24 +484,44 @@ namespace Spark::Build
                 return;
 
             std::error_code ec;
-            if (!std::filesystem::exists(sourceDir, ec))
+            const std::filesystem::path sourceRoot = FileUtils::PathFromUtf8(sourceDir);
+            if (!std::filesystem::exists(sourceRoot, ec))
             {
                 result.warnings.push_back("Directory not found: " + sourceDir);
                 return;
             }
 
-            for (const auto& entry : std::filesystem::recursive_directory_iterator(sourceDir, ec))
+            for (const auto& entry : std::filesystem::recursive_directory_iterator(sourceRoot, ec))
             {
                 if (!entry.is_regular_file())
                     continue;
 
-                auto relPath = std::filesystem::relative(entry.path(), sourceDir, ec);
+                auto relPath = std::filesystem::relative(entry.path(), sourceRoot, ec);
+                const std::optional<std::string> sourcePath = ToManifestPath(entry.path(), result);
+                const std::optional<std::string> relative = FileUtils::TryPathToUtf8(relPath);
+                if (!sourcePath || !relative)
+                {
+                    continue;
+                }
+
                 ManifestEntry me;
-                me.sourcePath = entry.path().string();
-                me.relativePath = destPrefix + "/" + relPath.string();
+                me.sourcePath = *sourcePath;
+                me.relativePath = destPrefix + "/" + *relative;
                 me.sizeBytes = std::filesystem::file_size(entry.path(), ec);
                 manifest.push_back(std::move(me));
             }
+        }
+
+        /// UTF-8 manifest spelling of a scanned file. Only a Windows name that is not
+        /// well-formed UTF-16 has none; it is reported, since the package will lack it.
+        static std::optional<std::string> ToManifestPath(const std::filesystem::path& path, PackageResult& result)
+        {
+            std::optional<std::string> utf8 = FileUtils::TryPathToUtf8(path);
+            if (!utf8)
+            {
+                result.warnings.emplace_back("Skipped a file whose name is not valid Unicode");
+            }
+            return utf8;
         }
 
         void FilterExcludes(std::vector<ManifestEntry>& manifest, const std::vector<std::string>& patterns) const

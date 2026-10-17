@@ -27,6 +27,9 @@
 #include "Utils/LogMacros.h"
 #include "Utils/Logger.h"
 #include "Utils/SparkConsole.h"
+#include "SparkUI/Fonts.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
@@ -190,23 +193,24 @@ namespace SparkEditor
         }
         if (ImGui::BeginPopupModal("Export Log", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
         {
-            ImGui::Text("Export console log to file");
-            ImGui::Separator();
+            Spark::Ui::SubHeader("Export console log to file");
 
+            ImGui::SetNextItemWidth(Spark::Ui::Em(24.0f));
             ImGui::InputText("File Path", s_exportPathBuffer, sizeof(s_exportPathBuffer));
 
             const char* formats[] = {"Text (.txt)", "CSV (.csv)"};
+            ImGui::SetNextItemWidth(Spark::Ui::Em(24.0f));
             ImGui::Combo("Format", &s_exportFormatIndex, formats, IM_ARRAYSIZE(formats));
 
             ImGui::Separator();
-            if (ImGui::Button("Export", ImVec2(120, 0)))
+            if (Spark::Ui::PrimaryButton("Export", Spark::Ui::Px2(120, 0)))
             {
                 std::string format = (s_exportFormatIndex == 1) ? "csv" : "txt";
                 ExportLog(std::string(s_exportPathBuffer), format);
                 ImGui::CloseCurrentPopup();
             }
             ImGui::SameLine();
-            if (ImGui::Button("Cancel", ImVec2(120, 0)))
+            if (Spark::Ui::SecondaryButton("Cancel", Spark::Ui::Px2(120, 0)))
             {
                 ImGui::CloseCurrentPopup();
             }
@@ -390,7 +394,7 @@ namespace SparkEditor
     void ConsolePanel::RenderLogDisplay()
     {
         ImVec2 contentSize = ImGui::GetContentRegionAvail();
-        contentSize.y -= 30; // Reserve space for command input
+        contentSize.y -= ImGui::GetFrameHeightWithSpacing(); // Reserve space for command input
 
         // Snapshot filtered entries under lock to avoid data races during rendering
         std::vector<LogEntry> visibleEntries;
@@ -408,6 +412,8 @@ namespace SparkEditor
 
         if (ImGui::BeginChild("LogDisplay", contentSize, true, ImGuiWindowFlags_AlwaysVerticalScrollbar))
         {
+            // Log lines are machine output: timestamps, paths and IDs read best in the mono face.
+            const Spark::Ui::ScopedFont mono(Spark::Ui::FontRole::Mono);
             ImVec2 currentSize = ImGui::GetWindowSize();
             if (currentSize.x != m_lastWindowSize.x || currentSize.y != m_lastWindowSize.y)
             {
@@ -507,8 +513,9 @@ namespace SparkEditor
 
     void ConsolePanel::RenderCommandInput()
     {
-        // Simple command input at top
-        ImGui::SetNextItemWidth(-60);
+        // Simple command input at top; the field leaves exactly enough room for the Run button.
+        const float runWidth = ImGui::CalcTextSize("Run").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+        ImGui::SetNextItemWidth(-(runWidth + ImGui::GetStyle().ItemSpacing.x));
         const ImGuiInputTextFlags inputFlags = ImGuiInputTextFlags_EnterReturnsTrue |
                                                ImGuiInputTextFlags_CallbackHistory |
                                                ImGuiInputTextFlags_CallbackCompletion;
@@ -537,40 +544,40 @@ namespace SparkEditor
 
     void ConsolePanel::RenderFilterControls()
     {
-        if (ImGui::BeginChild("FilterControls", ImVec2(0, 120), true))
+        // The filter box grows with its content, so larger fonts and UI scales never clip it.
+        if (ImGui::BeginChild("FilterControls", ImVec2(0.0f, 0.0f),
+                              ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY))
         {
-            ImGui::Text("Log Level:");
-            ImGui::SameLine();
-
-            const char* levelNames[] = {"TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"};
-            int currentLevel = static_cast<int>(m_filter.minLevel);
-            if (ImGui::Combo("##LogLevel", &currentLevel, levelNames, IM_ARRAYSIZE(levelNames)))
+            if (Spark::Ui::BeginPropertyGrid("##ConsoleFilters"))
             {
-                m_filter.minLevel = static_cast<LogLevel>(currentLevel);
-                m_filterChanged = true;
+                Spark::Ui::PropertyLabel("Log Level");
+                const char* levelNames[] = {"TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"};
+                int currentLevel = static_cast<int>(m_filter.minLevel);
+                if (ImGui::Combo("##LogLevel", &currentLevel, levelNames, IM_ARRAYSIZE(levelNames)))
+                {
+                    m_filter.minLevel = static_cast<LogLevel>(currentLevel);
+                    m_filterChanged = true;
+                }
+
+                Spark::Ui::PropertyLabel("Categories");
+                if (ImGui::Checkbox("All##Categories", &m_filter.enableAllCategories))
+                {
+                    m_filterChanged = true;
+                }
+
+                // The search pattern was already honoured by UpdateFilteredEntries;
+                // it simply had no way in.
+                Spark::Ui::PropertyLabel("Search");
+                if (Spark::Ui::SearchField("##ConsoleSearch", m_searchBuffer, sizeof(m_searchBuffer),
+                                           "Filter log text"))
+                {
+                    m_filter.searchPattern = m_searchBuffer;
+                    m_filterChanged = true;
+                }
+                Spark::Ui::EndPropertyGrid();
             }
 
-            ImGui::Text("Categories:");
-            ImGui::SameLine();
-            if (ImGui::Checkbox("All##Categories", &m_filter.enableAllCategories))
-            {
-                m_filterChanged = true;
-            }
-
-            // The search pattern was already honoured by UpdateFilteredEntries;
-            // it simply had no way in.
-            ImGui::Text("Search:");
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(-1.0f);
-            if (ImGui::InputTextWithHint("##ConsoleSearch", "filter log text", m_searchBuffer, sizeof(m_searchBuffer)))
-            {
-                m_filter.searchPattern = m_searchBuffer;
-                m_filterChanged = true;
-            }
-
-            ImGui::Separator();
-            ImGui::Text("Display:");
-
+            Spark::Ui::SubHeader("Display");
             if (ImGui::Checkbox("Timestamps", &m_filter.showTimestamps))
                 m_filterChanged = true;
             ImGui::SameLine();
@@ -692,14 +699,13 @@ namespace SparkEditor
         if (ImGui::IsItemHovered())
         {
             ImGui::BeginTooltip();
-            ImGui::Text("Full Entry Details:");
-            ImGui::Separator();
-            ImGui::Text("Time: %s", FormatTimestamp(entry.timestamp).c_str());
-            ImGui::Text("Level: %s", LogLevelToString(entry.level));
-            ImGui::Text("Category: %s", entry.category.c_str());
-            ImGui::Text("Function: %s", entry.function.c_str());
-            ImGui::Text("File: %s:%d", entry.file.c_str(), entry.line);
-            ImGui::Text("Frame: %llu", static_cast<unsigned long long>(entry.frameNumber));
+            Spark::Ui::SubHeader("Full Entry Details");
+            Spark::Ui::KeyValue("Time", "%s", FormatTimestamp(entry.timestamp).c_str());
+            Spark::Ui::KeyValue("Level", "%s", LogLevelToString(entry.level));
+            Spark::Ui::KeyValue("Category", "%s", entry.category.c_str());
+            Spark::Ui::KeyValue("Function", "%s", entry.function.c_str());
+            Spark::Ui::KeyValue("File", "%s:%d", entry.file.c_str(), entry.line);
+            Spark::Ui::KeyValue("Frame", "%llu", static_cast<unsigned long long>(entry.frameNumber));
             ImGui::EndTooltip();
         }
 
@@ -882,20 +888,20 @@ namespace SparkEditor
     {
         switch (level)
         {
+        // Each line also spells its level, so the colour is never the only cue.
         case LogLevel::TRACE:
-            return ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
+            return Spark::Ui::ColV(Spark::Ui::Role::TextSecondary);
         case LogLevel::DEBUG:
-            return ImVec4(0.6f, 0.8f, 1.0f, 1.0f);
+            return Spark::Ui::ColV(Spark::Ui::Role::InfoText);
         case LogLevel::INFO:
-            return ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+            return Spark::Ui::ColV(Spark::Ui::Role::TextPrimary);
         case LogLevel::WARNING:
-            return ImVec4(1.0f, 1.0f, 0.0f, 1.0f);
+            return Spark::Ui::ColV(Spark::Ui::Role::WarningText);
         case LogLevel::ERROR_:
-            return ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
         case LogLevel::CRITICAL:
-            return ImVec4(1.0f, 0.2f, 0.2f, 1.0f);
+            return Spark::Ui::ColV(Spark::Ui::Role::ErrorText);
         default:
-            return ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+            return Spark::Ui::ColV(Spark::Ui::Role::TextPrimary);
         }
     }
 

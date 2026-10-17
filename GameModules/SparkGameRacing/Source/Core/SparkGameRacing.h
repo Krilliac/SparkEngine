@@ -16,6 +16,8 @@
 
 #include "Spark/SparkSDK.h"
 #include <memory>
+#include <string>
+#include <vector>
 
 // Forward declarations
 namespace Racing
@@ -33,7 +35,7 @@ namespace Racing
  * @brief Game module that demonstrates racing game mechanics
  *
  * Wires up a complete racing game framework demonstrating:
- * - Physics-based vehicle driving with multiple vehicle types
+ * - Jolt vehicles on the engine's shared PhysicsSystem, with multiple vehicle types
  * - Track layouts with checkpoints, surface zones, and hazards
  * - Race lifecycle management with timing and positions
  * - AI drivers with difficulty scaling and rubber-banding
@@ -60,11 +62,9 @@ class SparkGameRacingModule : public Spark::IModule
 
   private:
     void RegisterConsoleCommands();
-    void SetupDefaultRaceRoster();
-    void SyncRaceAndTrackState();
+    bool SetupDefaultRaceRoster();
+    void StepRace(float deltaTime);
     void UpdatePresentationState();
-    void ApplyPlayerInput(float deltaTime);
-    void ApplyAIDriverInputs(float deltaTime);
 
     Spark::IEngineContext* m_context{nullptr};
     bool m_initialized{false};
@@ -79,6 +79,8 @@ class SparkGameRacingModule : public Spark::IModule
     std::unique_ptr<Racing::RacingEngineSystems> m_engineSystems;
     bool m_cameraCycleHeld{false};
     bool m_restartHeld{false};
+    bool m_autopilot{false}; ///< race_autopilot: the player car follows the racing line instead of the keys
+    std::vector<std::string> m_registeredConsoleCommands;
 };
 
 // Module exports

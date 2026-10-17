@@ -9,6 +9,8 @@
 
 #if __has_include(<imgui.h>)
 #include <imgui.h>
+
+#include "SparkUI/Widgets.h"
 #endif
 
 namespace SparkEditor
@@ -36,8 +38,7 @@ namespace SparkEditor
 #if __has_include(<imgui.h>)
     void CSGEditorPanel::RenderBrushCreation(Spark::LevelDesign::CSGSystem& /*csg*/)
     {
-        ImGui::TextUnformatted("Create Brush");
-        ImGui::Separator();
+        Spark::Ui::SubHeader("Create Brush");
 
         const char* shapes[] = {"Box", "Cylinder", "Sphere", "Wedge", "Cone"};
         int shapeIdx = static_cast<int>(m_brushShape);
@@ -61,7 +62,7 @@ namespace SparkEditor
                 m_brushOperation = static_cast<Spark::LevelDesign::CSGOperation>(opIdx);
         }
 
-        if (ImGui::Button("Create"))
+        if (Spark::Ui::PrimaryButton("Create"))
         {
             CreateBrush(m_brushShape, m_brushSize, m_brushOperation);
         }
@@ -70,8 +71,12 @@ namespace SparkEditor
 
     void CSGEditorPanel::RenderBrushList(Spark::LevelDesign::CSGSystem& csg)
     {
-        ImGui::TextUnformatted("Brushes");
-        ImGui::Separator();
+        Spark::Ui::SubHeader("Brushes");
+
+        if (m_brushIds.empty())
+        {
+            Spark::Ui::SecondaryText("No brushes yet - create one above.");
+        }
 
         uint32_t toDelete = 0;
         for (uint32_t id : m_brushIds)
@@ -90,6 +95,7 @@ namespace SparkEditor
             {
                 toDelete = id;
             }
+            ImGui::SetItemTooltip("Remove brush %u", id);
             ImGui::PopID();
         }
         if (toDelete != 0)
@@ -101,8 +107,7 @@ namespace SparkEditor
 
     void CSGEditorPanel::RenderBuildControls(Spark::LevelDesign::CSGSystem& /*csg*/)
     {
-        ImGui::TextUnformatted("Build");
-        ImGui::Separator();
+        Spark::Ui::SubHeader("Build");
         ImGui::Checkbox("Auto-rebuild", &m_autoRebuild);
         ImGui::SameLine();
         if (ImGui::Button("Rebuild Now"))
@@ -114,12 +119,11 @@ namespace SparkEditor
 
     void CSGEditorPanel::RenderStatistics()
     {
-        ImGui::TextUnformatted("Statistics");
-        ImGui::Separator();
-        ImGui::Text("Brushes:   %u", static_cast<unsigned>(m_brushIds.size()));
-        ImGui::Text("Triangles: %u", static_cast<unsigned>(m_lastMesh.triangleCount));
-        ImGui::Text("Vertices:  %u", static_cast<unsigned>(m_lastMesh.vertices.size()));
-        ImGui::Text("Selected:  %u", static_cast<unsigned>(m_selectedBrush));
+        Spark::Ui::SubHeader("Statistics");
+        Spark::Ui::KeyValue("Brushes:", "%u", static_cast<unsigned>(m_brushIds.size()));
+        Spark::Ui::KeyValue("Triangles:", "%u", static_cast<unsigned>(m_lastMesh.triangleCount));
+        Spark::Ui::KeyValue("Vertices:", "%u", static_cast<unsigned>(m_lastMesh.vertices.size()));
+        Spark::Ui::KeyValue("Selected:", "%u", static_cast<unsigned>(m_selectedBrush));
     }
 #else
     void CSGEditorPanel::RenderBrushCreation(Spark::LevelDesign::CSGSystem& /*csg*/) {}

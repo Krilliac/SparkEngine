@@ -35,6 +35,7 @@
 #include "Net/TFClientSessionState.h"
 #include "Net/TFNetProtocol.h"
 #include "Net/TFRepProtocol.h"
+#include "Net/TFScramWire.h"
 
 #include "Engine/Networking/ClientPrediction.h"
 #include "Engine/Networking/InterpolationBuffer.h"
@@ -101,6 +102,22 @@ namespace Terrafront
         /// Debug panel toggle (hidden by default; wired from tf_* console commands).
         void ToggleDebugUI() { m_showDebug = !m_showDebug; }
 
+        // --- TF-110 scripted-client harness (Console/TFCommandsHarness.cpp) ----
+
+        /// Drive the local pawn from script for `seconds` of client clock.
+        /// `forward`/`right` are clamped to [-1, 1] and replace the keyboard
+        /// axes inside PumpInput, so the move still travels the normal
+        /// TF_ClientInput + prediction path (the server stays authoritative).
+        /// Works without an InputManager (headless clients).
+        void SetScriptedMove(float forward, float right, float seconds);
+
+        /// Point the local view (radians, camera convention). Also turns the
+        /// module camera when one exists so mouse-look reads the new angles back.
+        void SetViewAngles(float yaw, float pitch);
+
+        /// Monotonic client clock (seconds since Initialize).
+        double ClockSec() const { return m_clock; }
+
         // --- chat-social lane (additive): UI self-registration ------------------
         // TFChatWindow/TFSocialPanel call these from their Initialize so the
         // uiOpen input-suppression check in Update covers them (a chat line or
@@ -115,6 +132,22 @@ namespace Terrafront
         // server reply so console commands (tf_login/tf_char_list/...) and Task
         // 5/6 can consume it. Once `m_ctx->loginFlow` is wired (Task 6), the
         // On*Reply handlers below should forward to it directly instead.
+        /**
+         * @brief NET-100: start a SCRAM login (LoginRequest -> LoginChallenge -> LoginProof -> LoginReply)
+         *
+         * The password stays in this process: it is held only until the server's
+         * challenge arrives, turned into a proof, and wiped. The reply is accepted
+         * only if the server's signature proves it holds this account's ServerKey.
+         * On a listen host the whole exchange completes before this returns.
+         */
+        void BeginLogin(const std::string& user, const std::string& password);
+
+        /**
+         * @brief NET-100: register by sending a verifier derived here (never the password)
+         * @return false when the registration was refused locally (see LastAuthError)
+         */
+        bool Register(const std::string& user, const std::string& password);
+
         bool IsLoggedIn() const { return m_session.loggedIn; }
         uint64_t AccountId() const { return m_session.accountId; }
         uint8_t LastAuthError() const { return static_cast<uint8_t>(m_session.lastAuthError); }
@@ -174,6 +207,9 @@ namespace Terrafront
         void RegisterClientHandlers();
         void ReleaseClientHandlers();
         void OnWorldWelcome(const void* data, size_t size);
+        /// TF-120: TF_ContinentIdentity. A server hosting another continent than the one this client loaded at
+        /// boot is refused: the client logs it and disconnects before TF_WorldWelcome can put it in the world.
+        void OnContinentIdentity(const void* data, size_t size);
         void OnSpawnReply(const void* data, size_t size);
         void OnHitConfirm(const void* data, size_t size);
         void OnDamageEvent(const void* data, size_t size);
@@ -185,6 +221,7 @@ namespace Terrafront
         // parse + stash the reply so Task 5/6 can read it via a getter, or replace
         // this stash entirely once `m_ctx->loginFlow` exists (Task 6). Logged at
         // INFO so the loopback flow is observable before the UI lands.
+        void OnLoginChallenge(const void* data, size_t size);
         void OnLoginReply(const void* data, size_t size);
         void OnRegisterReply(const void* data, size_t size);
         void OnCharListReply(const void* data, size_t size);
@@ -211,6 +248,11 @@ namespace Terrafront
         float m_viewYaw{0.0f};
         float m_viewPitch{0.0f};
 
+        // TF-110 scripted move (SetScriptedMove); active while m_clock < until.
+        float m_scriptedMoveX{0.0f};
+        float m_scriptedMoveY{0.0f};
+        double m_scriptedMoveUntil{-1.0};
+
         // Prediction (pure client only)
         Spark::ClientPrediction m_prediction;
         Spark::PredictedState m_predState{};
@@ -230,6 +272,9 @@ namespace Terrafront
 
         // W5 onboarding (Task 4) reply stash (see the getters above).
         TFClientSessionState m_session;
+
+        // NET-100: the SCRAM login in flight (owns and wipes the password and derived keys).
+        TFScramClient m_scram;
     };
 
 } // namespace Terrafront

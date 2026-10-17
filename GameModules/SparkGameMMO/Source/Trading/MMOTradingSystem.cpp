@@ -8,7 +8,7 @@
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -31,7 +31,9 @@ namespace MMO
     void MMOTradingSystem::Update(float dt)
     {
         if (dt <= 0.0f)
+        {
             return;
+        }
 
         // Expire trade sessions
         for (auto it = m_trades.begin(); it != m_trades.end();)
@@ -61,7 +63,9 @@ namespace MMO
                     listing.expired = true;
                     // If there was a bid, the high bidder wins
                     if (listing.currentBid > 0 && listing.highBidderId != 0)
+                    {
                         listing.sold = true;
+                    }
                 }
             }
         }
@@ -83,7 +87,9 @@ namespace MMO
     uint32_t MMOTradingSystem::ProposeTrade(uint32_t initiatorId, uint32_t targetId)
     {
         if (initiatorId == 0 || targetId == 0 || initiatorId == targetId)
+        {
             return 0;
+        }
 
         TradeSession session;
         session.tradeId = m_nextTradeId++;
@@ -101,9 +107,13 @@ namespace MMO
     {
         auto* trade = GetTradeMut(tradeId);
         if (!trade || trade->state != TradeState::Proposed)
+        {
             return false;
+        }
         if (trade->sideB.playerId != playerId)
+        {
             return false;
+        }
         trade->state = TradeState::Open;
         return true;
     }
@@ -112,9 +122,13 @@ namespace MMO
     {
         auto* trade = GetTradeMut(tradeId);
         if (!trade)
+        {
             return false;
+        }
         if (trade->sideA.playerId != playerId && trade->sideB.playerId != playerId)
+        {
             return false;
+        }
         SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Trade cancelled: ID %u by player %u", tradeId, playerId);
         trade->state = TradeState::Cancelled;
         m_trades.erase(tradeId);
@@ -124,19 +138,29 @@ namespace MMO
     bool MMOTradingSystem::AddTradeItem(uint32_t tradeId, uint32_t playerId, uint32_t itemDefId, int count)
     {
         if (itemDefId == 0 || count <= 0)
+        {
             return false;
+        }
 
         auto* trade = GetTradeMut(tradeId);
         if (!trade || trade->state != TradeState::Open)
+        {
             return false;
+        }
 
         TradeOffer* offer = nullptr;
         if (trade->sideA.playerId == playerId)
+        {
             offer = &trade->sideA;
+        }
         else if (trade->sideB.playerId == playerId)
+        {
             offer = &trade->sideB;
+        }
         if (!offer)
+        {
             return false;
+        }
 
         // Reset confirmation when items change
         offer->confirmed = false;
@@ -151,7 +175,9 @@ namespace MMO
     {
         auto* trade = GetTradeMut(tradeId);
         if (!trade || trade->state != TradeState::Open || amount < 0)
+        {
             return false;
+        }
 
         if (trade->sideA.playerId == playerId)
         {
@@ -166,7 +192,9 @@ namespace MMO
             trade->sideB.confirmed = false;
         }
         else
+        {
             return false;
+        }
 
         return true;
     }
@@ -175,17 +203,27 @@ namespace MMO
     {
         auto* trade = GetTradeMut(tradeId);
         if (!trade || trade->state != TradeState::Open)
+        {
             return false;
+        }
 
         if (trade->sideA.playerId == playerId)
+        {
             trade->sideA.confirmed = true;
+        }
         else if (trade->sideB.playerId == playerId)
+        {
             trade->sideB.confirmed = true;
+        }
         else
+        {
             return false;
+        }
 
         if (trade->sideA.confirmed && trade->sideB.confirmed)
+        {
             trade->state = TradeState::Locked;
+        }
 
         return true;
     }
@@ -198,7 +236,9 @@ namespace MMO
         auto* trade = GetTradeMut(tradeId);
         SPARK_BRANCH_GUARD_BEGIN("mmo_trade_state_validation")
         if (!trade || trade->state != TradeState::Locked)
+        {
             return false;
+        }
         SPARK_BRANCH_GUARD_END("mmo_trade_state_validation")
 
         InventoryData nextA = invA;
@@ -209,24 +249,32 @@ namespace MMO
         for (const auto& item : trade->sideA.items)
         {
             if (item.count <= 0 || invSys.RemoveItem(nextA, item.itemDefId, item.count) != item.count)
+            {
                 return false;
+            }
         }
 
         for (const auto& item : trade->sideB.items)
         {
             if (item.count <= 0 || invSys.RemoveItem(nextB, item.itemDefId, item.count) != item.count)
+            {
                 return false;
+            }
         }
 
         for (const auto& item : trade->sideA.items)
         {
             if (invSys.AddItem(nextB, item.itemDefId, item.count) != item.count)
+            {
                 return false;
+            }
         }
         for (const auto& item : trade->sideB.items)
         {
             if (invSys.AddItem(nextA, item.itemDefId, item.count) != item.count)
+            {
                 return false;
+            }
         }
 
         if (trade->sideA.currency < 0 || trade->sideB.currency < 0 || nextA.currency < trade->sideA.currency ||
@@ -237,7 +285,9 @@ namespace MMO
         const int64_t currencyA = static_cast<int64_t>(nextA.currency) - trade->sideA.currency + trade->sideB.currency;
         const int64_t currencyB = static_cast<int64_t>(nextB.currency) - trade->sideB.currency + trade->sideA.currency;
         if (currencyA > std::numeric_limits<int>::max() || currencyB > std::numeric_limits<int>::max())
+        {
             return false;
+        }
         nextA.currency = static_cast<int>(currencyA);
         nextB.currency = static_cast<int>(currencyB);
 
@@ -279,7 +329,9 @@ namespace MMO
         if (static_cast<int>(m_listings.size()) >= MAX_LISTINGS || sellerId == 0 || sellerName.empty() ||
             itemDefId == 0 || count <= 0 || startPrice < 0 || buyoutPrice < 0 ||
             (buyoutPrice > 0 && buyoutPrice < startPrice))
+        {
             return 0;
+        }
 
         AuctionListing listing;
         listing.listingId = m_nextListingId++;
@@ -305,9 +357,13 @@ namespace MMO
             if (listing.listingId == listingId && !listing.sold && !listing.expired)
             {
                 if (amount <= listing.currentBid || amount < listing.startPrice)
+                {
                     return false;
+                }
                 if (listing.sellerId == bidderId)
+                {
                     return false;
+                }
 
                 listing.currentBid = amount;
                 listing.highBidderId = bidderId;
@@ -326,13 +382,19 @@ namespace MMO
             if (listing.listingId == listingId && !listing.sold && !listing.expired)
             {
                 if (listing.buyoutPrice <= 0 || listing.sellerId == buyerId)
+                {
                     return false;
+                }
                 if (buyerInv.currency < listing.buyoutPrice)
+                {
                     return false;
+                }
 
                 InventoryData completedInventory = buyerInv;
                 if (invSys.AddItem(completedInventory, listing.itemDefId, listing.itemCount) != listing.itemCount)
+                {
                     return false;
+                }
                 completedInventory.currency -= listing.buyoutPrice;
                 buyerInv = std::move(completedInventory);
                 listing.sold = true;
@@ -364,10 +426,14 @@ namespace MMO
         for (const auto& listing : m_listings)
         {
             if (listing.sold || listing.expired)
+            {
                 continue;
+            }
             const auto* def = invSys.GetItem(listing.itemDefId);
             if (def && def->name.find(term) != std::string::npos)
+            {
                 results.push_back(&listing);
+            }
         }
         return results;
     }
@@ -379,13 +445,17 @@ namespace MMO
         for (const auto& l : m_listings)
         {
             if (!l.sold && !l.expired)
+            {
                 ++active;
+            }
         }
         ss << "Auction House (" << active << " active listings):\n";
         for (const auto& l : m_listings)
         {
             if (l.sold || l.expired)
+            {
                 continue;
+            }
             ss << "  [" << l.listingId << "] Item#" << l.itemDefId << " x" << l.itemCount
                << " - Start: " << l.startPrice << " Buyout: " << l.buyoutPrice << " Bid: " << l.currentBid << "\n";
         }
@@ -394,7 +464,7 @@ namespace MMO
 
     void MMOTradingSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (ImGui::TreeNode("MMO Trading System"))
         {
             ImGui::Text("Active Trades: %zu", m_trades.size());
@@ -405,7 +475,9 @@ namespace MMO
                 for (const auto& l : m_listings)
                 {
                     if (l.sold || l.expired)
+                    {
                         continue;
+                    }
                     ImGui::Text("[%u] Item#%u x%d | Start:%d Buyout:%d Bid:%d by %s", l.listingId, l.itemDefId,
                                 l.itemCount, l.startPrice, l.buyoutPrice, l.currentBid,
                                 l.highBidderName.empty() ? "none" : l.highBidderName.c_str());

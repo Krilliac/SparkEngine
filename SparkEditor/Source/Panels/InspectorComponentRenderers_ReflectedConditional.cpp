@@ -9,6 +9,8 @@
  */
 
 #include "InspectorComponentRenderers_ReflectedInternal.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
@@ -33,7 +35,7 @@ namespace SparkEditor
 
     void InspectorPanel::RenderRigidBody2DComponent()
     {
-        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_GLOBE " Rigid Body 2D");
+        bool headerOpen = Spark::Ui::SectionHeader("Rigid Body 2D", ICON_FA_GLOBE, false);
         if (ImGui::BeginPopupContextItem("##RigidBody2DCtx"))
         {
             if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
@@ -42,7 +44,7 @@ namespace SparkEditor
         }
         if (headerOpen)
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4.0f));
             Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::RIGID_BODY_2D);
             auto* d = comp ? comp->GetData<RigidBody2DData>() : nullptr;
             if (d)
@@ -90,9 +92,9 @@ namespace SparkEditor
             }
             else
             {
-                ImGui::TextDisabled("(Component data unavailable)");
+                Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Component data unavailable");
             }
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4.0f));
         }
     }
 
@@ -102,7 +104,7 @@ namespace SparkEditor
 
     void InspectorPanel::RenderCollider2DComponent()
     {
-        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_VECTOR_SQUARE " Collider 2D");
+        bool headerOpen = Spark::Ui::SectionHeader("Collider 2D", ICON_FA_VECTOR_SQUARE, false);
         if (ImGui::BeginPopupContextItem("##Collider2DCtx"))
         {
             if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
@@ -111,7 +113,7 @@ namespace SparkEditor
         }
         if (headerOpen)
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4.0f));
             Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::COLLIDER_2D);
             auto* d = comp ? comp->GetData<Collider2DData>() : nullptr;
             if (d)
@@ -157,9 +159,9 @@ namespace SparkEditor
             }
             else
             {
-                ImGui::TextDisabled("(Component data unavailable)");
+                Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Component data unavailable");
             }
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4.0f));
         }
     }
 
@@ -169,7 +171,7 @@ namespace SparkEditor
 
     void InspectorPanel::RenderProjectileComponent()
     {
-        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_CROSSHAIRS " Projectile");
+        bool headerOpen = Spark::Ui::SectionHeader("Projectile", ICON_FA_CROSSHAIRS, false);
         if (ImGui::BeginPopupContextItem("##ProjectileCtx"))
         {
             if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
@@ -178,7 +180,7 @@ namespace SparkEditor
         }
         if (headerOpen)
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4.0f));
             Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::PROJECTILE);
             auto* d = comp ? comp->GetData<ProjectileData>() : nullptr;
             if (d)
@@ -228,9 +230,9 @@ namespace SparkEditor
             }
             else
             {
-                ImGui::TextDisabled("(Component data unavailable)");
+                Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Component data unavailable");
             }
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4.0f));
         }
     }
 
@@ -240,7 +242,7 @@ namespace SparkEditor
 
     void InspectorPanel::RenderInteractionComponent()
     {
-        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_HAND_POINTER " Interaction");
+        bool headerOpen = Spark::Ui::SectionHeader("Interaction", ICON_FA_HAND_POINTER, false);
         if (ImGui::BeginPopupContextItem("##InteractionCtx"))
         {
             if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
@@ -249,7 +251,7 @@ namespace SparkEditor
         }
         if (headerOpen)
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4.0f));
             Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::INTERACTION);
             auto* d = comp ? comp->GetData<InteractionData>() : nullptr;
             if (d)
@@ -294,9 +296,9 @@ namespace SparkEditor
             }
             else
             {
-                ImGui::TextDisabled("(Component data unavailable)");
+                Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Component data unavailable");
             }
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4.0f));
         }
     }
 

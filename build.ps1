@@ -35,6 +35,7 @@ $submodules = @(
     @{ Path = "ThirdParty\UI\imgui";                           Name = "Dear ImGui";     Desc = "Editor UI, debug overlays" },
     @{ Path = "ThirdParty\ECS\entt";                           Name = "EnTT";           Desc = "Entity component system" },
     @{ Path = "ThirdParty\Scripting\angelscript-mirror";       Name = "AngelScript";    Desc = "Hot-reload scripting" },
+    @{ Path = "ThirdParty\Security\libsodium";                 Name = "libsodium";      Desc = "Network transport cryptography (required)" },
     @{ Path = "ThirdParty\Networking\curl";                    Name = "curl";           Desc = "HTTP networking (optional)" }
 )
 

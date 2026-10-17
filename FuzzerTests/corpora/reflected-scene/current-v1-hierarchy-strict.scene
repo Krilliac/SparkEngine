@@ -1,0 +1,59 @@
+S{
+ "version": 1,
+ "entities": [
+  {
+   "id": 0,
+   "name": "Root",
+   "parent": -1,
+   "components": [
+    {
+     "type": "Transform",
+     "fields": {
+      "position": "1.000000,2.000000,3.000000",
+      "rotation": "0.000000,90.000000,0.000000",
+      "scale": "1.000000,1.000000,1.000000"
+     }
+    }
+   ]
+  },
+  {
+   "id": 1,
+   "name": "Child",
+   "parent": 0,
+   "components": [
+    {
+     "type": "Transform",
+     "fields": {
+      "position": "1.000000,2.000000,3.000000",
+      "rotation": "0.000000,90.000000,0.000000",
+      "scale": "1.000000,1.000000,1.000000"
+     }
+    },
+    {
+     "type": "Camera",
+     "fields": {
+      "fov": "60.000000",
+      "nearPlane": "0.100000",
+      "farPlane": "1000.000000",
+      "isMainCamera": "true"
+     }
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "name": "Grandchild",
+   "parent": 1,
+   "components": [
+    {
+     "type": "Transform",
+     "fields": {
+      "position": "1.000000,2.000000,3.000000",
+      "rotation": "0.000000,90.000000,0.000000",
+      "scale": "1.000000,1.000000,1.000000"
+     }
+    }
+   ]
+  }
+ ]
+}

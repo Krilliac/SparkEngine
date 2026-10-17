@@ -7,7 +7,7 @@
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -22,7 +22,9 @@ namespace MMO
         for (const auto& b : bosses)
         {
             if (!b.defeated)
+            {
                 return false;
+            }
         }
         return !bosses.empty();
     }
@@ -49,7 +51,7 @@ namespace MMO
         shadowCrypt.id = 1;
         shadowCrypt.name = "Shadow Crypt";
         shadowCrypt.description = "An ancient crypt infested with shadow creatures";
-        shadowCrypt.scenePath = "Assets/Scenes/shadow_crypt.scene";
+        shadowCrypt.scenePath = "Assets/Scenes/MMO/shadow_crypt.scene";
         shadowCrypt.minLevel = 10;
         shadowCrypt.recommendedPlayers = 5;
         shadowCrypt.bosses = {
@@ -62,7 +64,7 @@ namespace MMO
         forgottenMine.id = 2;
         forgottenMine.name = "Forgotten Mine";
         forgottenMine.description = "Collapsed mine tunnels with dangerous machinery";
-        forgottenMine.scenePath = "Assets/Scenes/forgotten_mine.scene";
+        // No scene is authored for this dungeon yet: an empty scenePath keeps it registered but not enterable.
         forgottenMine.minLevel = 5;
         forgottenMine.recommendedPlayers = 3;
         forgottenMine.maxPlayers = 3;
@@ -75,7 +77,7 @@ namespace MMO
         voidSpire.id = 3;
         voidSpire.name = "Void Spire";
         voidSpire.description = "A floating tower piercing the void between dimensions";
-        voidSpire.scenePath = "Assets/Scenes/void_spire.scene";
+        // No scene is authored for this dungeon yet: an empty scenePath keeps it registered but not enterable.
         voidSpire.minLevel = 20;
         voidSpire.recommendedPlayers = 5;
         voidSpire.bosses = {
@@ -101,11 +103,25 @@ namespace MMO
                                               const std::vector<uint32_t>& playerIds)
     {
         if (static_cast<int>(m_instances.size()) >= MAX_INSTANCES)
+        {
             return 0;
+        }
 
         const auto* def = GetDungeon(dungeonDefId);
         if (!def)
+        {
             return 0;
+        }
+
+        // Fail closed: a dungeon without an authored scene has nothing to load the instance into.
+        if (!def->IsEnterable())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "Dungeon '%s' (ID %u) is not enterable: no scene authored",
+                           def->name.c_str(), dungeonDefId);
+            Spark::SimpleConsole::GetInstance().LogWarning("[MMO] Dungeon not enterable (no scene authored): " +
+                                                           def->name);
+            return 0;
+        }
 
         DungeonInstance inst;
         inst.instanceId = m_nextInstanceId++;
@@ -123,7 +139,9 @@ namespace MMO
         }
 
         for (uint32_t pid : playerIds)
+        {
             inst.playerIds.insert(pid);
+        }
 
         uint32_t id = inst.instanceId;
         m_instances[id] = std::move(inst);
@@ -139,7 +157,9 @@ namespace MMO
     {
         auto it = m_instances.find(instanceId);
         if (it == m_instances.end() || it->second.state != InstanceState::Active)
+        {
             return false;
+        }
         it->second.playerIds.insert(playerId);
         return true;
     }
@@ -148,7 +168,9 @@ namespace MMO
     {
         auto it = m_instances.find(instanceId);
         if (it == m_instances.end())
+        {
             return false;
+        }
         it->second.playerIds.erase(playerId);
         return true;
     }
@@ -157,7 +179,9 @@ namespace MMO
     {
         auto it = m_instances.find(instanceId);
         if (it == m_instances.end())
+        {
             return false;
+        }
 
         for (auto& boss : it->second.bosses)
         {
@@ -171,7 +195,9 @@ namespace MMO
                 Spark::SimpleConsole::GetInstance().LogInfo("[MMO] Boss defeated: " + boss.name);
 
                 if (it->second.AllBossesDefeated())
+                {
                     it->second.state = InstanceState::Completed;
+                }
                 return true;
             }
         }
@@ -240,7 +266,9 @@ namespace MMO
         for (const auto& lo : ps.lockouts)
         {
             if (lo.dungeonDefId == dungeonId && lo.difficulty == diff && lo.remaining > 0)
+            {
                 return true;
+            }
         }
         return false;
     }
@@ -271,9 +299,13 @@ namespace MMO
         {
             it->remaining -= dt;
             if (it->remaining <= 0.0f)
+            {
                 it = ps.lockouts.erase(it);
+            }
             else
+            {
                 ++it;
+            }
         }
     }
 
@@ -281,7 +313,9 @@ namespace MMO
     {
         const auto* def = GetDungeon(dungeonId);
         if (!def)
+        {
             return 1.0f;
+        }
         switch (diff)
         {
         case DungeonDifficulty::Heroic:
@@ -302,7 +336,8 @@ namespace MMO
         for (const auto& [id, d] : m_dungeons)
         {
             ss << "  [" << id << "] " << d.name << " (Lv" << d.minLevel << ", " << d.recommendedPlayers << "p, "
-               << d.bosses.size() << " bosses)\n";
+               << d.bosses.size() << " bosses)" << (d.IsEnterable() ? "" : " [not enterable: no scene authored]")
+               << "\n";
         }
         ss << "Active Instances: " << m_instances.size() << "\n";
         return ss.str();
@@ -312,7 +347,9 @@ namespace MMO
     {
         const auto* inst = GetInstance(instanceId);
         if (!inst)
+        {
             return "Instance not found";
+        }
         const auto* def = GetDungeon(inst->dungeonDefId);
         std::ostringstream ss;
         ss << "Instance #" << instanceId << " - " << (def ? def->name : "Unknown") << "\n";
@@ -327,13 +364,15 @@ namespace MMO
 
     void MMODungeonSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (ImGui::TreeNode("MMO Dungeon System"))
         {
             ImGui::Text("Dungeons: %zu | Active Instances: %zu", m_dungeons.size(), m_instances.size());
             for (const auto& [id, d] : m_dungeons)
-                ImGui::Text("  [%u] %s - Lv%d, %zup, %zu bosses", id, d.name.c_str(), d.minLevel, d.recommendedPlayers,
-                            d.bosses.size());
+            {
+                ImGui::Text("  [%u] %s - Lv%d, %dp, %zu bosses%s", id, d.name.c_str(), d.minLevel, d.recommendedPlayers,
+                            d.bosses.size(), d.IsEnterable() ? "" : " [not enterable: no scene authored]");
+            }
             ImGui::TreePop();
         }
 #endif

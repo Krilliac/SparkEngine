@@ -4,7 +4,7 @@ SparkEngine provides a GPU-accelerated particle system that runs emission, simul
 
 **Source:** `SparkEngine/Source/Graphics/GPUParticleSystem.h`, `SparkEngine/Source/Graphics/GPUParticleTypes.h`
 **Namespace:** Global (classes prefixed with `GPU`)
-**Tests:** `Tests/TestGPUParticleSystem.cpp` (11 test cases)
+**Tests:** `Tests/TestGPUParticleSystem.cpp`
 
 ---
 

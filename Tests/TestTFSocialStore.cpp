@@ -188,6 +188,68 @@ TEST(TFSocialStore_MissingPrimaryWithRecoveryBackupFailsClosed)
     RemoveStoreArtifacts(path);
 }
 
+TEST(Persistence_Migration_SocialLegacyUnversionedUpgrades)
+{
+    // N-1 fixture: every social store written before DATA-120 versioning is {"characters": [...]} only.
+    const fs::path path = TempStorePath("schema_v0");
+    RemoveStoreArtifacts(path);
+    {
+        std::ofstream output(path, std::ios::binary | std::ios::trunc);
+        output << OneRecord();
+    }
+    const auto legacy = TFSocialSystem::LoadStoreForTesting(path);
+    EXPECT_TRUE(legacy.accepted);
+    EXPECT_EQ(legacy.recordCount, size_t{1});
+
+    // The production serializer rewrites it in the current schema, which loads again with the same rows
+    // and passes the exact-key check.
+    ASSERT_TRUE(TFSocialSystem::ResaveStoreForTesting(path));
+    const std::string rewritten = ReadText(path);
+    EXPECT_STR_CONTAINS(rewritten, "\"schemaVersion\": " + std::to_string(TFSocialSystem::kStoreSchemaVersion));
+    EXPECT_TRUE(TFSocialSystem::ValidateStoreJsonForTesting(rewritten));
+    const auto upgraded = TFSocialSystem::LoadStoreForTesting(path);
+    EXPECT_TRUE(upgraded.accepted);
+    EXPECT_EQ(upgraded.recordCount, size_t{1});
+    EXPECT_TRUE(RecoveryBackups(path).empty());
+
+    // The optional key does not open the root to arbitrary fields.
+    EXPECT_FALSE(TFSocialSystem::ValidateStoreJsonForTesting(R"({"schemaVersion":1,"characters":[],"x":0})"));
+    RemoveStoreArtifacts(path);
+}
+
+TEST(Persistence_Migration_SocialNewerSchemaFailsClosedWithoutRewrite)
+{
+    // Rollback fixture: a newer build added "mutedUntilMs" to each row. The exact-key check would call that
+    // corruption; the version gate must refuse it first, keep the file byte-identical and make no quarantine
+    // copy, so rolling forward again finds the data intact.
+    const fs::path path = TempStorePath("schema_newer");
+    RemoveStoreArtifacts(path);
+    const std::string newer = "{\"schemaVersion\":" + std::to_string(TFSocialSystem::kStoreSchemaVersion + 1) +
+                              ",\"characters\":[{\"charId\":42,\"friends\":[\"Alice One\"],\"blocked\":[],"
+                              "\"recent\":[],\"mutedUntilMs\":1700000000000}]}";
+    {
+        std::ofstream output(path, std::ios::binary | std::ios::trunc);
+        output << newer;
+    }
+
+    const auto result = TFSocialSystem::LoadStoreForTesting(path);
+    EXPECT_FALSE(result.accepted);
+    EXPECT_TRUE(result.unsupportedVersion);
+    EXPECT_EQ(result.recordCount, size_t{0});
+    EXPECT_FALSE(TFSocialSystem::ResaveStoreForTesting(path));
+    EXPECT_TRUE(ReadText(path) == newer);
+    EXPECT_TRUE(RecoveryBackups(path).empty());
+
+    // Malformed versions are corruption, not "legacy" and not "newer".
+    for (const char* bad : {R"("1")", "0", "-1", "1.5"})
+    {
+        const std::string text = std::string("{\"schemaVersion\":") + bad + ",\"characters\":[]}";
+        std::string detail;
+        EXPECT_FALSE(TFSocialSystem::ValidateStoreJsonForTesting(text, &detail));
+    }
+    RemoveStoreArtifacts(path);
+}
+
 TEST(TFSocialStore_GenuinelyMissingStoreStartsEmpty)
 {
     const fs::path path = TempStorePath("missing_empty");

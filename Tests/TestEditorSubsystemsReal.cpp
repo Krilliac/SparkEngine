@@ -15,8 +15,11 @@
 
 #include "Prefabs/PrefabManager.h"
 #include "Profiler/PerformanceProfiler.h"
+#include "Panels/MaterialEditorPanel.h"
+#include "Panels/AssetBrowserPanel.h"
 #include "SceneSystem/SceneFile.h"
 #include "Terrain/TerrainEditor.h"
+#include "Utils/FileUtils.h"
 
 #include "Core/EngineContext.h"
 #include "Engine/ECS/Components.h"
@@ -63,6 +66,26 @@ namespace
 
       private:
         std::filesystem::path m_path;
+    };
+
+    class MaterialWorkingDirectoryGuard
+    {
+      public:
+        explicit MaterialWorkingDirectoryGuard(const std::filesystem::path& next)
+            : m_previous(std::filesystem::current_path())
+        {
+            std::filesystem::current_path(next);
+        }
+        ~MaterialWorkingDirectoryGuard()
+        {
+            std::error_code error;
+            std::filesystem::current_path(m_previous, error);
+        }
+        MaterialWorkingDirectoryGuard(const MaterialWorkingDirectoryGuard&) = delete;
+        MaterialWorkingDirectoryGuard& operator=(const MaterialWorkingDirectoryGuard&) = delete;
+
+      private:
+        std::filesystem::path m_previous;
     };
 
     /// @brief Build a small authored terrain in the editor: heights, a bound texture layer, a detail mesh.
@@ -605,4 +628,222 @@ TEST(EditorSubsystemsReal_ProfilerFrameTimeTracksTheRealDelta)
     EXPECT_NEAR(profiler.GetP99FrameTimeMs(), 20.0f, 0.01f);
 
     profiler.Shutdown();
+}
+
+TEST(EditorSubsystemsReal_MaterialSave_CreatesMissingParent)
+{
+    ScratchDir scratch("material_first_save");
+    MaterialWorkingDirectoryGuard workingDirectory(scratch.Path());
+    SparkEditor::MaterialEditorPanel panel;
+    panel.CreateMaterial("FirstMaterial", "Shaders/QA.hlsl");
+    const auto destination = scratch.Path() / "Assets" / "Materials" / "FirstMaterial.spkmat";
+    EXPECT_FALSE(std::filesystem::exists(destination.parent_path()));
+    ASSERT_TRUE(panel.SaveMaterial());
+    EXPECT_TRUE(std::filesystem::is_regular_file(destination));
+    EXPECT_TRUE(std::filesystem::file_size(destination) > 0);
+    EXPECT_FALSE(panel.HasUnsavedChanges());
+}
+
+TEST(EditorSubsystemsReal_MaterialSave_ParentFileFailureRetainsDirtyState)
+{
+    ScratchDir scratch("material_parent_file");
+    MaterialWorkingDirectoryGuard workingDirectory(scratch.Path());
+    const auto blocker = scratch.Path() / "Assets";
+    ASSERT_TRUE(Spark::FileUtils::WriteTextFile(blocker.string(), "existing user asset"));
+    SparkEditor::MaterialEditorPanel panel;
+    panel.CreateMaterial("FirstMaterial", "Shaders/QA.hlsl");
+    EXPECT_FALSE(panel.SaveMaterial());
+    EXPECT_TRUE(panel.HasUnsavedChanges());
+    EXPECT_EQ(Spark::FileUtils::ReadTextFile(blocker.string()).value_or(""), std::string("existing user asset"));
+}
+
+TEST(EditorSubsystemsReal_MaterialSave_DestinationDirectoryFailureRetainsDirtyState)
+{
+    ScratchDir scratch("material_destination_directory");
+    MaterialWorkingDirectoryGuard workingDirectory(scratch.Path());
+    const auto destination = scratch.Path() / "Assets" / "Materials" / "FirstMaterial.spkmat";
+    ASSERT_TRUE(std::filesystem::create_directories(destination));
+    SparkEditor::MaterialEditorPanel panel;
+    panel.CreateMaterial("FirstMaterial", "Shaders/QA.hlsl");
+    EXPECT_FALSE(panel.SaveMaterial());
+    EXPECT_TRUE(panel.HasUnsavedChanges());
+    EXPECT_TRUE(std::filesystem::is_directory(destination));
+}
+
+TEST(EditorSubsystemsReal_MaterialSave_UsesNativeUtf8Path)
+{
+    ScratchDir scratch("material_utf8");
+    MaterialWorkingDirectoryGuard workingDirectory(scratch.Path());
+    const auto filename = std::filesystem::path(u8"塗料");
+    const auto utf8Name = Spark::FileUtils::TryPathToUtf8(filename);
+    ASSERT_TRUE(utf8Name.has_value());
+    const auto destination = scratch.Path() / "Assets" / "Materials" / std::filesystem::path(u8"塗料.spkmat");
+    SparkEditor::MaterialEditorPanel panel;
+    panel.CreateMaterial(*utf8Name, "Shaders/QA.hlsl");
+    ASSERT_TRUE(panel.SaveMaterial());
+    EXPECT_TRUE(std::filesystem::is_regular_file(destination));
+    EXPECT_FALSE(panel.HasUnsavedChanges());
+}
+
+TEST(EditorSubsystemsReal_MaterialSave_ReopenPreservesAuthoredValues)
+{
+    ScratchDir scratch("material_reopen");
+    MaterialWorkingDirectoryGuard workingDirectory(scratch.Path());
+    const std::string path = scratch.File("Authored.spkmat");
+    const std::string authored =
+        "name: Authored Material\nshader: Shaders/Custom Shader.hlsl\n"
+        "param roughness float 0.248\nparam Vector2 float2 2 3\n"
+        "param Vector3 float3 4 5 6\nparam Vector4 float4 7 8 9 10\n"
+        "param Tint color 0.1 0.2 0.3 0.4\nparam Count int 17\nparam Enabled bool true\n"
+        "param Diffuse texture2d Textures/Color Map.png\nparam Environment texturecube Textures/Sky Cube.dds\n"
+        "param Matrix matrix4x4 1 0 0 0 0 2 0 0 0 0 3 0 4 5 6 1\n"
+        "texture_slot Albedo 3 Textures/Color Map.png 2 3 0.25 0.5\n"
+        "blend_mode 2\ncull_mode 1\ndepth_write false\ndepth_test true\n"
+        "cast_shadows false\nreceive_shadows true\nalpha_clip 0.33\nrender_queue 2500\n";
+    ASSERT_TRUE(Spark::FileUtils::WriteTextFile(path, authored));
+    SparkEditor::MaterialEditorPanel panel;
+    panel.OpenMaterial(path);
+    EXPECT_FALSE(panel.HasUnsavedChanges());
+    ASSERT_TRUE(panel.SaveMaterial());
+    const std::string saved = Spark::FileUtils::ReadTextFile(path).value_or("");
+    for (const std::string& line : {"name: Authored Material",
+                                    "shader: Shaders/Custom Shader.hlsl",
+                                    "param roughness float 0.248",
+                                    "param Vector2 float2 2 3",
+                                    "param Vector3 float3 4 5 6",
+                                    "param Vector4 float4 7 8 9 10",
+                                    "param Tint color 0.1 0.2 0.3 0.4",
+                                    "param Count int 17",
+                                    "param Enabled bool true",
+                                    "param Diffuse texture2d Textures/Color Map.png",
+                                    "param Environment texturecube Textures/Sky Cube.dds",
+                                    "param Matrix matrix4x4 1 0 0 0 0 2 0 0 0 0 3 0 4 5 6 1",
+                                    "texture_slot Albedo 3 Textures/Color Map.png 2 3 0.25 0.5",
+                                    "blend_mode 2",
+                                    "cull_mode 1",
+                                    "depth_write false",
+                                    "depth_test true",
+                                    "cast_shadows false",
+                                    "receive_shadows true",
+                                    "alpha_clip 0.33",
+                                    "render_queue 2500"})
+    {
+        EXPECT_TRUE(saved.find(line) != std::string::npos);
+    }
+}
+
+TEST(EditorSubsystemsReal_MaterialSave_MissingLoadRetainsSelectionAndDirtyState)
+{
+    ScratchDir scratch("material_missing_load");
+    MaterialWorkingDirectoryGuard workingDirectory(scratch.Path());
+    SparkEditor::MaterialEditorPanel panel;
+    panel.CreateMaterial("Existing", "Shaders/QA.hlsl");
+    panel.OpenMaterial(scratch.File("Missing.spkmat"));
+    EXPECT_TRUE(panel.HasUnsavedChanges());
+    ASSERT_TRUE(panel.SaveMaterial());
+    EXPECT_TRUE(std::filesystem::is_regular_file(scratch.Path() / "Assets/Materials/Existing.spkmat"));
+    EXPECT_FALSE(std::filesystem::exists(scratch.Path() / "Missing.spkmat"));
+}
+
+TEST(EditorSubsystemsReal_MaterialSave_MalformedLoadRetainsAssetAndDirtyState)
+{
+    ScratchDir scratch("material_malformed_load");
+    MaterialWorkingDirectoryGuard workingDirectory(scratch.Path());
+    const std::string path = scratch.File("Malformed.spkmat");
+    const std::vector<std::string> invalidRecords = {
+        "param roughness float wrong\n", "texture_slot Ambient Occlusion -1 none 1 1 0 0\n",
+        "texture_slot Ambient Occlusion wrong none 1 1 0 0\n", "texture_slot Ambient Occlusion 4 none 1 nan 0 0\n",
+        "texture_slot Ambient Occlusion 4 none 1 1 0 0\ntexture_slot Ambient Occlusion 4 none 1 1 0 0\n"};
+    for (const auto& record : invalidRecords)
+    {
+        const std::string invalid = "name: Invalid\nshader: Shaders/QA.hlsl\n" + record;
+        ASSERT_TRUE(Spark::FileUtils::WriteTextFile(path, invalid));
+        SparkEditor::MaterialEditorPanel panel;
+        panel.CreateMaterial("Existing", "Shaders/QA.hlsl");
+        panel.OpenMaterial(path);
+        EXPECT_TRUE(panel.HasUnsavedChanges());
+        ASSERT_TRUE(panel.SaveMaterial());
+        EXPECT_EQ(Spark::FileUtils::ReadTextFile(path).value_or(""), invalid);
+        EXPECT_TRUE(std::filesystem::is_regular_file(scratch.Path() / "Assets/Materials/Existing.spkmat"));
+    }
+}
+
+TEST(EditorSubsystemsReal_MaterialSave_AssetActivationLoadsUtf8Material)
+{
+    ScratchDir scratch("material_activation");
+    const auto assets = scratch.Path() / "Assets";
+    const auto folder = assets / Spark::FileUtils::PathFromUtf8("Materials_\xE6\xB5\x8B\xE8\xAF\x95");
+    std::filesystem::create_directories(folder);
+    const auto file = folder / "Authored.SPKMAT";
+    const std::string authored = "name: Activated\nshader: Shaders/Authored.hlsl\nparam roughness float 0.248\n";
+    std::ofstream(file) << authored;
+
+    SparkEditor::MaterialEditorPanel material;
+    material.SetVisible(false);
+    SparkEditor::AssetBrowserPanel browser;
+    browser.SetProjectPath(*Spark::FileUtils::TryPathToUtf8(assets));
+    int calls = 0;
+    std::string activatedPath;
+    browser.SetOnMaterialOpened(
+        [&](const std::string& path)
+        {
+            ++calls;
+            activatedPath = path;
+            material.OpenMaterial(path);
+        });
+    EXPECT_TRUE(browser.OpenAsset(*Spark::FileUtils::TryPathToUtf8(file)));
+    EXPECT_EQ(calls, 1);
+    EXPECT_EQ(Spark::FileUtils::PathFromUtf8(activatedPath), std::filesystem::weakly_canonical(file));
+    EXPECT_TRUE(material.IsVisible());
+    ASSERT_TRUE(material.SaveMaterial());
+    std::ifstream saved(file);
+    const std::string contents((std::istreambuf_iterator<char>(saved)), std::istreambuf_iterator<char>());
+    EXPECT_TRUE(contents.find("name: Activated\n") != std::string::npos);
+    EXPECT_TRUE(contents.find("shader: Shaders/Authored.hlsl\n") != std::string::npos);
+    EXPECT_TRUE(contents.find("param roughness float 0.248\n") != std::string::npos);
+}
+
+TEST(EditorSubsystemsReal_MaterialSave_DefaultWriterRoundTripKeepsAllTextureSlots)
+{
+    ScratchDir scratch("material_default_slots");
+    MaterialWorkingDirectoryGuard workingDirectory(scratch.Path());
+    SparkEditor::MaterialEditorPanel writer;
+    writer.CreateMaterial("DefaultSlots", "Shaders/Authored.hlsl");
+    ASSERT_TRUE(writer.SaveMaterial());
+    const auto file = scratch.Path() / "Assets/Materials/DefaultSlots.spkmat";
+    std::ifstream before(file);
+    const std::string authored((std::istreambuf_iterator<char>(before)), std::istreambuf_iterator<char>());
+    EXPECT_TRUE(authored.find("texture_slot Ambient Occlusion 4 none 1 1 0 0") != std::string::npos);
+    SparkEditor::MaterialEditorPanel reader;
+    reader.SetVisible(false);
+    reader.OpenMaterial(*Spark::FileUtils::TryPathToUtf8(file));
+    EXPECT_TRUE(reader.IsVisible());
+    ASSERT_TRUE(reader.SaveMaterial());
+    std::ifstream after(file);
+    const std::string reopened((std::istreambuf_iterator<char>(after)), std::istreambuf_iterator<char>());
+    EXPECT_EQ(reopened, authored);
+}
+
+TEST(EditorSubsystemsReal_MaterialSave_AssetActivationPreservesProjectBoundary)
+{
+    ScratchDir scratch("material_activation_boundary");
+    const auto assets = scratch.Path() / "Assets";
+    std::filesystem::create_directories(assets);
+    std::ofstream(assets / "Valid.spkmat") << "name: Valid\nshader: Shaders/Authored.hlsl\n";
+    std::ofstream(assets / "Other.obj") << "mesh";
+    std::ofstream(scratch.Path() / "Outside.spkmat") << "name: Outside\nshader: Shaders/Authored.hlsl\n";
+    const auto utf8 = [](const std::filesystem::path& path) { return *Spark::FileUtils::TryPathToUtf8(path); };
+    SparkEditor::AssetBrowserPanel browser;
+    browser.SetProjectPath(utf8(assets));
+    EXPECT_FALSE(browser.OpenAsset(utf8(assets / "Valid.spkmat")));
+    int calls = 0;
+    browser.SetOnMaterialOpened([&](const std::string&) { ++calls; });
+    EXPECT_FALSE(browser.OpenAsset(utf8(assets / "Other.obj")));
+    EXPECT_FALSE(browser.OpenAsset(utf8(assets / "Missing.spkmat")));
+    EXPECT_FALSE(browser.OpenAsset(utf8(scratch.Path() / "Outside.spkmat")));
+    EXPECT_FALSE(browser.OpenAsset(utf8(assets)));
+    EXPECT_EQ(calls, 0);
+    browser.ClearProject();
+    EXPECT_FALSE(browser.OpenAsset(utf8(assets / "Valid.spkmat")));
+    EXPECT_EQ(calls, 0);
 }

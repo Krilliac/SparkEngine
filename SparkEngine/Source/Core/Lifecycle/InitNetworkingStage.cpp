@@ -11,7 +11,7 @@ namespace Spark::Core::Lifecycle
         LifecycleThreadAffinity ThreadAffinity() const override { return LifecycleThreadAffinity::MainThread; }
         bool SupportsInitialize() const override { return true; }
 
-        void Initialize() override { InitializeNetworkingSystemsImpl(); }
+        bool Initialize() override { return InitializeNetworkingSystemsImpl(); }
     };
 
     std::unique_ptr<LifecycleStage> CreateInitNetworkingStage()

@@ -66,14 +66,7 @@ namespace
     {
         Lattice lat;
 
-        fs::path root = fs::current_path();
-        for (int i = 0; i < 10 && !fs::exists(root / "Assets/MMOFPS/Data/regions.json"); ++i)
-        {
-            const fs::path parent = root.parent_path();
-            if (parent.empty() || parent == root)
-                return lat;
-            root = parent;
-        }
+        const fs::path root(SPARK_TEST_SOURCE_DIR);
         std::ifstream f(root / "Assets/MMOFPS/Data/regions.json", std::ios::binary);
         if (!f.is_open())
             return lat;

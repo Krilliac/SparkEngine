@@ -1,0 +1,141 @@
+name: Pinned SDE extraction preflight
+'on':
+  push:
+    branches:
+    - codex/sde-extraction-20261003
+permissions:
+  contents: read
+concurrency:
+  group: sde-extraction-20261003
+  cancel-in-progress: false
+jobs:
+  source-contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+    - name: Checkout exact source
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ github.sha }}
+        persist-credentials: false
+        fetch-depth: 1
+    - name: Verify source and existing Python environment
+      env:
+        EXPECTED_SOURCE: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+        test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE"
+        git show -s --format='%H %T' HEAD
+        python3 -c 'import sys, yaml; print(sys.version, "PyYAML", yaml.__version__)'
+    - name: Verify Primary capture and mutation contracts
+      run: |
+        set -euo pipefail
+        python3 -B Tests/Tools/test_rhi210_capture.py
+        python3 -B Tests/Tools/test_verify_approved_primary.py
+        python3 -B Tests/Tools/test_diagnostic_sccache_keys.py
+        python3 -B Tests/Tools/test_installed_module_abi_rejection.py
+        python3 -B Tests/Tools/test_installed_native_runner.py
+        python3 -B Tests/Tools/test_sdk_template_configuration.py
+    - name: Run cleanup and diagnostic contracts
+      run: |
+        set -euo pipefail
+        python3 -B Tests/Tools/test_compare_build_outputs.py TwoTreeCleanupTests
+        python3 -B -m unittest discover -s Tests/Tools -p 'test_build_matrix_*diagnostics.py'
+        python3 -B Tests/Tools/test_build_matrix_report_upload.py
+    - name: Verify supply chain and workflow contracts
+      run: |
+        set -euo pipefail
+        python3 -B Tests/Tools/test_supply_chain_license_policy.py
+        python3 -B .github/scripts/test-workflow-failure-propagation.py
+        python3 -B .github/scripts/test_workflow_privilege_boundaries.py
+    - name: Verify exact documentation and inventory
+      run: |
+        set -euo pipefail
+        bash docs/update-all-docs.sh check
+        python3 -B Tools/buildmatrix/inventory.py --check docs/readiness/build-matrix-inventory.json
+        test -z "$(git status --porcelain)"
+    - name: Verify reconciled production contracts
+      run: |
+        set -euo pipefail
+        python3 -B Tests/Tools/test_clang_tidy_budget.py
+        python3 -B Tests/Tools/test_ops100_crash_security.py CrashSecurityTests.test_runtime_limit_constants_remain_source_anchored
+        bash tools/check-test-registration.sh
+    - name: Validate pinned SDE extraction contracts
+      run: python3 -B Tests/Tools/test_extract_sde_archive.py
+    - name: Full Windows qualification contracts
+      run: python3 -B Tests/Tools/test_full_windows_qualification.py
+  sde-preflight:
+    needs: source-contracts
+    runs-on: windows-2022
+    timeout-minutes: 12
+    env:
+      PYTHONUTF8: '1'
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+    - name: Initialize owned evidence and monotonic job budget
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $q = Join-Path $env:RUNNER_TEMP "spark-sde-probe-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+        if (Test-Path -LiteralPath $q) { throw 'Evidence root exists' }
+        New-Item -ItemType Directory -Path $q | Out-Null
+        "QUAL_ROOT=$q" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+        python -c "import json,time,pathlib; pathlib.Path(r'$q/clock.json').write_text(json.dumps({'deadline':time.monotonic()+240*60}))"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Checkout workflow helper
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: ${{ github.sha }}
+        path: harness
+        persist-credentials: false
+        sparse-checkout: .github/scripts
+    - name: Checkout exact combined product
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        ref: d90b86e42fd586a56d53f077bbca6a457200d9bd
+        path: product
+        persist-credentials: false
+    - name: Record setup-only host and exact identities
+      timeout-minutes: 2
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $actual = git -C product rev-parse HEAD
+        if ($LASTEXITCODE -ne 0 -or $actual.Trim() -ne 'd90b86e42fd586a56d53f077bbca6a457200d9bd') { throw 'Product source mismatch' }
+        $os = Get-CimInstance Win32_OperatingSystem
+        $python = (Get-Command python.exe -ErrorAction Stop).Source
+        @{ sourceSha=$actual.Trim(); workflowSha=$env:GITHUB_SHA; runId=$env:GITHUB_RUN_ID; runAttempt=$env:GITHUB_RUN_ATTEMPT; os=$os.Caption; osVersion=$os.Version; pythonPath=$python; pythonSha256=(Get-FileHash -LiteralPath $python -Algorithm SHA256).Hash.ToLowerInvariant(); scope='SDE setup only; no engine compilation or CPU-floor test' } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath "$env:QUAL_ROOT/host.json" -Encoding utf8
+    - name: sde
+      timeout-minutes: 5
+      run: |-
+        python harness/.github/scripts/qualify-full-windows.py sde --source product --root "$env:QUAL_ROOT" --source-sha d90b86e42fd586a56d53f077bbca6a457200d9bd
+    - name: Require extracted executable and metadata
+      timeout-minutes: 1
+      run: |
+        $ErrorActionPreference = 'Stop'
+        if (-not $env:SPARK_SDE_EXECUTABLE -or -not (Test-Path -LiteralPath $env:SPARK_SDE_EXECUTABLE -PathType Leaf)) { throw 'SDE executable was not propagated' }
+        $exe = Get-Item -LiteralPath $env:SPARK_SDE_EXECUTABLE
+        $metaPath = Join-Path $env:QUAL_ROOT 'sde-extraction.json'
+        if (-not (Test-Path -LiteralPath $metaPath -PathType Leaf)) { throw 'Extraction metadata missing' }
+        $meta = Get-Content -Raw -LiteralPath $metaPath | ConvertFrom-Json
+        if ($meta.archiveBytes -le 0 -or $meta.memberCount -le 0 -or $meta.declaredExpandedBytes -le 0 -or $null -eq $meta.extractionSeconds -or $meta.extractionSeconds -lt 0 -or $meta.extractionSeconds -gt 280 -or $exe.Length -le 0) { throw 'Invalid extraction measurements' }
+        $unpacked = [IO.Path]::GetFullPath((Join-Path $env:RUNNER_TEMP 'intel-sde-10.13.1/unpacked')) + [IO.Path]::DirectorySeparatorChar
+        $expectedExe = [IO.Path]::GetFullPath((Join-Path $unpacked $meta.executableRelativePath))
+        if (-not $expectedExe.StartsWith($unpacked, [StringComparison]::OrdinalIgnoreCase) -or $expectedExe -ne $exe.FullName) { throw 'Extracted executable path mismatch' }
+        $imageHash = (Get-FileHash -LiteralPath $exe.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($imageHash -ne $meta.executableSha256) { throw 'Extracted executable hash mismatch' }
+        @{ passed=$true; sourceSha='d90b86e42fd586a56d53f077bbca6a457200d9bd'; workflowSha=$env:GITHUB_SHA; runId=$env:GITHUB_RUN_ID; runAttempt=$env:GITHUB_RUN_ATTEMPT; sdePath=$exe.FullName; sdeBytes=$exe.Length; sdeSha256=$imageHash; verifiedArchiveSha256='74e626ede09b0baa5011fc9e51b58627ea92c3fc0bae5fd7db34b490f335f651'; scope='setup only' } | ConvertTo-Json | Set-Content -LiteralPath "$env:QUAL_ROOT/sde-probe-result.json" -Encoding utf8
+    - name: pack
+      timeout-minutes: 10
+      run: |-
+        python harness/.github/scripts/qualify-full-windows.py pack --source product --root "$env:QUAL_ROOT" --source-sha d90b86e42fd586a56d53f077bbca6a457200d9bd
+      if: ${{ always() && env.QUAL_ROOT != '' }}
+    - name: Retain bounded text proof
+      if: ${{ always() && env.QUAL_ROOT != '' }}
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      with:
+        name: sde-extraction-text
+        path: ${{ env.QUAL_ROOT }}/qualification-text
+        if-no-files-found: error
+        retention-days: 1
+        compression-level: 6

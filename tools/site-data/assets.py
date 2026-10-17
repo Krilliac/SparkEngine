@@ -12,7 +12,11 @@ package that ships a file no manifest declares.
 from __future__ import annotations
 
 import hashlib
+import ntpath
+import os
 import re
+import stat
+import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -25,8 +29,16 @@ UNDECLARED_EXEMPT = {MANIFEST_NAME, "README.md"}
 PACKAGE_ROOTS = ("Templates", "GameModules")
 MAX_MANIFEST_BYTES = 4 * 1024 * 1024
 MAX_ASSET_BYTES = 256 * 1024 * 1024
+MAX_PATH_BYTES = 1024
 HASH_CHUNK_BYTES = 1024 * 1024
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+INVALID_WINDOWS_CHARS = frozenset('<>:"|?*')
+RESERVED_WINDOWS_NAMES = frozenset(
+    {"CON", "PRN", "AUX", "NUL", "CLOCK$", "CONIN$", "CONOUT$"}
+    | {f"COM{i}" for i in range(1, 10)}
+    | {f"LPT{i}" for i in range(1, 10)}
+)
+FILE_ATTRIBUTE_REPARSE_POINT = 0x400
 
 
 def asset_package_roots() -> list[str]:
@@ -51,19 +63,84 @@ def file_digest(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _asset_path_error(path: Path) -> str | None:
+    """Reject reparse ancestry before a package asset is opened or hashed."""
+    root = Path(os.path.abspath(os.fspath(REPO_ROOT)))
+    absolute = Path(os.path.abspath(os.fspath(path)))
+    try:
+        relative = absolute.relative_to(root)
+    except ValueError:
+        return "asset path escapes the repository root"
+
+    current = root
+    try:
+        root_info = os.lstat(current)
+    except FileNotFoundError:
+        return None
+    except OSError as error:
+        return f"cannot inspect asset root: {error}"
+    if stat.S_ISLNK(root_info.st_mode) or bool(
+        int(getattr(root_info, "st_file_attributes", 0)) & FILE_ATTRIBUTE_REPARSE_POINT
+    ):
+        return "asset root is a symlink or reparse point"
+
+    for component in relative.parts:
+        current /= component
+        try:
+            info = os.lstat(current)
+        except FileNotFoundError:
+            break
+        except OSError as error:
+            return f"cannot inspect asset path component {current}: {error}"
+        if stat.S_ISLNK(info.st_mode) or bool(
+            int(getattr(info, "st_file_attributes", 0)) & FILE_ATTRIBUTE_REPARSE_POINT
+        ):
+            return f"asset path component {current} is a symlink or reparse point"
+        if current != absolute and not stat.S_ISDIR(info.st_mode):
+            return f"asset path component {current} is not a directory"
+
+    try:
+        resolved_root = root.resolve(strict=True)
+        resolved = absolute.resolve(strict=True)
+        resolved.relative_to(resolved_root)
+    except FileNotFoundError:
+        return None
+    except (OSError, RuntimeError, ValueError):
+        return "asset path cannot be resolved within the repository root"
+    return None
+
+
 def _reference_error(reference: Any) -> str | None:
     """Reject a reference before it is ever joined to a directory."""
     if not isinstance(reference, str) or not reference:
         return "asset path must be a non-empty string"
+    try:
+        encoded = reference.encode("utf-8")
+    except UnicodeEncodeError as error:
+        return f"asset path is not valid Unicode: {error}"
+    if len(encoded) > MAX_PATH_BYTES:
+        return f"asset path exceeds {MAX_PATH_BYTES} UTF-8 bytes"
+    if reference != unicodedata.normalize("NFC", reference):
+        return "asset path is not NFC-normalized"
     if "\\" in reference:
         return f"asset path uses backslashes: {reference!r}"
-    candidate = Path(reference)
-    if candidate.is_absolute() or reference.startswith("/"):
+    if ntpath.isabs(reference) or ntpath.splitdrive(reference)[0] or reference.startswith("/"):
         return f"asset path is absolute: {reference!r}"
-    if ".." in candidate.parts or "." in candidate.parts:
+    parts = reference.split("/")
+    if any(part in ("", ".", "..") for part in parts):
         return f"asset path traverses outside its package: {reference!r}"
-    if reference.endswith("/"):
-        return f"asset path names a directory: {reference!r}"
+    for part in parts:
+        if part != part.strip() or part.endswith((".", " ")):
+            return f"asset path has non-canonical whitespace or trailing dot: {reference!r}"
+        for char in part:
+            codepoint = ord(char)
+            if codepoint < 0x20 or codepoint == 0x7F:
+                return f"asset path contains control character U+{codepoint:04X}: {reference!r}"
+            if char in INVALID_WINDOWS_CHARS:
+                return f"asset path contains Windows-invalid character {char!r}: {reference!r}"
+        device_stem = part.split(".", 1)[0].rstrip(" .").upper()
+        if device_stem in RESERVED_WINDOWS_NAMES:
+            return f"asset path contains reserved Windows device name: {reference!r}"
     return None
 
 
@@ -71,7 +148,14 @@ def validate_package(directory: str, tracked: frozenset[str]) -> list[tuple[str,
     """Validate one ``<package>/Assets`` directory. Returns (location, message)."""
     findings: list[tuple[str, str]] = []
     manifest_relative = f"{directory}/{MANIFEST_NAME}"
-    manifest_path = REPO_ROOT / manifest_relative
+    package_path = REPO_ROOT / directory
+    package_path_error = _asset_path_error(package_path)
+    if package_path_error:
+        return [(directory, f"asset package path is unsafe: {package_path_error}")]
+    manifest_path = package_path / MANIFEST_NAME
+    manifest_path_error = _asset_path_error(manifest_path)
+    if manifest_path_error:
+        return [(manifest_relative, f"manifest path is unsafe: {manifest_path_error}")]
     if not manifest_path.is_file():
         return [(directory, "asset package has no manifest.json recording provenance and SHA-256")]
     try:
@@ -80,6 +164,14 @@ def validate_package(directory: str, tracked: frozenset[str]) -> list[tuple[str,
         return [(manifest_relative, f"manifest is unreadable: {error}")]
     if not isinstance(manifest, dict):
         return [(manifest_relative, "manifest must be a JSON object")]
+    package_name = Path(directory).parent.name
+    if manifest.get("package") != package_name:
+        findings.append(
+            (
+                manifest_relative,
+                f"manifest package must exactly match its directory package {package_name!r}",
+            )
+        )
     if manifest.get("manifestVersion") != 1:
         findings.append((manifest_relative, "manifestVersion must be 1"))
     if not isinstance(manifest.get("license"), str) or not manifest.get("license"):
@@ -117,6 +209,10 @@ def validate_package(directory: str, tracked: frozenset[str]) -> list[tuple[str,
             findings.append((location, f"asset reference resolves to no tracked file: {reference}"))
             continue
         path = REPO_ROOT / resolved
+        path_error = _asset_path_error(path)
+        if path_error:
+            findings.append((location, f"declared asset path is unsafe: {path_error}: {reference}"))
+            continue
         if path.is_symlink() or not path.is_file():
             findings.append((location, f"declared asset is not a regular file: {reference}"))
             continue

@@ -55,6 +55,7 @@
 #include <functional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace Spark::Dialogue
@@ -219,6 +220,10 @@ namespace Spark::Dialogue
 
         std::unordered_map<std::string, float> m_variables;
         std::vector<ResponseRule> m_rules;
+        /// Signals already warned about having no matching rule; each is reported once per Initialize.
+        std::unordered_set<std::string> m_unmatchedSignalsReported;
+        /// Set once a signal sent before Initialize has been warned about; reset by Initialize/Shutdown.
+        bool m_signalBeforeInitializeReported = false;
         Spark::Scheduler m_actionScheduler;
         float m_gameTime = 0.0f;
         bool m_initialized = false;

@@ -16,6 +16,7 @@
 #include "../../Utils/ScopeGuard.h"
 #include "../../Utils/SecureMemory.h"
 #include "../../Utils/Validate.h"
+#include <format>
 #include <sstream>
 #include <cmath>
 #include <cstring>
@@ -51,7 +52,7 @@ namespace Spark::Net
 
     NetworkMessage::NetworkMessage(NetworkMessage&& other) noexcept
         : type(other.type), channel(other.channel), senderID(other.senderID), sequence(other.sequence),
-          payload(std::move(other.payload)), timestamp(other.timestamp),
+          orderedSequence(other.orderedSequence), payload(std::move(other.payload)), timestamp(other.timestamp),
           sensitive(std::exchange(other.sensitive, false)), localOnly(std::exchange(other.localOnly, false)),
           ownerLifecycleEpoch(std::exchange(other.ownerLifecycleEpoch, 0))
     {
@@ -80,6 +81,7 @@ namespace Spark::Net
         channel = other.channel;
         senderID = other.senderID;
         sequence = other.sequence;
+        orderedSequence = other.orderedSequence;
         payload = std::move(other.payload);
         timestamp = other.timestamp;
         sensitive = std::exchange(other.sensitive, false);
@@ -274,9 +276,9 @@ namespace Spark::Net
         }
 #endif // SPARK_PLATFORM_WINDOWS
 
-        // Set socket buffer sizes for game traffic
-        int sendBufSize = 65536;
-        int recvBufSize = 65536;
+        // Set socket buffer sizes for game traffic (sized in NetworkWireLimits.h)
+        const int sendBufSize = static_cast<int>(NETWORK_SOCKET_SEND_BUFFER_SIZE);
+        const int recvBufSize = static_cast<int>(NETWORK_SOCKET_RECEIVE_BUFFER_SIZE);
         setsockopt(m_socket, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<const char*>(&sendBufSize), sizeof(sendBufSize));
         setsockopt(m_socket, SOL_SOCKET, SO_RCVBUF, reinterpret_cast<const char*>(&recvBufSize), sizeof(recvBufSize));
 
@@ -339,9 +341,10 @@ namespace Spark::Net
         //   [2] message type
         //   [1] channel type
         //   [4] sender ID
-        //   [4] sequence number
+        //   [4] sequence number (reliability/ACK)
         //   [4] timestamp (float bits)
         //   [4] payload length
+        //   [4] ordered sequence -- ReliableOrdered only (protocol v3)
         //   [N] payload bytes
 
         if (!IsNetworkPayloadSizeValid(msg.payload.size()))
@@ -367,6 +370,10 @@ namespace Spark::Net
         buf.WriteUint32(msg.sequence);
         buf.WriteFloat(msg.timestamp);
         buf.WriteUint32(static_cast<uint32_t>(msg.payload.size()));
+        if (msg.channel == ChannelType::ReliableOrdered)
+        {
+            buf.WriteUint32(msg.orderedSequence);
+        }
         if (!msg.payload.empty())
         {
             buf.WriteBytes(msg.payload.data(), msg.payload.size());
@@ -382,7 +389,8 @@ namespace Spark::Net
         outMsg.localOnly = false;
         outMsg.ownerLifecycleEpoch = 0;
 
-        // Minimum header: magic(4) + type(2) + channel(1) + sender(4) + seq(4) + timestamp(4) + payloadLen(4) = 23
+        // Minimum header: magic(4) + type(2) + channel(1) + sender(4) + seq(4) + timestamp(4) + payloadLen(4) = 23;
+        // a ReliableOrdered message adds its 4-byte ordered sequence before the payload.
         if (length < NETWORK_WIRE_HEADER_SIZE)
         {
             SPARK_LOG_WARN(Spark::LogCategory::Network, "Packet too small (%zu bytes, need %zu minimum)", length,
@@ -430,10 +438,23 @@ namespace Spark::Net
             return false;
         }
         uint32_t payloadLen = buf.ReadUint32();
-
-        if (payloadLen > length || buf.GetReadPosition() > length - payloadLen)
+        outMsg.orderedSequence = 0;
+        if (outMsg.channel == ChannelType::ReliableOrdered)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Network, "Payload length %u exceeds remaining packet data", payloadLen);
+            outMsg.orderedSequence = buf.ReadUint32();
+        }
+        if (buf.HasError())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network, "Packet header truncated (%zu bytes)", length);
+            return false;
+        }
+
+        const size_t payloadOffset = buf.GetReadPosition();
+        if (payloadOffset > length || static_cast<size_t>(payloadLen) != length - payloadOffset)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network,
+                           "Payload length %u does not match remaining packet data (%zu bytes)", payloadLen,
+                           payloadOffset <= length ? length - payloadOffset : 0u);
             return false;
         }
 
@@ -499,6 +520,114 @@ namespace Spark::Net
         return true;
     }
 
+    bool NetworkManager::SendFrameTo(ClientID peerKey, const std::vector<uint8_t>& serialized, const sockaddr_in& addr,
+                                     bool localOnly)
+    {
+        std::lock_guard<std::recursive_mutex> apiLock(m_apiMutex);
+        if (serialized.size() < NETWORK_WIRE_HEADER_SIZE)
+        {
+            return false;
+        }
+        // The type sits at bytes 4..5 of our own serialization (SerializeMessage).
+        const auto type =
+            static_cast<MessageType>(static_cast<uint16_t>(serialized[4]) | static_cast<uint16_t>(serialized[5] << 8));
+        std::vector<uint8_t> frame;
+        if (IsHandshakeMessage(type))
+        {
+            frame.reserve(serialized.size() + 1);
+            frame.push_back(NETWORK_FRAME_HANDSHAKE);
+            frame.insert(frame.end(), serialized.begin(), serialized.end());
+            return SendRawTo(frame, addr, localOnly);
+        }
+
+        const auto channelIt = m_secureChannels.find(peerKey);
+        if (channelIt == m_secureChannels.end() || !channelIt->second.channel)
+        {
+            // No channel, no transmission: there is no plaintext fallback (NET-100).
+            m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+            m_stats.unsealedSendsRefused++;
+            return false;
+        }
+        PeerChannel& peer = channelIt->second;
+        static constexpr uint8_t kSealedAad[1] = {NETWORK_FRAME_SEALED};
+        std::vector<uint8_t> sealed;
+        if (!peer.channel->Seal(serialized, sealed, kSealedAad))
+        {
+            m_droppedOutgoingMessages.fetch_add(1, std::memory_order_relaxed);
+            m_stats.unsealedSendsRefused++;
+            return false;
+        }
+        frame.reserve(sealed.size() + 1);
+        frame.push_back(NETWORK_FRAME_SEALED);
+        frame.insert(frame.end(), sealed.begin(), sealed.end());
+        const bool sent = SendRawTo(frame, addr, localOnly);
+        if (sent)
+        {
+            ++m_stats.sealedFramesSent;
+        }
+
+        // Nonce discipline: the sequence space per key is never approached. Rotating is
+        // unilateral (the receiver accepts epoch + 1 once it authenticates); when the epoch
+        // space is spent the channel is dropped and the peer must handshake again.
+        ++peer.sealedSinceRotation;
+        if (peer.sealedSinceRotation >= SECURE_ROTATE_AFTER_PACKETS ||
+            m_serverTime - peer.rotatedAt >= SECURE_ROTATE_AFTER_SECONDS)
+        {
+            if (peer.channel->RotateSendKey())
+            {
+                peer.sealedSinceRotation = 0;
+                peer.rotatedAt = m_serverTime;
+                m_stats.keyRotations++;
+            }
+            else
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Network,
+                               "Secure channel to peer %u exhausted its key epochs; the session must be re-established",
+                               peerKey);
+                m_secureChannels.erase(channelIt);
+            }
+        }
+        return sent;
+    }
+
+    void NetworkManager::SendLegacyRejection(const sockaddr_in& addr, const NetworkMessage& legacyConnect)
+    {
+        // Pre-v2 peers parse only unframed messages. Tell them why, in their own format, and
+        // keep no state: no client ID, no address entry, no retransmission. The old Connect
+        // schema minimum (8 payload bytes) bounds the reply to about twice the request.
+        if (legacyConnect.payload.size() < 8)
+        {
+            return;
+        }
+        NetBuffer request;
+        request.WriteBytes(legacyConnect.payload.data(), legacyConnect.payload.size());
+        const uint32_t magic = request.ReadUint32();
+        const uint16_t version = request.ReadUint16();
+        ConnectRejectReason reason = ConnectRejectReason::ProtocolTooOld;
+        if (request.HasError() || magic != NETWORK_HANDSHAKE_MAGIC)
+        {
+            reason = ConnectRejectReason::ProtocolMissing;
+        }
+        else if (version > NETWORK_PROTOCOL_VERSION)
+        {
+            reason = ConnectRejectReason::ProtocolTooNew;
+        }
+
+        NetworkMessage reject;
+        reject.type = MessageType::ConnectRejected;
+        reject.channel = ChannelType::Unreliable;
+        NetBuffer payload;
+        payload.WriteString(std::format("Server speaks protocol version {}", NETWORK_PROTOCOL_VERSION));
+        payload.WriteUint8(static_cast<uint8_t>(reason));
+        payload.WriteUint16(NETWORK_PROTOCOL_VERSION);
+        reject.payload = payload.GetData();
+        const std::vector<uint8_t> serialized = SerializeMessage(reject);
+        if (!serialized.empty())
+        {
+            SendRawTo(serialized, addr, false);
+        }
+    }
+
     int NetworkManager::ReceiveRaw(std::vector<uint8_t>& outData, sockaddr_in& outSender)
     {
         if (m_socket == INVALID_SOCKET)
@@ -508,19 +637,26 @@ namespace Spark::Net
         }
 
         constexpr int maxPacketSize = static_cast<int>(MAX_UDP_WIRE_DATAGRAM_SIZE);
-        outData.resize(MAX_UDP_WIRE_DATAGRAM_SIZE);
+        outData.clear();
+        if (m_receiveScratch.size() != MAX_UDP_WIRE_DATAGRAM_SIZE)
+        {
+            m_receiveScratch.resize(MAX_UDP_WIRE_DATAGRAM_SIZE);
+        }
 
         socklen_t senderLen = sizeof(outSender);
-        int received = recvfrom(m_socket, reinterpret_cast<char*>(outData.data()), maxPacketSize, 0,
+        int received = recvfrom(m_socket, reinterpret_cast<char*>(m_receiveScratch.data()), maxPacketSize, 0,
                                 reinterpret_cast<sockaddr*>(&outSender), &senderLen);
 
         if (received <= 0)
         {
-            outData.clear();
             return received;
         }
 
-        outData.resize(static_cast<size_t>(received));
+        // Copy out only the datagram, then erase it from the reused scratch buffer so no
+        // plaintext wire copy outlives this call (ProcessIncoming erases outData itself).
+        const auto size = static_cast<size_t>(received);
+        outData.assign(m_receiveScratch.data(), m_receiveScratch.data() + size);
+        Spark::SecureErase(m_receiveScratch.data(), size);
         m_bytesReceivedSinceSample += static_cast<uint64_t>(received);
         m_stats.bytesReceived += static_cast<uint64_t>(received);
         return received;
@@ -673,14 +809,37 @@ namespace Spark::Net
                 std::lock_guard<std::mutex> lock(m_clientsMutex);
                 remainsAdmitted = m_clients.contains(event.senderID);
             }
-            if (!remainsAdmitted)
-                continue;
+            if (remainsAdmitted)
+            {
+                m_pendingFullSyncs.push_back(event.senderID);
+            }
+        }
+
+        // An initial sync walks every replicated entity and queues two reliable
+        // messages per entity. Admission needs no credentials, so bound that work
+        // per Update: a burst of connects (or connect/disconnect churn) waits its
+        // turn instead of multiplying the full-world walk within one frame.
+        // Removed clients leave the queue in RemoveClientState, and a client
+        // kicked before its turn is skipped without consuming the budget.
+        size_t fullSyncsStarted = 0;
+        while (fullSyncsStarted < kMaxFullSyncsPerUpdate && !m_pendingFullSyncs.empty())
+        {
+            const ClientID target = m_pendingFullSyncs.front();
+            m_pendingFullSyncs.pop_front();
+            {
+                std::lock_guard<std::mutex> lock(m_clientsMutex);
+                if (!m_clients.contains(target))
+                {
+                    continue;
+                }
+            }
+            ++fullSyncsStarted;
 
             // SendFullEntitySync owns its lock so its property callbacks can
             // completely release it (recursive unlock would leave this frame's
             // outer acquisition held).
             apiLock.unlock();
-            SendFullEntitySync(event.senderID);
+            SendFullEntitySync(target);
             apiLock.lock();
             if (m_lifecycleEpoch != updateLifecycleEpoch)
                 return;
@@ -751,45 +910,68 @@ namespace Spark::Net
                         toDispatch.pop();
                         continue;
                     }
-                    // ReliableOrdered recording is deferred until the message is
-                    // accepted below — a sequence dropped by a full reorder buffer
-                    // must not be ACKed, or the sender stops retransmitting and the
-                    // ordered channel wedges on the gap forever.
-                    if (msg.channel != ChannelType::ReliableOrdered)
+                    // Ordered recording is deferred until the message is accepted
+                    // below — a sequence dropped by a full reorder buffer must not
+                    // be ACKed, or the sender stops retransmitting and the ordered
+                    // channel wedges on the gap forever.
+                    if (msg.channel != ChannelType::ReliableOrdered || msg.orderedSequence == 0)
+                    {
                         RecordReceivedSequence(peer, msg.sequence);
+                    }
                 }
 
-                // Ordered delivery: buffer out-of-order ReliableOrdered messages
-                if (msg.channel == ChannelType::ReliableOrdered && msg.sequence > 0)
+                // Ordered delivery: ReliableOrdered messages are ordered by their own
+                // ordered-stream sequence, never by the reliability sequence, which
+                // Reliable traffic to the same peer also consumes.
+                if (msg.channel == ChannelType::ReliableOrdered && msg.orderedSequence > 0)
                 {
                     PeerState& peer = GetPeerState(peerKey);
-                    if (msg.sequence != peer.expectedOrderedSequence)
+                    if (msg.orderedSequence != peer.expectedOrderedSequence)
                     {
+                        // Already delivered (a late copy under a new reliability
+                        // sequence): ACK it so the sender stops, but never buffer
+                        // it — it would wait for a sequence that never recurs.
+                        if (IsSequenceNewer(peer.expectedOrderedSequence, msg.orderedSequence))
+                        {
+                            if (msg.sequence > 0)
+                            {
+                                RecordReceivedSequence(peer, msg.sequence);
+                            }
+                            m_stats.packetsReceived++;
+                            toDispatch.pop();
+                            continue;
+                        }
                         // Bound the reorder buffer so a peer that never sends the
                         // expected sequence (always leaving a gap) cannot grow this
                         // map without limit — a remote memory-exhaustion DoS.
                         // Overwriting an already-buffered sequence is fine; only a
                         // *new* out-of-order sequence past the cap is dropped.
                         if (peer.orderedBuffer.size() >= kMaxQueuedMessages &&
-                            !peer.orderedBuffer.contains(msg.sequence))
+                            !peer.orderedBuffer.contains(msg.orderedSequence))
                         {
                             m_droppedIncomingMessages.fetch_add(1, std::memory_order_relaxed);
                             SPARK_LOG_WARN(Spark::LogCategory::Network,
                                            "Ordered reorder buffer full (%zu) — dropping out-of-order sequence %u",
-                                           peer.orderedBuffer.size(), static_cast<unsigned>(msg.sequence));
+                                           peer.orderedBuffer.size(), static_cast<unsigned>(msg.orderedSequence));
                             toDispatch.pop();
                             continue;
                         }
                         // Buffer for later delivery
-                        RecordReceivedSequence(peer, msg.sequence);
-                        peer.orderedBuffer[msg.sequence] = msg;
+                        if (msg.sequence > 0)
+                        {
+                            RecordReceivedSequence(peer, msg.sequence);
+                        }
+                        peer.orderedBuffer[msg.orderedSequence] = msg;
                         m_stats.packetsReceived++;
                         toDispatch.pop();
                         continue;
                     }
                     // This is the expected sequence — deliver it, then flush buffer
-                    RecordReceivedSequence(peer, msg.sequence);
-                    peer.expectedOrderedSequence++;
+                    if (msg.sequence > 0)
+                    {
+                        RecordReceivedSequence(peer, msg.sequence);
+                    }
+                    peer.expectedOrderedSequence = NextReliableSequence(peer.expectedOrderedSequence);
                 }
 
                 if (const MessageHandler observer = dispatchMessage(msg))
@@ -859,6 +1041,12 @@ namespace Spark::Net
 
         // Check for timed-out clients (server) or server timeout (client)
         std::vector<ClientID> timedOutClients = CheckConnectionTimeouts();
+        // A client whose server went silent has just ended its session; nothing
+        // of the ended lifecycle may be flushed or retransmitted below.
+        if (m_lifecycleEpoch != updateLifecycleEpoch)
+        {
+            return;
+        }
         TimeoutHandler timeoutHandler = m_timeoutHandler;
 
         // Update bandwidth stats every second

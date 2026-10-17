@@ -183,8 +183,6 @@ namespace SparkBuild
         // ========================================================================
 
         // Core systems
-        config.options.push_back(
-            {"ENABLE_GRAPHICS", "Graphics Engine", "Build the graphics engine", true, true, OptionCategory::Core});
         config.options.push_back({"ENABLE_RECAST", "Recast Navigation",
                                   "Build the Recast/Detour navigation implementation", true, true,
                                   OptionCategory::Core});
@@ -221,6 +219,9 @@ namespace SparkBuild
                                   OptionCategory::EditorTools});
         config.options.push_back(
             {"BUILD_TESTS", "Unit Tests", "Build the CTest test suite", true, true, OptionCategory::EditorTools});
+        config.options.push_back({"SPARK_LIFECYCLE_TEST_HOOKS", "Lifecycle Test Hooks",
+                                  "Enable process-level lifecycle fault-injection hooks for dedicated test lanes",
+                                  false, false, OptionCategory::EditorTools});
         config.options.push_back({"BUILD_GAME_MODULES", "Game Modules", "Build the in-tree game modules", true, true,
                                   OptionCategory::EditorTools});
         config.options.push_back(
@@ -384,7 +385,11 @@ namespace SparkBuild
                 opt.cmakeVar == "ENABLE_NETWORKING" || opt.cmakeVar == "ENABLE_SERVER_PROCESSES" ||
                 opt.cmakeVar == "ENABLE_VULKAN" || opt.cmakeVar == "ENABLE_OPENGL" || opt.cmakeVar == "ENABLE_SDL2" ||
                 opt.cmakeVar == "ENABLE_METAL" || opt.cmakeVar == "ENABLE_VR" || opt.cmakeVar == "ENABLE_MOBILE" ||
-                opt.cmakeVar == "SPARK_NATIVE_ARCH")
+                opt.cmakeVar == "SPARK_NATIVE_ARCH" || opt.cmakeVar == "SPARK_LIFECYCLE_TEST_HOOKS" ||
+                // windows-shipping sets ENABLE_LTO=OFF so the installed SDK's
+                // SparkEngineLib.lib stays linkable by other MSVC toolset builds
+                // (/GL objects are C1047-bound to the exact compiler).
+                opt.cmakeVar == "ENABLE_LTO")
             {
                 opt.currentValue = false;
             }
@@ -434,14 +439,37 @@ namespace SparkBuild
 
     bool ConfigManager::Load(const std::string& iniPath)
     {
-        std::ifstream file(iniPath);
+        std::ifstream file(iniPath, std::ios::binary);
         if (!file.is_open())
+        {
             return false;
+        }
 
+        // Read at most one byte past the bound, so an endless source (a pipe or
+        // /dev/zero) is refused without being drained. Trim strips the CR of a
+        // CRLF line, so binary mode parses the same values text mode did.
+        std::string text(kMaxConfigBytes + 1, '\0');
+        file.read(&text[0], static_cast<std::streamsize>(text.size()));
+        if (file.bad())
+        {
+            return false;
+        }
+        text.resize(static_cast<size_t>(file.gcount()));
+        if (text.size() > kMaxConfigBytes)
+        {
+            return false;
+        }
+
+        std::istringstream input(text);
+        return LoadFromStream(input);
+    }
+
+    bool ConfigManager::LoadFromStream(std::istream& input)
+    {
         BuildConfig parsed = config;
         std::string line, currentSection;
         std::unordered_set<std::string> seenKeys;
-        while (std::getline(file, line))
+        while (std::getline(input, line))
         {
             line = Trim(line);
             if (line.empty() || line[0] == ';' || line[0] == '#')

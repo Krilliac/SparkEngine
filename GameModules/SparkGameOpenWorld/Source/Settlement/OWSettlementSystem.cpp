@@ -4,10 +4,9 @@
  */
 
 #include "OWSettlementSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -25,10 +24,10 @@ namespace OpenWorld
         DefineSettlements();
 
         m_initialized = true;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Settlement system initialized: %zu settlements",
-                       m_settlements.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Settlements: " + std::to_string(m_settlements.size()) +
-                                                    " | NPCs: " + std::to_string(GetTotalNPCCount()));
+        Spark::ModuleLog::Info(m_context, "Settlement system initialized: {} settlements", m_settlements.size());
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[OpenWorld] Settlements: " + std::to_string(m_settlements.size()) +
+                                   " | NPCs: " + std::to_string(GetTotalNPCCount()));
         return true;
     }
 
@@ -229,7 +228,9 @@ namespace OpenWorld
     void OWSettlementSystem::Update([[maybe_unused]] float deltaTime)
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         // NPC AI updates, disposition changes, shop restocking would happen here
     }
@@ -237,10 +238,13 @@ namespace OpenWorld
     void OWSettlementSystem::Shutdown()
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         m_settlements.clear();
         m_camps.clear();
+        m_visitedSettlements.clear();
         m_initialized = false;
     }
 
@@ -248,7 +252,9 @@ namespace OpenWorld
     {
         size_t total = 0;
         for (const auto& s : m_settlements)
+        {
             total += s.npcs.size();
+        }
         return total;
     }
 
@@ -257,7 +263,9 @@ namespace OpenWorld
         for (const auto& s : m_settlements)
         {
             if (s.settlementId == id)
+            {
                 return &s;
+            }
         }
         return nullptr;
     }
@@ -281,6 +289,32 @@ namespace OpenWorld
         return nearest;
     }
 
+    const Settlement* OWSettlementSystem::FindSettlementAt(float x, float z) const
+    {
+        const Settlement* nearest = GetNearestSettlement(x, z);
+        if (!nearest)
+        {
+            return nullptr;
+        }
+        const float dx = x - nearest->centerX;
+        const float dz = z - nearest->centerZ;
+        return dx * dx + dz * dz <= nearest->radius * nearest->radius ? nearest : nullptr;
+    }
+
+    bool OWSettlementSystem::VisitSettlement(uint32_t settlementId)
+    {
+        const Settlement* settlement = GetSettlement(settlementId);
+        if (!settlement)
+        {
+            return false;
+        }
+        if (m_visitedSettlements.insert(settlementId).second)
+        {
+            Spark::ModuleLog::Info(m_context, "{}", "[OpenWorld] Visited settlement: " + settlement->name);
+        }
+        return true;
+    }
+
     uint32_t OWSettlementSystem::PlaceCamp(const std::string& name, float x, float y, float z, uint32_t regionId)
     {
         PlayerCamp camp{};
@@ -295,8 +329,8 @@ namespace OpenWorld
 
         m_camps[camp.campId] = camp;
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Camp '" + name +
-                                                    "' placed (id=" + std::to_string(camp.campId) + ")");
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[OpenWorld] Camp '" + name + "' placed (id=" + std::to_string(camp.campId) + ")");
         return camp.campId;
     }
 
@@ -304,25 +338,36 @@ namespace OpenWorld
     {
         auto it = m_camps.find(campId);
         if (it == m_camps.end())
+        {
             return false;
+        }
 
         auto& camp = it->second;
         if (camp.tier >= CampTier::Homestead)
+        {
             return false;
+        }
 
         camp.tier = static_cast<CampTier>(static_cast<uint8_t>(camp.tier) + 1);
         camp.storageCapacity += 10;
 
         // Unlock features per tier
         if (camp.tier >= CampTier::Lean_To)
+        {
             camp.hasCookingFire = true;
+        }
         if (camp.tier >= CampTier::Tent)
+        {
             camp.hasStorageChest = true;
+        }
         if (camp.tier >= CampTier::Cabin)
+        {
             camp.hasCraftingStation = true;
+        }
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Camp '" + camp.name + "' upgraded to tier " +
-                                                    std::to_string(static_cast<int>(camp.tier)));
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[OpenWorld] Camp '" + camp.name + "' upgraded to tier " +
+                                   std::to_string(static_cast<int>(camp.tier)));
         return true;
     }
 
@@ -345,11 +390,15 @@ namespace OpenWorld
         auto fail = [&](const char* message)
         {
             if (error)
+            {
                 *error = message;
+            }
             return false;
         };
         if (state.camps.size() > 1024)
+        {
             return fail("too many player camps");
+        }
 
         std::unordered_map<uint32_t, PlayerCamp> camps;
         camps.reserve(state.camps.size());
@@ -364,11 +413,15 @@ namespace OpenWorld
                 camp.hasCraftingStation != (camp.tier >= CampTier::Cabin) ||
                 camp.storageCapacity != 10 + 10 * static_cast<uint32_t>(camp.tier) ||
                 !camps.emplace(camp.campId, camp).second)
+            {
                 return fail("invalid player camp record");
+            }
             highestId = std::max(highestId, camp.campId);
         }
         if (state.nextCampId == 0 || state.nextCampId <= highestId)
+        {
             return fail("invalid next camp id");
+        }
 
         m_camps = std::move(camps);
         m_nextCampId = state.nextCampId;
@@ -385,11 +438,21 @@ namespace OpenWorld
             ss << "    " << s.description << "\n";
             ss << "    NPCs: " << s.npcs.size();
             if (s.hasMerchant)
+            {
                 ss << " | Merchant";
+            }
             if (s.hasBlacksmith)
+            {
                 ss << " | Blacksmith";
+            }
             if (s.hasInn)
+            {
                 ss << " | Inn";
+            }
+            if (IsSettlementVisited(s.settlementId))
+            {
+                ss << " | Visited";
+            }
             ss << "\n";
         }
         return ss.str();
@@ -410,11 +473,17 @@ namespace OpenWorld
             ss << "    Position: (" << camp.posX << ", " << camp.posY << ", " << camp.posZ << ")\n";
             ss << "    Storage: " << camp.storageCapacity << " slots";
             if (camp.hasCookingFire)
+            {
                 ss << " | Cooking";
+            }
             if (camp.hasCraftingStation)
+            {
                 ss << " | Crafting";
+            }
             if (camp.hasStorageChest)
+            {
                 ss << " | Chest";
+            }
             ss << "\n";
         }
         return ss.str();
@@ -422,9 +491,11 @@ namespace OpenWorld
 
     void OWSettlementSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Settlements"))
+        {
             return;
+        }
 
         ImGui::Text("Settlements: %zu | NPCs: %zu | Player Camps: %zu", m_settlements.size(), GetTotalNPCCount(),
                     m_camps.size());

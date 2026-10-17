@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "projectIdentity": "/projects/fuzz/Fuzz.sparkproject",
+  "projectRelativeScene": "Scenes/Arena.sparkscene",
+  "sceneDisplayName": "Arena",
+  "serializedWorld": "{\n \"version\": 1,\n \"entities\": [\n  {\n   \"id\": 0,\n   \"name\": \"Root\",\n   \"parent\": -1,\n   \"components\": [\n    {\n     \"type\": \"Transform\",\n     \"fields\": {\n      \"position\": \"1.000000,2.000000,3.000000\",\n      \"rotation\": \"0.000000,90.000000,0.000000\",\n      \"scale\": \"1.000000,1.000000,1.000000\"\n     }\n    }\n   ]\n  },\n  {\n   \"id\": 1,\n   \"name\": \"Camera\",\n   \"parent\": 0,\n   \"components\": [\n    {\n     \"type\": \"Transform\",\n     \"fields\": {\n      \"position\": \"1.000000,2.000000,3.000000\",\n      \"rotation\": \"0.000000,90.000000,0.000000\",\n      \"scale\": \"1.000000,1.000000,1.000000\"\n     }\n    },\n    {\n     \"type\": \"Camera\",\n     \"fields\": {\n      \"fov\": \"60.000000\",\n      \"nearPlane\": \"0.100000\",\n      \"farPlane\": \"1000.000000\",\n      \"isMainCamera\": \"true\"\n     }\n    }\n   ]\n  }\n ]\n}",
+  "layoutIniPath": "Config/layout.ini",
+  "dirtySequence": 9007199254740993,
+  "capturedUnixMilliseconds": 1790000000123,
+  "recentOperations": [
+    "Move Root",
+    "Rename Camera"
+  ]
+}

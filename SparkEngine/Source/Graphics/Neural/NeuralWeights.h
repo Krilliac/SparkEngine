@@ -54,8 +54,8 @@ namespace Spark::Graphics::Neural
     /**
      * @brief Binary header for .nnw files.
      *
-     * v2 adds a @p flags field (previously part of implicit zero padding).
-     * Readers must check @p version: v1 files ignore flags entirely.
+     * v2 appends a @p flags field after the 16-byte v1 prefix.
+     * Readers must check @p version: v1 files do not contain the field.
      */
     struct NNWHeader
     {

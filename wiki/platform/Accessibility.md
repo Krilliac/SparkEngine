@@ -270,18 +270,18 @@ Example output:
 AccessibilitySystem: initialized | Colorblind: Deuteranopia | Subtitles: on (active: 2) | HighContrast: off | ReducedMotion: on | TextScale: 1.500000
 ```
 
-## Platform Compliance
+## Accessibility Guidance References
 
-The accessibility feature set is designed to support compliance with major platform and regulatory requirements:
+The feature set is mapped against published accessibility guidance. The mapping is reference only: it is not a conformance, compliance or certification claim. Console support is planned and uncertified (OD-12, PLT-250).
 
-| Standard | Relevant Features |
+| Guidance | Relevant Features |
 |---|---|
 | **EU European Accessibility Act (EAA)** | Colorblind correction, subtitles, screen reader hooks, text scaling, high contrast |
-| **Xbox Accessibility Guidelines (XAG)** | Colorblind modes, subtitle customization, reduced motion, input remapping |
-| **PlayStation Certification** | Subtitle support, text scaling, colorblind options |
+| **Xbox Accessibility Guidelines (XAG)** (reference only; console support is planned, PLT-250) | Colorblind modes, subtitle customization, reduced motion, input remapping |
+| **PlayStation accessibility guidance** (reference only; console support is planned and uncertified, PLT-250) | Subtitle support, text scaling, colorblind options |
 | **WCAG 2.1 (web-adjacent)** | High contrast, text scaling, reduced motion, keyboard navigation |
 
-Use the settings struct to implement per-platform compliance checklists. The `screenReaderEnabled` flag is a hook point for platform-specific screen reader integration (e.g., Windows Narrator, VoiceOver on macOS).
+Use the settings struct to back per-platform accessibility checklists. The `screenReaderEnabled` flag is a hook point for platform-specific screen reader integration (e.g., Windows Narrator, VoiceOver on macOS).
 
 ## Integration
 

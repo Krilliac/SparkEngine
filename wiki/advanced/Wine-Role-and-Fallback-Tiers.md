@@ -8,9 +8,19 @@
 
 ## Overview
 
+The MinGW/Wine route is experimental. Its advisory CI lane runs only on manual
+`workflow_dispatch`; the last documented hosted Wine tests failed. The design
+intent below is not a passing-run or platform-certification claim.
+
 Wine in SparkEngine is a **live execution path**, not just a CI smoke test. The intent: a developer without a GPU — or inside a sandbox with no GPU passthrough — can cross-compile the engine on Linux with MinGW-w64, run it under Wine, and see real frame-by-frame rendering via Lavapipe or llvmpipe. The `build-linux-mingw-wine` CI job exists to *protect* this path, not define it. Decisions about Wine version, DXVK pairing, fork choice, and escape hatches should optimize for live developer experience first, CI second.
 
 A future session asking "should we swap upstream Wine for ValveSoftware/wine?" or "should we drop the flaky Wine job?" should read this page first. Both answers are no, for the reasons below.
+
+OD-30 (owner, 2026-10-01) explicitly keeps this experimental CPU-rendering
+capability for GPU-less servers and AI agents, covering both engine and editor.
+The new `.github/scripts/mingw-wine-smoke.py` path requires captures, automation and
+successful editor presentations on DXVK/Lavapipe; local and exact-commit hosted
+proof remain pending. Lower-tier diagnostic fallbacks cannot satisfy CI-100[2].
 
 ## Why Upstream Wine, Not ValveSoftware/wine
 

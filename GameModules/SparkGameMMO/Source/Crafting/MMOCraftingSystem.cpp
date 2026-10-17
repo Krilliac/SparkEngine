@@ -8,7 +8,7 @@
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -177,11 +177,17 @@ namespace MMO
         for (const auto& [id, recipe] : m_recipes)
         {
             if (!KnowsRecipe(crafter, id))
+            {
                 continue;
+            }
             if (GetSkillLevel(crafter, recipe.discipline) < recipe.requiredSkillLevel)
+            {
                 continue;
+            }
             if (recipe.station != CraftingStation::None && recipe.station != crafter.nearbyStation)
+            {
                 continue;
+            }
             result.push_back(&recipe);
         }
         return result;
@@ -191,20 +197,30 @@ namespace MMO
     {
         const auto* recipe = GetRecipe(recipeId);
         if (!recipe || !KnowsRecipe(crafter, recipeId))
+        {
             return false;
+        }
         if (GetSkillLevel(crafter, recipe->discipline) < recipe->requiredSkillLevel)
+        {
             return false;
+        }
         if (recipe->station != CraftingStation::None && recipe->station != crafter.nearbyStation)
+        {
             return false;
+        }
 
         if (!m_invSystem)
+        {
             return false;
+        }
 
         InventoryData trialInventory = inv;
         for (const auto& mat : recipe->materials)
         {
             if (m_invSystem->CountItem(trialInventory, mat.itemDefId) < mat.count)
+            {
                 return false;
+            }
             m_invSystem->RemoveItem(trialInventory, mat.itemDefId, mat.count);
         }
 
@@ -227,7 +243,9 @@ namespace MMO
         if (m_invSystem)
         {
             for (const auto& mat : recipe->materials)
+            {
                 m_invSystem->RemoveItem(inv, mat.itemDefId, mat.count);
+            }
         }
 
         crafter.isCrafting = true;
@@ -246,7 +264,9 @@ namespace MMO
     void MMOCraftingSystem::Update(float dt, CraftingState& crafter, InventoryData& inv)
     {
         if (!crafter.isCrafting || dt <= 0.0f)
+        {
             return;
+        }
 
         const auto* recipe = GetRecipe(crafter.activeRecipeId);
         if (!recipe)
@@ -277,7 +297,9 @@ namespace MMO
     {
         const auto* recipe = GetRecipe(crafter.activeRecipeId);
         if (!recipe || !m_invSystem)
+        {
             return false;
+        }
 
         InventoryData completedInventory = inv;
         if (m_invSystem->AddItem(completedInventory, recipe->resultItemId, recipe->resultCount) != recipe->resultCount)
@@ -308,7 +330,9 @@ namespace MMO
             skill.currentXP = 0;
         }
         if (skill.level >= skill.maxLevel)
+        {
             return;
+        }
 
         skill.currentXP += xp;
         while (skill.currentXP >= skill.GetXPForNext() && skill.level < skill.maxLevel)
@@ -321,7 +345,9 @@ namespace MMO
     void MMOCraftingSystem::LearnRecipe(CraftingState& crafter, uint32_t recipeId)
     {
         if (!KnowsRecipe(crafter, recipeId) && GetRecipe(recipeId))
+        {
             crafter.knownRecipes.push_back(recipeId);
+        }
     }
 
     bool MMOCraftingSystem::KnowsRecipe(const CraftingState& crafter, uint32_t recipeId) const
@@ -344,21 +370,25 @@ namespace MMO
         {
             ss << "Skills:\n";
             for (const auto& [k, s] : crafter.skills)
+            {
                 ss << "  Discipline " << k << ": Lv" << s.level << "\n";
+            }
         }
         return ss.str();
     }
 
     void MMOCraftingSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (ImGui::TreeNode("MMO Crafting System"))
         {
             ImGui::Text("Recipes: %zu", m_recipes.size());
             if (ImGui::TreeNode("Recipe List"))
             {
                 for (const auto& [id, r] : m_recipes)
+                {
                     ImGui::Text("[%u] %s (Skill Lv%d, %.1fs)", id, r.name.c_str(), r.requiredSkillLevel, r.craftTime);
+                }
                 ImGui::TreePop();
             }
             ImGui::TreePop();

@@ -1,0 +1,22 @@
+{
+  "projectFileVersion": 2,
+  "name": "Future",
+  "version": "1.0.0",
+  "description": "Written by a SparkEditor newer than this build",
+  "engineVersion": "9.0.0",
+  "defaultScene": "Scenes/Main.sparkscene",
+  "lastOpenedScene": "Scenes/Main.sparkscene",
+  "createdTime": 0,
+  "lastModified": 0,
+  "modules": [
+    "Future"
+  ],
+  "scenes": [
+    "Scenes/Main.sparkscene"
+  ],
+  "sceneLayers": {
+    "Scenes/Main.sparkscene": [
+      "Gameplay"
+    ]
+  }
+}

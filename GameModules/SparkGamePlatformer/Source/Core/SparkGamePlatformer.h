@@ -17,6 +17,8 @@
 
 #include "Spark/SparkSDK.h"
 #include <memory>
+#include <string>
+#include <vector>
 
 // Forward declarations
 namespace Platformer
@@ -28,6 +30,8 @@ namespace Platformer
     class PlatformerCheckpointSystem;
     class PlatformerCameraSystem;
     class PlatformerEngineSystems;
+    class PlatformerLevelFlow;
+    class PlatformerRouteRunner;
 } // namespace Platformer
 
 /**
@@ -64,6 +68,7 @@ class SparkGamePlatformerModule : public Spark::IModule
     bool LoadPlayableLevel(uint32_t index);
 
     Spark::IEngineContext* m_context{nullptr};
+    std::vector<std::string> m_consoleCommands; ///< Registered through m_context->GetConsole(); removed in OnUnload
     bool m_initialized{false};
     bool m_paused{false};
 
@@ -74,6 +79,8 @@ class SparkGamePlatformerModule : public Spark::IModule
     std::unique_ptr<Platformer::PlatformerCheckpointSystem> m_checkpointSystem;
     std::unique_ptr<Platformer::PlatformerCameraSystem> m_cameraSystem;
     std::unique_ptr<Platformer::PlatformerEngineSystems> m_engineSystems;
+    std::unique_ptr<Platformer::PlatformerLevelFlow> m_levelFlow; ///< Per-frame orchestration over the systems above
+    std::unique_ptr<Platformer::PlatformerRouteRunner> m_routeRunner; ///< Non-null while platformer_autoplay is on
 };
 
 // Module exports

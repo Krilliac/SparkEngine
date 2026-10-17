@@ -13,6 +13,7 @@
 #include "GraphicsEngine.h"
 
 #include "AssetPipeline.h"
+#include "D3D11BasicInputLayouts.h"
 #include "GPUDrivenRenderer.h"
 
 // Windows headers for DirectX
@@ -62,12 +63,30 @@ void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const 
     if (localDrawList.empty())
         return;
 
+    ComPtr<ID3D11InputLayout> assetInputLayout;
+    UINT layoutBytes = sizeof(ID3D11InputLayout*);
+    if (!m_context || !m_basicVertexShader ||
+        FAILED(m_basicVertexShader->GetPrivateData(Spark::Graphics::Detail::kBasicAssetInputLayoutGuid, &layoutBytes,
+                                                   assetInputLayout.GetAddressOf())) ||
+        layoutBytes != sizeof(ID3D11InputLayout*) || !assetInputLayout)
+    {
+        SPARK_LOG_ONCE(Spark::LogLevel::Error, Spark::LogCategory::Graphics,
+                       "ProcessDrawList: the asset vertex input layout is unavailable; submitted draws rejected");
+        localDrawList.clear();
+        return;
+    }
+    auto bindAssetShaders = [&]()
+    {
+        SetBasicShaders();
+        m_context->IASetInputLayout(assetInputLayout.Get());
+    };
+
     // Draw a suffix through the established per-object CPU path. GPU-driven
     // rendering calls this immediately when any prerequisite or dispatch
     // fails, so enabling the optimization can never discard submitted meshes.
     auto drawCPUCommands = [&](size_t first)
     {
-        SetBasicShaders();
+        bindAssetShaders();
         std::string_view lastMaterial;
         for (size_t commandIndex = first; commandIndex < localDrawList.size(); ++commandIndex)
         {
@@ -80,7 +99,18 @@ void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const 
                 m_assetPipeline->BindMesh(cmd.meshPath);
                 if (cmd.materialPath != lastMaterial)
                 {
-                    m_assetPipeline->BindMaterial(cmd.materialPath);
+                    if (cmd.materialPath.empty())
+                    {
+                        // BindMaterial intentionally treats an empty path as
+                        // the default-material selector. Rebind the engine's
+                        // actual default SRV here so a prior explicit texture
+                        // cannot leak into this draw.
+                        SetBasicTexture(nullptr);
+                    }
+                    else
+                    {
+                        m_assetPipeline->BindMaterial(cmd.materialPath);
+                    }
                     lastMaterial = cmd.materialPath;
                 }
                 m_assetPipeline->DrawBoundMesh();
@@ -111,7 +141,7 @@ void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const 
             std::sort(localDrawList.begin(), localDrawList.end(),
                       [](const MeshDrawCommand& a, const MeshDrawCommand& b) { return a.meshPath < b.meshPath; });
 
-            SetBasicShaders();
+            bindAssetShaders();
             size_t i = 0;
             while (i < localDrawList.size())
             {
@@ -174,7 +204,10 @@ void GraphicsEngine::ProcessDrawList(const DirectX::XMMATRIX& viewMatrix, const 
 
                 // Bind material from first instance (batch shares mesh, material may vary).
                 // string_view overload avoids per-draw-call std::string allocation.
-                m_assetPipeline->BindMaterial(localDrawList[batchStart].materialPath);
+                if (localDrawList[batchStart].materialPath.empty())
+                    SetBasicTexture(nullptr);
+                else
+                    m_assetPipeline->BindMaterial(localDrawList[batchStart].materialPath);
 
                 // GPU cull + indirect draw
                 ID3D11Buffer* vb = meshAsset->GetVertexBuffer();

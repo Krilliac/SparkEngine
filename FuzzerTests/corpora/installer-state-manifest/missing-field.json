@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "ref": "Working",
+  "destination": "/opt/SparkEngine",
+  "generator": "Ninja",
+  "build_type": "Release",
+  "built_at": "2026-09-29T00:00:00Z",
+  "installer_version": "1.0.0",
+  "options": {
+    "BUILD_TESTS": true,
+    "ENABLE_EDITOR": false
+  }
+}

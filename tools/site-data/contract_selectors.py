@@ -11,15 +11,28 @@ from __future__ import annotations
 
 import fnmatch
 import functools
+import json
+import os
 import re
+import shlex
+import sys
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Iterable
 
 from common import REPO_ROOT, SiteDataError, read_bytes_stable
 
 
 WORKFLOW_ROOT = REPO_ROOT / ".github" / "workflows"
 TEST_ROOT = REPO_ROOT / "Tests"
-TEST_CMAKE = TEST_ROOT / "CMakeLists.txt"
+# Directories never searched for CTest registrations: vendored projects, build
+# trees, and dot-directories (VCS metadata, agent worktrees holding whole
+# checkout copies). Asset trees hold no CMake and are large to walk.
+_REGISTRATION_SKIP_DIRS = frozenset({"ThirdParty", "Assets", "Art", "node_modules"})
+# The build-matrix inventory owns CMakePresets.json parsing and inheritance
+# resolution; work-item commands are resolved through the same code so the two
+# contracts cannot disagree about what a preset means.
+BUILDMATRIX_ROOT = REPO_ROOT / "Tools" / "buildmatrix"
 MAX_WORKFLOW_BYTES = 2 * 1024 * 1024
 MAX_TEST_SOURCE_BYTES = 8 * 1024 * 1024
 GLOB_CHARACTERS = "*?["
@@ -68,6 +81,30 @@ def workflow_job_ids() -> frozenset[str]:
     return frozenset(identifiers)
 
 
+def test_registration_files() -> list[Path]:
+    """First-party CMake files that register CTests.
+
+    Tests are registered next to the product they cover (SparkCrashReporter,
+    SparkServer, SparkBuild, ...) as well as in Tests/CMakeLists.txt, so every
+    CMakeLists.txt and cmake/*.cmake module containing ``add_test(`` counts.
+    """
+    registrations: list[Path] = []
+    for directory, subdirectories, files in os.walk(REPO_ROOT):
+        subdirectories[:] = sorted(
+            name
+            for name in subdirectories
+            if not name.startswith(".")
+            and not name.startswith("build")
+            and name not in _REGISTRATION_SKIP_DIRS
+            and not os.path.islink(os.path.join(directory, name))
+        )
+        current = Path(directory)
+        for name in sorted(files):
+            if name == "CMakeLists.txt" or (name.endswith(".cmake") and current.name == "cmake"):
+                registrations.append(current / name)
+    return registrations
+
+
 @functools.lru_cache(maxsize=1)
 def test_selector_targets() -> frozenset[str]:
     """Everything a test selector may legitimately name.
@@ -76,10 +113,13 @@ def test_selector_targets() -> frozenset[str]:
     identifiers the SparkTests harness selects through SPARK_TEST_NAME.
     """
     targets: set[str] = set()
-    if TEST_CMAKE.is_file():
-        cmake = read_bytes_stable(TEST_CMAKE, MAX_TEST_SOURCE_BYTES, "Tests/CMakeLists.txt").decode(
-            "utf-8", errors="replace"
-        )
+    for path in test_registration_files():
+        if path.is_symlink() or not path.is_file():
+            continue
+        display = path.relative_to(REPO_ROOT).as_posix()
+        cmake = read_bytes_stable(path, MAX_TEST_SOURCE_BYTES, display).decode("utf-8", errors="replace")
+        if "add_test(" not in cmake:
+            continue
         for match in _CTEST_NAME.finditer(cmake):
             targets.add(match.group(1))
         for match in _CTEST_LABELS.finditer(cmake):
@@ -106,6 +146,134 @@ def resolve_ci_job(value: str) -> bool:
     return value in workflow_job_ids()
 
 
+REQUIRED_GATE_WORKFLOW = WORKFLOW_ROOT / "build.yml"
+REQUIRED_GATE_JOB = "required-ci-gate"
+_NEEDS_INLINE = re.compile(r"^    needs:\s*\[([^\]]*)\]\s*(?:#.*)?$")
+_NEEDS_SCALAR = re.compile(r"^    needs:\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*(?:#.*)?$")
+_NEEDS_BLOCK = re.compile(r"^    needs:\s*(?:#.*)?$")
+_NEEDS_ENTRY = re.compile(r"^      -\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*(?:#.*)?$")
+
+
+def workflow_job_needs(workflow: Path) -> dict[str, frozenset[str]]:
+    """Every job in one workflow file mapped to the jobs its ``needs:`` names.
+
+    Same structural line parser as :func:`workflow_job_ids`: a job is a
+    two-space-indented key inside ``jobs:``, and ``needs:`` is a four-space key
+    in inline-list, scalar, or block-list form.
+    """
+    if not workflow.is_file():
+        raise SiteDataError(f"{workflow.relative_to(REPO_ROOT).as_posix()} does not exist")
+    text = read_bytes_stable(workflow, MAX_WORKFLOW_BYTES, f"workflow {workflow.name}").decode(
+        "utf-8", errors="replace"
+    )
+    needs: dict[str, set[str]] = {}
+    current: str | None = None
+    in_jobs = False
+    in_needs = False
+    for line in text.splitlines():
+        top = _TOP_LEVEL_KEY.match(line)
+        if top:
+            in_jobs = top.group(1) == "jobs"
+            current = None
+            continue
+        if not in_jobs:
+            continue
+        job = _JOB_KEY.match(line)
+        if job:
+            current = job.group(1)
+            needs[current] = set()
+            in_needs = False
+            continue
+        if current is None:
+            continue
+        inline = _NEEDS_INLINE.match(line) or _NEEDS_SCALAR.match(line)
+        if inline:
+            needs[current].update(entry.strip() for entry in inline.group(1).split(",") if entry.strip())
+            in_needs = False
+            continue
+        if _NEEDS_BLOCK.match(line):
+            in_needs = True
+            continue
+        if in_needs:
+            entry = _NEEDS_ENTRY.match(line)
+            if entry:
+                needs[current].add(entry.group(1))
+            elif line.strip() and not line.lstrip().startswith("#"):
+                in_needs = False
+    return {job: frozenset(jobs) for job, jobs in needs.items()}
+
+
+_RUNS_ON = re.compile(r"^    runs-on:\s*(\S[^#]*?)\s*(?:#.*)?$")
+_SANITIZER_JOB_ID = re.compile(r"^build-linux-(?:asan|tsan|msan)$")
+_SANITIZER_PRESET = re.compile(r"\bci-linux-(?:asan|tsan)\b")
+
+
+@dataclass(frozen=True)
+class WorkflowJob:
+    """One job's runner label and whether it is a Linux sanitizer lane."""
+
+    runs_on: str
+    sanitizer: bool
+
+    @property
+    def windows(self) -> bool:
+        return self.runs_on.startswith("windows-")
+
+
+@functools.lru_cache(maxsize=16)
+def workflow_jobs(workflow: Path) -> dict[str, WorkflowJob]:
+    """Every job in one workflow with its ``runs-on`` label and sanitizer classification.
+
+    A sanitizer lane is a ``build-linux-{asan,tsan,msan}`` job or a job that
+    configures the ``ci-linux-asan``/``ci-linux-tsan`` presets. An expression
+    runner such as ``${{ matrix.os }}`` is kept verbatim and is never Windows.
+    """
+    if not workflow.is_file():
+        raise SiteDataError(f"{workflow.relative_to(REPO_ROOT).as_posix()} does not exist")
+    text = read_bytes_stable(workflow, MAX_WORKFLOW_BYTES, f"workflow {workflow.name}").decode(
+        "utf-8", errors="replace"
+    )
+    bodies: dict[str, list[str]] = {}
+    current: str | None = None
+    in_jobs = False
+    for line in text.splitlines():
+        top = _TOP_LEVEL_KEY.match(line)
+        if top:
+            in_jobs = top.group(1) == "jobs"
+            current = None
+            continue
+        if not in_jobs:
+            continue
+        job = _JOB_KEY.match(line)
+        if job:
+            current = job.group(1)
+            bodies[current] = []
+        elif current is not None:
+            bodies[current].append(line)
+    jobs: dict[str, WorkflowJob] = {}
+    for name, lines in bodies.items():
+        runs_on = next((match.group(1).strip("'\"") for match in map(_RUNS_ON.match, lines) if match), "")
+        sanitizer = bool(_SANITIZER_JOB_ID.match(name)) or any(_SANITIZER_PRESET.search(line) for line in lines)
+        jobs[name] = WorkflowJob(runs_on, sanitizer)
+    return jobs
+
+
+@functools.lru_cache(maxsize=1)
+def required_gate_jobs() -> frozenset[str]:
+    """Jobs the aggregate ``required-ci-gate`` job in build.yml needs.
+
+    A job outside this set can be skipped, cancelled, or fail without turning the
+    required aggregate red, so it cannot be the CI evidence behind a claim that
+    something is release-validated.
+    """
+    needs = workflow_job_needs(REQUIRED_GATE_WORKFLOW)
+    if REQUIRED_GATE_JOB not in needs:
+        raise SiteDataError(f"build.yml defines no {REQUIRED_GATE_JOB} job")
+    if not needs[REQUIRED_GATE_JOB]:
+        raise SiteDataError(f"{REQUIRED_GATE_JOB} in build.yml needs no jobs")
+    return needs[REQUIRED_GATE_JOB]
+
+
 @functools.lru_cache(maxsize=4096)
 def resolve_test_selector(value: str) -> bool:
     """A test selector may be an exact name or a glob over selectable names.
@@ -121,11 +289,439 @@ def resolve_test_selector(value: str) -> bool:
     return any(fnmatch.fnmatchcase(target, value) for target in targets)
 
 
+# CI-110: what `ctest -L` and `ctest -R` can select. Unlike test_selector_targets
+# this holds CTest names and labels only (ctest never sees SparkTests TEST names),
+# kept apart because -L matches labels and -R matches names.
+_ADD_TEST_NAME = re.compile(r"\bNAME\s+\"?([^\s\")]+)")
+_LABELS_PROPERTY = re.compile(r"\bLABELS\s+(?:\"([^\"]*)\"|([A-Za-z0-9_.;\-]+))")
+_HELPER_CALL = re.compile(r"(?<![\w(])(spark_add_\w*test)\s*\(")
+_QUOTED = re.compile(r"\"([^\"]*)\"")
+_CMAKE_VARIABLE = re.compile(r"\$\{[^}]*\}")
+_LITERAL_NAME = re.compile(r"[A-Za-z][A-Za-z0-9_.\-]*")
+# Quoted foreach-list items that become CTest names: "Prefix_=<count>" (the
+# name drops the trailing underscores) and "Name|Module|label|timeout".
+_PREFIX_COUNT_ITEM = re.compile(r"([A-Za-z][A-Za-z0-9_]*?)_+=(?:\d+|\$\{\w+\})")
+_PIPE_ITEM = re.compile(r"([A-Za-z][A-Za-z0-9_]*)\|[^|]+\|[^|]*(?:\|[^|]*)*")
+_CTEST_PLACEHOLDER = re.compile(r"\$[A-Za-z{(]|<[A-Za-z]|%[A-Za-z]")
+
+
+@dataclass(frozen=True)
+class CTestRegistry:
+    """CTest labels and names registered by first-party CMake, statically.
+
+    A lower bound read from source, not from a configured tree: literal
+    ``LABELS`` values and ``;``-lists passed to ``spark_add_*test`` helpers,
+    literal ``NAME`` values, ``ModuleManifest_<Module>_<prefix>`` names expanded
+    from each module.json, and quoted foreach-list items shaped like the ones
+    those loops turn into names. A ``NAME`` built from ``${...}`` around a
+    literal part is kept as a glob (``TerrafrontMultiClient_*``).
+    """
+
+    labels: frozenset[str]
+    names: frozenset[str]
+    name_patterns: frozenset[str]
+
+
+def _call_body(text: str, start: int) -> str:
+    """Text of a CMake call from its opening parenthesis to the balancing one."""
+    depth = 0
+    for index in range(start, len(text)):
+        if text[index] == "(":
+            depth += 1
+        elif text[index] == ")":
+            depth -= 1
+            if depth == 0:
+                return text[start + 1:index]
+    return text[start + 1:]
+
+
+def _label_list(value: str) -> set[str]:
+    return {label.strip() for label in value.split(";") if label.strip() and "$" not in label}
+
+
+@functools.lru_cache(maxsize=1)
+def ctest_registry() -> CTestRegistry:
+    labels: set[str] = set()
+    names: set[str] = set()
+    patterns: set[str] = set()
+    for path in test_registration_files():
+        if path.is_symlink() or not path.is_file():
+            continue
+        display = path.relative_to(REPO_ROOT).as_posix()
+        cmake = read_bytes_stable(path, MAX_TEST_SOURCE_BYTES, display).decode("utf-8", errors="replace")
+        if "add_test(" not in cmake:
+            continue
+        for match in _LABELS_PROPERTY.finditer(cmake):
+            labels.update(_label_list(match.group(1) if match.group(1) is not None else match.group(2)))
+        for match in _ADD_TEST_NAME.finditer(cmake):
+            token = match.group(1)
+            if "${" not in token:
+                names.add(token)
+                continue
+            pattern = _CMAKE_VARIABLE.sub("*", token)
+            if any(character.isalnum() for character in pattern):
+                patterns.add(pattern)
+        # The lookbehind skips the helper's own function(...) definition.
+        for match in _HELPER_CALL.finditer(cmake):
+            body = _call_body(cmake, match.end() - 1)
+            arguments = body.split()
+            if arguments and _LITERAL_NAME.fullmatch(arguments[0]):
+                names.add(arguments[0])
+            for quoted in _QUOTED.findall(body):
+                if ";" in quoted and "=" not in quoted:
+                    labels.update(_label_list(quoted))
+        for quoted in _QUOTED.findall(cmake):
+            item = _PREFIX_COUNT_ITEM.fullmatch(quoted) or _PIPE_ITEM.fullmatch(quoted)
+            if item:
+                names.add(item.group(1))
+    for manifest in sorted((REPO_ROOT / "GameModules").glob("*/module.json")):
+        if not (manifest.parent / "CMakeLists.txt").is_file():
+            continue
+        display = manifest.relative_to(REPO_ROOT).as_posix()
+        try:
+            data = json.loads(read_bytes_stable(manifest, MAX_TEST_SOURCE_BYTES, display))
+        except ValueError as error:
+            raise SiteDataError(f"{display}: {error}") from error
+        prefixes = (data.get("tests") or {}).get("prefixes") or [] if isinstance(data, dict) else []
+        for entry in prefixes:
+            prefix = entry.get("prefix") if isinstance(entry, dict) else None
+            if isinstance(prefix, str) and prefix.strip("_"):
+                names.add(f"ModuleManifest_{manifest.parent.name}_{prefix.rstrip('_')}")
+    if not labels or not names:
+        raise SiteDataError("no CTest label or name registration could be resolved")
+    return CTestRegistry(frozenset(labels), frozenset(names), frozenset(patterns))
+
+
+def _pattern_admits(core: str, left: bool, right: bool, pattern: str) -> bool:
+    """Whether a literal ``-R`` value can match some name a ``${...}`` glob stands for."""
+    if left and right:
+        return fnmatch.fnmatchcase(core, pattern)
+    head, tail = pattern.split("*")[0], pattern.split("*")[-1]
+    if core in pattern.replace("*", ""):
+        return True
+    if not right and head and (core.startswith(head) or (left and head.startswith(core))):
+        return True
+    return not left and bool(tail) and (core.endswith(tail) or (right and tail.endswith(core)))
+
+
+def _selects(value: str, pattern: re.Pattern[str], registered: frozenset[str], globs: frozenset[str]) -> bool:
+    if any(pattern.search(candidate) for candidate in registered):
+        return True
+    left, right = value.startswith("^"), value.endswith("$")
+    core = value[1 if left else 0:len(value) - 1 if right else len(value)]
+    if not _LITERAL_NAME.fullmatch(core):
+        return False
+    return any(_pattern_admits(core, left, right, glob) for glob in globs)
+
+
+def ctest_filter_errors(arguments: list[str], planned: Iterable[str] = ()) -> list[str]:
+    """Why each ``-L``/``-R`` filter in one ctest invocation's arguments selects nothing.
+
+    ``-LE``/``-E`` exclude and need not match. A filter whose value, without
+    ``^``/``$``, occurs in a planned selector (``*`` removed) is declared debt.
+    Values holding shell or document placeholders are skipped.
+    """
+    registry = ctest_registry()
+    planned_text = [entry.replace("*", "") for entry in planned]
+    errors: list[str] = []
+    index = 0
+    while index < len(arguments):
+        argument = arguments[index]
+        index += 1
+        kind = None
+        for flag, flag_kind in (("-L", "label"), ("--label-regex", "label"), ("-R", "name"), ("--tests-regex", "name")):
+            if argument == flag:
+                kind, value = flag_kind, arguments[index] if index < len(arguments) else None
+                index += 1
+            elif flag.startswith("--") and argument.startswith(flag + "="):
+                kind, value = flag_kind, argument[len(flag) + 1:]
+            if kind:
+                break
+        if kind is None or not value or _CTEST_PLACEHOLDER.search(value):
+            continue
+        flag = "-L" if kind == "label" else "-R"
+        try:
+            compiled = re.compile(value)
+        except re.error as error:
+            errors.append(f"ctest {flag} {value} is not a valid regular expression ({error})")
+            continue
+        if kind == "label":
+            found = _selects(value, compiled, registry.labels, frozenset())
+        else:
+            found = _selects(value, compiled, registry.names, registry.name_patterns)
+        stripped = value.strip("^$")
+        if found or any(stripped and re.search(re.escape(stripped), entry) for entry in planned_text):
+            continue
+        noun = "label" if kind == "label" else "test"
+        errors.append(
+            f"ctest {flag} {value} selects no registered {noun}; fix it or declare it in plannedTestSelectors"
+        )
+    return errors
+
+
+_CMAKE_TOOL = re.compile(r"^(?:.*[/\\])?(cmake|ctest|cpack)(?:\.exe)?$", re.IGNORECASE)
+_BUILD_TESTS_ON = re.compile(r"^-D\s*BUILD_TESTS(?::BOOL)?=(?:ON|TRUE|YES|Y|1)$", re.IGNORECASE)
+# CMake's false constants (if() semantics); an unset BUILD_TESTS keeps the
+# option's ON default from the root CMakeLists.txt.
+_CMAKE_FALSE_VALUES = {"", "0", "OFF", "NO", "FALSE", "N", "IGNORE", "NOTFOUND"}
+_CMAKE_MODE_PRESET_KINDS = {"configure": "configure", "build": "build", "workflow": "workflow"}
+_TOOL_PRESET_KINDS = {"ctest": "test", "cpack": "package"}
+
+
+@dataclass(frozen=True)
+class PresetReference:
+    """One preset or preset build tree named by a cmake/ctest/cpack invocation.
+
+    ``kind`` is the preset family the name must resolve in (``configure``,
+    ``build``, ``test``, ``package``, ``workflow``) or ``binaryDir`` for a
+    ``build/<dir>`` tree. ``enables_tests`` marks a configure invocation that
+    forces ``-DBUILD_TESTS=ON`` over the preset's own value.
+    """
+
+    tool: str
+    kind: str
+    name: str
+    enables_tests: bool = False
+
+
+def command_tokens(segment: str) -> list[str]:
+    try:
+        return shlex.split(segment, posix=True)
+    except ValueError:
+        return segment.split()
+
+
+_SHELL_CONTROL_OPERATORS = frozenset(";&|\r\n")
+
+
+def shell_segments(command: str) -> list[str]:
+    """Split ``command`` on the shell control operators ``; & |`` and newlines outside quotes.
+
+    A regex alternation inside a quoted filter (``-R '^A_(B|C)$'``) is one
+    argument, not a pipeline. A command with an unbalanced quote is split on
+    every operator, so a malformed command is never split less than before.
+    """
+    segments: list[str] = []
+    current: list[str] = []
+    quote = None
+    for character in command:
+        if quote:
+            quote = None if character == quote else quote
+        elif character in "'\"":
+            quote = character
+        elif character in _SHELL_CONTROL_OPERATORS:
+            if current:
+                segments.append("".join(current))
+            current = []
+            continue
+        current.append(character)
+    if quote:
+        return [segment for segment in re.split(r"[;&|\r\n]+", command) if segment]
+    if current:
+        segments.append("".join(current))
+    return segments
+
+
+def _build_tree(value: str) -> str | None:
+    """Return ``build/<dir>`` when ``value`` points into the repository build root."""
+    normalized = value.replace("\\", "/")
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    parts = [part for part in normalized.split("/") if part]
+    if len(parts) < 2 or parts[0] != "build":
+        return None
+    return f"build/{parts[1]}"
+
+
+def preset_references(command: str) -> list[PresetReference]:
+    """Every preset and ``build/<dir>`` tree a work-item command hands to CMake tools.
+
+    Segments are split on shell control operators like the CTest fail-on-empty
+    check, so a later invocation cannot hide behind an earlier valid one.
+    """
+    references: list[PresetReference] = []
+    for segment in shell_segments(command):
+        tokens = [token.lstrip("$(!").rstrip(")") for token in command_tokens(segment)]
+        start = next((index for index, token in enumerate(tokens) if _CMAKE_TOOL.match(token)), None)
+        if start is None:
+            continue
+        tool = _CMAKE_TOOL.match(tokens[start]).group(1).lower()
+        arguments = [token for token in tokens[start + 1:] if token]
+        if tool == "cmake":
+            mode = "configure"
+            for flag, flag_mode in (("--build", "build"), ("--install", "install"), ("--workflow", "workflow")):
+                if any(argument == flag or argument.startswith(flag + "=") for argument in arguments):
+                    mode = flag_mode
+                    break
+            preset_kind = _CMAKE_MODE_PRESET_KINDS.get(mode, "configure")
+        else:
+            mode = tool
+            preset_kind = _TOOL_PRESET_KINDS.get(tool, "test")
+        enables_tests = mode == "configure" and any(
+            _BUILD_TESTS_ON.match(argument)
+            or (argument == "-D" and index + 1 < len(arguments) and _BUILD_TESTS_ON.match("-D" + arguments[index + 1]))
+            for index, argument in enumerate(arguments)
+        )
+        for index, argument in enumerate(arguments):
+            preset_name = None
+            if argument == "--preset" and index + 1 < len(arguments):
+                preset_name = arguments[index + 1]
+            elif argument.startswith("--preset="):
+                preset_name = argument.split("=", 1)[1]
+            if preset_name:
+                references.append(PresetReference(tool, preset_kind, preset_name, enables_tests))
+                continue
+            value = argument
+            if argument.startswith("--") and "=" in argument:
+                value = argument.split("=", 1)[1]
+            elif argument.startswith("-B") and len(argument) > 2:
+                value = argument[2:]
+            tree = _build_tree(value)
+            if tree:
+                references.append(PresetReference(tool, "binaryDir", tree, enables_tests))
+    return references
+
+
+def _import_inventory() -> Any:
+    root = str(BUILDMATRIX_ROOT)
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    import inventory  # noqa: PLC0415 -- resolved from Tools/buildmatrix on demand
+
+    return inventory
+
+
+class CMakePresetIndex:
+    """Visible CMake presets, their resolved build trees, and whether they build tests."""
+
+    def __init__(self, presets: dict[str, Any]) -> None:
+        inventory = _import_inventory()
+        try:
+            self.names = {
+                kind: {preset["name"] for preset in presets.get(f"{kind}Presets", []) if not preset.get("hidden")}
+                for kind in ("configure", "build", "test", "package", "workflow")
+            }
+            self._configure = {
+                name: inventory.resolve_configure_preset(presets, name) for name in self.names["configure"]
+            }
+            self._test_configure = {
+                name: inventory.resolve_dependent_preset(presets, "testPresets", name)["configurePreset"]
+                for name in self.names["test"]
+            }
+            # The configuration a configure preset's own build preset selects;
+            # multi-config trees build Debug unless told otherwise.
+            self._build_configuration: dict[str, str] = {}
+            for name in sorted(self.names["build"]):
+                resolved_build = inventory.resolve_dependent_preset(presets, "buildPresets", name)
+                configuration = resolved_build.get("configuration")
+                if isinstance(configuration, str) and configuration:
+                    self._build_configuration.setdefault(resolved_build["configurePreset"], configuration)
+        except inventory.InventoryError as error:
+            raise SiteDataError(f"CMakePresets.json: {error}") from error
+        self.binary_dirs: dict[str, str] = {}
+        for name, resolved in sorted(self._configure.items()):
+            binary_dir = resolved.get("resolvedBinaryDir")
+            if isinstance(binary_dir, str) and binary_dir.startswith("${sourceDir}/"):
+                tree = _build_tree(binary_dir[len("${sourceDir}/"):])
+                if tree and tree == binary_dir[len("${sourceDir}/"):].rstrip("/"):
+                    self.binary_dirs.setdefault(tree, name)
+
+    def exists(self, kind: str, name: str) -> bool:
+        return name in self.names.get(kind, set())
+
+    def configure_for(self, reference: PresetReference) -> str | None:
+        """The configure preset whose build tree a reference runs against."""
+        if reference.kind == "binaryDir":
+            return self.binary_dirs.get(reference.name)
+        if reference.kind == "test":
+            return self._test_configure.get(reference.name)
+        if reference.kind == "configure" and reference.name in self._configure:
+            return reference.name
+        return None
+
+    def binary_dir_of(self, configure_name: str) -> str | None:
+        """The ``build/<dir>`` tree a configure preset writes, when it resolves to one."""
+        return next((tree for tree, name in self.binary_dirs.items() if name == configure_name), None)
+
+    def is_multi_config(self, configure_name: str) -> bool:
+        """True when the preset's tree may use a multi-config generator (Visual Studio, Ninja Multi-Config, Xcode).
+
+        A preset without a generator uses the host default, which is Visual
+        Studio on Windows; it is single-config only when its condition pins a
+        non-Windows host.
+        """
+        resolved = self._configure[configure_name]
+        generator = resolved.get("generator")
+        if not isinstance(generator, str):
+            condition = resolved.get("condition")
+            pins_non_windows_host = (
+                isinstance(condition, dict)
+                and condition.get("type") == "equals"
+                and condition.get("lhs") == "${hostSystemName}"
+                and isinstance(condition.get("rhs"), str)
+                and condition["rhs"] != "Windows"
+            )
+            return not pins_non_windows_host
+        return generator.startswith("Visual Studio") or generator in {"Ninja Multi-Config", "Xcode"}
+
+    def generator_pins(self, generator: str) -> set[tuple[str | None, str | None]]:
+        """(architecture, toolset) pairs the visible presets pin for ``generator``."""
+
+        def pinned(value: Any) -> str | None:
+            if isinstance(value, dict):
+                value = value.get("value")
+            return value if isinstance(value, str) and value else None
+
+        return {
+            (pinned(resolved.get("architecture")), pinned(resolved.get("toolset")))
+            for resolved in self._configure.values()
+            if resolved.get("generator") == generator
+        }
+
+    def expected_configuration(self, configure_name: str) -> str | None:
+        """The configuration a build of this preset's tree must name.
+
+        The configure preset's own build preset wins; otherwise the configure
+        preset's CMAKE_BUILD_TYPE. None when neither states one.
+        """
+        configuration = self._build_configuration.get(configure_name)
+        if configuration:
+            return configuration
+        value = self._configure[configure_name]["cacheVariables"].get("CMAKE_BUILD_TYPE")
+        if isinstance(value, dict):
+            value = value.get("value")
+        return value if isinstance(value, str) and value else None
+
+    def builds_tests(self, configure_name: str) -> bool:
+        value = self._configure[configure_name]["cacheVariables"].get("BUILD_TESTS")
+        if isinstance(value, dict):
+            value = value.get("value")
+        if value is None:
+            return True
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().upper() not in _CMAKE_FALSE_VALUES and not str(value).upper().endswith("-NOTFOUND")
+
+
+@functools.lru_cache(maxsize=1)
+def cmake_preset_index() -> CMakePresetIndex:
+    """The repository's CMakePresets.json, resolved once per run."""
+    inventory = _import_inventory()
+    try:
+        presets = inventory.extract_cmake_presets()
+    except inventory.InventoryError as error:
+        raise SiteDataError(f"CMakePresets.json: {error}") from error
+    return CMakePresetIndex(presets)
+
+
 def reset_caches() -> None:
     """Drop cached inventories so a test can point the resolvers at new content."""
     workflow_job_ids.cache_clear()
+    workflow_jobs.cache_clear()
     test_selector_targets.cache_clear()
     resolve_test_selector.cache_clear()
+    ctest_registry.cache_clear()
+    cmake_preset_index.cache_clear()
 
 
 def _report() -> int:

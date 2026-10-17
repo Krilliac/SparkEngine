@@ -47,9 +47,10 @@ namespace
 
     constexpr uint16_t kDefaultPort = 27020;
 
-    // Every command registered through TerrafrontModule's three TFCommands
-    // translation units. Kept in one teardown list so no callback retaining
-    // `this` survives module unload or a hot-reload.
+    // Every command registered through the TFCommands translation units
+    // (TFCommands, TFCommandsGameplay, TFCommandsNet, TFCommandsHarness). Kept
+    // in one teardown list so no callback retaining `this` or the context
+    // survives module unload or a hot-reload.
     constexpr const char* kModuleConsoleCommands[] = {
         "tf_status",
         "tf_host",
@@ -89,6 +90,16 @@ namespace
         "tf_quickplay",
         "tf_selftest_onboarding",
         "tf_cheat_stats",
+        "tf_observe",
+        "tf_walk",
+        "tf_aim_at",
+        "tf_give_raw",
+        "tf_fire_raw",
+        "tf_vehicle_buy",
+        "tf_vehicle_seat",
+        "tf_place_faction",
+        "tf_flux_floor",
+        "tf_damage_vehicles",
     };
 
     // Client-side class selection shared by tf_class / tf_spawn / tf_give.
@@ -413,8 +424,9 @@ void TerrafrontModule::RegisterConsoleCommands()
 
     // Split parts, called in the original registration order: data/world +
     // debug/move + W2/W3 gameplay first, then chat + W5 onboarding.
-    RegisterConsoleCommandsGameplay(); // Console/TFCommandsGameplay.cpp
-    RegisterConsoleCommandsNet();      // Console/TFCommandsNet.cpp
+    RegisterConsoleCommandsGameplay();     // Console/TFCommandsGameplay.cpp
+    RegisterConsoleCommandsNet();          // Console/TFCommandsNet.cpp
+    RegisterConsoleCommandsHarness(m_ctx); // Console/TFCommandsHarness.cpp (TF-110)
 
     // ------------------------------------------------------------------- W13
     // Anti-cheat lane: per-player detection/clamp/reject counters (movement
@@ -429,7 +441,7 @@ void TerrafrontModule::RegisterConsoleCommands()
         [this](const std::vector<std::string>&) -> std::string
         {
             const auto& stats = TFServerValidation::Get().Stats();
-            if (stats.empty())
+            if (stats.empty() && TFServerValidation::Get().AuditTrail().empty())
             {
                 return m_ctx.IsAuthority() ? "[TF] anti-cheat: no violations recorded"
                                            : "[TF] anti-cheat: no data (this instance is not the server)";
@@ -440,7 +452,15 @@ void TerrafrontModule::RegisterConsoleCommands()
             {
                 os << "\n  p" << player << "  moveClamps=" << st.movementClamps << " (spikes=" << st.movementSpikes
                    << ")  fireRateRejects=" << st.fireRateRejects << "  fireOriginRejects=" << st.fireOriginRejects
-                   << "  inputRateRejects=" << st.inputRateRejects;
+                   << "  inputRateRejects=" << st.inputRateRejects << "  forged=" << st.forgedStateRejects;
+            }
+            // TF-110: the forged-state audit trail outlives kicked sessions.
+            const auto& audit = TFServerValidation::Get().AuditTrail();
+            if (!audit.empty())
+            {
+                const TFForgedStateAudit& last = audit.back();
+                os << "\n  forged-state audit: " << audit.size() << " record" << (audit.size() == 1 ? "" : "s")
+                   << ", latest kind=" << ForgedStateName(last.kind) << " player=" << last.player;
             }
             return os.str();
         },

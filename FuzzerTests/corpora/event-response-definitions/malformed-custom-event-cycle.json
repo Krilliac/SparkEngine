@@ -1,0 +1,1 @@
+{"rules":[{"name":"Echo","trigger":"OnCustom","triggerParam":"ping","actions":[{"type":"FireCustomEvent","params":["ping"]}]},{"name":"Kick","trigger":"OnStart","actions":[{"type":"FireCustomEvent","params":["ping"]}]}]}

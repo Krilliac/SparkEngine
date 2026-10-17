@@ -9,12 +9,15 @@
 #include "Utils/LogMacros.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
+#include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <string_view>
 #include <system_error>
 
 // ============================================================================
@@ -220,10 +223,12 @@ SPARK_REFLECT_FIELD(NS, maxReliableRetries, "MaxReliableRetries")
 SPARK_REFLECT_FIELD(NS, sendBufferSize, "SendBufferSize")
 SPARK_REFLECT_FIELD(NS, receiveBufferSize, "ReceiveBufferSize")
 SPARK_REFLECT_FIELD(NS, enableCompression, "EnableCompression")
-SPARK_REFLECT_FIELD(NS, enableEncryption, "EnableEncryption")
 SPARK_REFLECT_FIELD(NS, simulatedLatencyMs, "SimulatedLatencyMs")
 SPARK_REFLECT_FIELD(NS, simulatedPacketLoss, "SimulatedPacketLoss")
 SPARK_REFLECT_FIELD(NS, simulatedJitterMs, "SimulatedJitterMs")
+SPARK_REFLECT_FIELD(NS, simulatedReorderPercent, "SimulatedReorderPercent")
+SPARK_REFLECT_FIELD(NS, simulatedDuplicatePercent, "SimulatedDuplicatePercent")
+SPARK_REFLECT_FIELD(NS, simulatedImpairmentSeed, "SimulatedImpairmentSeed")
 SPARK_REFLECT_END(NS)
 
 using DS = EngineSettings::DebugSettings;
@@ -372,20 +377,9 @@ SPARK_REFLECT_FIELD(CRS, requireConsent, "RequireConsent")
 SPARK_REFLECT_FIELD(CRS, headlessMode, "HeadlessMode")
 SPARK_REFLECT_FIELD(CRS, promptUserDescription, "PromptUserDescription")
 SPARK_REFLECT_FIELD(CRS, allowScreenshotRefusal, "AllowScreenshotRefusal")
-SPARK_REFLECT_FIELD(CRS, uploadURL, "UploadURL")
-SPARK_REFLECT_FIELD(CRS, proxyURL, "ProxyURL")
-SPARK_REFLECT_FIELD(CRS, githubRepo, "GithubRepo")
-SPARK_REFLECT_FIELD(CRS, githubToken, "GithubToken")
-SPARK_REFLECT_FIELD(CRS, githubLabels, "GithubLabels")
-SPARK_REFLECT_FIELD(CRS, attachDump, "AttachDump")
 SPARK_REFLECT_FIELD(CRS, captureScreenshot, "CaptureScreenshot")
 SPARK_REFLECT_FIELD(CRS, captureSystemInfo, "CaptureSystemInfo")
 SPARK_REFLECT_FIELD(CRS, captureAllThreads, "CaptureAllThreads")
-SPARK_REFLECT_FIELD(CRS, timeoutSeconds, "TimeoutSeconds")
-SPARK_REFLECT_FIELD(CRS, smtpUser, "SmtpUser")
-SPARK_REFLECT_FIELD(CRS, smtpPass, "SmtpPass")
-SPARK_REFLECT_FIELD(CRS, emailTo, "EmailTo")
-SPARK_REFLECT_FIELD(CRS, emailFrom, "EmailFrom")
 SPARK_REFLECT_END(CRS)
 
 using WthS = EngineSettings::WeatherSettings;
@@ -685,6 +679,37 @@ namespace
             default:
                 break;
             }
+        }
+    }
+
+    /**
+     * Drop [CrashReporting] keys left over from the removed in-process crash uploader.
+     *
+     * They held reusable credentials (GitHub PAT, SMTP password) and capability URLs.
+     * Nothing reads them any more, but ConfigParser keeps unknown keys, so without this
+     * a later Save() would copy a secret from settings.local.ini into settings.ini.
+     * Matching ignores letter case because shipped files spelled them "GitHubToken"
+     * while the reflection layer used "GithubToken".
+     */
+    void RemoveRetiredCrashTransportKeys(Spark::ConfigParser& cfg)
+    {
+        static constexpr std::array<std::string_view, 11> kRetiredKeys = {
+            "uploadurl",      "proxyurl", "githubrepo", "githubtoken", "githublabels", "attachdump",
+            "timeoutseconds", "smtpuser", "smtppass",   "emailto",     "emailfrom"};
+
+        const std::string section = "CrashReporting";
+        for (const std::string& key : cfg.GetKeys(section))
+        {
+            const std::string lowered = Spark::StringUtils::ToLower(key);
+            if (std::find(kRetiredKeys.begin(), kRetiredKeys.end(), lowered) == kRetiredKeys.end())
+                continue;
+
+            // Name the key, never the value.
+            if (!cfg.GetString(section, key, "").empty())
+                SPARK_LOG_WARN(Spark::LogCategory::Core,
+                               "Ignoring retired [CrashReporting] %s: the engine no longer uploads crash reports",
+                               key.c_str());
+            cfg.RemoveKey(section, key);
         }
     }
 
@@ -1128,6 +1153,7 @@ bool EngineSettings::Load(const std::string& path)
             }
         }
 
+        RemoveRetiredCrashTransportKeys(staged.m_config);
         staged.ReadFromConfig();
     }
     else
@@ -1689,161 +1715,4 @@ void EngineSettings::NotifyChanged(const std::string& section, const std::string
     {
         cb(section, key);
     }
-}
-
-// =============================================================================
-// Console commands
-// =============================================================================
-void EngineSettings::RegisterConsoleCommands()
-{
-    SPARK_LOG_DEBUG(Spark::LogCategory::Core, "Registering settings console commands");
-    auto& console = Spark::SimpleConsole::GetInstance();
-
-    console.RegisterCommand(
-        "settings_get",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.size() < 2)
-                return "Usage: settings_get <section> <key>";
-            auto& settings = EngineSettings::GetInstance();
-            std::string val = settings.GetValue(args[0], args[1]);
-            if (val.empty())
-                return "Key not found: " + args[0] + "." + args[1];
-            return args[0] + "." + args[1] + " = " + val;
-        },
-        "Get a settings value", "Settings");
-
-    console.RegisterCommand(
-        "settings_set",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.size() < 3)
-                return "Usage: settings_set <section> <key> <value>";
-            auto& settings = EngineSettings::GetInstance();
-            if (settings.SetValue(args[0], args[1], args[2]))
-            {
-                return "Set " + args[0] + "." + args[1] + " = " + args[2];
-            }
-            return "Failed to set " + args[0] + "." + args[1];
-        },
-        "Set a settings value (runtime editable)", "Settings");
-
-    console.RegisterCommand(
-        "settings_save",
-        [](const std::vector<std::string>&) -> std::string
-        {
-            auto& settings = EngineSettings::GetInstance();
-            if (settings.Save())
-            {
-                return "Settings saved to " + settings.GetFilePath();
-            }
-            return "Failed to save settings";
-        },
-        "Save settings to disk", "Settings");
-
-    console.RegisterCommand(
-        "settings_reload",
-        [](const std::vector<std::string>&) -> std::string
-        {
-            auto& settings = EngineSettings::GetInstance();
-            if (settings.Load(settings.GetFilePath()))
-            {
-                return "Settings reloaded from " + settings.GetFilePath();
-            }
-            return "Failed to reload settings";
-        },
-        "Reload settings from disk (applies changes at runtime)", "Settings");
-
-    console.RegisterCommand(
-        "settings_reset",
-        [](const std::vector<std::string>&) -> std::string
-        {
-            auto& settings = EngineSettings::GetInstance();
-            settings.ResetToDefaults();
-            return "Settings reset to defaults (use settings_save to persist)";
-        },
-        "Reset all settings to defaults", "Settings");
-
-    console.RegisterCommand(
-        "settings_list",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            auto& settings = EngineSettings::GetInstance();
-            std::stringstream ss;
-
-            std::vector<std::string> sections;
-            if (!args.empty())
-            {
-                sections.push_back(args[0]);
-            }
-            else
-            {
-                sections = settings.GetSections();
-            }
-
-            for (const auto& section : sections)
-            {
-                ss << "[" << section << "]\n";
-                auto keys = settings.GetKeys(section);
-                for (const auto& key : keys)
-                {
-                    ss << "  " << key << " = " << settings.GetValue(section, key) << "\n";
-                }
-            }
-            return ss.str();
-        },
-        "List all settings (or settings in a section)", "Settings");
-
-    console.RegisterCommand(
-        "settings_sections",
-        [](const std::vector<std::string>&) -> std::string
-        {
-            auto& settings = EngineSettings::GetInstance();
-            std::stringstream ss;
-            ss << "Available sections:\n";
-            for (const auto& section : settings.GetSections())
-            {
-                auto keys = settings.GetKeys(section);
-                ss << "  [" << section << "] (" << keys.size() << " keys)\n";
-            }
-            return ss.str();
-        },
-        "List all settings sections", "Settings");
-
-    console.RegisterCommand(
-        "settings_search",
-        [](const std::vector<std::string>& args) -> std::string
-        {
-            if (args.empty())
-                return "Usage: settings_search <pattern>";
-            auto& settings = EngineSettings::GetInstance();
-            std::string pattern = args[0];
-            // Convert to lowercase for case-insensitive search
-            std::string lowerPattern = pattern;
-            std::transform(lowerPattern.begin(), lowerPattern.end(), lowerPattern.begin(), ::tolower);
-
-            std::stringstream ss;
-            int count = 0;
-            for (const auto& section : settings.GetSections())
-            {
-                auto keys = settings.GetKeys(section);
-                for (const auto& key : keys)
-                {
-                    std::string lowerSection = section;
-                    std::transform(lowerSection.begin(), lowerSection.end(), lowerSection.begin(), ::tolower);
-                    std::string lowerKey = key;
-                    std::transform(lowerKey.begin(), lowerKey.end(), lowerKey.begin(), ::tolower);
-
-                    if (lowerSection.contains(lowerPattern) || lowerKey.contains(lowerPattern))
-                    {
-                        ss << "  " << section << "." << key << " = " << settings.GetValue(section, key) << "\n";
-                        count++;
-                    }
-                }
-            }
-            if (count == 0)
-                return "No settings matching '" + pattern + "'";
-            return "Found " + std::to_string(count) + " matching settings:\n" + ss.str();
-        },
-        "Search settings by name pattern", "Settings");
 }

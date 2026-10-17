@@ -57,8 +57,7 @@ namespace SparkEditor
       private:
         void RenderWeaponList();       ///< Draw the weapon selection list.
         void RenderWeaponProperties(); ///< Draw stat sliders for the selected weapon.
-        void RenderWeaponPreview();    ///< Draw the weapon model/animation preview.
-        void RenderDPSChart();         ///< Draw the DPS-over-range chart.
+        void RenderDPSChart();         ///< Draw the per-weapon burst DPS bar chart.
         void RenderComparisonTable();  ///< Draw side-by-side weapon stat comparison.
 
         std::vector<WeaponEntry> m_weapons;  ///< All weapon entries as currently edited.
@@ -66,7 +65,6 @@ namespace SparkEditor
         int m_selectedWeapon = 0;            ///< Index of the currently selected weapon.
         bool m_showComparison = false;       ///< Whether the comparison table is visible.
         bool m_showDPSChart = true;          ///< Whether the DPS chart is visible.
-        float m_previewTime = 0.0f;          ///< Accumulated time for weapon preview animation.
     };
 
 } // namespace SparkEditor

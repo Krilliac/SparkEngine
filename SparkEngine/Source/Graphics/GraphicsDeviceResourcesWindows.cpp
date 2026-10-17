@@ -28,6 +28,7 @@
 
 #include <string>
 #include <cstdint>
+#include <cstdio>
 #include <cwchar>
 #include <cstring>
 #include <utility>
@@ -74,12 +75,27 @@ HRESULT GraphicsEngine::CreateDeviceAndSwapChain(HWND hWnd)
     }
     const D3D_DRIVER_TYPE driverType = useWarp ? D3D_DRIVER_TYPE_WARP : D3D_DRIVER_TYPE_HARDWARE;
 
+    // RHI-210: SPARK_D3D11_DEBUG_LAYER=1 turns the D3D11 debug layer on in any
+    // build, so Release frames can be validated. It is parsed like the driver
+    // override: exactly "1" enables it and any other value fails closed rather
+    // than silently running unvalidated.
+    wchar_t debugLayerOverride[4] = {};
+    const DWORD debugLayerOverrideLength =
+        GetEnvironmentVariableW(L"SPARK_D3D11_DEBUG_LAYER", debugLayerOverride, ARRAYSIZE(debugLayerOverride));
+    const bool debugLayerRequested = debugLayerOverrideLength == 1 && debugLayerOverride[0] == L'1';
+    if (debugLayerOverrideLength != 0 && !debugLayerRequested)
+    {
+        SPARK_LOG_FATAL("Graphics",
+                        "Unsupported SPARK_D3D11_DEBUG_LAYER override; expected exactly '1' or an unset variable.");
+        return E_INVALIDARG;
+    }
+    if (debugLayerRequested)
+        createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+    const bool debugLayerEnabled = (createDeviceFlags & D3D11_CREATE_DEVICE_DEBUG) != 0;
+
     if (useWarp)
     {
-        SPARK_LOG_INFO("Graphics",
-                       "SPARK_D3D11_DEVICE driver=warp certification=software-only; "
-                       "creating explicit WARP D3D11 device (flags=0x%X)",
-                       createDeviceFlags);
+        SPARK_LOG_INFO("Graphics", "Creating explicit WARP D3D11 device (flags=0x%X)", createDeviceFlags);
     }
     else
     {
@@ -90,6 +106,16 @@ HRESULT GraphicsEngine::CreateDeviceAndSwapChain(HWND hWnd)
         D3D11CreateDevice(nullptr, driverType, nullptr, createDeviceFlags, featureLevels, ARRAYSIZE(featureLevels),
                           D3D11_SDK_VERSION, &baseDevice, &featureLevel, &baseContext);
 
+    if (hr == DXGI_ERROR_SDK_COMPONENT_MISSING && debugLayerEnabled)
+    {
+        // Never retry without the layer: a validation run that silently drops
+        // validation would report "clean" for frames nothing checked.
+        SPARK_LOG_FATAL("Graphics",
+                        "The D3D11 debug layer was requested but is not installed (HR=0x%08lX). Install "
+                        "the Windows 'Graphics Tools' optional feature, or unset SPARK_D3D11_DEBUG_LAYER.",
+                        static_cast<long>(hr));
+        return hr;
+    }
     if (FAILED(hr))
     {
         SPARK_LOG_FATAL("Graphics", "%s D3D11CreateDevice failed with HR=0x%08lX.%s", useWarp ? "WARP" : "Hardware",
@@ -97,6 +123,15 @@ HRESULT GraphicsEngine::CreateDeviceAndSwapChain(HWND hWnd)
                         useWarp ? " The software-only lifecycle smoke cannot continue."
                                 : " Check GPU driver installation and DirectX 11 support.");
         return hr;
+    }
+
+    // Emit one fixed, logger-free wire record after successful creation. The
+    // release smoke parser treats any prefixed or malformed token as invalid,
+    // so this marker cannot be supplied by a logger decoration or lookalike.
+    if (useWarp)
+    {
+        std::fputs("SPARK_D3D11_DEVICE driver=warp certification=software-only\n", stdout);
+        std::fflush(stdout);
     }
 
     // Log the feature level we got
@@ -134,6 +169,25 @@ HRESULT GraphicsEngine::CreateDeviceAndSwapChain(HWND hWnd)
     {
         LOG_TO_CONSOLE_IMMEDIATE(L"Failed to query ID3D11DeviceContext1", L"ERROR");
         return hr;
+    }
+
+    if (debugLayerEnabled)
+    {
+        hr = m_device.As(&m_infoQueue);
+        if (FAILED(hr))
+        {
+            SPARK_LOG_FATAL("Graphics", "D3D11 debug layer is on but ID3D11InfoQueue is unavailable (HR=0x%08lX)",
+                            static_cast<long>(hr));
+            return hr;
+        }
+        // Never break into a debugger on a message: validation runs must keep
+        // rendering so every message of the run is counted. EndFrame drains the
+        // queue every frame, so no storage limit is needed and nothing is dropped
+        // unclassified.
+        m_infoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_CORRUPTION, FALSE);
+        m_infoQueue->SetBreakOnSeverity(D3D11_MESSAGE_SEVERITY_ERROR, FALSE);
+        m_infoQueue->SetMessageCountLimit(static_cast<UINT64>(-1));
+        SPARK_LOG_INFO("Graphics", "D3D11 debug layer active; validation messages are counted per frame");
     }
 
     // Create DXGI factory

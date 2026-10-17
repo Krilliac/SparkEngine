@@ -238,8 +238,8 @@ The engine boots through a strict initialization order. Dependencies flow top-do
     └────────┬──────────────┘   │ Fixed 60Hz Tick Loop     │
              │                  │ (sleep-regulated)         │
     ┌────────▼──────────────┐   └─────────────────────────┘
-    │ RegisterCoreSubsystems│
-    │ (via EngineSetup)     │
+    │ InitPhysics           │
+    │ (Jolt world)          │
     └────────┬──────────────┘
              │
     ┌────────▼──────────────┐
@@ -289,7 +289,7 @@ The engine boots through a strict initialization order. Dependencies flow top-do
 
 **Key files:**
 - `SparkEngine/Source/Core/SparkEngine.cpp` — `wWinMain()`, `main()`, `InitInstance()`, `InitEngineContext()`
-- `SparkEngine/Source/Core/EngineBootstrap.h` — `EngineSetup::RegisterCoreSubsystems()`
+- `SparkEngine/Source/Core/EngineSetup.h` — `EngineSetup::InitializeJobSystem()`, `CreatePhaseSystemManager()`
 - `SparkEngine/Source/Core/GameplaySystemLifecycle.cpp` — `InitGameplaySystems()`
 - `SparkEngine/Source/Utils/ConsoleProcessManager.h` — subprocess management
 """)
@@ -516,7 +516,7 @@ SparkEngine uses [EnTT](https://github.com/skypjack/entt) as its entity-componen
 **Key files:**
 - `SparkEngine/Source/Engine/ECS/Systems/ECSystems.h` — System definitions and execution order
 - `SparkEngine/Source/Engine/ECS/Components/CoreComponents.h` — Transform, MeshRenderer, Camera, Script
-- `SparkEngine/Source/Engine/ECS/Components/` — All 12+ domain component headers
+- `SparkEngine/Source/Engine/ECS/Components/` — Domain component headers (see the generated ECS inventory above)
 """)
 
     # ================================================================
@@ -1881,7 +1881,7 @@ def main():
 
     out = pathlib.Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(content, encoding="utf-8")
+    out.write_text(content, encoding="utf-8", newline="\n")
     print(f"Wrote {len(content)} bytes to {out}")
 
 

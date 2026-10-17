@@ -11,6 +11,9 @@
 #include "EditorPluginManager.h"
 #include "EditorIcons.h"
 #include "EditorTheme.h"
+#include <SparkUI/Fonts.h>
+#include <SparkUI/Runtime.h>
+#include <SparkUI/Widgets.h>
 #include "../Panels/HierarchyPanel.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
@@ -19,6 +22,7 @@
 #include <imgui_internal.h>
 #include <algorithm>
 #include <cerrno>
+#include <cstdio>
 #include <filesystem>
 #include <vector>
 
@@ -41,16 +45,24 @@ namespace SparkEditor
         {
             const pid_t pid = fork();
             if (pid == -1)
+            {
                 return false;
+            }
             if (pid == 0)
             {
                 if (setsid() == -1)
+                {
                     _exit(127);
+                }
                 const pid_t detachedPid = fork();
                 if (detachedPid == -1)
+                {
                     _exit(127);
+                }
                 if (detachedPid != 0)
+                {
                     _exit(0);
+                }
 #ifdef __APPLE__
                 execlp("open", "open", "docs/", nullptr);
 #else
@@ -63,7 +75,9 @@ namespace SparkEditor
             while (waitpid(pid, &status, 0) == -1)
             {
                 if (errno == EINTR)
+                {
                     continue;
+                }
                 return errno == ECHILD;
             }
             return WIFEXITED(status) && WEXITSTATUS(status) == 0;
@@ -79,7 +93,9 @@ namespace SparkEditor
             ImGui::MenuItem(label, shortcut);
             ImGui::EndDisabled();
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            {
                 ImGui::SetTooltip("%s", explanation);
+            }
         }
     } // namespace
 
@@ -116,6 +132,7 @@ namespace SparkEditor
         {
             RenderFileMenu();
             RenderEditMenu();
+            RenderViewMenu();
             RenderGameObjectMenu();
             RenderWindowMenu();
             RenderFPSToolsMenu();
@@ -139,7 +156,9 @@ namespace SparkEditor
             NewScene();
         }
         if (ImGui::MenuItem("Open Scene...", "Ctrl+O"))
+        {
             ShowOpenSceneDialog();
+        }
         if (ImGui::MenuItem("Save Scene", "Ctrl+S"))
         {
             SaveScene();
@@ -176,7 +195,9 @@ namespace SparkEditor
                 {
                     std::string label = rp.name + "  (" + rp.path + ")";
                     if (!rp.valid)
+                    {
                         label += "  [missing]";
+                    }
                     if (ImGui::MenuItem(label.c_str(), nullptr, false, rp.valid))
                     {
                         // The request may be waiting on Save/Discard/Cancel;
@@ -198,7 +219,9 @@ namespace SparkEditor
     void EditorUI::RenderFileMenu()
     {
         if (!ImGui::BeginMenu("File"))
+        {
             return;
+        }
 
         RenderFileSceneItems();
         ImGui::Separator();
@@ -228,7 +251,9 @@ namespace SparkEditor
     void EditorUI::RenderEditMenu()
     {
         if (!ImGui::BeginMenu("Edit"))
+        {
             return;
+        }
 
         // Operates on the process-wide CommandHistory — the same history the
         // edit surfaces execute into and the one SwapWorld() clears.
@@ -290,29 +315,45 @@ namespace SparkEditor
         if (ImGui::BeginMenu("3D Object"))
         {
             if (ImGui::MenuItem("Cube"))
+            {
                 createObject("Cube");
+            }
             if (ImGui::MenuItem("Sphere"))
+            {
                 createObject("Sphere");
+            }
             if (ImGui::MenuItem("Cylinder"))
+            {
                 createObject("Cylinder");
+            }
             if (ImGui::MenuItem("Plane"))
+            {
                 createObject("Plane");
+            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Light"))
         {
             if (ImGui::MenuItem("Directional Light"))
+            {
                 createObject("Directional Light");
+            }
             if (ImGui::MenuItem("Point Light"))
+            {
                 createObject("Point Light");
+            }
             if (ImGui::MenuItem("Spot Light"))
+            {
                 createObject("Spot Light");
+            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Camera"))
         {
             if (ImGui::MenuItem("Camera"))
+            {
                 createObject("Camera");
+            }
             ImGui::EndMenu();
         }
     }
@@ -320,7 +361,9 @@ namespace SparkEditor
     void EditorUI::RenderGameObject2DSubMenu()
     {
         if (!ImGui::BeginMenu("2D Object"))
+        {
             return;
+        }
 
         const char* items[] = {"Sprite",    "Animated Sprite",     "Tilemap",
                                "Camera 2D", "Parallax Background", "Nine-Slice Sprite"};
@@ -341,41 +384,69 @@ namespace SparkEditor
         if (ImGui::BeginMenu("Volume"))
         {
             if (ImGui::MenuItem("Trigger Volume"))
+            {
                 createObject("Trigger Volume");
+            }
             if (ImGui::MenuItem("Post-Process Volume"))
+            {
                 createObject("Post-Process Volume");
+            }
             if (ImGui::MenuItem("Fog Volume"))
+            {
                 createObject("Fog Volume");
+            }
             if (ImGui::MenuItem("Audio Reverb Zone"))
+            {
                 createObject("Audio Reverb Zone");
+            }
             if (ImGui::MenuItem("Wind Zone"))
+            {
                 createObject("Wind Zone");
+            }
             if (ImGui::MenuItem("Cinematic Trigger"))
+            {
                 createObject("Cinematic Trigger");
+            }
             if (ImGui::MenuItem("Area Boundary"))
+            {
                 createObject("Area Boundary");
+            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Probe"))
         {
             if (ImGui::MenuItem("Reflection Probe"))
+            {
                 createObject("Reflection Probe");
+            }
             if (ImGui::MenuItem("Light Probe"))
+            {
                 createObject("Light Probe");
+            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Environment"))
         {
             if (ImGui::MenuItem("Water Plane"))
+            {
                 createObject("Water Plane");
+            }
             if (ImGui::MenuItem("Spawn Point"))
+            {
                 createObject("Spawn Point");
+            }
             if (ImGui::MenuItem("NavMesh Obstacle"))
+            {
                 createObject("NavMesh Obstacle");
+            }
             if (ImGui::MenuItem("Occluder"))
+            {
                 createObject("Occluder");
+            }
             if (ImGui::MenuItem("Billboard"))
+            {
                 createObject("Billboard");
+            }
             ImGui::EndMenu();
         }
     }
@@ -385,59 +456,101 @@ namespace SparkEditor
         if (ImGui::BeginMenu("Gameplay"))
         {
             if (ImGui::MenuItem("Destructible"))
+            {
                 createObject("Destructible");
+            }
             if (ImGui::MenuItem("Dialogue Trigger"))
+            {
                 createObject("Dialogue Trigger");
+            }
             if (ImGui::MenuItem("Physics Joint"))
+            {
                 createObject("Physics Joint");
+            }
             if (ImGui::MenuItem("Character Controller"))
+            {
                 createObject("Character Controller");
+            }
             if (ImGui::MenuItem("Vehicle"))
+            {
                 createObject("Vehicle");
+            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("AI"))
         {
             if (ImGui::MenuItem("Cover Point"))
+            {
                 createObject("Cover Point");
+            }
             if (ImGui::MenuItem("Tactical Point"))
+            {
                 createObject("Tactical Point");
+            }
             if (ImGui::MenuItem("Nav Region"))
+            {
                 createObject("Nav Region");
+            }
             if (ImGui::MenuItem("Nav Link"))
+            {
                 createObject("Nav Link");
+            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Rendering"))
         {
             if (ImGui::MenuItem("Skybox"))
+            {
                 createObject("Skybox");
+            }
             if (ImGui::MenuItem("Line Renderer"))
+            {
                 createObject("Line Renderer");
+            }
             if (ImGui::MenuItem("Trail Renderer"))
+            {
                 createObject("Trail Renderer");
+            }
             if (ImGui::MenuItem("Text 3D"))
+            {
                 createObject("Text 3D");
+            }
             if (ImGui::MenuItem("Billboard"))
+            {
                 createObject("Billboard");
+            }
             if (ImGui::MenuItem("Foliage Volume"))
+            {
                 createObject("Foliage Volume");
+            }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Physics"))
         {
             if (ImGui::MenuItem("Ragdoll"))
+            {
                 createObject("Ragdoll");
+            }
             if (ImGui::MenuItem("Soft Body / Cloth"))
+            {
                 createObject("Soft Body");
+            }
             if (ImGui::MenuItem("Constant Force"))
+            {
                 createObject("Constant Force");
+            }
             if (ImGui::MenuItem("Force Region"))
+            {
                 createObject("Force Region");
+            }
             if (ImGui::MenuItem("Buoyancy Volume"))
+            {
                 createObject("Buoyancy Volume");
+            }
             if (ImGui::MenuItem("Spring Arm"))
+            {
                 createObject("Spring Arm");
+            }
             ImGui::EndMenu();
         }
     }
@@ -445,7 +558,9 @@ namespace SparkEditor
     void EditorUI::RenderGameObjectMenu()
     {
         if (!ImGui::BeginMenu("GameObject"))
+        {
             return;
+        }
 
         auto createObject = [this](const std::string& name)
         {
@@ -502,7 +617,9 @@ namespace SparkEditor
     void EditorUI::RenderWindowMenu()
     {
         if (!ImGui::BeginMenu("Window"))
+        {
             return;
+        }
 
         struct CategoryInfo
         {
@@ -525,10 +642,14 @@ namespace SparkEditor
             for (auto& [name, panel] : m_panels)
             {
                 if (panel->GetCategory() == cat && panel->IsVisibleInMenu())
+                {
                     catPanels.emplace_back(name, panel.get());
+                }
             }
             if (catPanels.empty())
+            {
                 continue;
+            }
 
             // Sort alphabetically for consistent ordering
             std::sort(catPanels.begin(), catPanels.end(),
@@ -538,10 +659,14 @@ namespace SparkEditor
             {
                 for (auto& [name, panel] : catPanels)
                 {
-                    std::string menuLabel =
-                        panel->GetIcon().empty() ? panel->GetName() : panel->GetIcon() + " " + panel->GetName();
+                    const std::string menuLabel =
+                        (panel->GetIcon().empty() ? std::string(EditorPanel::CategoryIcon(panel->GetCategory()))
+                                                  : panel->GetIcon()) +
+                        " " + panel->GetName();
                     if (ImGui::MenuItem(menuLabel.c_str(), nullptr, panel->IsVisible()))
+                    {
                         panel->SetVisible(!panel->IsVisible());
+                    }
                 }
                 ImGui::EndMenu();
             }
@@ -567,11 +692,17 @@ namespace SparkEditor
                 ShowNotification("Layout save failed", "error");
             }
         }
+        if (ImGui::MenuItem("Save Layout As..."))
+        {
+            m_saveLayoutAsRequested = true;
+        }
+        const auto layouts = m_layoutManager ? m_layoutManager->GetSavedLayouts() : std::vector<LayoutInfo>{};
         if (ImGui::BeginMenu("Load Layout"))
         {
-            const auto layouts = m_layoutManager ? m_layoutManager->GetSavedLayouts() : std::vector<LayoutInfo>{};
             if (layouts.empty())
+            {
                 ImGui::TextDisabled("No saved layouts");
+            }
             for (const LayoutInfo& layout : layouts)
             {
                 if (ImGui::MenuItem(layout.name.c_str()))
@@ -583,13 +714,96 @@ namespace SparkEditor
             }
             ImGui::EndMenu();
         }
+        if (ImGui::BeginMenu("Delete Layout", !layouts.empty()))
+        {
+            for (const LayoutInfo& layout : layouts)
+            {
+                if (ImGui::MenuItem(layout.name.c_str()))
+                {
+                    m_layoutPendingDelete = layout.name;
+                    m_deleteLayoutRequested = true;
+                }
+            }
+            ImGui::EndMenu();
+        }
+        ImGui::EndMenu();
+    }
+
+    void EditorUI::RenderViewMenu()
+    {
+        if (!ImGui::BeginMenu("View"))
+        {
+            return;
+        }
+
+        if (ImGui::MenuItem("Appearance..."))
+        {
+            OpenAppearanceWindow();
+        }
+        if (ImGui::BeginMenu("UI Scale"))
+        {
+            if (ImGui::MenuItem("Increase", "Ctrl+="))
+            {
+                StepUiScale(1);
+            }
+            if (ImGui::MenuItem("Decrease", "Ctrl+-"))
+            {
+                StepUiScale(-1);
+            }
+            if (ImGui::MenuItem("Reset to 100%", "Ctrl+0"))
+            {
+                StepUiScale(0);
+            }
+            ImGui::EndMenu();
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem("Status Bar", nullptr, m_preferences.showStatusBar))
+        {
+            m_preferences.showStatusBar = !m_preferences.showStatusBar;
+            SavePreferences();
+        }
+        // Notification history stays reachable with the status bar (and its bell) hidden.
+        {
+            const std::size_t unread = m_notificationManager ? m_notificationManager->GetUnreadCount() : 0;
+            char notificationsLabel[48];
+            if (unread > 0)
+            {
+                std::snprintf(notificationsLabel, sizeof(notificationsLabel), "Notifications (%zu unread)", unread);
+            }
+            else
+            {
+                std::snprintf(notificationsLabel, sizeof(notificationsLabel), "Notifications");
+            }
+            if (ImGui::MenuItem(notificationsLabel))
+            {
+                OpenNotificationHistory();
+            }
+        }
+        if (ImGui::MenuItem("Start Page", nullptr, m_startPage.IsOpen()))
+        {
+            if (m_startPage.IsOpen())
+            {
+                m_startPage.Close();
+            }
+            else
+            {
+                OpenStartPage();
+            }
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem("Command Palette", "Ctrl+P") && m_commandPalette)
+        {
+            m_commandPalette->Open();
+        }
         ImGui::EndMenu();
     }
 
     void EditorUI::RenderFPSToolsMenu()
     {
         if (!ImGui::BeginMenu("FPS Tools"))
+        {
             return;
+        }
 
         if (ImGui::MenuItem(ICON_FA_CROSSHAIRS " Weapon Editor", nullptr, IsPanelVisible("WeaponEditor")))
         {
@@ -635,7 +849,9 @@ namespace SparkEditor
     void EditorUI::RenderBuildMenu()
     {
         if (!ImGui::BeginMenu("Build"))
+        {
             return;
+        }
 
         if (ImGui::MenuItem(ICON_FA_COG " Build Settings..."))
         {
@@ -670,25 +886,22 @@ namespace SparkEditor
     void EditorUI::RenderHelpMenu()
     {
         if (!ImGui::BeginMenu("Help"))
+        {
             return;
+        }
 
         if (ImGui::MenuItem("Show Demo Window", nullptr, m_showDemoWindow))
         {
             m_showDemoWindow = !m_showDemoWindow;
         }
-        if (ImGui::BeginMenu("Themes"))
+        if (ImGui::MenuItem("Welcome..."))
         {
-            auto themes = EditorTheme::GetAvailableThemes();
-            for (const auto& name : themes)
-            {
-                bool isSelected = (m_currentTheme == name);
-                if (ImGui::MenuItem(name.c_str(), nullptr, isSelected))
-                {
-                    ApplyTheme(name);
-                    ShowNotification("Theme: " + name, "success", 2.0f);
-                }
-            }
-            ImGui::EndMenu();
+            OpenStartPage();
+        }
+        // Kept where users look for it; themes live in View > Appearance now.
+        if (ImGui::MenuItem("Themes..."))
+        {
+            OpenAppearanceWindow();
         }
         ImGui::Separator();
         if (ImGui::MenuItem("About"))
@@ -702,214 +915,225 @@ namespace SparkEditor
             ShowNotification("Opening documentation...", "info", 2.0f);
 #else
             if (LaunchDocumentationViewer())
+            {
                 ShowNotification("Opening documentation...", "info", 2.0f);
+            }
             else
+            {
                 ShowNotification("Could not launch the documentation viewer", "error", 3.0f);
+            }
 #endif
         }
         ImGui::EndMenu();
     }
 
-    void EditorUI::RenderToolbarTransformTools(float btnSize, ImDrawList* dl, const ImVec4& accentTeal,
-                                               const ImVec4& pillBg, const ImVec4& passiveHover)
+    void EditorUI::RenderToolbarTransformTools()
     {
-        ImVec2 btnDim(btnSize, btnSize);
+        namespace Ui = Spark::Ui;
 
-        auto ToolButton = [&](const char* icon, TransformTool tool, const char* tooltip)
+        static constexpr const char* kToolLabels[] = {ICON_FA_ARROWS_ALT " Move", ICON_FA_SYNC_ALT " Rotate",
+                                                      ICON_FA_EXPAND " Scale"};
+        int tool = static_cast<int>(m_currentTool);
+        ImGui::BeginGroup();
+        if (Ui::SegmentedControl("##transformTool", kToolLabels, 3, &tool))
         {
-            bool active = (m_currentTool == tool);
-            if (active)
-            {
-                ImGui::PushStyleColor(ImGuiCol_Button, accentTeal);
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                                      ImVec4(accentTeal.x * 1.1f, accentTeal.y * 1.1f, accentTeal.z * 1.1f, 1.0f));
-            }
-            else
-            {
-                ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, passiveHover);
-            }
-            if (ImGui::Button(icon, btnDim))
-                SetTransformTool(tool);
-            ImGui::PopStyleColor(2);
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("%s", tooltip);
-            ImGui::SameLine();
-        };
-
-        ToolButton(ICON_FA_ARROWS_ALT, TransformTool::Move, "Move (W)");
-        ToolButton(ICON_FA_SYNC_ALT, TransformTool::Rotate, "Rotate (E)");
-        ToolButton(ICON_FA_EXPAND, TransformTool::Scale, "Scale (R)");
-
+            SetTransformTool(static_cast<TransformTool>(tool));
+        }
+        ImGui::EndGroup();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
         {
-            ImGui::SameLine(0, 8);
-            ImVec2 sepPos = ImGui::GetCursorScreenPos();
-            dl->AddLine(ImVec2(sepPos.x, sepPos.y + 2), ImVec2(sepPos.x, sepPos.y + btnSize - 2),
-                        ImGui::GetColorU32(ImGuiCol_Separator), 1.0f);
-            ImGui::Dummy(ImVec2(2, btnSize));
-            ImGui::SameLine(0, 8);
+            ImGui::SetTooltip("Transform tool: Move (W), Rotate (E), Scale (R)");
         }
 
-        bool isLocal = (m_transformSpace == TransformSpace::Local);
-        ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, passiveHover);
-        if (ImGui::Button(isLocal ? ICON_FA_CUBE " Local" : ICON_FA_GLOBE " World", ImVec2(80, btnSize)))
-        {
-            m_transformSpace = isLocal ? TransformSpace::World : TransformSpace::Local;
-        }
-        ImGui::PopStyleColor(2);
-        if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Toggle World/Local space");
+        Ui::ToolbarSeparator();
 
-        ImGui::SameLine(0, 8);
-
+        static constexpr const char* kSpaceLabels[] = {ICON_FA_GLOBE " World", ICON_FA_CUBE " Local"};
+        int space = m_transformSpace == TransformSpace::Local ? 1 : 0;
+        ImGui::BeginGroup();
+        if (Ui::SegmentedControl("##transformSpace", kSpaceLabels, 2, &space))
         {
-            ImVec2 sepPos = ImGui::GetCursorScreenPos();
-            dl->AddLine(ImVec2(sepPos.x, sepPos.y + 2), ImVec2(sepPos.x, sepPos.y + btnSize - 2),
-                        ImGui::GetColorU32(ImGuiCol_Separator), 1.0f);
-            ImGui::Dummy(ImVec2(2, btnSize));
-            ImGui::SameLine(0, 8);
+            m_transformSpace = space == 1 ? TransformSpace::Local : TransformSpace::World;
         }
+        ImGui::EndGroup();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+        {
+            ImGui::SetTooltip("Gizmo space: world axes or the selection's local axes");
+        }
+
+        Ui::ToolbarSeparator();
     }
 
-    void EditorUI::RenderToolbarPlayControls(float btnSize, ImDrawList* dl, const ImVec4& playGreen,
-                                             const ImVec4& accentAmber, const ImVec4& stopRed, const ImVec4& pillBg,
-                                             const ImVec4& passiveHover)
+    void EditorUI::RenderToolbarPlayControls(float btnSize)
     {
-        ImVec2 btnDim(btnSize, btnSize);
+        namespace Ui = Spark::Ui;
+        // The editor is not an in-process game host. PlayModeManager is an
+        // intentional state-preview aid, but its counters are not gameplay.
+        // Keep the prominent toolbar affordance on the verified out-of-process
+        // path so this button cannot look like a running game.
+        const bool previewing = m_playModeManager.IsInPlayMode();
+        const float previewWidth =
+            previewing ? ImGui::CalcTextSize("Preview").x + ImGui::GetStyle().FramePadding.x * 4.0f : 0.0f;
+        const float clusterWidth = btnSize + previewWidth;
+        const float centredX = (ImGui::GetWindowWidth() - clusterWidth) * 0.5f;
+        if (centredX > ImGui::GetCursorPosX())
+        {
+            ImGui::SetCursorPosX(centredX);
+        }
 
-        float windowWidth = ImGui::GetWindowContentRegionMax().x;
-        float playWidth = btnSize * 3 + 12;
-        float cursorX = (windowWidth - playWidth) * 0.5f;
-        if (cursorX > ImGui::GetCursorPosX())
-            ImGui::SetCursorPosX(cursorX);
-
-        bool isPlaying = (m_playMode == PlayMode::Playing || m_playMode == PlayMode::Simulating);
-        if (isPlaying)
         {
-            ImGui::PushStyleColor(ImGuiCol_Button, playGreen);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(playGreen.x, playGreen.y, playGreen.z, 0.85f));
-        }
-        else
-        {
-            ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, passiveHover);
-        }
-        if (ImGui::Button(ICON_FA_PLAY, btnDim))
-        {
-            m_playModeManager.TogglePlayMode();
-            m_playMode = m_playModeManager.IsPlaying()
-                             ? PlayMode::Playing
-                             : (m_playModeManager.IsSimulating()
-                                    ? PlayMode::Simulating
-                                    : (m_playModeManager.IsPaused() ? PlayMode::Paused : PlayMode::Stopped));
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Play mode toggled: %s",
-                           m_playMode == PlayMode::Playing
-                               ? "Playing"
-                               : (m_playMode == PlayMode::Simulating
-                                      ? "Simulating"
-                                      : (m_playMode == PlayMode::Paused ? "Paused" : "Stopped")));
-            ShowNotification(m_playMode == PlayMode::Stopped ? "Stopped" : "Running...",
-                             m_playMode == PlayMode::Stopped ? "info" : "success", 2.0f);
-        }
-        ImGui::PopStyleColor(2);
-        if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Play (F5)");
-        ImGui::SameLine();
-
-        bool isPaused = (m_playMode == PlayMode::Paused);
-        if (isPaused)
-        {
-            ImGui::PushStyleColor(ImGuiCol_Button, accentAmber);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(accentAmber.x, accentAmber.y, accentAmber.z, 0.85f));
-        }
-        else
-        {
-            ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, passiveHover);
-        }
-        if (ImGui::Button(ICON_FA_PAUSE, btnDim))
-        {
-            m_playModeManager.TogglePause();
-            if (m_playModeManager.IsPaused())
-                m_playMode = PlayMode::Paused;
-            else if (m_playModeManager.IsSimulating())
-                m_playMode = PlayMode::Simulating;
-            else if (m_playModeManager.IsInPlayMode())
-                m_playMode = PlayMode::Playing;
-        }
-        ImGui::PopStyleColor(2);
-        if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Pause");
-        ImGui::SameLine();
-
-        ImGui::PushStyleColor(ImGuiCol_Button, pillBg);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, passiveHover);
-        if (ImGui::Button(ICON_FA_STOP, btnDim))
-        {
-            if (m_playMode != PlayMode::Stopped)
+            Ui::ScopedPrimaryButtonColors primary;
+            if (ImGui::Button(ICON_FA_PLAY "##OpenPlayControl", ImVec2(btnSize, btnSize)))
             {
-                m_playModeManager.ExitPlayMode();
-                m_playMode = PlayMode::Stopped;
-                ShowNotification("Stopped", "info", 2.0f);
+                SetPanelVisible("PlayControl", true);
+                ShowNotification("Play Control opened — select a module, then Launch Game", "info", 3.0f);
             }
         }
-        ImGui::PopStyleColor(2);
         if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Stop (Shift+F5)");
-
-        ImGui::SameLine(0, 8);
-
         {
-            ImVec2 sepPos = ImGui::GetCursorScreenPos();
-            dl->AddLine(ImVec2(sepPos.x, sepPos.y + 2), ImVec2(sepPos.x, sepPos.y + btnSize - 2),
-                        ImGui::GetColorU32(ImGuiCol_Separator), 1.0f);
-            ImGui::Dummy(ImVec2(2, btnSize));
-            ImGui::SameLine(0, 8);
+            ImGui::SetTooltip("Open Play Control; Launch Game runs actual gameplay in SparkEngine.exe");
         }
-    }
 
-    void EditorUI::RenderToolbarSnapControls(float btnSize, const ImVec4& pillBg)
-    {
-        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(pillBg.x, pillBg.y, pillBg.z, 1.0f));
-        ImGui::Checkbox(ICON_FA_MAGNET " Snap", &m_snapEnabled);
-        ImGui::PopStyleColor();
-        if (m_snapEnabled)
+        // The state preview is not gameplay; say so beside the button while it runs.
+        if (previewing)
         {
             ImGui::SameLine();
-            ImGui::SetNextItemWidth(60);
+            Ui::StatusChip(Ui::Status::Warning, "Preview",
+                           "Editor state preview is running. It restores the scene when it stops; it is not "
+                           "gameplay.");
+        }
+
+        Ui::ToolbarSeparator();
+    }
+
+    void EditorUI::RenderToolbarSnapControls()
+    {
+        namespace Ui = Spark::Ui;
+        if (Ui::IconButton("##snapToggle", ICON_FA_MAGNET,
+                           m_snapEnabled ? "Snap is on: click to turn it off" : "Snap is off: click to turn it on",
+                           m_snapEnabled))
+        {
+            m_snapEnabled = !m_snapEnabled;
+        }
+        ImGui::SameLine();
+        {
+            Ui::ScopedDisabled disabled(!m_snapEnabled, "Turn snap on to change the increment");
+            Ui::ScopedFont mono(Ui::FontRole::Mono);
+            ImGui::SetNextItemWidth(Ui::Em(4.0f));
             ImGui::DragFloat("##SnapVal", &m_snapValue, 0.1f, 0.1f, 100.0f, "%.1f");
         }
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+        {
+            ImGui::SetTooltip("Snap increment in world units");
+        }
+    }
+
+    void EditorUI::RenderToolbarLayoutMenu()
+    // NOTE: Intentionally exceeds the 60-line guideline -- one dropdown, read top to bottom.
+    {
+        namespace Ui = Spark::Ui;
+        Ui::ToolbarSeparator();
+
+        const std::string current = m_preferences.lastLayout.empty() ? "Default" : m_preferences.lastLayout;
+        char preview[96];
+        std::snprintf(preview, sizeof(preview), "%s  %s", ICON_FA_COLUMNS, current.c_str());
+        ImGui::SetNextItemWidth(Ui::Em(11.0f));
+        if (!ImGui::BeginCombo("##layoutMenu", preview, ImGuiComboFlags_HeightLarge))
+        {
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+            {
+                ImGui::SetTooltip("Workspace layout");
+            }
+            return;
+        }
+
+        if (ImGui::Selectable("Default", m_preferences.lastLayout.empty()))
+        {
+            ResetToDefaultLayout();
+        }
+
+        const auto layouts = m_layoutManager ? m_layoutManager->GetSavedLayouts() : std::vector<LayoutInfo>{};
+        if (!layouts.empty())
+        {
+            ImGui::Separator();
+        }
+        for (const LayoutInfo& layout : layouts)
+        {
+            if (ImGui::Selectable(layout.name.c_str(), layout.name == m_preferences.lastLayout))
+            {
+                if (LoadLayout(layout.name))
+                {
+                    Notify(NotificationSeverity::Success, "Layout loaded", layout.name);
+                }
+                else
+                {
+                    Notify(NotificationSeverity::Error, "Layout not loaded",
+                           m_layoutManager ? m_layoutManager->GetLastError() : std::string());
+                }
+            }
+            if (!layout.description.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip))
+            {
+                ImGui::SetTooltip("%s", layout.description.c_str());
+            }
+        }
+
+        ImGui::Separator();
+        if (ImGui::Selectable("Save Layout As..."))
+        {
+            m_saveLayoutAsRequested = true;
+        }
+        if (ImGui::BeginMenu("Delete...", !layouts.empty()))
+        {
+            for (const LayoutInfo& layout : layouts)
+            {
+                if (ImGui::MenuItem(layout.name.c_str()))
+                {
+                    m_layoutPendingDelete = layout.name;
+                    m_deleteLayoutRequested = true;
+                }
+            }
+            ImGui::EndMenu();
+        }
+        // The menu item closes only its submenu; close the dropdown too before the confirmation opens.
+        if (m_deleteLayoutRequested)
+        {
+            ImGui::CloseCurrentPopup();
+        }
+        if (ImGui::Selectable("Reset"))
+        {
+            ResetToDefaultLayout();
+            Notify(NotificationSeverity::Info, "Layout reset", "Panels are back in their default places.");
+        }
+        ImGui::EndCombo();
     }
 
     void EditorUI::RenderToolbar()
     {
-        const auto& theme = EditorTheme::GetCurrentThemeData();
-        ImGuiWindowFlags toolbarFlags =
+        namespace Ui = Spark::Ui;
+        const ImGuiWindowFlags toolbarFlags =
             ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse;
 
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, EditorToolbarPaddingY));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(3, 4));
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, theme.frameRounding);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, Ui::Px2(8.0f, EditorToolbarPaddingY));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, Ui::Px2(4.0f, 4.0f));
 
-        if (ImGui::Begin("##Toolbar", nullptr, toolbarFlags))
+        if (ImGui::Begin(EditorToolbarWindowName, nullptr, toolbarFlags))
         {
-            float btnSize = EditorToolbarButtonSize;
-            ImDrawList* dl = ImGui::GetWindowDrawList();
+            const float btnSize = Ui::Px(EditorToolbarButtonSize);
+            // One row: centre every control on the play button's height.
+            const float rowTop = ImGui::GetCursorPosY();
+            const float controlOffset = std::max(0.0f, (btnSize - ImGui::GetFrameHeight()) * 0.5f);
 
-            ImVec4 accentTeal = theme.backgroundSelected.ToImVec4();
-            ImVec4 accentAmber = theme.background.Lerp(theme.textWarning, 0.28f).ToImVec4();
-            ImVec4 playGreen = theme.background.Lerp(theme.textSuccess, 0.28f).ToImVec4();
-            ImVec4 stopRed = theme.textError.ToImVec4();
-            ImVec4 pillBg = theme.button.ToImVec4();
-            ImVec4 passiveHover = theme.buttonHovered.ToImVec4();
-
-            RenderToolbarTransformTools(btnSize, dl, accentTeal, pillBg, passiveHover);
-            RenderToolbarPlayControls(btnSize, dl, playGreen, accentAmber, stopRed, pillBg, passiveHover);
-            RenderToolbarSnapControls(btnSize, pillBg);
+            ImGui::SetCursorPosY(rowTop + controlOffset);
+            RenderToolbarTransformTools();
+            ImGui::SetCursorPosY(rowTop);
+            RenderToolbarPlayControls(btnSize);
+            ImGui::SetCursorPosY(rowTop + controlOffset);
+            RenderToolbarSnapControls();
+            ImGui::SameLine();
+            ImGui::SetCursorPosY(rowTop + controlOffset);
+            RenderToolbarLayoutMenu();
         }
         ImGui::End();
-        ImGui::PopStyleVar(3);
+        ImGui::PopStyleVar(2);
     }
 
 } // namespace SparkEditor

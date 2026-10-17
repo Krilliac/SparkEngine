@@ -1,0 +1,55 @@
+name: Combined reliability source checks
+on:
+  push:
+    branches: [codex/combined-reliability-followup-20261002, codex/primary-verifier-followup-20261002, codex/cache-contract-followup-20261003, codex/installed-abi-contract-20261003, codex/installed-native-qualification-20261003, codex/installed-native-config-20261003, codex/atomic-handoff-20261003]
+permissions:
+  contents: read
+concurrency:
+  group: combined-reliability-source-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  source-contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Verify source and existing Python environment
+        env:
+          EXPECTED_SOURCE: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE"
+          git show -s --format='%H %T' HEAD
+          python3 -c 'import sys, yaml; print(sys.version, "PyYAML", yaml.__version__)'
+      - name: Verify Primary capture and mutation contracts
+        run: |
+          set -euo pipefail
+          python3 -B Tests/Tools/test_rhi210_capture.py
+          python3 -B Tests/Tools/test_verify_approved_primary.py
+          python3 -B Tests/Tools/test_diagnostic_sccache_keys.py
+          python3 -B Tests/Tools/test_installed_module_abi_rejection.py
+          python3 -B Tests/Tools/test_installed_native_runner.py
+          python3 -B Tests/Tools/test_sdk_template_configuration.py
+      - name: Run cleanup and diagnostic contracts
+        run: |
+          set -euo pipefail
+          python3 -B Tests/Tools/test_compare_build_outputs.py TwoTreeCleanupTests
+          python3 -B -m unittest discover -s Tests/Tools -p 'test_build_matrix_*diagnostics.py'
+          python3 -B Tests/Tools/test_build_matrix_report_upload.py
+      - name: Verify supply chain and workflow contracts
+        run: |
+          set -euo pipefail
+          python3 -B Tests/Tools/test_supply_chain_license_policy.py
+          python3 -B .github/scripts/test-workflow-failure-propagation.py
+          python3 -B .github/scripts/test_workflow_privilege_boundaries.py
+      - name: Verify exact documentation and inventory
+        run: |
+          set -euo pipefail
+          bash docs/update-all-docs.sh check
+          python3 -B Tools/buildmatrix/inventory.py --check docs/readiness/build-matrix-inventory.json
+          test -z "$(git status --porcelain)"

@@ -9,12 +9,16 @@
  */
 
 #include "MaterialEditorPanel.h"
+#include "MaterialEditorMaterialParser.h"
 #include "../Core/EditorIcons.h"
 #include "Utils/LogMacros.h"
 #include <imgui.h>
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
@@ -45,7 +49,7 @@ namespace SparkEditor
         // Blend mode
         const char* blendNames[] = {"Opaque", "Alpha Blend", "Additive", "Multiply", "Custom"};
         int currentBlend = static_cast<int>(state.blendMode);
-        ImGui::SetNextItemWidth(200.0f);
+        ImGui::SetNextItemWidth(Spark::Ui::Px(200.0f));
         if (ImGui::Combo("Blend Mode", &currentBlend, blendNames, 5))
         {
             SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "MaterialEditor: blend mode changed to '%s'",
@@ -59,7 +63,7 @@ namespace SparkEditor
         if (state.blendMode == MaterialRenderState::BlendMode::AlphaBlend ||
             state.blendMode == MaterialRenderState::BlendMode::Custom)
         {
-            ImGui::SetNextItemWidth(200.0f);
+            ImGui::SetNextItemWidth(Spark::Ui::Px(200.0f));
             if (ImGui::SliderFloat("Alpha Clip Threshold", &state.alphaClipThreshold, 0.0f, 1.0f, "%.2f"))
             {
                 selected->isModified = true;
@@ -72,7 +76,7 @@ namespace SparkEditor
         // Cull mode
         const char* cullNames[] = {"Back", "Front", "None"};
         int currentCull = static_cast<int>(state.cullMode);
-        ImGui::SetNextItemWidth(200.0f);
+        ImGui::SetNextItemWidth(Spark::Ui::Px(200.0f));
         if (ImGui::Combo("Cull Mode", &currentCull, cullNames, 3))
         {
             SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "MaterialEditor: cull mode changed to '%s'",
@@ -123,7 +127,7 @@ namespace SparkEditor
         ImGui::Spacing();
 
         // Render queue
-        ImGui::SetNextItemWidth(200.0f);
+        ImGui::SetNextItemWidth(Spark::Ui::Px(200.0f));
         if (ImGui::InputInt("Render Queue", &state.renderQueue, 100, 500))
         {
             state.renderQueue = std::clamp(state.renderQueue, 0, 5000);
@@ -157,15 +161,17 @@ namespace SparkEditor
         ImGui::Text(ICON_FA_EYE " Material Preview");
         ImGui::Separator();
 
-        float previewSize = std::min(ImGui::GetContentRegionAvail().x, 300.0f);
+        float previewSize = std::min(ImGui::GetContentRegionAvail().x, Spark::Ui::Px(300.0f));
         ImVec2 previewRegion(previewSize, previewSize);
 
         // Preview area with border
         ImVec2 cursorPos = ImGui::GetCursorScreenPos();
-        ImGui::GetWindowDrawList()->AddRectFilled(
-            cursorPos, ImVec2(cursorPos.x + previewRegion.x, cursorPos.y + previewRegion.y), IM_COL32(30, 30, 30, 255));
-        ImGui::GetWindowDrawList()->AddRect(
-            cursorPos, ImVec2(cursorPos.x + previewRegion.x, cursorPos.y + previewRegion.y), IM_COL32(80, 80, 80, 255));
+        ImGui::GetWindowDrawList()->AddRectFilled(cursorPos,
+                                                  ImVec2(cursorPos.x + previewRegion.x, cursorPos.y + previewRegion.y),
+                                                  Spark::Ui::Col(Spark::Ui::Role::SurfaceSunken));
+        ImGui::GetWindowDrawList()->AddRect(cursorPos,
+                                            ImVec2(cursorPos.x + previewRegion.x, cursorPos.y + previewRegion.y),
+                                            Spark::Ui::Col(Spark::Ui::Role::BorderSubtle));
 
         // CPU-side preview: draw a stylized sphere using material parameters
         float centerX = cursorPos.x + previewRegion.x * 0.5f;
@@ -289,7 +295,8 @@ namespace SparkEditor
 
             // Outline
             drawList->AddRect(ImVec2(centerX - halfSize, centerY - halfSize),
-                              ImVec2(centerX + halfSize, centerY + halfSize), IM_COL32(200, 200, 200, 100));
+                              ImVec2(centerX + halfSize, centerY + halfSize),
+                              Spark::Ui::Col(Spark::Ui::Role::BorderStrong));
         }
         else
         {
@@ -306,7 +313,8 @@ namespace SparkEditor
             drawList->AddRectFilled(ImVec2(centerX - halfSize, centerY - halfSize * 0.5f),
                                     ImVec2(centerX + halfSize, centerY + halfSize * 0.5f), planeColor);
             drawList->AddRect(ImVec2(centerX - halfSize, centerY - halfSize * 0.5f),
-                              ImVec2(centerX + halfSize, centerY + halfSize * 0.5f), IM_COL32(200, 200, 200, 100));
+                              ImVec2(centerX + halfSize, centerY + halfSize * 0.5f),
+                              Spark::Ui::Col(Spark::Ui::Role::BorderStrong));
         }
 
         // Advance cursor past the preview region
@@ -316,12 +324,12 @@ namespace SparkEditor
         // Preview info
         const char* shapeNames[] = {"Sphere", "Cube", "Plane", "Cylinder", "Custom"};
         const char* lightingNames[] = {"Default", "Scene Lights", "IBL Only", "Unlit"};
-        ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Shape: %s | Lighting: %s | Rotation: %s",
-                           shapeNames[static_cast<int>(m_previewShape)],
-                           lightingNames[static_cast<int>(m_previewLighting)], m_previewRotate ? "On" : "Off");
+        Spark::Ui::SecondaryText("Shape: %s | Lighting: %s | Rotation: %s",
+                                 shapeNames[static_cast<int>(m_previewShape)],
+                                 lightingNames[static_cast<int>(m_previewLighting)], m_previewRotate ? "On" : "Off");
 
         ImGui::Spacing();
-        ImGui::SetNextItemWidth(200.0f);
+        ImGui::SetNextItemWidth(Spark::Ui::Px(200.0f));
         ImGui::SliderFloat("Rotation Speed", &m_previewRotationSpeed, 0.0f, 180.0f, "%.1f deg/s");
     }
 
@@ -587,201 +595,7 @@ namespace SparkEditor
 
     void MaterialEditorPanel::PopulateDefaultPBRParameters(MaterialDefinition& material)
     {
-        // ---- Surface group ----
-        {
-            ShaderParameter albedoColor;
-            albedoColor.name = "albedoColor";
-            albedoColor.displayName = "Albedo Color";
-            albedoColor.type = ShaderParamType::Color;
-            albedoColor.group = "Surface";
-            albedoColor.floatValues[0] = 0.8f;
-            albedoColor.floatValues[1] = 0.8f;
-            albedoColor.floatValues[2] = 0.8f;
-            albedoColor.floatValues[3] = 1.0f;
-            albedoColor.tooltip = "Base color of the surface (linear space)";
-            material.parameters.push_back(albedoColor);
-        }
-        {
-            ShaderParameter metallic;
-            metallic.name = "metallic";
-            metallic.displayName = "Metallic";
-            metallic.type = ShaderParamType::Float;
-            metallic.group = "Surface";
-            metallic.floatValues[0] = 0.0f;
-            metallic.minValue = 0.0f;
-            metallic.maxValue = 1.0f;
-            metallic.step = 0.01f;
-            metallic.tooltip = "0 = dielectric, 1 = metallic";
-            material.parameters.push_back(metallic);
-        }
-        {
-            ShaderParameter roughness;
-            roughness.name = "roughness";
-            roughness.displayName = "Roughness";
-            roughness.type = ShaderParamType::Float;
-            roughness.group = "Surface";
-            roughness.floatValues[0] = 0.5f;
-            roughness.minValue = 0.0f;
-            roughness.maxValue = 1.0f;
-            roughness.step = 0.01f;
-            roughness.tooltip = "0 = mirror-smooth, 1 = fully rough";
-            material.parameters.push_back(roughness);
-        }
-        {
-            ShaderParameter opacity;
-            opacity.name = "opacity";
-            opacity.displayName = "Opacity";
-            opacity.type = ShaderParamType::Float;
-            opacity.group = "Surface";
-            opacity.floatValues[0] = 1.0f;
-            opacity.minValue = 0.0f;
-            opacity.maxValue = 1.0f;
-            opacity.step = 0.01f;
-            opacity.tooltip = "Overall opacity of the material";
-            material.parameters.push_back(opacity);
-        }
-
-        // ---- Normal group ----
-        {
-            ShaderParameter normalStrength;
-            normalStrength.name = "normalStrength";
-            normalStrength.displayName = "Normal Strength";
-            normalStrength.type = ShaderParamType::Float;
-            normalStrength.group = "Normal";
-            normalStrength.floatValues[0] = 1.0f;
-            normalStrength.minValue = 0.0f;
-            normalStrength.maxValue = 2.0f;
-            normalStrength.step = 0.01f;
-            normalStrength.tooltip = "Intensity of the normal map effect";
-            material.parameters.push_back(normalStrength);
-        }
-
-        // ---- Emission group ----
-        {
-            ShaderParameter emissionColor;
-            emissionColor.name = "emissionColor";
-            emissionColor.displayName = "Emission Color";
-            emissionColor.type = ShaderParamType::Color;
-            emissionColor.group = "Emission";
-            emissionColor.floatValues[0] = 0.0f;
-            emissionColor.floatValues[1] = 0.0f;
-            emissionColor.floatValues[2] = 0.0f;
-            emissionColor.floatValues[3] = 1.0f;
-            emissionColor.isHDR = true;
-            emissionColor.tooltip = "Emissive color (HDR values allowed)";
-            material.parameters.push_back(emissionColor);
-        }
-        {
-            ShaderParameter emissionIntensity;
-            emissionIntensity.name = "emissionIntensity";
-            emissionIntensity.displayName = "Emission Intensity";
-            emissionIntensity.type = ShaderParamType::Float;
-            emissionIntensity.group = "Emission";
-            emissionIntensity.floatValues[0] = 0.0f;
-            emissionIntensity.minValue = 0.0f;
-            emissionIntensity.maxValue = 20.0f;
-            emissionIntensity.step = 0.1f;
-            emissionIntensity.tooltip = "Brightness multiplier for emission";
-            material.parameters.push_back(emissionIntensity);
-        }
-
-        // ---- Ambient Occlusion group ----
-        {
-            ShaderParameter aoStrength;
-            aoStrength.name = "aoStrength";
-            aoStrength.displayName = "AO Strength";
-            aoStrength.type = ShaderParamType::Float;
-            aoStrength.group = "Ambient Occlusion";
-            aoStrength.floatValues[0] = 1.0f;
-            aoStrength.minValue = 0.0f;
-            aoStrength.maxValue = 1.0f;
-            aoStrength.step = 0.01f;
-            aoStrength.tooltip = "Strength of the ambient occlusion effect";
-            material.parameters.push_back(aoStrength);
-        }
-
-        // ---- Detail group ----
-        {
-            ShaderParameter detailTiling;
-            detailTiling.name = "detailTiling";
-            detailTiling.displayName = "Detail Tiling";
-            detailTiling.type = ShaderParamType::Float2;
-            detailTiling.group = "Detail";
-            detailTiling.floatValues[0] = 1.0f;
-            detailTiling.floatValues[1] = 1.0f;
-            detailTiling.minValue = 0.01f;
-            detailTiling.maxValue = 50.0f;
-            detailTiling.tooltip = "UV tiling for detail textures";
-            material.parameters.push_back(detailTiling);
-        }
-        {
-            ShaderParameter useDetailMap;
-            useDetailMap.name = "useDetailMap";
-            useDetailMap.displayName = "Use Detail Map";
-            useDetailMap.type = ShaderParamType::Bool;
-            useDetailMap.group = "Detail";
-            useDetailMap.boolValue = false;
-            useDetailMap.tooltip = "Enable detail texture overlay";
-            material.parameters.push_back(useDetailMap);
-        }
-
-        // ---- Texture Slots ----
-        {
-            TextureSlot albedo;
-            albedo.name = "Albedo";
-            albedo.bindSlot = 0;
-            albedo.filter = TextureSlot::FilterMode::Trilinear;
-            material.textureSlots.push_back(albedo);
-        }
-        {
-            TextureSlot normal;
-            normal.name = "Normal";
-            normal.bindSlot = 1;
-            normal.filter = TextureSlot::FilterMode::Trilinear;
-            material.textureSlots.push_back(normal);
-        }
-        {
-            TextureSlot metallic;
-            metallic.name = "Metallic";
-            metallic.bindSlot = 2;
-            metallic.filter = TextureSlot::FilterMode::Bilinear;
-            material.textureSlots.push_back(metallic);
-        }
-        {
-            TextureSlot roughness;
-            roughness.name = "Roughness";
-            roughness.bindSlot = 3;
-            roughness.filter = TextureSlot::FilterMode::Bilinear;
-            material.textureSlots.push_back(roughness);
-        }
-        {
-            TextureSlot ao;
-            ao.name = "Ambient Occlusion";
-            ao.bindSlot = 4;
-            ao.filter = TextureSlot::FilterMode::Bilinear;
-            material.textureSlots.push_back(ao);
-        }
-        {
-            TextureSlot emission;
-            emission.name = "Emission";
-            emission.bindSlot = 5;
-            emission.filter = TextureSlot::FilterMode::Bilinear;
-            material.textureSlots.push_back(emission);
-        }
-        {
-            TextureSlot height;
-            height.name = "Height";
-            height.bindSlot = 6;
-            height.filter = TextureSlot::FilterMode::Bilinear;
-            material.textureSlots.push_back(height);
-        }
-        {
-            TextureSlot detail;
-            detail.name = "Detail";
-            detail.bindSlot = 7;
-            detail.filter = TextureSlot::FilterMode::Trilinear;
-            material.textureSlots.push_back(detail);
-        }
+        InitializeStandardPBRParameters(material);
     }
 
 } // namespace SparkEditor

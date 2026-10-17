@@ -104,10 +104,11 @@ namespace Terrafront
                         return "[TF] tf_chaos: authority only (tf_dedicated / tf_host first)";
                     if (args.empty())
                         return std::string("[TF] chaos ") + (m_chaosActive ? "ACTIVE" : "idle") +
-                               "  bots=" + std::to_string(BotCount()) + "  (tf_chaos <0-32> [seconds])";
+                               "  bots=" + std::to_string(BotCount()) + "  (tf_chaos <0-" + std::to_string(kTFMaxBots) +
+                               "> [seconds])";
                     const int n = std::atoi(args[0].c_str());
                     if (n < 0 || n > static_cast<int>(kTFMaxBots))
-                        return "[TF] tf_chaos: count must be 0-32";
+                        return "[TF] tf_chaos: count must be 0-" + std::to_string(kTFMaxBots);
                     float seconds = 300.0f;
                     if (args.size() > 1)
                         seconds = static_cast<float>(std::atof(args[1].c_str()));
@@ -119,7 +120,7 @@ namespace Terrafront
                 },
                 "Chaos exercise mode: spawn N bots across all factions that scatter onto capture "
                 "points, fight, capture, place deployables and try vehicles to stress-test the server",
-                "TERRAFRONT", "tf_chaos <botcount 0-32> [seconds=300]");
+                "TERRAFRONT", "tf_chaos <botcount 0-" + std::to_string(kTFMaxBots) + "> [seconds=300]");
             m_chaosCmds = true;
         }
         if (!console.HasCommand("tf_validate"))

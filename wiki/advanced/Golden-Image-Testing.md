@@ -1,8 +1,38 @@
 # Golden Image Testing
 
-The Golden Image Testing framework captures framebuffer screenshots, compares them pixel-by-pixel against stored reference images, and reports visual regressions. It supports configurable per-pixel and per-image tolerance thresholds, generates diff images highlighting changed regions, and integrates with CI pipelines for automated visual regression detection.
+The Golden Image Testing framework captures framebuffer screenshots, compares them pixel-by-pixel against committed PNG reference images, and reports visual regressions. Thresholds are not configured in code: each scene on each backend row has a reviewed entry in `Tests/GoldenImages/manifest.json` carrying its per-pixel and per-image thresholds, the reviewer, and the SHA-256 of the committed baseline. Comparisons fail closed: a missing or invalid manifest, a missing entry, a missing baseline, or a baseline hash mismatch is a failure, never a skip.
 
-**Source:** `SparkEngine/Source/Utils/GoldenImageTest.h`
+**Source:** `SparkEngine/Source/Utils/GoldenImageTest.h`, `SparkEngine/Source/Utils/GoldenImageManifest.h`, `SparkEngine/Source/Utils/GoldenImagePng.h`
+**Layout and review workflow:** `Tests/GoldenImages/README.md`
+
+The required `performance-budget-governance` job checks the base-to-head diff.
+New or changed baseline hashes and thresholds must carry a changed, non-pending
+reviewer record in the manifest. A PNG replacement without that record fails;
+deleting a PNG or manifest entry also fails because the schema has no reviewed
+deletion record. Unchanged pending software baselines remain explicitly pending.
+This checks the recorded review, not the reviewer's identity; protected human
+approval still depends on repository review policy. The gate's Python regressions
+run in CI and through CTest `GoldenImage_ReviewGate`.
+
+> **Status (2026-09-26):** two software rows have entries. `vulkan-lavapipe` has `PostProcess_ACES`, `BloomExtract` and `GaussianBlur_Vertical`, the shipped SPIR-V post-process programs rendered on Mesa Lavapipe by `Tests/TestRHI230VulkanGoldenReal.cpp` (RHI-230). `opengl-llvmpipe` has eight scenes of the shipped GLSL (BasicVS+BasicPS lit sphere, the ACES/Reinhard/Uncharted2/FXAA `PostProcess` variants, horizontal and vertical `GaussianBlur`, and `BloomExtract`) rendered through `GLDevice` on Mesa llvmpipe by `Tests/TestRHI240OpenGLGoldenReal.cpp` (RHI-240). Both are software-row shader evidence, not engine-pass goldens or hardware certification. `d3d11-warp` has `PostPass_TonemapACES`, `PostPass_Bloom`, `PostPass_FXAA` and `PostPass_GTAO`, the production `PostProcessingPipeline` passes rendered one at a time on WARP by `Tests/TestRHI210D3D11PassGoldenReal.cpp` (RHI-210, CTest `D3D11PassGolden`), owner-approved in September 2026 with the D3D11 WARP checklist below. The canonical-content goldens and the `d3d11-hw` row have no entries yet.
+
+## Primary deferred WARP baselines (2026-10-02)
+
+`Primary_DeferredGeometry`, `Primary_DeferredLighting` and `Primary_ShadowDepth`
+have user-approved reference images and exact SHA256 records in the manifest.
+All five captures matched byte-for-byte; the approved threshold and differing
+pixel tolerance are both zero. The normal four-test Primary suite passed after
+registration. Disabling geometry, lighting or shadow depth produced actual pixel
+comparison failures against the corresponding reference, while unaffected scenes
+matched. Approval is recorded against review message
+`Sentinel_2378f2266ca48191873a1f638547f3b4` and the delivered Library image IDs.
+
+This is local WARP qualification of three intermediate outputs. ShadowDepth
+does not establish visible shadows in the final lit frame. The remaining seven
+canonical scenes and exact-commit hosted evidence are pending; CTest disabled
+states and release-readiness claims are unchanged. See
+[`RHI210-CAPTURE.md`](../../Tests/GoldenImages/RHI210-CAPTURE.md) for scope and
+follow-up checks.
 
 ## Overview
 
@@ -11,25 +41,40 @@ The Golden Image Testing framework captures framebuffer screenshots, compares th
 | `GoldenImageTestRunner` | Singleton that captures screenshots, compares against golden references, and manages the test workflow |
 | `IGoldenImageCapture` | Abstract interface for framebuffer readback (one implementation per RHI backend) |
 | `ImageComparisonResult` | Detailed result of comparing a captured screenshot against a golden image |
-| `GoldenImageConfig` | Configuration for directories, tolerance thresholds, and reporting limits |
+| `GoldenImageConfig` | Directories, backend row under test, and reporting limit |
+| `GoldenManifestEntry` / `GoldenManifest::Load` | Reviewed per-scene, per-row thresholds and baseline hash; strict parser |
 | `PixelDiff` | Information about a single pixel that differs between golden and actual images |
 
 ## Key Types
 
 ### GoldenImageConfig
 
-Configuration struct controlling directories and tolerance:
-
 ```cpp
 struct GoldenImageConfig
 {
-    std::string goldenImageDir;      // Directory containing reference images
+    std::string goldenImageDir;      // manifest.json and <backendRow>/<scene>.png baselines
     std::string outputDir;           // Directory for captured / diff images
-    float tolerancePercent = 0.5f;   // Max allowed percent of differing pixels
-    float perPixelThreshold = 10.0f; // Max channel distance before a pixel counts as different
+    std::string backendRow;          // d3d11-warp, d3d11-hw, opengl-llvmpipe or vulkan-lavapipe
     uint32_t maxDiffsToReport = 100; // Cap on PixelDiff entries stored in results
 };
 ```
+
+### GoldenManifestEntry
+
+```cpp
+struct GoldenManifestEntry
+{
+    std::string scene;           // Scene id, 1-128 chars of [A-Za-z0-9_-]
+    std::string backendRow;      // One of the four rows above
+    bool software = false;       // Must agree with the row (true for WARP/llvmpipe/lavapipe)
+    float perPixelThreshold = 0; // 0-441.68
+    float tolerancePercent = 0;  // 0-100
+    std::string reviewer;        // Non-empty
+    std::string baselineSha256;  // 64 lowercase hex characters
+};
+```
+
+`GoldenManifest::Load(path, entries, error)` requires `schemaVersion: 1`, every field, and no unknown keys; one invalid entry rejects the whole manifest.
 
 ### ImageComparisonResult
 
@@ -45,6 +90,9 @@ struct ImageComparisonResult
     float percentDifferent = 0.f;     // Percentage of differing pixels
     float maxPixelDistance = 0.f;     // Maximum per-pixel distance observed
     float averagePixelDistance = 0.f; // Average distance across all pixels
+    float perPixelThreshold = 0.f;    // Reviewed threshold applied (from the manifest)
+    float tolerancePercent = 0.f;     // Reviewed tolerance applied (from the manifest)
+    std::string failureReason;        // Why the comparison failed closed; empty on a pixel verdict
     std::string diffImagePath;        // Path to the generated diff image
     std::vector<PixelDiff> diffs;     // First N differing pixels (capped)
 };
@@ -94,12 +142,11 @@ public:
 
 auto& runner = Spark::GoldenImageTestRunner::GetInstance();
 
-// Configure directories and tolerances
+// Thresholds come from Tests/GoldenImages/manifest.json, not from the config
 Spark::GoldenImageConfig config;
 config.goldenImageDir = "Tests/GoldenImages";
 config.outputDir = "Tests/Output";
-config.tolerancePercent = 0.5f;    // Allow up to 0.5% of pixels to differ
-config.perPixelThreshold = 10.0f;  // Per-pixel RGB distance threshold
+config.backendRow = "vulkan-lavapipe";
 config.maxDiffsToReport = 100;     // Report at most 100 differing pixels
 
 runner.Initialize(config);
@@ -147,7 +194,7 @@ renderEngine.RenderFrame();
 runner.CaptureGolden("Level1_Spawn");
 ```
 
-Golden images are saved to the `goldenImageDir` as `{sceneName}.png` files at a default resolution of 1920x1080.
+Captures are written as real PNGs to `{goldenImageDir}/{backendRow}/{sceneName}.png` at 1920x1080. A capture is not a baseline until a reviewer records its thresholds, name, and `sha256sum` in `manifest.json`; until then the hash check fails the comparison.
 
 ### Comparing Against Golden Images
 
@@ -159,8 +206,8 @@ auto result = runner.CompareWithGolden("MainMenu");
 
 if (!result.matched)
 {
-    std::println("Visual regression in {}: {:.2f}% pixels differ (max distance: {:.1f})",
-                 result.sceneName, result.percentDifferent, result.maxPixelDistance);
+    std::println("Visual regression in {}: {} ({:.2f}% pixels differ, max distance {:.1f})",
+                 result.sceneName, result.failureReason, result.percentDifferent, result.maxPixelDistance);
     std::println("Diff image saved to: {}", result.diffImagePath);
 
     // Inspect individual pixel differences
@@ -177,7 +224,7 @@ if (!result.matched)
 
 ### Running All Comparisons
 
-Compare every golden image in the golden directory at once:
+Compare every manifest entry for the configured backend row (a row with no entries returns one failed result):
 
 ```cpp
 auto results = runner.RunAllComparisons();
@@ -206,7 +253,7 @@ When visuals change intentionally, update the golden references:
 runner.UpdateGolden("MainMenu");  // Equivalent to CaptureGolden
 ```
 
-### Listing Available Golden Images
+### Listing Reviewed Scenes for the Row
 
 ```cpp
 auto names = runner.GetGoldenImageNames();
@@ -218,13 +265,14 @@ for (const auto& name : names)
 
 ## Configuration
 
-### Tolerance Settings
+### Reviewed Thresholds (manifest)
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `tolerancePercent` | 0.5% | Maximum percentage of pixels allowed to differ before the test fails |
-| `perPixelThreshold` | 10.0 | Per-pixel Euclidean RGB distance threshold; pixels below this are considered matching |
-| `maxDiffsToReport` | 100 | Maximum number of `PixelDiff` entries stored in results |
+| Field | Range | Description |
+|-------|-------|-------------|
+| `tolerancePercent` | 0-100 | Maximum percentage of pixels allowed to differ before the test fails |
+| `perPixelThreshold` | 0-441.68 | Per-pixel Euclidean RGB distance threshold; pixels at or below this match |
+
+`GoldenImageConfig::maxDiffsToReport` (default 100) caps the stored `PixelDiff` entries.
 
 ### Per-Pixel Distance Calculation
 
@@ -245,14 +293,14 @@ When a comparison fails, a diff image is generated showing:
 - **Red pixels**: Differing regions, with intensity proportional to the distance (brighter red = larger difference)
 - **Dark green pixels**: Matching regions
 
-The diff image is saved to `{outputDir}/{sceneName}_diff.png`.
+The diff image is saved to `{outputDir}/{backendRow}_{sceneName}_diff.png` and the actual frame to `{outputDir}/{backendRow}_{sceneName}.png`.
 
 ## Console Commands
 
 ```cpp
 std::string status = runner.Console_GetStatus();
 // Output: "[GoldenImageTest] goldenDir=Tests/GoldenImages, outputDir=Tests/Output,
-//          tolerance=0.5%, perPixel=10, capture=set"
+//          row=vulkan-lavapipe, capture=set"
 ```
 
 ## CI Integration
@@ -267,8 +315,7 @@ int main()
     Spark::GoldenImageConfig config;
     config.goldenImageDir = "Tests/GoldenImages";
     config.outputDir = "Tests/CIOutput";
-    config.tolerancePercent = 1.0f;   // Slightly relaxed for CI
-    config.perPixelThreshold = 15.0f;
+    config.backendRow = "opengl-llvmpipe"; // Thresholds are reviewed per row in the manifest
     runner.Initialize(config);
     runner.SetCapture(std::make_unique<SoftwareCapture>());
 
@@ -279,8 +326,8 @@ int main()
         auto result = runner.CompareWithGolden(scene);
         if (!result.matched)
         {
-            std::print(stderr, "VISUAL REGRESSION: {} ({:.2f}% diff)\n",
-                       result.sceneName, result.percentDifferent);
+            std::print(stderr, "VISUAL REGRESSION: {}: {} ({:.2f}% diff)\n",
+                       result.sceneName, result.failureReason, result.percentDifferent);
         }
     }
 
@@ -292,6 +339,29 @@ int main()
 ### Software Rendering in CI
 
 For GPU-less CI environments, use NullRHIDevice or Mesa llvmpipe for software rendering. The capture interface works with any RHI backend.
+
+### The golden-linux lane
+
+The `golden-linux` job in `.github/workflows/build.yml` (CI-110) is the Mesa-pinned lane that compares the committed Linux baselines. It is advisory until its first hosted pass: it is not yet a `required-ci-gate` dependency, and becomes required after that pass is recorded (promotion flips `GOLDEN_LINUX_REQUIRED` in `.github/scripts/test-workflow-failure-propagation.py` and adds the job to the gate). It runs on `ubuntu-24.04` and:
+
+1. installs the Mesa binaries it uses (`libgl1-mesa-dri`, `mesa-vulkan-drivers`, `libegl-mesa0`, `libglx-mesa0`, `libgbm1`, `libgbm-dev`, `mesa-libgallium`) at `25.2.8-0ubuntu0.24.04.2` explicitly, because `noble-updates` can move Mesa on its own (on 2026-09-30 it moved to `.3` while `noble-security` kept publishing `.2`), and then fails unless `libgl1-mesa-dri`, `mesa-vulkan-drivers` and every other installed Mesa binary are exactly `25.2.8-0ubuntu0.24.04.2`, the Mesa build the `opengl-llvmpipe` baselines were reviewed on. A different rasterizer means re-rendering and re-reviewing the baselines, never comparing against them;
+2. configures the `linux-gcc-release` preset and requires the headless EGL path (Mesa surfaceless llvmpipe, no display server);
+3. asserts that both `SparkOpenGLGoldenTests` and `VulkanGoldenTests` are registered, because `--no-tests=error` alone would pass with one row missing;
+4. runs `ctest --test-dir build/linux-gcc-release -L '^(opengl-golden|vulkan-golden)$' --output-on-failure --no-tests=error`, and uploads the JUnit, logs and `Tests/Output/` diffs even when the comparison fails.
+
+Until that promotion, `build-linux-gcc` and `build-linux-clang` keep running those two CTest entries, so a required job still compares the baselines; promotion excludes them there so each baseline is compared once per run, on the pinned Mesa. `.github/scripts/test-workflow-failure-propagation.py` keeps this structure in place, including the lane's advisory gate status. A hosted match of the baselines is not recorded yet; the first hosted `golden-linux` run supplies it.
+
+```bash
+ctest --test-dir build/linux-gcc-release -L '^(opengl-golden|vulkan-golden)$' --output-on-failure --no-tests=error
+```
+
+### Lane parity
+
+`Tests/Tools/test_golden_manifest.py` (CTest `GoldenImage_ManifestIntegrity`) ties each committed baseline to exactly one comparing lane. A lane is a `Tests/TestRHI*Golden*.cpp` source that declares `kRow` and `kScenes` and is registered with `SPARK_TEST_FILE=<lane>;`. One row may be split across several lanes (one fixture per source file): the union of their `kScenes` must equal the manifest scenes for that row, and a scene declared by two lanes of the same row is an error.
+
+### D3D11 WARP capture and review
+
+The `d3d11-warp` row's rasterizer identity is the file version of `%SystemRoot%\System32\d3d10warp.dll` plus the Windows build number, recorded in every reviewer string (the WARP analogue of the Mesa pin). A WARP baseline is committed only after five checks, listed in `Tests/GoldenImages/README.md`: the lane's CPU probes pass, the PNG is inspected, the maximum and mean distance to a local hardware render of the same scene justify the thresholds, a one-constant shader mutation fails the golden, and the reviewer keeps `owner review pending` (allowed only on software rows). A mismatch on another Windows build is data for owner review, never a reason to loosen thresholds.
 
 ## Integration
 
@@ -317,6 +387,10 @@ bool allPassed = !bench.HasRegressions(perfComparisons)
               && !Spark::GoldenImageTestRunner::HasRegressions(vizResults);
 ```
 
+### Blank-Frame Check
+
+`AnalyzeFrame(rgba)` returns the distinct colour count and the share of the most common colour; `FrameHasRenderedContent(rgba, maxDominantFraction)` rejects a uniform frame. The D3D11 golden tests use these shared functions.
+
 ### Static Comparison Utility
 
 The `CompareImages` static method can compare any two RGBA buffers without the full runner:
@@ -332,7 +406,7 @@ std::println("Diff: {} pixels ({:.2f}%), max distance: {:.1f}",
 
 ### Static PNG I/O
 
-Save and load raw RGBA images (simplified format: `[width:4][height:4][RGBA data]`):
+Encode and decode real 8-bit RGBA PNG files (`Utils/GoldenImagePng.h`: vendored miniz encoder plus a strict reader). `LoadPNG` accepts only 8-bit RGB/RGBA non-interlaced PNGs with valid chunk CRCs. It rejects everything else, including the legacy `[width:4][height:4][RGBA]` layout and images wider or taller than 16384. The bundled stb headers are API stubs and are not used:
 
 ```cpp
 // Save
@@ -350,18 +424,20 @@ auto pixels = Spark::GoldenImageTestRunner::LoadPNG("input.png", w, h);
 | Method | Description |
 |--------|-------------|
 | `GetInstance() -> GoldenImageTestRunner&` | Access the singleton |
-| `Initialize(const GoldenImageConfig&)` | Set up directories and tolerances |
+| `Initialize(const GoldenImageConfig&)` | Set directories and backend row |
 | `Shutdown()` | Release capture interface and reset config |
 | `SetCapture(unique_ptr<IGoldenImageCapture>)` | Set the framebuffer capture backend |
-| `CaptureGolden(string_view sceneName)` | Capture and save a golden reference (1920x1080) |
-| `CompareWithGolden(string_view) -> ImageComparisonResult` | Compare current framebuffer against stored golden |
-| `RunAllComparisons() -> vector<ImageComparisonResult>` | Compare all golden images in the directory |
+| `CaptureGolden(string_view sceneName) -> bool` | Write `<row>/<scene>.png` (1920x1080) for review |
+| `CompareWithGolden(string_view) -> ImageComparisonResult` | Manifest + hash gate, then pixel diff with reviewed thresholds |
+| `RunAllComparisons() -> vector<ImageComparisonResult>` | Compare every manifest entry for the row |
 | `HasRegressions(vector<ImageComparisonResult>) -> bool` | Check if any results did not match (static) |
-| `UpdateGolden(string_view sceneName)` | Overwrite golden reference with current frame |
-| `GetGoldenImageNames() -> vector<string>` | List all golden image scene names |
+| `UpdateGolden(string_view sceneName) -> bool` | Overwrite `<row>/<scene>.png` with the current frame |
+| `GetGoldenImageNames() -> vector<string>` | Scene ids the manifest lists for the row |
 | `CompareImages(golden, actual, w, h, tolerance) -> ImageComparisonResult` | Static pixel-by-pixel comparison |
-| `SavePNG(string_view, data, w, h) -> bool` | Save RGBA data to file (static) |
-| `LoadPNG(string_view, w&, h&) -> vector<uint8_t>` | Load RGBA data from file (static) |
+| `SavePNG(string_view, data, w, h) -> bool` | Encode RGBA data as PNG (static) |
+| `LoadPNG(string_view, w&, h&) -> vector<uint8_t>` | Decode a PNG to RGBA (static) |
+| `AnalyzeFrame(rgba) -> FrameContent` | Colour statistics for blank-frame rejection (static) |
+| `FrameHasRenderedContent(rgba, maxDominant) -> bool` | Reject uniform frames (static) |
 | `Console_GetStatus() -> string` | Human-readable status for console |
 
 ### IGoldenImageCapture (Interface)
@@ -373,7 +449,7 @@ auto pixels = Spark::GoldenImageTestRunner::LoadPNG("input.png", w, h);
 ## Thread Safety
 
 - `GoldenImageTestRunner` is a singleton with **no internal synchronization**. All methods must be called from the **main thread** (or a single test thread).
-- `CompareImages`, `SavePNG`, and `LoadPNG` are static methods with no shared state and are safe to call from any thread.
+- `CompareImages`, `SavePNG`, `LoadPNG`, `AnalyzeFrame`, and `GoldenManifest::Load` are static/free functions with no shared state and are safe to call from any thread.
 - `GetInstance()` uses a function-local static and is safe for concurrent first-access under C++11 magic-statics guarantees.
 - The `IGoldenImageCapture` implementation may interact with the GPU; ensure framebuffer readback happens after the frame is fully rendered.
 
@@ -383,3 +459,11 @@ auto pixels = Spark::GoldenImageTestRunner::LoadPNG("input.png", w, h);
 - [[Graphics-Engine]] -- Rendering pipeline and framebuffer management
 - [[RHI-Overview]] -- RHI abstraction layer and backend implementations
 - [[Testing]] -- Unit test infrastructure and CTest setup
+
+## RHI-210 capture continuation (2026-10-01)
+
+The new capture plans and their current deferred-pass blockers are documented in
+[the RHI-210 capture handoff](../../Tests/GoldenImages/RHI210-CAPTURE.md). Pending
+manifest entries carry no baseline or numeric threshold and are excluded from
+the reviewed comparison set. The registered lanes fail closed until capture and
+owner review; no readiness promotion follows from the tooling changes.

@@ -9,7 +9,9 @@
  */
 
 #include "InspectorPanel.h"
+#include "InspectorWorldAssetDrop.h"
 #include "SelectionManager.h"
+#include "../AssetPipeline/EditorAssetDrag.h"
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
 #include "../Core/EditorUI.h"
@@ -18,10 +20,16 @@
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 #include "Engine/ECS/Components.h"
 #include "Utils/LogMacros.h"
+#include "SparkUI/Fonts.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #include <imgui.h>
+#include <imgui_internal.h> // ImGui::GetActiveID — identifies the widget that owns an open edit gesture
 #include <iostream>
 #include <algorithm>
 #include <cstring>
+#include <optional>
+#include <utility>
 
 namespace SparkEditor
 {
@@ -62,8 +70,15 @@ namespace SparkEditor
 
     void InspectorPanel::Render()
     {
+        // EDT-210: which entity the World-backed path renders this frame. A
+        // pending field edit is settled against it after the panel is drawn,
+        // including frames where the panel is hidden or collapsed.
+        m_worldRenderedEntity = entt::null;
         if (!IsVisible())
+        {
+            SettlePendingWorldEdit();
             return;
+        }
 
         if (BeginPanel())
         {
@@ -79,12 +94,8 @@ namespace SparkEditor
             }
             else if (m_inspectedObjectID == INVALID_OBJECT_ID && m_inspectedObject.empty())
             {
-                float avail = ImGui::GetContentRegionAvail().y;
-                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + avail * 0.4f);
-                float textWidth = ImGui::CalcTextSize(ICON_FA_MOUSE_POINTER " Select an object to inspect").x;
-                ImGui::SetCursorPosX((ImGui::GetWindowWidth() - textWidth) * 0.5f);
-                ImGui::TextColored(ImVec4(0.55f, 0.58f, 0.62f, 1.0f),
-                                   ICON_FA_MOUSE_POINTER " Select an object to inspect");
+                Spark::Ui::EmptyState(ICON_FA_MOUSE_POINTER, "Select an object to inspect",
+                                      "Pick an entity in the Hierarchy or the Scene view to edit its components.");
             }
             else
             {
@@ -98,7 +109,7 @@ namespace SparkEditor
 
                 // Full-width "Add Component" button
                 float btnWidth = ImGui::GetContentRegionAvail().x;
-                if (ImGui::Button(ICON_FA_PLUS " Add Component", ImVec2(btnWidth, 30)))
+                if (ImGui::Button(ICON_FA_PLUS " Add Component", ImVec2(btnWidth, Spark::Ui::Px(30.0f))))
                 {
                     m_showAddComponentMenu = true;
                 }
@@ -110,10 +121,42 @@ namespace SparkEditor
             }
         }
         EndPanel();
+        SettlePendingWorldEdit();
+    }
+
+    InspectorPendingWorldEdit::CommitFn InspectorPanel::WorldEditCommitter()
+    {
+        return [this](const std::string& before, const std::string& description)
+        { return m_editorUI && m_editorUI->RecordAppliedDocumentMutation(before, description); };
+    }
+
+    void InspectorPanel::SettlePendingWorldEdit()
+    {
+        const void* document = m_editorUI ? static_cast<const void*>(m_editorUI->GetWorld()) : nullptr;
+        const uint64_t sequence = Spark::Editor::CommandHistory::GetInstance().GetEditSequence();
+        const ImGuiContext* context = ImGui::GetCurrentContext();
+        const uint32_t activeItem = context ? static_cast<uint32_t>(ImGui::GetActiveID()) : 0u;
+        if (m_pendingWorldEdit.Settle(document, m_worldRenderedEntity, activeItem, sequence, WorldEditCommitter()) ==
+            InspectorPendingWorldEdit::Outcome::Discarded)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Editor,
+                           "Inspector: dropped a stale field-edit baseline (document replaced or history moved)");
+        }
+    }
+
+    void InspectorPanel::FlushPendingWorldEdit()
+    {
+        const void* document = m_editorUI ? static_cast<const void*>(m_editorUI->GetWorld()) : nullptr;
+        m_pendingWorldEdit.Flush(document, Spark::Editor::CommandHistory::GetInstance().GetEditSequence(),
+                                 WorldEditCommitter());
     }
 
     void InspectorPanel::Shutdown()
     {
+        // EditorUI already captured the final recovery snapshot (which holds
+        // the applied field value) and is about to clear the history, so an
+        // unfinished gesture is dropped rather than recorded mid-teardown.
+        m_pendingWorldEdit.Discard();
         if (m_selectionMgrCallbackId != 0)
         {
             SelectionManager::GetInstance().RemoveCallback(m_selectionMgrCallbackId);
@@ -551,9 +594,9 @@ namespace SparkEditor
             obj = m_scene->FindObject(m_inspectedObjectID);
         }
 
-        if (ImGui::CollapsingHeader(ICON_FA_CUBE " Object Properties", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Object Properties", ICON_FA_CUBE, true))
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4.0f));
 
             // Name editing
             char nameBuffer[256];
@@ -660,83 +703,87 @@ namespace SparkEditor
                 ImGui::Checkbox("Static", &isStatic);
             }
 
-            // Tag dropdown
-            const char* tags[] = {"Default", "Player", "Enemy", "Weapon", "Terrain", "Trigger"};
-            int currentTag = 0;
-            if (obj)
+            // Tag and layer share a label/control grid that stacks in narrow docks.
+            if (Spark::Ui::BeginPropertyGrid("##ObjectTagLayer"))
             {
-                for (int i = 0; i < IM_ARRAYSIZE(tags); ++i)
+                // Tag dropdown
+                const char* tags[] = {"Default", "Player", "Enemy", "Weapon", "Terrain", "Trigger"};
+                int currentTag = 0;
+                if (obj)
                 {
-                    if (obj->tag == tags[i])
+                    for (int i = 0; i < IM_ARRAYSIZE(tags); ++i)
                     {
-                        currentTag = i;
-                        break;
+                        if (obj->tag == tags[i])
+                        {
+                            currentTag = i;
+                            break;
+                        }
                     }
                 }
-            }
-            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.5f);
-            if (ImGui::Combo("Tag", &currentTag, tags, IM_ARRAYSIZE(tags)))
-            {
+                Spark::Ui::PropertyLabel("Tag");
+                if (ImGui::Combo("##Tag", &currentTag, tags, IM_ARRAYSIZE(tags)))
+                {
+                    if (obj)
+                    {
+                        std::string oldTag = obj->tag;
+                        std::string newTag = tags[currentTag];
+                        SceneFile* capturedScene = m_scene;
+                        ObjectID capturedID = m_inspectedObjectID;
+                        auto& history = Spark::Editor::CommandHistory::GetInstance();
+                        history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
+                            [capturedScene, capturedID, newTag]()
+                            {
+                                SceneObject* o = capturedScene->FindObject(capturedID);
+                                if (o)
+                                    o->tag = newTag;
+                            },
+                            [capturedScene, capturedID, oldTag]()
+                            {
+                                SceneObject* o = capturedScene->FindObject(capturedID);
+                                if (o)
+                                    o->tag = oldTag;
+                            },
+                            "Change Tag to " + newTag));
+                    }
+                }
+
+                // Layer dropdown
+                const char* layers[] = {"Default", "Ignore Raycast", "Water", "UI", "Ground", "Player"};
+                int currentLayer = 0;
                 if (obj)
                 {
-                    std::string oldTag = obj->tag;
-                    std::string newTag = tags[currentTag];
-                    SceneFile* capturedScene = m_scene;
-                    ObjectID capturedID = m_inspectedObjectID;
-                    auto& history = Spark::Editor::CommandHistory::GetInstance();
-                    history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
-                        [capturedScene, capturedID, newTag]()
-                        {
-                            SceneObject* o = capturedScene->FindObject(capturedID);
-                            if (o)
-                                o->tag = newTag;
-                        },
-                        [capturedScene, capturedID, oldTag]()
-                        {
-                            SceneObject* o = capturedScene->FindObject(capturedID);
-                            if (o)
-                                o->tag = oldTag;
-                        },
-                        "Change Tag to " + newTag));
+                    currentLayer = (std::min)(obj->layer, static_cast<int>(IM_ARRAYSIZE(layers) - 1));
+                    currentLayer = (std::max)(currentLayer, 0);
                 }
-            }
-
-            // Layer dropdown
-            const char* layers[] = {"Default", "Ignore Raycast", "Water", "UI", "Ground", "Player"};
-            int currentLayer = 0;
-            if (obj)
-            {
-                currentLayer = (std::min)(obj->layer, static_cast<int>(IM_ARRAYSIZE(layers) - 1));
-                currentLayer = (std::max)(currentLayer, 0);
-            }
-            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.5f);
-            if (ImGui::Combo("Layer", &currentLayer, layers, IM_ARRAYSIZE(layers)))
-            {
-                if (obj)
+                Spark::Ui::PropertyLabel("Layer");
+                if (ImGui::Combo("##Layer", &currentLayer, layers, IM_ARRAYSIZE(layers)))
                 {
-                    int oldLayer = obj->layer;
-                    int newLayer = currentLayer;
-                    SceneFile* capturedScene = m_scene;
-                    ObjectID capturedID = m_inspectedObjectID;
-                    auto& history = Spark::Editor::CommandHistory::GetInstance();
-                    history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
-                        [capturedScene, capturedID, newLayer]()
-                        {
-                            SceneObject* o = capturedScene->FindObject(capturedID);
-                            if (o)
-                                o->layer = newLayer;
-                        },
-                        [capturedScene, capturedID, oldLayer]()
-                        {
-                            SceneObject* o = capturedScene->FindObject(capturedID);
-                            if (o)
-                                o->layer = oldLayer;
-                        },
-                        "Change Layer"));
+                    if (obj)
+                    {
+                        int oldLayer = obj->layer;
+                        int newLayer = currentLayer;
+                        SceneFile* capturedScene = m_scene;
+                        ObjectID capturedID = m_inspectedObjectID;
+                        auto& history = Spark::Editor::CommandHistory::GetInstance();
+                        history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
+                            [capturedScene, capturedID, newLayer]()
+                            {
+                                SceneObject* o = capturedScene->FindObject(capturedID);
+                                if (o)
+                                    o->layer = newLayer;
+                            },
+                            [capturedScene, capturedID, oldLayer]()
+                            {
+                                SceneObject* o = capturedScene->FindObject(capturedID);
+                                if (o)
+                                    o->layer = oldLayer;
+                            },
+                            "Change Layer"));
+                    }
                 }
+                Spark::Ui::EndPropertyGrid();
             }
-
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4.0f));
         }
     }
 
@@ -1261,18 +1308,21 @@ namespace SparkEditor
     void InspectorPanel::RenderWorldBackedInspector(::World* world, ::EntityID entity)
     {
         const uint32_t rawEntity = static_cast<uint32_t>(entity);
-        if (m_worldEditEntity != entity)
-        {
-            m_worldEditBaselines.clear();
-            m_worldEditEntity = entity;
-        }
+        // A gesture still open on a previously inspected entity (selection
+        // just moved) is recorded before this entity's fields can change.
+        if (m_pendingWorldEdit.HasPending() && m_pendingWorldEdit.PendingEntity() != entity)
+            SettlePendingWorldEdit();
+        m_worldRenderedEntity = entity;
 
         // Entity header — name (from NameComponent, if present) + raw id,
         // for context. Renaming ECS entities is out of scope for this unit.
         const ::NameComponent* nc = world->GetComponent<::NameComponent>(entity);
         const char* label = (nc && !nc->name.empty()) ? nc->name.c_str() : "Entity";
-        ImGui::TextColored(ImVec4(0.7f, 0.85f, 1.0f, 1.0f), ICON_FA_CUBE " %s", label);
-        ImGui::TextDisabled("Entity #%u", rawEntity);
+        {
+            const Spark::Ui::ScopedFont heading(Spark::Ui::FontRole::H2);
+            ImGui::Text(ICON_FA_CUBE " %s", label);
+        }
+        Spark::Ui::KeyValue("Entity", "#%u", rawEntity);
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
@@ -1286,45 +1336,84 @@ namespace SparkEditor
                 continue;
 
             ImGui::PushID(type.c_str());
-            if (ImGui::CollapsingHeader(type.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+            if (Spark::Ui::SectionHeader(type.c_str(), nullptr, true))
             {
                 void* comp = factory.GetComponentRaw(type, world, rawEntity);
                 const Spark::TypeInfo* ti = typeRegistry.FindTypeByName(type);
                 if (comp && ti)
                 {
-                    ImGui::Indent(4);
-                    const std::string editKey = std::to_string(rawEntity) + "|" + type;
-                    const std::string before = m_editorUI ? m_editorUI->CaptureDocumentSnapshot() : std::string{};
-                    const bool changed = RenderReflectedFields(comp, ti->fields);
-                    if (changed && !before.empty() && !m_worldEditBaselines.contains(editKey))
-                        m_worldEditBaselines.emplace(editKey, before);
-
-                    auto baseline = m_worldEditBaselines.find(editKey);
-                    if (baseline != m_worldEditBaselines.end() && !ImGui::IsAnyItemActive())
+                    ImGui::Indent(Spark::Ui::Px(4.0f));
+                    // Only the first change of a gesture needs the pre-edit
+                    // snapshot; skip the serialization while one is pending.
+                    const std::string before = (m_editorUI && !m_pendingWorldEdit.HasPending())
+                                                   ? m_editorUI->CaptureDocumentSnapshot()
+                                                   : std::string{};
+                    // An asset dropped on a path field is only captured while
+                    // the fields render: applying it replaces the registry and
+                    // would leave `comp` dangling for the remaining fields.
+                    std::string droppedField;
+                    std::string droppedReference;
+                    const bool changed = RenderReflectedFields(
+                        comp, ti->fields,
+                        [&type, &droppedField, &droppedReference](const Spark::FieldInfo& field)
+                        {
+                            const std::optional<EditorAssetKind> kind = AssetKindForField(type, field.fieldName);
+                            if (!kind || field.readOnly || !ImGui::BeginDragDropTarget())
+                            {
+                                return;
+                            }
+                            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(kAssetDragPayloadType))
+                            {
+                                std::string reference;
+                                if (DecodeAssetDragPayload(payload->Data, payload->DataSize, *kind, reference))
+                                {
+                                    droppedField = field.fieldName;
+                                    droppedReference = std::move(reference);
+                                }
+                            }
+                            ImGui::EndDragDropTarget();
+                        });
+                    if (changed)
                     {
-                        if (m_editorUI)
-                            m_editorUI->RecordAppliedDocumentMutation(baseline->second, "Edit " + type);
-                        m_worldEditBaselines.erase(baseline);
+                        m_pendingWorldEdit.NoteChange(world, entity, before, "Edit " + type,
+                                                      static_cast<uint32_t>(ImGui::GetActiveID()),
+                                                      Spark::Editor::CommandHistory::GetInstance().GetEditSequence());
+                    }
+                    if (!droppedField.empty() && m_editorUI)
+                    {
+                        // An open typing gesture is recorded first, so it and
+                        // the drop undo as two steps in reverse order.
+                        FlushPendingWorldEdit();
+                        const AssetDropResult result = ApplyWorldAssetDrop(
+                            *world, entity, type, droppedField, droppedReference,
+                            [this]() { return m_editorUI->CaptureDocumentSnapshot(); }, WorldEditCommitter());
+                        if (result == AssetDropResult::Rejected || result == AssetDropResult::NoComponent)
+                        {
+                            SPARK_LOG_WARN(Spark::LogCategory::Editor, "Inspector: asset drop onto %s.%s was rejected",
+                                           type.c_str(), droppedField.c_str());
+                        }
                     }
 
                     if (type != "NameComponent" && type != "Transform")
                     {
                         if (ImGui::SmallButton((ICON_FA_TRASH " Remove##" + type).c_str()))
                         {
+                            FlushPendingWorldEdit();
                             const std::string removeBefore =
                                 m_editorUI ? m_editorUI->CaptureDocumentSnapshot() : std::string{};
                             if (factory.RemoveComponent(type, world, rawEntity) && m_editorUI)
                                 m_editorUI->RecordAppliedDocumentMutation(removeBefore, "Remove " + type);
-                            ImGui::Unindent(4);
+                            ImGui::Unindent(Spark::Ui::Px(4.0f));
                             ImGui::PopID();
                             continue;
                         }
                     }
-                    ImGui::Unindent(4);
+                    ImGui::Unindent(Spark::Ui::Px(4.0f));
                 }
                 else
                 {
-                    ImGui::TextDisabled("(no reflection data registered for '%s')", type.c_str());
+                    Spark::Ui::StatusText(Spark::Ui::Status::Warning, "No reflection data registered for '%s'",
+                                          type.c_str());
                 }
             }
             ImGui::PopID();
@@ -1335,7 +1424,7 @@ namespace SparkEditor
         ImGui::Spacing();
 
         float btnWidth = ImGui::GetContentRegionAvail().x;
-        if (ImGui::Button(ICON_FA_PLUS " Add Component##World", ImVec2(btnWidth, 30)))
+        if (ImGui::Button(ICON_FA_PLUS " Add Component##World", ImVec2(btnWidth, Spark::Ui::Px(30.0f))))
         {
             m_showWorldAddComponentMenu = true;
         }
@@ -1369,6 +1458,7 @@ namespace SparkEditor
                 bool has = factory.HasComponent(type, world, rawEntity);
                 if (ImGui::MenuItem(type.c_str(), nullptr, false, !has))
                 {
+                    FlushPendingWorldEdit();
                     const std::string before = m_editorUI ? m_editorUI->CaptureDocumentSnapshot() : std::string{};
                     if (factory.AddComponent(type, world, rawEntity) && m_editorUI)
                         m_editorUI->RecordAppliedDocumentMutation(before, "Add " + type);

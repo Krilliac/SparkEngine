@@ -193,6 +193,16 @@ namespace Spark
         /** @brief Initialize the destruction system. */
         void Initialize();
 
+        /**
+     * @brief Release every pattern, debris record and destruction callback.
+     *
+     * Game modules register callbacks whose code and destructor live in the
+     * module image. Engine teardown calls this after module OnUnload and before
+     * the image is unmapped; the singleton's process-exit destructor would
+     * otherwise destroy them in unmapped code. `Initialize()` may run again later.
+     */
+        void Shutdown();
+
         /** @brief Set the ECS World pointer for entity creation. Must be called before ApplyDamage. */
         void SetWorld(World* world) { m_world = world; }
 
@@ -256,6 +266,15 @@ namespace Spark
      */
         Spark::Delegate<const DestructionEvent&>::HandlerID OnDestruction(
             std::function<void(const DestructionEvent&)> callback);
+
+        /**
+     * @brief Remove a callback registered with OnDestruction().
+     * @param id Handler id OnDestruction() returned; an unknown id is ignored.
+     */
+        void RemoveDestructionCallback(Spark::Delegate<const DestructionEvent&>::HandlerID id)
+        {
+            m_destructionCallbacks -= id;
+        }
 
         // --- Console integration ---
 

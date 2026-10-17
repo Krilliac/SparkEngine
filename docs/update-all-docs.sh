@@ -58,7 +58,9 @@ case "$MODE" in
     *) echo "Unknown command: $MODE" >&2; exit 1 ;;
 esac
 
-RESULTS_FILE="$(mktemp)"
+# Apple mktemp can prefer /var/folders over TMPDIR. Python honors the safe
+# job-owned TMPDIR needed by the health reader's no-reparse path contract.
+RESULTS_FILE="$("$PYTHON_BIN" -c 'import os,tempfile; fd,path=tempfile.mkstemp(prefix="spark-doc-results-"); os.close(fd); print(path)')" || exit 1
 HEALTH_OUTPUT="${SPARK_DOC_HEALTH_OUTPUT:-$SCRIPT_DIR/.health.json}"
 STARTED_AT="$("$PYTHON_BIN" -c "from datetime import datetime,timezone; print(datetime.now(timezone.utc).isoformat().replace('+00:00','Z'))")"
 FINAL_EXIT=1
@@ -106,8 +108,11 @@ run_generator() {
         return 1
     fi
     local code=0
+    # 300s per generator by default. Slow hosts (sync-wiki.sh takes over five
+    # minutes on a busy Windows box) can raise it with SPARK_DOCS_GENERATOR_TIMEOUT.
+    local limit="${SPARK_DOCS_GENERATOR_TIMEOUT:-300}"
     if command -v timeout >/dev/null 2>&1; then
-        timeout --signal=TERM 300s bash "$full_path" "$generator_mode" || code=$?
+        timeout --signal=TERM "${limit}s" bash "$full_path" "$generator_mode" || code=$?
     else
         bash "$full_path" "$generator_mode" || code=$?
     fi
@@ -115,7 +120,15 @@ run_generator() {
         record "$id" "current" "generator completed successfully"
         return 0
     fi
-    record "$id" "failed" "generator exited $code"
+    # A generator killed mid-run leaves its outputs half-updated, so name it:
+    # the summary count alone does not say which outputs are still stale.
+    if [ "$code" -eq 124 ]; then
+        echo "[DOCS] $name TIMED OUT after ${limit}s; its outputs may be partly stale (set SPARK_DOCS_GENERATOR_TIMEOUT to raise the limit)" >&2
+        record "$id" "failed" "generator timed out after ${limit}s"
+    else
+        echo "[DOCS] $name FAILED (exit $code)" >&2
+        record "$id" "failed" "generator exited $code"
+    fi
     return 1
 }
 

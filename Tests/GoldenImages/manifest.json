@@ -1,0 +1,216 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "scene": "PostProcess_ACES",
+      "backendRow": "vulkan-lavapipe",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-230 (Mesa 25.2.8 Lavapipe; CPU-reference probes checked; Krilliac approved 2026-09-29 from the first-capture review packet)",
+      "baselineSha256": "7a47e8896b561010375435d44b48ca4e828b9cdc859d9fc3aec93e101bc118db"
+    },
+    {
+      "scene": "BloomExtract",
+      "backendRow": "vulkan-lavapipe",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-230 (Mesa 25.2.8 Lavapipe; CPU-reference probes checked; Krilliac approved 2026-09-29 from the first-capture review packet)",
+      "baselineSha256": "5e4cb97dc705e0c5b52d86950b6f39842415da9de2bab6b094198e0b03246b0a"
+    },
+    {
+      "scene": "GaussianBlur_Vertical",
+      "backendRow": "vulkan-lavapipe",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-230 (Mesa 25.2.8 Lavapipe; CPU-reference probes checked; Krilliac approved 2026-09-29 from the first-capture review packet)",
+      "baselineSha256": "936c6be7fe6a32f8fa099aacb6ad2eb84376c637b9dc346c9bdba4a1ae82b596"
+    },
+    {
+      "scene": "LitSphere_BasicVS_BasicPS",
+      "backendRow": "opengl-llvmpipe",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-240 (Ubuntu 24.04 noble-updates Mesa 25.2.8-0ubuntu0.24.04.2 llvmpipe, not yet matched on a hosted runner; CPU-reference probes checked; Krilliac approved 2026-09-29 from the first-capture review packet)",
+      "baselineSha256": "8ecf40ebf35c6cda52bf960e58133f198abc981e568fb5696417f29cd510c049"
+    },
+    {
+      "scene": "PostProcess_ACES",
+      "backendRow": "opengl-llvmpipe",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-240 (Ubuntu 24.04 noble-updates Mesa 25.2.8-0ubuntu0.24.04.2 llvmpipe, not yet matched on a hosted runner; CPU-reference probes checked; Krilliac approved 2026-09-29 from the first-capture review packet)",
+      "baselineSha256": "7a47e8896b561010375435d44b48ca4e828b9cdc859d9fc3aec93e101bc118db"
+    },
+    {
+      "scene": "PostProcess_Reinhard",
+      "backendRow": "opengl-llvmpipe",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-240 (Ubuntu 24.04 noble-updates Mesa 25.2.8-0ubuntu0.24.04.2 llvmpipe, not yet matched on a hosted runner; CPU-reference probes checked; Krilliac approved 2026-09-29 from the first-capture review packet)",
+      "baselineSha256": "bca3f7d23d7d6e3823e1eda8367a4d450cf7f3e59ab2229a7501b5d594c67228"
+    },
+    {
+      "scene": "PostProcess_Uncharted2",
+      "backendRow": "opengl-llvmpipe",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-240 (Ubuntu 24.04 noble-updates Mesa 25.2.8-0ubuntu0.24.04.2 llvmpipe, not yet matched on a hosted runner; CPU-reference probes checked; Krilliac approved 2026-09-29 from the first-capture review packet)",
+      "baselineSha256": "825045f7e8281b45fd42c36d09cd36381e7f96c42eb036c97a1fc39dec6ec5d9"
+    },
+    {
+      "scene": "PostProcess_FXAA",
+      "backendRow": "opengl-llvmpipe",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-240 (Ubuntu 24.04 noble-updates Mesa 25.2.8-0ubuntu0.24.04.2 llvmpipe, not yet matched on a hosted runner; CPU-reference probes checked; Krilliac approved 2026-09-29 from the first-capture review packet)",
+      "baselineSha256": "1b3efa710b005ae3174f183754dc2e4382ae792bda9612dc3364895882885075"
+    },
+    {
+      "scene": "GaussianBlur_Horizontal",
+      "backendRow": "opengl-llvmpipe",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-240 (Ubuntu 24.04 noble-updates Mesa 25.2.8-0ubuntu0.24.04.2 llvmpipe, not yet matched on a hosted runner; CPU-reference probes checked; Krilliac approved 2026-09-29 from the first-capture review packet)",
+      "baselineSha256": "7bc3d1881313a750bb45d138444c76006905bcc7132baf29c020194260145dfd"
+    },
+    {
+      "scene": "GaussianBlur_Vertical",
+      "backendRow": "opengl-llvmpipe",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-240 (Ubuntu 24.04 noble-updates Mesa 25.2.8-0ubuntu0.24.04.2 llvmpipe, not yet matched on a hosted runner; CPU-reference probes checked; Krilliac approved 2026-09-29 from the first-capture review packet)",
+      "baselineSha256": "936c6be7fe6a32f8fa099aacb6ad2eb84376c637b9dc346c9bdba4a1ae82b596"
+    },
+    {
+      "scene": "BloomExtract",
+      "backendRow": "opengl-llvmpipe",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-240 (Ubuntu 24.04 noble-updates Mesa 25.2.8-0ubuntu0.24.04.2 llvmpipe, not yet matched on a hosted runner; CPU-reference probes checked; Krilliac approved 2026-09-29 from the first-capture review packet)",
+      "baselineSha256": "5e4cb97dc705e0c5b52d86950b6f39842415da9de2bab6b094198e0b03246b0a"
+    },
+    {
+      "scene": "PostPass_TonemapACES",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-210 (WARP d3d10warp.dll 10.0.26100.9278, Windows build 26200; CPU-reference probes and one-constant shader mutations checked; RTX 5070 Ti render of the same scene within max distance 1.73, mean 0.06; Krilliac approved 2026-09-29 from the first-capture review packet; pins the current AO normalization, which darkens an open plane to ~53%; re-capture after the shader fix)",
+      "baselineSha256": "cb5aa37c85264e1cc865fead6b445c329793617ef096ebf90a7fcbc350718505"
+    },
+    {
+      "scene": "PostPass_Bloom",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-210 (WARP d3d10warp.dll 10.0.26100.9278, Windows build 26200; CPU-reference probes and one-constant shader mutations checked; RTX 5070 Ti render of the same scene within max distance 1.73, mean 0.06; Krilliac approved 2026-09-29 from the first-capture review packet)",
+      "baselineSha256": "71f77c897ac55197b3da43aba9a075b96d13d8a0b1cbd8cde6c88e348a2a787a"
+    },
+    {
+      "scene": "PostPass_FXAA",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-210 (WARP d3d10warp.dll 10.0.26100.9278, Windows build 26200; CPU-reference probes and one-constant shader mutations checked; RTX 5070 Ti render of the same scene within max distance 1.73, mean 0.06; Krilliac approved 2026-09-29 from the first-capture review packet)",
+      "baselineSha256": "789ce42679bc77b2ad00f06d2e5fa795f27324aebeb4710b767c805796c14f9f"
+    },
+    {
+      "scene": "PostPass_GTAO",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "perPixelThreshold": 2,
+      "tolerancePercent": 0.5,
+      "reviewer": "Claude agent, RHI-210 GTAO normalization fix (WARP 10.0.26100.x; open plane now ~204; Krilliac approved 2026-09-30 from the before/after review packet)",
+      "baselineSha256": "2bde35c70f03bc0dc4a5b460380c3b592f5772d3fda74d3ce9cc951de0423353"
+    },
+    {
+      "scene": "Frame_ForwardLit",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "status": "awaiting-capture",
+      "thresholdPolicy": "set from measured variance"
+    },
+    {
+      "scene": "Frame_ForwardMaterial",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "status": "awaiting-capture",
+      "thresholdPolicy": "set from measured variance"
+    },
+    {
+      "scene": "Frame_DrawList",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "status": "awaiting-capture",
+      "thresholdPolicy": "set from measured variance"
+    },
+    {
+      "scene": "Frame_PostChain",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "status": "awaiting-capture",
+      "thresholdPolicy": "set from measured variance"
+    },
+    {
+      "scene": "Scene_FPSLevel1_MainCamera",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "status": "awaiting-capture",
+      "thresholdPolicy": "set from measured variance"
+    },
+    {
+      "scene": "Scene_FPSLevel1_Overview",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "status": "awaiting-capture",
+      "thresholdPolicy": "set from measured variance"
+    },
+    {
+      "scene": "World_OpaqueAndSprites",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "status": "awaiting-capture",
+      "thresholdPolicy": "set from measured variance"
+    },
+    {
+      "scene": "Primary_DeferredGeometry",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "perPixelThreshold": 0,
+      "tolerancePercent": 0,
+      "reviewer": "User approved 2026-10-02: explicit Yes to exact hashed Primary review packet Sentinel_2378f2266ca48191873a1f638547f3b4 and zero-difference thresholds; WARP 10.0.26100.9278, Windows 10.0.26200.0; Library libfile_891deddd026881919c3011fed0e778b6",
+      "baselineSha256": "6e25c22bd2c2d929bf5e851292b333e5bd3df31d4236b826697ad16a7db420ac"
+    },
+    {
+      "scene": "Primary_DeferredLighting",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "perPixelThreshold": 0,
+      "tolerancePercent": 0,
+      "reviewer": "User approved 2026-10-02: explicit Yes to exact hashed Primary review packet Sentinel_2378f2266ca48191873a1f638547f3b4 and zero-difference thresholds; WARP 10.0.26100.9278, Windows 10.0.26200.0; Library libfile_ba6a1e4f817881918e9d9dc94c6d78ea",
+      "baselineSha256": "6f88f8c2a024afe456a6d1923493a4baa70cd11a90f46eea65f4b46dd63680ae"
+    },
+    {
+      "scene": "Primary_ShadowDepth",
+      "backendRow": "d3d11-warp",
+      "software": true,
+      "perPixelThreshold": 0,
+      "tolerancePercent": 0,
+      "reviewer": "User approved 2026-10-02: explicit Yes to exact hashed Primary review packet Sentinel_2378f2266ca48191873a1f638547f3b4 and zero-difference thresholds; WARP 10.0.26100.9278, Windows 10.0.26200.0; Library libfile_1c87d9c65c3c81918112fe7eb245fb4e",
+      "baselineSha256": "b083f6cec0dab16b593b127b3ee43c7ab3828a9665762fb2da1ce2fb3b7451b3"
+    }
+  ]
+}

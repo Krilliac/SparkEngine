@@ -40,6 +40,13 @@ int main()
               state.at("other.module") == "keep",
           "Profile fields or unrelated module state changed");
 
+    auto nonFiniteState = state;
+    nonFiniteState[std::string(Spark::FPSLocalProfile::kKeyPrefix) + "health"] = "nan";
+    Spark::FPSLocalProfile nonFiniteProfile;
+    std::string nonFiniteError;
+    check(!nonFiniteProfile.ReadFrom(nonFiniteState, nonFiniteError),
+          "Profile accepted non-finite health from custom state");
+
     Spark::ProgressionSystem restored;
     restored.Initialize();
     int levelEvents = 0;

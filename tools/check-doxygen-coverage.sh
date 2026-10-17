@@ -51,6 +51,7 @@ SOURCE_DIRS=(
     "$PROJECT_ROOT/SparkConsole/src"
     "$PROJECT_ROOT/SparkShaderCompiler/src"
     "$PROJECT_ROOT/SparkSDK"
+    "$PROJECT_ROOT/SparkUI"
 )
 
 while IFS= read -r file; do

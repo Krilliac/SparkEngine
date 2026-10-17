@@ -6,6 +6,7 @@
  */
 
 #include "EditorPanel.h"
+#include "EditorIcons.h"
 #include "Utils/Validate.h"
 #include "Utils/LogMacros.h"
 #include <imgui.h>
@@ -17,6 +18,26 @@ namespace SparkEditor
     {
         SPARK_WARN_IF(Spark::LogCategory::Editor, name.empty(), "EditorPanel created with empty name");
         SPARK_WARN_IF(Spark::LogCategory::Editor, id.empty(), "EditorPanel created with empty id");
+    }
+
+    const char* EditorPanel::CategoryIcon(PanelCategory category)
+    {
+        switch (category)
+        {
+        case PanelCategory::Viewport:
+            return ICON_FA_DESKTOP;
+        case PanelCategory::Inspector:
+            return ICON_FA_SLIDERS;
+        case PanelCategory::Tool:
+            return ICON_FA_HAMMER;
+        case PanelCategory::Config:
+            return ICON_FA_COG;
+        case PanelCategory::Debug:
+            return ICON_FA_BUG;
+        case PanelCategory::Other:
+            break;
+        }
+        return ICON_FA_TH_LARGE;
     }
 
     bool EditorPanel::BeginPanel()
@@ -33,18 +54,13 @@ namespace SparkEditor
             flags |= ImGuiWindowFlags_NoCollapse;
         }
 
-        // Compose display title with icon, but use stable ###ID for docking
-        std::string displayTitle;
-        if (m_icon.empty())
-        {
-            displayTitle = m_title + "###" + m_id;
-        }
-        else
-        {
-            displayTitle = m_icon + "  " + m_title + "###" + m_id;
-        }
+        // Compose display title with icon (the category glyph when the panel sets none), but use the stable
+        // ###ID for docking so a title or icon change never moves the panel.
+        const std::string displayTitle =
+            (m_icon.empty() ? std::string(CategoryIcon(m_category)) : m_icon) + "  " + m_title + "###" + m_id;
 
         bool visible = m_isVisible;
+        ImGui::SetNextWindowSize(ImVec2(m_width, m_height), ImGuiCond_FirstUseEver);
         bool result = ImGui::Begin(displayTitle.c_str(), m_isClosable ? &visible : nullptr, flags);
 
         if (visible != m_isVisible)

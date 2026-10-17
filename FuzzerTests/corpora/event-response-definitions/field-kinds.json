@@ -1,0 +1,1 @@
+{"rules":[{"name":5,"trigger":["OnStart"],"triggerParam":{},"enabled":"yes","oneShot":1,"actions":{"type":"ShowMessage"}}]}

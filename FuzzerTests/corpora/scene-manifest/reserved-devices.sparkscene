@@ -1,0 +1,8 @@
+name = Devices
+mesh = COM1
+mesh = models/nul.mesh
+texture = textures/LPT9.dds
+texture = textures/con . .dds
+audio = aux
+audio = audio/COM10.wav
+audio = audio/weapon..old.wav

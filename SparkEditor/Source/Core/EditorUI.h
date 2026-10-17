@@ -22,9 +22,13 @@
 #include <functional>
 #include <chrono>
 
+#include "EditorDocument.h"
 #include "EditorLogger.h"
+#include "EditorAppearanceWindow.h"
 #include "EditorLayoutManager.h"
 #include "EditorNotificationManager.h"
+#include "EditorPreferences.h"
+#include "EditorStartPage.h"
 #include "EditorCrashHandler.h"
 #include "EditorRecovery.h"
 #include "ProjectManager.h"
@@ -52,6 +56,7 @@ namespace SparkEditor
         None,
         NewScene,
         OpenSceneDialog,
+        OpenScenePath, ///< Open a known scene file (Start page recent scenes)
         OpenProject,
         CreateProject,
         Exit
@@ -163,17 +168,17 @@ namespace SparkEditor
         LiveEditBridge* GetLiveEditBridge() { return m_liveEditBridge.get(); }
 
         /// @brief The single live ECS World being edited (the document). Owned by
-        /// EditorUI; panels (SceneView, Hierarchy, Inspector) hold a non-owning
-        /// pointer to it via their own SetWorld().
-        World* GetWorld() { return m_world.get(); }
+        /// the EditorDocument member; panels (SceneView, Hierarchy, Inspector)
+        /// hold a non-owning pointer to it via their own SetWorld().
+        World* GetWorld() const { return m_document.GetWorld(); }
 
         /// @brief The currently selected ECS entity (Unit C2) — the
         /// document-level selection for World-backed panels (Hierarchy
         /// publishes it, Inspector (C3) consumes it). Distinct from the
         /// legacy SceneFile SelectionManager used by the dormant SceneFile
         /// hierarchy path. entt::null when nothing is selected.
-        ::EntityID GetSelectedEntity() const { return m_selectedEntity; }
-        void SetSelectedEntity(::EntityID e) { m_selectedEntity = e; }
+        ::EntityID GetSelectedEntity() const { return m_document.GetSelectedEntity(); }
+        void SetSelectedEntity(::EntityID e) { m_document.SetSelectedEntity(e); }
 
         /// @brief Set non-owning pointer to the plugin manager (owned by EditorApplication)
         void SetPluginManager(EditorPluginManager* pluginManager) { m_pluginManager = pluginManager; }
@@ -204,14 +209,20 @@ namespace SparkEditor
 
         /// Document operations shared by menus, shortcuts, command palette,
         /// and World-backed panels. These are the only scene model the editor
-        /// renders and serializes.
+        /// renders and serializes. The entity and snapshot operations forward
+        /// to EditorDocument, which records them on CommandHistory.
         void NewScene();
         void ShowOpenSceneDialog();
+        /// @brief Open @p path after the unsaved-changes check (Start page recent scenes).
+        void RequestOpenScenePath(const std::string& path);
         bool SaveScene();
-        bool CreateDocumentEntity(const std::string& name);
-        bool DeleteSelectedDocumentEntity();
-        std::string CaptureDocumentSnapshot() const;
-        bool RecordAppliedDocumentMutation(const std::string& before, const std::string& description);
+        bool CreateDocumentEntity(const std::string& name) { return m_document.CreateEntity(name); }
+        bool DeleteSelectedDocumentEntity() { return m_document.DeleteSelected(); }
+        std::string CaptureDocumentSnapshot() const { return m_document.Capture(); }
+        bool RecordAppliedDocumentMutation(const std::string& before, const std::string& description)
+        {
+            return m_document.RecordApplied(before, description);
+        }
 
         // Simple layout operations
         bool SaveLayout(const std::string& layoutName, const std::string& description = "");
@@ -222,8 +233,30 @@ namespace SparkEditor
         void ApplyTheme(const std::string& themeName);
         const std::string& GetCurrentTheme() const { return m_currentTheme; }
 
-        // Simple notifications
-        void ShowNotification(const std::string& message, const std::string& type = "info", float duration = 3.0f);
+        // Notifications. duration / seconds <= 0 use the severity default (Info/Success 4 s, Warning 8 s);
+        // errors stay until dismissed.
+        void ShowNotification(const std::string& message, const std::string& type = "info", float duration = 0.0f);
+        void Notify(NotificationSeverity severity, std::string title, std::string body = {}, float seconds = 0.0f);
+        /// @brief Open the notification history (View > Notifications, the command palette); it does not need the
+        ///        status bar, so toasts pushed off screen stay reachable while the bar is hidden.
+        void OpenNotificationHistory() { m_notificationHistoryRequested = true; }
+
+        // View > Appearance, Help > Welcome and the UI-scale shortcuts.
+        void OpenAppearanceWindow() { m_appearanceWindow.Open(); }
+        void OpenStartPage() { m_startPage.Open(); }
+        /// @brief Grow (+1) or shrink (-1) the user UI scale one 12.5 % step; 0 resets it to 100 %.
+        void StepUiScale(int direction);
+
+        /// @brief Take the preferences EditorApplication read at startup (the only read of the file).
+        /// @param prefs    Normalized preferences; EditorUI owns, edits and saves them from now on.
+        /// @param persist  False in test mode, or when the file could not be read and must not be overwritten.
+        /// @details Call before Initialize(), which applies them. Without this call the defaults apply and nothing
+        ///          is saved.
+        void AdoptPreferences(EditorPreferences prefs, bool persist);
+
+        /// @brief Re-read the operating system appearance when the stored appearance is "system" (Match
+        ///        Windows) and re-apply the palette. Called before NewFrame after Windows reports a change.
+        void FollowSystemAppearance();
 
         // Simple command system
         std::string ExecuteCommand(const std::string& command);
@@ -267,7 +300,7 @@ namespace SparkEditor
         bool SaveCurrentScene(const std::string& path);
 
         /// @brief Load a reflected scene JSON (as written by SaveCurrentScene)
-        /// into a fresh ::World, replace m_world with it, and re-wire the
+        /// into a fresh ::World, make it the document World, and re-wire the
         /// caching panels (SceneView, Hierarchy) so they don't dangle a
         /// pointer to the old World. Returns false (leaving the current
         /// World untouched) if the load fails.
@@ -321,7 +354,23 @@ namespace SparkEditor
         bool m_showDemoWindow = false;
         bool m_firstFrame = true;
         bool m_defaultDockLayoutResetRequested = false;
-        bool m_showWelcomeScreen = true;
+
+        // Appearance, Start page and the persisted preferences behind them, adopted from EditorApplication's single
+        // startup read. Test-mode launches never write the preferences file (m_persistPreferences stays false), so
+        // smoke runs cannot change user settings; neither does a session whose file could not be read.
+        EditorPreferences m_preferences;
+        bool m_persistPreferences = false;
+        bool m_notificationHistoryRequested = false; ///< OpenNotificationHistory() was called; opens next Render()
+        EditorAppearanceWindow m_appearanceWindow;
+        EditorStartPage m_startPage;
+        ImGuiID m_centreDockId = 0; ///< Centre dock node of the default layout; the Start page joins it
+
+        // Toolbar Layout dropdown: Save Layout As and Delete run as top-level popups opened by these requests.
+        bool m_saveLayoutAsRequested = false;
+        bool m_deleteLayoutRequested = false;
+        std::string m_layoutPendingDelete;
+        char m_layoutNameBuffer[EditorLayoutManager::kMaxLayoutNameLength + 1] = {};
+        std::string m_layoutNameError;
         // Dear ImGui docking settings must be loaded before any window is
         // begun for the frame.  Menu actions run while the dockspace window
         // is already active, so LoadLayout queues the ini file here and
@@ -359,7 +408,7 @@ namespace SparkEditor
         std::vector<float> m_frameTimeHistory;
         static constexpr size_t MAX_FRAME_HISTORY = 60;
 
-        // Recovery records are captured only while EditorUI owns m_world. A
+        // Recovery records are captured only while a document World exists. A
         // valid pending snapshot blocks new captures until the user restores
         // or discards it, so an older recovery record cannot be silently
         // replaced before its explicit decision UI is shown.
@@ -381,17 +430,7 @@ namespace SparkEditor
         // Additional member variable for selected objects count
         int m_selectedObjectCount = 0;
 
-        // Toolbar state — delegates to PlayModeManager for scene snapshot/restore
-        enum class PlayMode
-        {
-            Stopped,
-            Playing,
-            Simulating,
-            Paused
-        };
-        PlayMode m_playMode = PlayMode::Stopped;
-
-        /// @brief Play-in-editor manager (scene snapshot, time control, subsystem toggles)
+        /// @brief Authoritative state-preview manager (snapshot/time/counters; no gameplay-system tick)
         Spark::Editor::PlayModeManager m_playModeManager;
 
         TransformTool m_currentTool = TransformTool::Move;
@@ -406,15 +445,12 @@ namespace SparkEditor
         bool m_snapEnabled = false;
         float m_snapValue = 1.0f;
 
-        // The single live ECS World being edited (the document). Panels that
+        // The document: the single live ECS World being edited and the
+        // selected entity (entt::null when nothing is selected). Panels that
         // display/manipulate scene content (SceneView, Hierarchy, Inspector)
-        // are wired to this via non-owning World* accessors.
-        std::unique_ptr<World> m_world;
-
-        // The currently selected ECS entity (Unit C2). entt::null when
-        // nothing is selected. Published by HierarchyPanel, consumed by
-        // InspectorPanel (C3).
-        ::EntityID m_selectedEntity = entt::null;
+        // are wired to its World via non-owning World* accessors; Hierarchy
+        // publishes the selection and the Inspector consumes it.
+        EditorDocument m_document;
         ::EntityID m_selectedEntityBeforePlay = entt::null;
 
 #ifdef _WIN32
@@ -440,6 +476,7 @@ namespace SparkEditor
         bool m_sceneModifiedBeforePlay = false;
         DocumentTransitionGuard m_documentTransitionGuard;
         std::string m_pendingProjectPath;
+        std::string m_pendingScenePath; ///< Scene for DocumentTransitionAction::OpenScenePath
         std::string m_pendingProjectName;
         std::string m_pendingProjectParentDirectory;
         std::string m_pendingProjectDescription;
@@ -449,7 +486,7 @@ namespace SparkEditor
         /// @brief Atomically replace the edited document World. Clears the
         /// undo/redo command history FIRST (so no queued command can reference
         /// the about-to-be-freed old World — prevents use-after-free on a later
-        /// Undo/Redo), then moves newWorld into m_world, then calls
+        /// Undo/Redo), then installs newWorld in m_document, then calls
         /// RewirePanelsToWorld(). Both OpenScene() and the initial world
         /// creation in SetGraphicsDevice() route through it.
         void SwapWorld(std::unique_ptr<::World> newWorld);
@@ -476,14 +513,11 @@ namespace SparkEditor
         void ClearMatchingRecoveryAfterSuccessfulSave();
         void RenderRecoveryModal();
 
-        /// @brief Re-point the panels that cache a raw ::World* (SceneView,
-        /// Hierarchy) at the current m_world and clear selection. Must be
-        /// called any time m_world is (re)assigned — both the initial seed
-        /// wiring in SetGraphicsDevice() and OpenScene() share this path so
-        /// the caching panels never dangle a pointer to a freed World.
-        /// InspectorPanel needs no re-wire — it reads GetWorld() live.
+        /// @brief Wire document-backed panels to the current World and EditorUI.
+        /// Re-points cached World pointers, clears stale selection, and gives
+        /// selection consumers their platform-neutral EditorUI owner. Must be
+        /// called any time the World is (re)assigned.
         void RewirePanelsToWorld();
-        bool RestoreWorldSnapshot(const std::string& json, ::EntityID selection);
         void RenderMainMenuBar();
         void RenderFileMenu();
         void RenderFileSceneItems();
@@ -497,21 +531,29 @@ namespace SparkEditor
         // Window menu panels are now rendered dynamically by PanelCategory
         // in RenderWindowMenu() — no per-category submenu functions needed.
         void RenderWindowMenu();
+        void RenderViewMenu();
         void RenderFPSToolsMenu();
         void RenderBuildMenu();
         void RenderHelpMenu();
         void RenderToolbar();
-        void RenderToolbarTransformTools(float btnSize, ImDrawList* dl, const ImVec4& accentTeal, const ImVec4& pillBg,
-                                         const ImVec4& passiveHover);
-        void RenderToolbarPlayControls(float btnSize, ImDrawList* dl, const ImVec4& playGreen,
-                                       const ImVec4& accentAmber, const ImVec4& stopRed, const ImVec4& pillBg,
-                                       const ImVec4& passiveHover);
-        void RenderToolbarSnapControls(float btnSize, const ImVec4& pillBg);
+        void RenderToolbarTransformTools();
+        void RenderToolbarPlayControls(float btnSize);
+        void RenderToolbarSnapControls();
+        void RenderToolbarLayoutMenu();
         void RenderStatusBar();
+        void RenderStatusBarMetrics();
+        void RenderLayoutDialogs();
+        void RenderStartPage();
+        void RenderAppearanceWindow();
+        void RenderNotificationHistory();
+        void SavePreferences();
+        void CommitPreferenceChange();
+        void RememberRecentScene(const std::string& scenePath);
         void RenderPanels();
         void RenderModalDialogs();
-        void RenderWelcomeScreen();
         void SetupDefaultDockLayout(ImGuiID dockspaceId);
+        /// "###<panel id>" dock window name of the panel registered under @p panelKey; empty when there is none.
+        std::string PanelDockWindowName(const char* panelKey) const;
         void UpdateStats(float deltaTime);
         void CreatePanels();
         void CreateCorePanels(

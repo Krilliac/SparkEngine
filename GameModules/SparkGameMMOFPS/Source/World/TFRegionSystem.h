@@ -28,7 +28,11 @@
  *    regions.json initialOwnership and persist.
  *  - Persistence: terrafront_territory.<continent-key>.json under SavePaths::Root(), written
  *    with tmp + rename on every ownership change and every 30 s when dirty;
- *    loaded on boot (falls back to initialOwnership when absent/stale).
+ *    loaded on boot (falls back to initialOwnership when absent/stale). The
+ *    file is single-writer: LoadPersisted takes a lifetime ExclusiveFileLock
+ *    on it before reading, a second authority for the same continent latches
+ *    its writes off, and the lease is released after the final Shutdown
+ *    checkpoint (or by the OS when the process dies).
  *  - Client: handlers for TF_RegionState/TF_CaptureTick keep a mirror store
  *    behind the SAME accessors, and the local player's capture-radius status
  *    feeds TFHUD::SetCaptureProgress each frame (all roles with a local player).
@@ -51,6 +55,7 @@
 #include "Core/TFTypes.h"
 #include "Core/TFEvents.h"
 #include "Net/TFNetProtocol.h"
+#include "Persistence/TFSavePaths.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -184,12 +189,13 @@ namespace Terrafront
         bool m_initialized{false};
 
         std::vector<RegionState> m_state;
-        double m_time{0.0};           ///< fixed-step clock (dominion timing)
-        float m_captureAccum{0.0f};   ///< 1 Hz capture tick accumulator
-        float m_saveAccum{0.0f};      ///< 30 s dirty-save accumulator
-        bool m_dirty{false};          ///< unsaved ownership/dominion change
-        bool m_persistLoaded{false};  ///< boot load attempted once
-        bool m_persistBlocked{false}; ///< qualified save unreadable/corrupt/mismatched
+        double m_time{0.0};                       ///< fixed-step clock (dominion timing)
+        float m_captureAccum{0.0f};               ///< 1 Hz capture tick accumulator
+        float m_saveAccum{0.0f};                  ///< 30 s dirty-save accumulator
+        bool m_dirty{false};                      ///< unsaved ownership/dominion change
+        bool m_persistLoaded{false};              ///< boot load attempted once
+        bool m_persistBlocked{false};             ///< qualified save unreadable/corrupt/mismatched, or owned elsewhere
+        SavePaths::ExclusiveFileLock m_saveLease; ///< single-writer lease on SavePath(), held from load to shutdown
 
         // Dominion hold
         bool m_domActive{false};

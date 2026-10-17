@@ -6,8 +6,14 @@
  * TypeRegistry. Uses GetFieldAsString/SetFieldFromString (from Reflection.h)
  * to convert fields to/from string key-value maps or raw binary.
  *
- * Used by: SaveSystem, JSONSceneSerializer, BinarySceneSerializer,
- * EngineSettings, and any subsystem that needs generic type I/O.
+ * No production subsystem calls these helpers today; only Tests/TestReflectionReal.cpp
+ * does. The binary decoder is nonetheless written for untrusted input (see
+ * Tools/fuzz-policy/parser-inventory.json, id "reflection-binary-codec"): it only
+ * writes a field when the wire type tag matches the reflected type, it never
+ * raw-copies String, Custom or Unknown fields, and it normalizes Bool values.
+ *
+ * Thread affinity: none (pure functions over caller-owned memory).
+ * Allocation: property maps, output buffers and decoded strings allocate.
  *
  * @see Core/Reflection.h, Core/ComponentReflection.cpp
  */
@@ -16,6 +22,8 @@
 
 #include "Reflection.h"
 
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <string>
 #include <unordered_map>
@@ -79,10 +87,40 @@ namespace Spark
     }
 
     /**
+     * @brief Whether a field type is plain data that the binary codec may copy byte for byte.
+     *
+     * String has its own length-prefixed encoding. Custom is opaque (it may own heap
+     * memory or have invariants), and Unknown has no defined layout, so neither is
+     * ever raw-copied in either direction.
+     */
+    [[nodiscard]] constexpr bool IsBinaryPlainFieldType(FieldType type) noexcept
+    {
+        switch (type)
+        {
+        case FieldType::Bool:
+        case FieldType::Int:
+        case FieldType::Float:
+        case FieldType::Double:
+        case FieldType::Vector2:
+        case FieldType::Vector3:
+        case FieldType::Vector4:
+        case FieldType::Enum:
+            return true;
+        case FieldType::Unknown:
+        case FieldType::String:
+        case FieldType::Custom:
+            return false;
+        }
+        return false;
+    }
+
+    /**
      * @brief Serialize all reflected fields to a binary buffer.
      *
      * Format per field: [fieldIndex:uint16][typeTag:uint8][rawBytes:size]
-     * Fields with serialized=false are skipped.
+     * Fields with serialized=false are skipped, and so are fields the format cannot
+     * represent: Custom and Unknown fields, plain fields wider than 65535 bytes and
+     * strings longer than 4 GiB.
      *
      * @param data      Pointer to the struct instance.
      * @param typeInfo  Reflected type metadata.
@@ -98,7 +136,14 @@ namespace Spark
 
         for (const auto& field : typeInfo.fields)
         {
-            if (!field.serialized)
+            const bool isString = field.type == FieldType::String;
+            if (!field.serialized || (!isString && !IsBinaryPlainFieldType(field.type)) ||
+                (!isString && field.size > 0xFFFFu))
+            {
+                ++fieldIndex;
+                continue;
+            }
+            if (isString && reinterpret_cast<const std::string*>(src + field.offset)->size() > 0xFFFFFFFFu)
             {
                 ++fieldIndex;
                 continue;
@@ -136,14 +181,19 @@ namespace Spark
     /**
      * @brief Deserialize a binary buffer into a reflected type instance.
      *
-     * Reads field headers and raw data, matching by field index.
-     * Unknown or out-of-range indices are skipped (forward-compatible).
+     * Reads field headers and raw data, matching by field index. A record is
+     * applied only when its index names a serialized field whose reflected type
+     * equals the wire type tag; for plain types the wire size must also equal the
+     * field size. Records for unknown indices, mismatched types, non-serialized
+     * fields, or Custom/Unknown fields are skipped without touching the instance
+     * (forward-compatible). Bool values are normalized to true/false.
      *
      * @param data      Pointer to the struct instance.
      * @param typeInfo  Reflected type metadata.
-     * @param buf       Input buffer.
+     * @param buf       Input buffer (untrusted).
      * @param bufSize   Size of the input buffer.
-     * @return Number of bytes consumed, or 0 on error.
+     * @return Number of bytes consumed, or 0 on error (null input or a truncated
+     *         record). Records before a truncated one may already have been applied.
      */
     inline size_t DeserializeFromBinary(void* data, const TypeInfo& typeInfo, const uint8_t* buf, size_t bufSize)
     {
@@ -153,49 +203,64 @@ namespace Spark
         auto* dst = static_cast<char*>(data);
         size_t pos = 0;
 
-        while (pos + 3 <= bufSize)
+        // Invariant: pos <= bufSize, so `bufSize - pos` never wraps.
+        while (pos < bufSize)
         {
-            uint16_t fieldIndex = static_cast<uint16_t>(buf[pos]) | (static_cast<uint16_t>(buf[pos + 1]) << 8);
-            auto typeTag = static_cast<FieldType>(buf[pos + 2]);
+            if (bufSize - pos < 3)
+                return 0;
+            const uint16_t fieldIndex = static_cast<uint16_t>(buf[pos]) | (static_cast<uint16_t>(buf[pos + 1]) << 8);
+            const auto typeTag = static_cast<FieldType>(buf[pos + 2]);
             pos += 3;
+
+            const FieldInfo* field = nullptr;
+            if (fieldIndex < typeInfo.fields.size())
+            {
+                const FieldInfo& candidate = typeInfo.fields[fieldIndex];
+                if (candidate.serialized && candidate.type == typeTag)
+                    field = &candidate;
+            }
 
             if (typeTag == FieldType::String)
             {
-                if (pos + 4 > bufSize)
-                    break;
-                uint32_t len = static_cast<uint32_t>(buf[pos]) | (static_cast<uint32_t>(buf[pos + 1]) << 8) |
-                               (static_cast<uint32_t>(buf[pos + 2]) << 16) |
-                               (static_cast<uint32_t>(buf[pos + 3]) << 24);
+                if (bufSize - pos < 4)
+                    return 0;
+                const uint32_t len = static_cast<uint32_t>(buf[pos]) | (static_cast<uint32_t>(buf[pos + 1]) << 8) |
+                                     (static_cast<uint32_t>(buf[pos + 2]) << 16) |
+                                     (static_cast<uint32_t>(buf[pos + 3]) << 24);
                 pos += 4;
-                if (pos + len > bufSize)
-                    break;
+                if (len > bufSize - pos)
+                    return 0;
 
-                if (fieldIndex < typeInfo.fields.size())
+                if (field)
                 {
-                    const auto& field = typeInfo.fields[fieldIndex];
-                    if (field.type == FieldType::String)
-                    {
-                        auto* str = reinterpret_cast<std::string*>(dst + field.offset);
-                        *str = std::string(reinterpret_cast<const char*>(buf + pos), len);
-                    }
+                    auto* str = reinterpret_cast<std::string*>(dst + field->offset);
+                    str->assign(reinterpret_cast<const char*>(buf + pos), len);
                 }
                 pos += len;
             }
             else
             {
-                if (pos + 2 > bufSize)
-                    break;
-                uint16_t sz = static_cast<uint16_t>(buf[pos]) | (static_cast<uint16_t>(buf[pos + 1]) << 8);
+                if (bufSize - pos < 2)
+                    return 0;
+                const uint16_t sz = static_cast<uint16_t>(buf[pos]) | (static_cast<uint16_t>(buf[pos + 1]) << 8);
                 pos += 2;
-                if (pos + sz > bufSize)
-                    break;
+                if (sz > bufSize - pos)
+                    return 0;
 
-                if (fieldIndex < typeInfo.fields.size())
+                if (field && IsBinaryPlainFieldType(field->type) && field->size == sz)
                 {
-                    const auto& field = typeInfo.fields[fieldIndex];
-                    if (field.size == sz)
+                    if (field->type == FieldType::Bool)
                     {
-                        std::memcpy(dst + field.offset, buf + pos, sz);
+                        // Any non-zero byte means true; never store a bool object
+                        // representation other than 0 or 1.
+                        bool value = false;
+                        for (uint16_t i = 0; i < sz; ++i)
+                            value = value || buf[pos + i] != 0;
+                        *reinterpret_cast<bool*>(dst + field->offset) = value;
+                    }
+                    else
+                    {
+                        std::memcpy(dst + field->offset, buf + pos, sz);
                     }
                 }
                 pos += sz;

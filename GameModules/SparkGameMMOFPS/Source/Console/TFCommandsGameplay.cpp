@@ -157,10 +157,11 @@ void TerrafrontModule::RegisterConsoleCommandsGameplay()
             if (!m_bots)
                 return "[TF] bot system not ready";
             if (args.empty())
-                return "[TF] bots active: " + std::to_string(m_bots->BotCount()) + "  (tf_bots <0-32> to set)";
+                return "[TF] bots active: " + std::to_string(m_bots->BotCount()) + "  (tf_bots <0-" +
+                       std::to_string(kTFMaxBots) + "> to set)";
             const int n = std::atoi(args[0].c_str());
-            if (n < 0 || n > 32)
-                return "[TF] tf_bots: count must be 0-32";
+            if (n < 0 || n > static_cast<int>(kTFMaxBots))
+                return "[TF] tf_bots: count must be 0-" + std::to_string(kTFMaxBots);
             m_bots->ServerSetBotCount(static_cast<uint32_t>(n));
             return "[TF] bot count set to " + std::to_string(n);
         },

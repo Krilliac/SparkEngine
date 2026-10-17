@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from fs_security import FilesystemPolicyError, SecureRoot, validate_portable_filename
-from secret_policy import scan_json_values, scan_payload
+from secret_policy import JsonScanLimitError, scan_json_values, scan_payload
 from ops_strict_json import StrictJsonError, loads_strict
 
 
@@ -224,8 +224,11 @@ class CrashPackageValidator:
             return None
         fields_valid = self.validate_manifest_fields(manifest, name)
         self.validate_no_transport_fields(manifest, name)
-        for finding in scan_json_values(manifest, location=name):
-            self._error("secret-exposure", f"{finding.location}: reusable secret matches {finding.rule}")
+        try:
+            for finding in scan_json_values(manifest, location=name):
+                self._error("secret-exposure", f"{finding.location}: reusable secret matches {finding.rule}")
+        except JsonScanLimitError as exc:
+            self._error("secret-exposure", f"manifest cannot receive complete secret inspection: {exc}")
         if not fields_valid:
             return manifest
 

@@ -1,0 +1,29 @@
+[Scene]
+name = Arena
+author = Level Design
+ambientLight = 0.2, 0.2, 0.25
+gravity = 0 -9.81 0 # earth
+
+[Object]
+type = Cube
+name = Pillar
+position = 0, 1, 0
+rotation = 0 45 0
+scale = 1 2 1
+model = Models/pillar.obj
+material = Materials/stone.mat
+hp = 250
+
+[Terrain]
+type = Plane
+position = 0 0 0
+scale = 100 1 100
+
+[Camera]
+type = perspective
+position = 0 5 -10
+fov = 60
+
+[SpawnPoint]
+position = 3 0 3
+tag = red

@@ -14,7 +14,6 @@
  */
 #include "World/TFWorldSetup.h"
 
-#include "World/TFSanctuaryZone.h"
 #include "World/TFWorldCollision.h"
 
 #include "Data/TFDataTables.h"
@@ -33,10 +32,6 @@
 #include "Engine/Networking/AreaServer.h"
 #endif
 
-#include <algorithm>
-#include <cmath>
-#include <cstdlib>
-#include <fstream>
 #include <string>
 
 namespace Terrafront
@@ -51,14 +46,6 @@ namespace Terrafront
         constexpr float kOriginRebaseThreshold = 8192.0f; // > continent diagonal: mechanism wired but
                                                           // inert on the 4km map. TF-W2: lower once
                                                           // replication is origin-offset aware.
-
-        float SmoothStep(float e0, float e1, float x)
-        {
-            if (e1 <= e0)
-                return x < e0 ? 0.0f : 1.0f;
-            float t = std::clamp((x - e0) / (e1 - e0), 0.0f, 1.0f);
-            return t * t * (3.0f - 2.0f * t);
-        }
 
     } // namespace
 
@@ -128,7 +115,13 @@ namespace Terrafront
 
         // Heightfield params live in the scene's [Terrain] section (tf* keys) so
         // authored geometry and the runtime height function share one source.
-        ParseTerrainParams(m_scenePath);
+        m_terrainLoaded = TFLoadTerrainParams(m_scenePath, m_terrain);
+        if (!m_terrainLoaded)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game,
+                           "[TF] Cannot read %s for terrain params; using defaults (continent handoffs refused)",
+                           m_scenePath.c_str());
+        }
 
         // The engine registers NO SceneManager in module mode (the FPS module
         // builds its own too — see SparkGameFPS Game::Initialize). Reuse the
@@ -184,142 +177,16 @@ namespace Terrafront
         }
     }
 
-    void TFWorldSetup::ParseTerrainParams(const std::string& scenePath)
-    {
-        std::ifstream f(scenePath);
-        if (!f.is_open())
-        {
-            SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] Cannot read %s for terrain params; using defaults",
-                           scenePath.c_str());
-            return;
-        }
-
-        std::string line;
-        bool inTerrain = false;
-        while (std::getline(f, line))
-        {
-            while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
-                line.pop_back();
-            if (line.empty() || line[0] == '#' || line[0] == ';')
-                continue;
-            if (line.front() == '[' && line.back() == ']')
-            {
-                inTerrain = (line == "[Terrain]");
-                continue;
-            }
-            if (!inTerrain)
-                continue;
-            auto eq = line.find('=');
-            if (eq == std::string::npos || line.rfind("tf", 0) != 0)
-                continue;
-            const std::string key = line.substr(0, eq);
-            const float val = std::strtof(line.c_str() + eq + 1, nullptr);
-
-            if (key == "tfBaseHeight")
-                m_terrain.baseHeight = val;
-            else if (key == "tfDuneAmp")
-                m_terrain.duneAmp = val;
-            else if (key == "tfDunePeriodX")
-                m_terrain.dunePeriodX = val;
-            else if (key == "tfDunePeriodZ")
-                m_terrain.dunePeriodZ = val;
-            else if (key == "tfRidgeAmp")
-                m_terrain.ridgeAmp = val;
-            else if (key == "tfCanyonX")
-                m_terrain.canyonX = val;
-            else if (key == "tfCanyonHalfWidth")
-                m_terrain.canyonHalfW = val;
-            else if (key == "tfCanyonZ0")
-                m_terrain.canyonZ0 = val;
-            else if (key == "tfCanyonZ1")
-                m_terrain.canyonZ1 = val;
-            else if (key == "tfCanyonDepth")
-                m_terrain.canyonDepth = val;
-            else if (key == "tfPlateauRadius")
-                m_terrain.plateauRadius = val;
-            else if (key == "tfPlateauSkirt")
-                m_terrain.plateauSkirt = val;
-            else if (key == "tfPlateauSkyanchor")
-                m_terrain.plateauSky = val;
-            else if (key == "tfPlateauFort")
-                m_terrain.plateauFort = val;
-            else if (key == "tfPlateauFacility")
-                m_terrain.plateauFacility = val;
-            else if (key == "tfPlateauOutpost")
-                m_terrain.plateauOutpost = val;
-        }
-    }
-
     const WorldPresentationDef& TFWorldSetup::Pres() const
     {
         static const WorldPresentationDef kDefault{};
         return (m_ctx && m_ctx->data && m_ctx->data->IsLoaded()) ? m_ctx->data->GetPresentation() : kDefault;
     }
 
-    float TFWorldSetup::PlateauHeight(const std::string& tier) const
-    {
-        if (tier == "skyanchor")
-            return m_terrain.plateauSky;
-        if (tier == "fort")
-            return m_terrain.plateauFort;
-        if (tier == "facility")
-            return m_terrain.plateauFacility;
-        return m_terrain.plateauOutpost;
-    }
-
     float TFWorldSetup::TerrainHeightAt(float x, float z) const
     {
-        const TFTerrainParams& p = m_terrain;
-
-        // Dune base
-        float h = p.baseHeight + p.duneAmp * std::sin(x * p.dunePeriodX) * std::cos(z * p.dunePeriodZ) +
-                  p.ridgeAmp * std::sin(x * 0.013f + z * 0.011f);
-
-        // Canyon between SW (AUC) and SE (HLX) territory
-        const float nx = (x - p.canyonX) / p.canyonHalfW;
-        if (std::fabs(nx) < 1.0f)
-        {
-            const float across = 1.0f - nx * nx;
-            const float along = SmoothStep(p.canyonZ0 - 300.0f, p.canyonZ0, z) *
-                                (1.0f - SmoothStep(p.canyonZ1, p.canyonZ1 + 300.0f, z));
-            h -= p.canyonDepth * across * along;
-        }
-
-        // Flat mesa plateau around each region center (scene objects sit at
-        // exactly these heights). Regions are far apart relative to the skirt,
-        // so sequential blending is order-independent in practice.
-        if (m_ctx && m_ctx->data && m_ctx->data->IsLoaded())
-        {
-            for (const RegionDef& r : m_ctx->data->GetContinent().regions)
-            {
-                const float dx = x - r.centerX;
-                const float dz = z - r.centerZ;
-                const float distSq = dx * dx + dz * dz;
-                const float outer = p.plateauRadius + p.plateauSkirt;
-                if (distSq >= outer * outer)
-                    continue;
-                const float w = 1.0f - SmoothStep(p.plateauRadius, outer, std::sqrt(distSq));
-                h += (PlateauHeight(r.tier) - h) * w;
-            }
-        }
-
-        // Sanctuary Haven pad (continents lane): a flat plateau at the reserved
-        // NW-corner zone, blended exactly like the region plateaus above. The
-        // constants are compile-time (TFSanctuaryZone.h) so this term is
-        // identical on every role regardless of data-load state — the same
-        // determinism contract as the rest of this function.
-        {
-            const float dx = x - kTFSanctuaryCenterX;
-            const float dz = z - kTFSanctuaryCenterZ;
-            const float distSq = dx * dx + dz * dz;
-            const float outer = kTFSanctuaryPlateauRadius + kTFSanctuaryPlateauSkirt;
-            if (distSq < outer * outer)
-            {
-                const float w = 1.0f - SmoothStep(kTFSanctuaryPlateauRadius, outer, std::sqrt(distSq));
-                h += (kTFSanctuaryPadY - h) * w;
-            }
-        }
-        return h;
+        const bool haveRegions = m_ctx && m_ctx->data && m_ctx->data->IsLoaded();
+        return TFTerrainHeightAt(m_terrain, haveRegions ? &m_ctx->data->GetContinent().regions : nullptr, x, z);
     }
 
     void TFWorldSetup::ResolveMoveCollision(const float prevPos[3], float pos[3], float vel[3], bool* grounded) const
@@ -337,13 +204,7 @@ namespace Terrafront
         //    final XZ after TFMoveStep's own step-7 clamp ran, and this also keeps
         //    "never below terrain" true even with physics unavailable. Identical
         //    math on server and predicting client (determinism contract).
-        const float h = TerrainHeightAt(pos[0], pos[2]);
-        if (pos[1] < h)
-        {
-            pos[1] = h;
-            if (vel[1] < 0.0f)
-                vel[1] = 0.0f;
-        }
+        TFApplyTerrainBackstop(TerrainHeightAt(pos[0], pos[2]), pos, vel);
     }
 
 } // namespace Terrafront

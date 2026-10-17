@@ -5,6 +5,10 @@
 
 #include "PrototypingPanel.h"
 
+#include "../Core/EditorIcons.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
+
 #include <imgui.h>
 #include <string>
 
@@ -54,7 +58,7 @@ namespace SparkEditor
 
     void PrototypingPanel::RenderBlockoutSection()
     {
-        if (!ImGui::CollapsingHeader("Blockout Shapes", ImGuiTreeNodeFlags_DefaultOpen))
+        if (!Spark::Ui::SectionHeader("Blockout Shapes", ICON_FA_CUBES, true))
             return;
 
         // Shape selector
@@ -65,14 +69,14 @@ namespace SparkEditor
         static float placePos[3] = {0.0f, 0.0f, 0.0f};
         ImGui::DragFloat3("Position", placePos, 0.5f);
 
-        if (ImGui::Button("Place Blockout"))
+        if (Spark::Ui::PrimaryButton(ICON_FA_PLUS " Place Blockout"))
         {
             m_system->PlaceBlockout(m_selectedShape, placePos[0], placePos[1], placePos[2]);
             SetModified(true);
         }
 
         ImGui::SameLine();
-        if (ImGui::Button("Clear All"))
+        if (Spark::Ui::DangerButton(ICON_FA_TRASH " Clear All"))
         {
             m_system->ClearAllBlockouts();
             SetModified(true);
@@ -83,13 +87,13 @@ namespace SparkEditor
         if (!prims.empty())
         {
             ImGui::Separator();
-            ImGui::Text("Placed: %zu", prims.size());
+            Spark::Ui::KeyValue("Placed:", "%zu", prims.size());
             for (const auto& p : prims)
             {
                 ImGui::PushID(static_cast<int>(p.primitiveId));
                 ImGui::BulletText("%s (%.0f, %.0f, %.0f)", p.name.c_str(), p.posX, p.posY, p.posZ);
                 ImGui::SameLine();
-                if (ImGui::SmallButton("X"))
+                if (Spark::Ui::IconButton("remove", ICON_FA_XMARK, "Remove blockout"))
                 {
                     m_system->RemoveBlockout(p.primitiveId);
                     SetModified(true);
@@ -103,7 +107,7 @@ namespace SparkEditor
 
     void PrototypingPanel::RenderTemplateSection()
     {
-        if (!ImGui::CollapsingHeader("Game Templates"))
+        if (!Spark::Ui::SectionHeader("Game Templates", ICON_FA_TH_LARGE, false))
             return;
 
         const auto& templates = m_system->GetTemplates();
@@ -117,15 +121,16 @@ namespace SparkEditor
             if (ImGui::IsItemHovered())
             {
                 ImGui::BeginTooltip();
-                ImGui::Text("%s", t.description.c_str());
-                ImGui::Text("Camera:%s Player:%s Physics:%s AI:%s UI:%s Net:%s", t.includesCamera ? "Y" : "N",
-                            t.includesPlayer ? "Y" : "N", t.includesPhysics ? "Y" : "N", t.includesAI ? "Y" : "N",
-                            t.includesUI ? "Y" : "N", t.includesNetworking ? "Y" : "N");
+                ImGui::TextUnformatted(t.description.c_str());
+                Spark::Ui::SecondaryText("Camera:%s Player:%s Physics:%s AI:%s UI:%s Net:%s",
+                                         t.includesCamera ? "Y" : "N", t.includesPlayer ? "Y" : "N",
+                                         t.includesPhysics ? "Y" : "N", t.includesAI ? "Y" : "N",
+                                         t.includesUI ? "Y" : "N", t.includesNetworking ? "Y" : "N");
                 ImGui::EndTooltip();
             }
         }
 
-        if (ImGui::Button("Apply Template") && m_selectedTemplateIdx >= 0 &&
+        if (Spark::Ui::PrimaryButton("Apply Template") && m_selectedTemplateIdx >= 0 &&
             m_selectedTemplateIdx < static_cast<int>(templates.size()))
         {
             m_system->ApplyTemplate(templates[m_selectedTemplateIdx].type);
@@ -134,7 +139,7 @@ namespace SparkEditor
 
     void PrototypingPanel::RenderRulesSection()
     {
-        if (!ImGui::CollapsingHeader("Gameplay Rules"))
+        if (!Spark::Ui::SectionHeader("Gameplay Rules", ICON_FA_LIST_ALT, false))
             return;
 
         static char ruleName[64] = "";
@@ -150,7 +155,7 @@ namespace SparkEditor
         ImGui::Combo("Action", &actionIdx, actions, 4);
         ImGui::InputText("Param", actionParam, sizeof(actionParam));
 
-        if (ImGui::Button("Add Rule") && ruleName[0] != '\0')
+        if (Spark::Ui::SecondaryButton(ICON_FA_PLUS " Add Rule") && ruleName[0] != '\0')
         {
             m_system->AddRule(ruleName, triggers[triggerIdx], actions[actionIdx], actionParam);
             ruleName[0] = '\0';
@@ -169,7 +174,7 @@ namespace SparkEditor
             ImGui::Text("%s: %s -> %s(%s)", r.name.c_str(), r.triggerEvent.c_str(), r.actionType.c_str(),
                         r.actionParam.c_str());
             ImGui::SameLine();
-            if (ImGui::SmallButton("X"))
+            if (Spark::Ui::IconButton("remove", ICON_FA_XMARK, "Remove rule"))
             {
                 m_system->RemoveRule(r.ruleId);
                 SetModified(true);
@@ -182,23 +187,25 @@ namespace SparkEditor
 
     void PrototypingPanel::RenderPlayTestSection()
     {
-        if (!ImGui::CollapsingHeader("Play Test"))
+        if (!Spark::Ui::SectionHeader("Play Test", ICON_FA_PLAY, false))
             return;
 
         if (m_system->IsPlaying())
         {
-            ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "PLAYING");
-            ImGui::Text("Time: %.1fs", m_system->GetPlayTime());
-            if (ImGui::Button("Stop"))
+            Spark::Ui::StatusText(Spark::Ui::Status::Success, "PLAYING");
+            Spark::Ui::KeyValue("Time:", "%.1fs", m_system->GetPlayTime());
+            if (Spark::Ui::SecondaryButton(ICON_FA_STOP " Stop"))
                 m_system->StopPlayTest();
         }
         else
         {
-            if (ImGui::Button("Start Play Test"))
+            if (Spark::Ui::PrimaryButton(ICON_FA_PLAY " Start Play Test"))
                 m_system->StartPlayTest();
         }
 
-        ImGui::Text("Blockouts: %zu | Rules: %zu", m_system->GetBlockouts().size(), m_system->GetRules().size());
+        Spark::Ui::KeyValue("Blockouts:", "%zu", m_system->GetBlockouts().size());
+        ImGui::SameLine(0.0f, Spark::Ui::Em(1.0f));
+        Spark::Ui::KeyValue("Rules:", "%zu", m_system->GetRules().size());
     }
 
 } // namespace SparkEditor

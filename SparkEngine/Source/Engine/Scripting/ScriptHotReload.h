@@ -25,6 +25,7 @@
 #include <chrono>
 #include <filesystem>
 #include <functional>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -125,13 +126,13 @@ namespace Spark::Scripting
         /**
      * @brief Check for file changes and trigger recompilation
      * Call this each frame from the main thread.
-     * @return Number of files recompiled
+     * @return Number of files successfully recompiled
      */
         int PollChanges();
 
         /**
      * @brief Force recompile all watched scripts
-     * @return Number of files recompiled
+     * @return Number of files successfully recompiled
      */
         int RecompileAll();
 
@@ -157,11 +158,14 @@ namespace Spark::Scripting
 
         void ScanDirectory(const std::string& directory, bool recursive);
         bool IsWatchedExtension(const std::string& path) const;
-        void ProcessChange(const std::string& filePath);
+        bool ProcessChange(const std::string& filePath);
 
         std::vector<std::string> m_watchDirs;
         std::vector<std::string> m_extensions = {".as", ".angelscript"};
         std::unordered_map<std::string, FileState> m_fileStates;
+        /// Scripts skipped because no narrow spelling reopens them; remembered so the
+        /// per-poll rescan warns about each one once.
+        std::set<std::filesystem::path> m_unopenableScripts;
 
         RecompileCallback m_recompileCallback;
         ErrorCallback m_errorCallback;
@@ -176,7 +180,7 @@ namespace Spark::Scripting
         uint32_t m_debounceMs = 300; // 300ms default debounce
 
         std::atomic<bool> m_running{false};
-        int m_recompileCount = 0;
+        int m_recompileCount = 0; ///< Total successful recompilations since start.
         int m_errorCount = 0;
         std::vector<RecompileResult> m_recentErrors; ///< Last N errors
         static constexpr int MaxRecentErrors = 10;
@@ -257,7 +261,8 @@ namespace Spark::Scripting
                 {"GetVelocity", "Vector3 GetVelocity(uint)", APICategory::Physics, "Get linear velocity"},
 
                 // Audio
-                {"PlaySound", "void PlaySound(const string &in)", APICategory::Audio, "Play a sound effect by name"},
+                {"playSound", "void playSound(EntityID, const string &in)", APICategory::Audio,
+                 "Play a one-shot sound at the entity (started by the next AudioUpdateSystem tick)"},
                 {"PlaySoundAt", "void PlaySoundAt(const string &in, Vector3)", APICategory::Audio,
                  "Play 3D sound at position"},
                 {"StopSound", "void StopSound(const string &in)", APICategory::Audio, "Stop a playing sound"},
@@ -287,8 +292,8 @@ namespace Spark::Scripting
                 {"GetRandomNavPoint", "Vector3 GetRandomNavPoint()", APICategory::AI, "Random walkable NavMesh point"},
 
                 // Animation
-                {"PlayAnimation", "void PlayAnimation(uint, const string &in)", APICategory::Animation,
-                 "Play animation clip on entity"},
+                {"playAnimation", "void playAnimation(EntityID, const string &in)", APICategory::Animation,
+                 "Switch the entity's AnimationController to a clip (no-op if already playing it)"},
                 {"SetAnimationSpeed", "void SetAnimationSpeed(uint, float)", APICategory::Animation,
                  "Set animation playback speed"},
 

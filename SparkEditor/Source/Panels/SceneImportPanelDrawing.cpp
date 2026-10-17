@@ -11,7 +11,10 @@
 
 #include "SceneImportPanel.h"
 
+#include "../Core/EditorIcons.h"
 #include "../Core/EditorUI.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 #include <imgui.h>
 
@@ -27,18 +30,25 @@ namespace SparkEditor
 
         if (BeginPanel())
         {
-            if (ImGui::Button("Refresh"))
+            if (Spark::Ui::BeginPanelToolbar("##SceneImportToolbar"))
             {
-                ScanSceneFiles();
+                if (Spark::Ui::SecondaryButton(ICON_FA_REFRESH " Refresh"))
+                {
+                    ScanSceneFiles();
+                }
+                ImGui::SameLine();
+                ImGui::AlignTextToFramePadding();
+                ImGui::TextUnformatted("Import (one-way)");
+                Spark::Ui::EndPanelToolbar();
             }
-            ImGui::SameLine();
-            ImGui::TextUnformatted("Import (one-way)");
-            ImGui::TextWrapped("Imports game .scene (INI) objects as normal, editable entities in the current "
-                               "world. Saving writes the editor's JSON scene format — nothing is ever written back "
-                               "to the .scene source.");
+            ImGui::PushTextWrapPos(0.0f);
+            Spark::Ui::SecondaryText("Imports game .scene (INI) objects as normal, editable entities in the current "
+                                     "world. Saving writes the editor's JSON scene format — nothing is ever written "
+                                     "back to the .scene source.");
+            ImGui::PopTextWrapPos();
             ImGui::Separator();
 
-            const float listWidth = 260.0f;
+            const float listWidth = Spark::Ui::Px(260.0f);
             ImGui::BeginChild("SceneImportList", ImVec2(listWidth, 0), true);
             RenderFileList();
             ImGui::EndChild();
@@ -58,7 +68,11 @@ namespace SparkEditor
     {
         if (m_sceneFiles.empty())
         {
-            ImGui::TextWrapped("No .scene files found under '%sAssets/Scenes'.", m_assetsPrefix.c_str());
+            const std::string hint = "Add .scene files under '" + m_assetsPrefix + "Assets/Scenes', then Refresh.";
+            if (Spark::Ui::EmptyState(ICON_FA_FILE, "No .scene files found", hint.c_str(), "Refresh"))
+            {
+                ScanSceneFiles();
+            }
             return;
         }
 
@@ -77,21 +91,32 @@ namespace SparkEditor
     {
         if (m_selected < 0 || m_selected >= static_cast<int>(m_sceneFiles.size()))
         {
-            ImGui::TextDisabled("Select a .scene file to preview and import.");
+            Spark::Ui::EmptyState(ICON_FA_FILE_IMPORT, "No scene selected",
+                                  "Select a .scene file to preview and import.");
         }
         else if (!m_previewValid)
         {
-            ImGui::TextWrapped("Cannot open '%s'.", m_sceneFiles[static_cast<size_t>(m_selected)].diskPath.c_str());
+            ImGui::PushTextWrapPos(0.0f);
+            Spark::Ui::StatusText(Spark::Ui::Status::Error, "Cannot open '%s'.",
+                                  m_sceneFiles[static_cast<size_t>(m_selected)].diskPath.c_str());
+            ImGui::PopTextWrapPos();
         }
         else
         {
             const SceneFileEntry& entry = m_sceneFiles[static_cast<size_t>(m_selected)];
 
-            ImGui::Text("Scene: %s", m_preview.sceneName.empty() ? "(unnamed)" : m_preview.sceneName.c_str());
-            ImGui::TextDisabled("%s", entry.diskPath.c_str());
-            ImGui::Spacing();
-            ImGui::Text("Importable objects: %d", static_cast<int>(m_preview.objects.size()));
-            ImGui::Text("Skipped nodes: %d", static_cast<int>(m_preview.skippedTypes.size()));
+            if (Spark::Ui::BeginPropertyGrid("SceneImportPreview"))
+            {
+                Spark::Ui::PropertyLabel("Scene");
+                ImGui::TextUnformatted(m_preview.sceneName.empty() ? "(unnamed)" : m_preview.sceneName.c_str());
+                Spark::Ui::PropertyLabel("File");
+                Spark::Ui::MonoText("%s", entry.diskPath.c_str());
+                Spark::Ui::PropertyLabel("Importable objects");
+                Spark::Ui::MonoText("%d", static_cast<int>(m_preview.objects.size()));
+                Spark::Ui::PropertyLabel("Skipped nodes");
+                Spark::Ui::MonoText("%d", static_cast<int>(m_preview.skippedTypes.size()));
+                Spark::Ui::EndPropertyGrid();
+            }
             if (!m_preview.skippedTypes.empty())
             {
                 for (const std::string& skip : AggregateSkipped(m_preview.skippedTypes))
@@ -100,9 +125,9 @@ namespace SparkEditor
             if (!m_preview.unresolvedModels.empty())
             {
                 ImGui::Spacing();
-                ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f),
-                                   "Unresolved model paths (%d) - will render as placeholder cubes:",
-                                   static_cast<int>(m_preview.unresolvedModels.size()));
+                Spark::Ui::StatusText(Spark::Ui::Status::Warning,
+                                      "Unresolved model paths (%d) - will render as placeholder cubes:",
+                                      static_cast<int>(m_preview.unresolvedModels.size()));
                 for (const std::string& model : m_preview.unresolvedModels)
                     ImGui::BulletText("%s", model.c_str());
             }
@@ -110,27 +135,35 @@ namespace SparkEditor
             ImGui::Spacing();
             const bool haveWorld = (m_editorUI != nullptr && m_editorUI->GetWorld() != nullptr);
             const bool canImport = haveWorld && !m_preview.objects.empty();
-            if (!canImport)
-                ImGui::BeginDisabled();
-            if (ImGui::Button("Import Into Current World"))
-            {
-                ImportParsed(m_preview, entry.displayPath);
-            }
-            if (!canImport)
-                ImGui::EndDisabled();
+            const char* blockedReason = nullptr;
             if (!haveWorld)
-                ImGui::TextDisabled("No document World available (EditorUI not wired).");
+                blockedReason = "No document World available (EditorUI not wired).";
             else if (m_preview.objects.empty())
-                ImGui::TextDisabled("Nothing importable in this file.");
+                blockedReason = "Nothing importable in this file.";
+            {
+                const Spark::Ui::ScopedDisabled disabled(!canImport, blockedReason);
+                if (Spark::Ui::PrimaryButton(ICON_FA_FILE_IMPORT " Import Into Current World"))
+                {
+                    ImportParsed(m_preview, entry.displayPath);
+                }
+            }
+            if (blockedReason != nullptr)
+                Spark::Ui::SecondaryText("%s", blockedReason);
             ImGui::SameLine();
-            ImGui::TextDisabled("(undoable as one step: Ctrl+Z removes the whole import)");
+            Spark::Ui::SecondaryText("(undoable as one step: Ctrl+Z removes the whole import)");
         }
 
         if (m_hasImported)
         {
-            ImGui::Separator();
-            ImGui::Text("Last import: %s", m_lastImport.sourcePath.c_str());
-            ImGui::Text("Entities created: %d", m_lastImport.imported);
+            Spark::Ui::SubHeader("Last import");
+            if (Spark::Ui::BeginPropertyGrid("SceneImportLast"))
+            {
+                Spark::Ui::PropertyLabel("Source");
+                Spark::Ui::MonoText("%s", m_lastImport.sourcePath.c_str());
+                Spark::Ui::PropertyLabel("Entities created");
+                Spark::Ui::MonoText("%d", m_lastImport.imported);
+                Spark::Ui::EndPropertyGrid();
+            }
         }
     }
 
@@ -154,15 +187,15 @@ namespace SparkEditor
             if (!m_lastImport.unresolvedModels.empty())
             {
                 ImGui::Spacing();
-                ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f), "Unresolved model paths (placeholder cubes):");
+                Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Unresolved model paths (placeholder cubes):");
                 for (const std::string& model : m_lastImport.unresolvedModels)
                     ImGui::BulletText("%s", model.c_str());
             }
 
             ImGui::Spacing();
-            ImGui::TextDisabled("One-way import: saving writes the editor's JSON format, not .scene.");
+            Spark::Ui::SecondaryText("One-way import: saving writes the editor's JSON format, not .scene.");
             ImGui::Spacing();
-            if (ImGui::Button("Close", ImVec2(120, 0)))
+            if (Spark::Ui::SecondaryButton("Close", Spark::Ui::Px2(120, 0)))
             {
                 ImGui::CloseCurrentPopup();
             }

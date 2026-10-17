@@ -748,7 +748,7 @@ audio_sources        # Show active audio source count and details
 
 | Platform | Backend | 3D Audio | Mixer | Music | Status |
 |----------|---------|----------|-------|-------|--------|
-| Windows | XAudio2 | Implemented; the listener follows the `EngineContext` camera each frame via `AudioEngine::SetListenerFromCamera` | Bus volume/mute/solo applied; occlusion applied when physics is attached; reverb zones and per-bus DSP are authoring data only | Volume chain works; no shipped caller routes cues to `AudioCategory::Music` yet | In `stable-v1`, blocked and uncertified |
+| Windows 11 x64 | XAudio2 | Implemented; the listener follows the `EngineContext` camera each frame via `AudioEngine::SetListenerFromCamera` | Bus volume/mute/solo applied; occlusion applied when physics is attached; reverb zones and per-bus DSP are authoring data only | Volume chain works; no shipped caller routes cues to `AudioCategory::Music` yet | In `stable-v1`, blocked and uncertified |
 | Linux | OpenAL Soft | Implemented | Same mixer limits as Windows | Same as Windows | Experimental, outside `stable-v1` |
 | macOS | OpenAL Soft | Implemented | Same mixer limits as Windows | Same as Windows | Experimental, outside `stable-v1` |
 

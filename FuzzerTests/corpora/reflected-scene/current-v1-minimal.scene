@@ -1,0 +1,20 @@
+P{
+ "version": 1,
+ "entities": [
+  {
+   "id": 0,
+   "name": "Root",
+   "parent": -1,
+   "components": [
+    {
+     "type": "Transform",
+     "fields": {
+      "position": "1.000000,2.000000,3.000000",
+      "rotation": "0.000000,90.000000,0.000000",
+      "scale": "1.000000,1.000000,1.000000"
+     }
+    }
+   ]
+  }
+ ]
+}

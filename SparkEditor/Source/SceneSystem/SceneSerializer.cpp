@@ -57,9 +57,13 @@ namespace SparkEditor
         try
         {
             if (actualFormat == SerializationFormat::BINARY)
+            {
                 result = SaveBinary(scene, filePath);
+            }
             else
+            {
                 result = SaveJSON(scene, filePath);
+            }
         }
         catch (const std::exception& exception)
         {
@@ -96,9 +100,13 @@ namespace SparkEditor
         try
         {
             if (format == SerializationFormat::JSON)
+            {
                 result = LoadJSON(filePath, outScene);
+            }
             else
+            {
                 result = LoadBinary(filePath, outScene);
+            }
         }
         catch (const std::exception& exception)
         {
@@ -174,43 +182,28 @@ namespace SparkEditor
     {
         std::ifstream file(filePath, std::ios::binary);
         if (!file.is_open())
+        {
             return false;
+        }
 
         uint32_t magic = 0;
         if (!file.read(reinterpret_cast<char*>(&magic), sizeof(magic)))
+        {
             return false;
+        }
         if (magic == SCENE_FILE_MAGIC)
+        {
             return true;
+        }
 
         // Check for JSON format
         file.seekg(0);
         char firstChar = 0;
         if (!file.read(&firstChar, 1))
+        {
             return false;
+        }
         return firstChar == '{';
-    }
-
-    bool SceneSerializer::ValidateScene(const SceneFile& scene, SerializationResult& result)
-    {
-        std::vector<std::string> errors;
-        bool valid = scene.Validate(errors);
-        for (const auto& err : errors)
-        {
-            result.warnings.push_back(err);
-        }
-        return valid;
-    }
-
-    bool SceneSerializer::HandleVersionCompatibility(uint32_t fileVersion, SceneFile& /*scene*/,
-                                                     SerializationResult& result)
-    {
-        if (fileVersion != SCENE_FILE_VERSION)
-        {
-            result.warnings.push_back("Scene file version " + std::to_string(fileVersion) +
-                                      " is unsupported; expected " + std::to_string(SCENE_FILE_VERSION));
-            return false;
-        }
-        return true;
     }
 
     bool SceneSerializer::CreateBackup(const std::string& filePath)

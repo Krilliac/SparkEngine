@@ -1,0 +1,6 @@
+[Object]
+type=cube
+name=poisoned
+position=nan,0,0
+rotation=0,inf,0
+scale=1,1,1e39

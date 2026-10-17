@@ -70,6 +70,9 @@ class SoundEffect
      * @param filename Path to the WAV file to load
      * @return HRESULT indicating success or failure of loading operation
      * @note Only WAV format files are currently supported
+     * @note Only PCM (8/16/24/32-bit) and IEEE-float (32-bit) fmt chunks with consistent
+     *       block-align and byte-rate fields are accepted; cbSize is forced to 0. A rejected
+     *       file leaves the object unloaded.
      */
     HRESULT LoadFromFile(const std::wstring& filename);
 

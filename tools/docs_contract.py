@@ -504,7 +504,10 @@ def read_regular_bytes(path: Path, *, label: str, maximum: int) -> bytes:
             )
             if not opened_identity_matches(before, opened_identity):
                 raise ContractError(f"{label} changed before it could be opened: {path}")
-            payload = stream.read(maximum + 1)
+            # One byte past the observed size, never maximum + 1: BufferedReader
+            # allocates the whole requested length up front (128 MiB per generated
+            # page), and a file that grew still reads long and fails the size check.
+            payload = stream.read(min(before.size, maximum) + 1)
     except ContractError:
         raise
     except OSError as exc:
@@ -1243,7 +1246,9 @@ def load_symbols(path: Path) -> list[Symbol]:
     try:
         payload = read_regular_bytes(path, label="symbol TSV", maximum=MAX_GENERATED_BYTES)
         with io.StringIO(payload.decode("utf-8"), newline="") as stream:
-            for line_no, row in enumerate(csv.reader(stream, delimiter="\t"), start=1):
+            # The writer joins fields with bare tabs and never quotes (tsv_row strips tabs and newlines),
+            # so read without quote handling: a brief that starts with '"' must round-trip verbatim.
+            for line_no, row in enumerate(csv.reader(stream, delimiter="\t", quoting=csv.QUOTE_NONE), start=1):
                 if line_no > MAX_GENERATED_FILES * 4096:
                     raise ContractError("symbol TSV exceeds row-count bound")
                 if len(row) != 5:

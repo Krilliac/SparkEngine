@@ -107,6 +107,9 @@ def verify_release_asset_boundary(
     release_tag: str,
     is_versioned: bool,
     expected_draft: bool,
+    immutable_channel: bool | None = None,
+    signature_control_asset: str | None = None,
+    signature_control_path: Path | None = None,
 ) -> None:
     """Verify raw GitHub metadata against durable state and exact local bytes."""
 
@@ -114,6 +117,21 @@ def verify_release_asset_boundary(
     _require(bool(release_tag), "release tag must not be empty")
     names = _read_expected_names(expected_assets_file)
     digests = _read_expected_digests(expected_digests_file, names)
+
+    control_digest = None
+    control_size = None
+    if signature_control_asset is not None:
+        _require(is_versioned, "signature control asset is valid only for stable releases")
+        _require(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", signature_control_asset) is not None,
+                 "signature control asset name is unsafe")
+        _require(signature_control_asset not in names,
+                 "signature control asset must not be in the distributable inventory")
+        control_path = signature_control_path or (asset_directory / signature_control_asset)
+        _require(not control_path.is_symlink() and control_path.is_file(),
+                 "signature control asset is missing or link-like")
+        control_path = control_path.resolve()
+        control_digest = _sha256(control_path)
+        control_size = control_path.stat().st_size
 
     asset_root = asset_directory.resolve()
     local_sizes: dict[str, int] = {}
@@ -131,7 +149,9 @@ def verify_release_asset_boundary(
     _require(release.get("tag_name") == release_tag, "release tag differs from the durable target")
     _require(release.get("draft") is expected_draft, "release draft visibility is not exact")
     _require(release.get("prerelease") is (not is_versioned), "release channel is not exact")
-    _require(release.get("immutable") is False, "release is immutable at a recoverable publication boundary")
+    expected_immutable = (is_versioned if immutable_channel is None else immutable_channel) and not expected_draft
+    _require(release.get("immutable") is expected_immutable,
+             "release immutability does not match the channel and publication phase")
 
     pages = _load_json(assets_json, "release asset metadata")
     _require(isinstance(pages, list) and bool(pages), "release asset pages must be a nonempty array")
@@ -153,7 +173,8 @@ def verify_release_asset_boundary(
             _require(isinstance(asset, dict),
                      f"release asset {page_index + 1}:{asset_index + 1} must be an object")
             assets.append(asset)
-    _require(len(assets) == len(names), "release asset count differs from the expected set")
+    _require(len(assets) == len(names) + (1 if signature_control_asset is not None else 0),
+             "release asset count differs from the expected set")
 
     actual_by_id: dict[int, dict[str, Any]] = {}
     actual_by_name: dict[str, dict[str, Any]] = {}
@@ -164,13 +185,16 @@ def verify_release_asset_boundary(
         _require(isinstance(name, str) and bool(name), f"{label}.name must be nonempty")
         _require(asset_id not in actual_by_id, f"release assets repeat ID {asset_id}")
         _require(name not in actual_by_name, f"release assets repeat name {name}")
-        _require(name in digests, f"release contains unexpected asset {name}")
+        is_control = signature_control_asset is not None and name == signature_control_asset
+        _require(name in digests or is_control, f"release contains unexpected asset {name}")
         _require(asset.get("state") == "uploaded", f"release asset {name} is not uploaded")
         digest = asset.get("digest")
         _require(isinstance(digest, str) and SHA256_DIGEST_RE.fullmatch(digest) is not None,
                  f"release asset {name} has an invalid digest")
-        _require(digest == digests[name], f"release asset {name} digest drifted")
-        _require(_exact_int(asset.get("size"), f"release asset {name}.size") == local_sizes[name],
+        expected_digest = control_digest if is_control else digests[name]
+        expected_size = control_size if is_control else local_sizes[name]
+        _require(digest == expected_digest, f"release asset {name} digest drifted")
+        _require(_exact_int(asset.get("size"), f"release asset {name}.size") == expected_size,
                  f"release asset {name} size drifted")
         _exact_int(asset.get("download_count"), f"release asset {name}.download_count")
         uploader = asset.get("uploader")
@@ -181,7 +205,8 @@ def verify_release_asset_boundary(
                  f"release asset {name} uploader login is untrusted")
         actual_by_id[asset_id] = asset
         actual_by_name[name] = asset
-    _require(set(actual_by_name) == set(names), "release asset names are not exact")
+    expected_release_names = set(names) | ({signature_control_asset} if signature_control_asset is not None else set())
+    _require(set(actual_by_name) == expected_release_names, "release asset names are not exact")
 
     ledger = _load_json(ledger_json, "durable release ledger")
     _require(isinstance(ledger, dict), "durable release ledger must be an object")
@@ -210,7 +235,12 @@ def verify_release_asset_boundary(
         for asset_id in prepared_ids_value
     }
     _require(len(prepared_ids) == len(prepared_ids_value), "ledger prepared asset IDs repeat")
-    _require(prepared_ids == set(actual_by_id), "release asset IDs differ from the durable checkpoint")
+    distributable_by_id = {
+        asset_id: asset for asset_id, asset in actual_by_id.items()
+        if asset["name"] != signature_control_asset
+    }
+    _require(prepared_ids == set(distributable_by_id),
+             "release asset IDs differ from the durable checkpoint")
 
     ledger_assets_value = ledger.get("assets")
     _require(isinstance(ledger_assets_value, list), "ledger assets must be an array")
@@ -221,7 +251,7 @@ def verify_release_asset_boundary(
         _require(asset_id not in ledger_by_id, f"ledger assets repeat ID {asset_id}")
         ledger_by_id[asset_id] = entry
 
-    for asset_id, asset in actual_by_id.items():
+    for asset_id, asset in distributable_by_id.items():
         name = asset["name"]
         entry = ledger_by_id.get(asset_id)
         _require(entry is not None, f"release asset {name} is absent from the durable ledger")
@@ -257,7 +287,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--release-id", type=int, required=True)
     parser.add_argument("--release-tag", required=True)
     parser.add_argument("--is-versioned", type=_parse_boolean, required=True)
+    parser.add_argument("--immutable-channel", type=_parse_boolean, default=None)
     parser.add_argument("--expected-draft", type=_parse_boolean, required=True)
+    parser.add_argument("--signature-control-asset")
+    parser.add_argument("--signature-control-path", type=Path)
     args = parser.parse_args(argv)
     try:
         verify_release_asset_boundary(
@@ -270,7 +303,10 @@ def main(argv: list[str] | None = None) -> int:
             release_id=args.release_id,
             release_tag=args.release_tag,
             is_versioned=args.is_versioned,
+            immutable_channel=args.immutable_channel,
             expected_draft=args.expected_draft,
+            signature_control_asset=args.signature_control_asset,
+            signature_control_path=args.signature_control_path,
         )
     except BoundaryError as exc:
         parser.error(str(exc))

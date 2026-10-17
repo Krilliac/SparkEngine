@@ -13,6 +13,7 @@ endif()
 add_executable(spark_package_smoke main.cpp)
 enable_testing()
 add_test(NAME SparkInstalledPackageSmoke COMMAND spark_package_smoke)
+set_tests_properties(SparkInstalledPackageSmoke PROPERTIES TIMEOUT 60 LABELS "sdk;package;integration")
 
 target_link_libraries(spark_package_smoke PRIVATE Spark::SparkEngineLib)
 

@@ -4,6 +4,8 @@
  */
 #include "Persistence/TFPlayerMeta.h"
 
+#include "Utils/LogMacros.h"
+
 #include <algorithm>
 #include <vector>
 
@@ -39,7 +41,7 @@ namespace Terrafront
         return false;
     }
 
-    bool TFPlayerMetaStore::Detach(PlayerId player, TFDatabase* db)
+    bool TFPlayerMetaStore::Detach(PlayerId player, TFDatabase* db, bool progressDurable)
     {
         auto it = m_meta.find(player);
         if (it == m_meta.end())
@@ -49,6 +51,8 @@ namespace Terrafront
         Meta& meta = it->second;
         if (meta.dirty && meta.charId != 0 && (!db || !PersistOne(meta, *db)))
         {
+            meta.parkedBaseRevision = db ? db->BaselineRevision(meta.charId) : std::nullopt;
+            meta.parkedProgressDurable = progressDurable;
             m_pendingByCharacter[meta.charId] = std::move(meta);
             persisted = false;
         }
@@ -60,9 +64,25 @@ namespace Terrafront
     {
         if (auto pending = m_pendingByCharacter.find(rec.id); pending != m_pendingByCharacter.end())
         {
-            m_meta[player] = std::move(pending->second);
+            // TF-120: the parked values are only still valid if nobody
+            // committed the character since they were computed; otherwise
+            // re-adopting them would overwrite another authority's newer row.
+            // A row parked without a database has no baseline to check.
+            const std::optional<uint64_t>& parkedBase = pending->second.parkedBaseRevision;
+            if (!parkedBase || *parkedBase == rec.revision)
+            {
+                Meta& adopted = m_meta[player];
+                adopted = std::move(pending->second);
+                adopted.parkedBaseRevision.reset();
+                adopted.parkedProgressDurable = true;
+                m_pendingByCharacter.erase(pending);
+                return;
+            }
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "[TF] discarded unsaved meta for character %llu on re-entry: another authority changed "
+                            "the character after this process's last successful save",
+                            static_cast<unsigned long long>(rec.id));
             m_pendingByCharacter.erase(pending);
-            return;
         }
 
         Meta& meta = m_meta[player];
@@ -102,23 +122,144 @@ namespace Terrafront
         return PersistOne(it->second, db);
     }
 
-    bool TFPlayerMetaStore::PersistAllDirty(TFDatabase& db)
+    bool TFPlayerMetaStore::PersistAllDirty(TFDatabase& db, std::vector<TFCharacterUpdate> progressUpdates)
     {
+        // A closed db fails FindCharacter below, so dirty rows report failure
+        // while an empty sweep still succeeds.
         bool ok = true;
-        for (auto& entry : m_meta)
-            if (entry.second.dirty && entry.second.charId != 0 && !PersistOne(entry.second, db))
-                ok = false;
-        for (auto it = m_pendingByCharacter.begin(); it != m_pendingByCharacter.end();)
+        std::vector<TFCharacterUpdate> batch;
+        std::unordered_map<uint64_t, size_t> batchIndex; // charId -> slot in batch
+        auto slotFor = [&](uint64_t charId) -> TFCharacterUpdate*
         {
-            if (PersistOne(it->second, db))
-                it = m_pendingByCharacter.erase(it);
-            else
+            TFCharacterRecord existing;
+            if (!db.FindCharacter(charId, existing))
+                return nullptr;
+            auto [it, inserted] = batchIndex.try_emplace(charId, batch.size());
+            if (inserted)
+            {
+                batch.emplace_back();
+                batch.back().charId = charId;
+            }
+            return &batch[it->second];
+        };
+
+        for (TFCharacterUpdate& progress : progressUpdates)
+        {
+            TFCharacterUpdate* slot = slotFor(progress.charId);
+            if (!slot || slot->writeProgress)
             {
                 ok = false;
-                ++it;
+                continue;
             }
+            slot->writeProgress = true;
+            slot->xp = progress.xp;
+            slot->rank = progress.rank;
+            slot->flux = progress.flux;
+            slot->lastPlayedMs = progress.lastPlayedMs;
         }
+
+        std::vector<Meta*> included;
+        auto addMeta = [&](Meta& meta)
+        {
+            TFCharacterUpdate* slot = slotFor(meta.charId);
+            if (!slot || slot->writeMeta)
+            {
+                ok = false;
+                return;
+            }
+            AddMetaToUpdate(meta, *slot);
+            included.push_back(&meta);
+        };
+        for (auto& entry : m_meta)
+            if (entry.second.dirty && entry.second.charId != 0)
+                addMeta(entry.second);
+        for (auto& entry : m_pendingByCharacter)
+            if (entry.second.dirty && entry.second.charId != 0)
+                addMeta(entry.second);
+
+        if (batch.empty())
+            return ok;
+
+        // TF-120: a row another continent authority changed since this
+        // process's baseline fails the whole commit with Conflict. Drop that
+        // row and commit the rest, so one stale character cannot block every
+        // other player's save on this continent. Each retry removes one row,
+        // so the loop ends after at most batch.size() commits.
+        std::unordered_set<uint64_t> conflicted;
+        while (!batch.empty() && !db.CommitCharacterUpdates(batch))
+        {
+            const uint64_t charId = db.ConflictedCharacter();
+            if (db.LastStatus() != TFDatabaseStatus::Conflict || charId == 0 || !conflicted.insert(charId).second)
+                return false;
+            ok = false;
+            std::erase_if(batch, [charId](const TFCharacterUpdate& update) { return update.charId == charId; });
+        }
+
+        for (Meta* meta : included)
+            if (!conflicted.contains(meta->charId))
+                meta->dirty = false;
+
+        // A parked (disconnected) row that conflicts was computed from a
+        // baseline another authority has since replaced: the character now
+        // lives there, so writing these values would overwrite its newer
+        // state. Discard it loudly. A conflicted in-world row stays dirty and
+        // keeps reporting failure; it means two authorities hold the character.
+        for (const uint64_t charId : conflicted)
+        {
+            if (auto parked = m_pendingByCharacter.find(charId); parked != m_pendingByCharacter.end())
+            {
+                if (parked->second.parkedProgressDurable)
+                {
+                    m_resolvedParked.push_back(charId);
+                }
+                m_pendingByCharacter.erase(parked);
+                SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                                "[TF] discarded unsaved meta for disconnected character %llu: another authority "
+                                "changed the character after this process's last successful save",
+                                static_cast<unsigned long long>(charId));
+            }
+            else
+                SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                                "[TF] character %llu is in world here but was changed by another authority; its "
+                                "progress and meta stay unsaved",
+                                static_cast<unsigned long long>(charId));
+        }
+        // Parked rows this sweep committed are resolved too (TF-120: their residency may now be released,
+        // unless the character's final progress never became durable).
+        std::erase_if(m_pendingByCharacter,
+                      [this](const auto& entry)
+                      {
+                          if (entry.second.dirty)
+                              return false;
+                          if (entry.second.parkedProgressDurable)
+                          {
+                              m_resolvedParked.push_back(entry.first);
+                          }
+                          return true;
+                      });
         return ok;
+    }
+
+    void TFPlayerMetaStore::AddMetaToUpdate(const Meta& meta, TFCharacterUpdate& update)
+    {
+        // Sorted copies so the on-disk JSON is deterministic across runs
+        // (unordered containers would otherwise reshuffle every save).
+        update.writeMeta = true;
+        update.unlocks.assign(meta.unlocks.begin(), meta.unlocks.end());
+        std::sort(update.unlocks.begin(), update.unlocks.end());
+
+        update.loadoutPrimary = meta.loadout.primary;
+        update.loadoutSecondary = meta.loadout.secondary;
+        update.loadoutTool = meta.loadout.tool;
+        update.loadoutGrenade = meta.loadout.grenade;
+        update.loadoutSuit = meta.loadout.suit;
+
+        update.weaponStats.clear();
+        update.weaponStats.reserve(meta.stats.size());
+        for (const auto& [key, s] : meta.stats)
+            update.weaponStats.push_back(TFWeaponStatsRow{key, s.kills, s.shots, s.hits, s.headshots});
+        std::sort(update.weaponStats.begin(), update.weaponStats.end(),
+                  [](const TFWeaponStatsRow& a, const TFWeaponStatsRow& b) { return a.weaponKey < b.weaponKey; });
     }
 
     bool TFPlayerMetaStore::PersistOne(Meta& meta, TFDatabase& db)
@@ -126,20 +267,10 @@ namespace Terrafront
         if (!meta.dirty || meta.charId == 0 || !db.IsOpen())
             return false;
 
-        // Sorted copies so the on-disk JSON is deterministic across runs
-        // (unordered containers would otherwise reshuffle every save).
-        std::vector<std::string> unlocks(meta.unlocks.begin(), meta.unlocks.end());
-        std::sort(unlocks.begin(), unlocks.end());
-
-        std::vector<TFWeaponStatsRow> stats;
-        stats.reserve(meta.stats.size());
-        for (const auto& [key, s] : meta.stats)
-            stats.push_back(TFWeaponStatsRow{key, s.kills, s.shots, s.hits, s.headshots});
-        std::sort(stats.begin(), stats.end(),
-                  [](const TFWeaponStatsRow& a, const TFWeaponStatsRow& b) { return a.weaponKey < b.weaponKey; });
-
-        if (!db.SaveCharacterMeta(meta.charId, unlocks, meta.loadout.primary, meta.loadout.secondary, meta.loadout.tool,
-                                  meta.loadout.grenade, meta.loadout.suit, stats))
+        TFCharacterUpdate update;
+        update.charId = meta.charId;
+        AddMetaToUpdate(meta, update);
+        if (!db.CommitCharacterUpdates({update}))
             return false;
         meta.dirty = false;
         return true;

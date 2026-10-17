@@ -71,6 +71,28 @@ namespace ARPG
         size_t GetTotalSkillCount() const { return m_allSkills.size(); }
         std::string GetSkillListString() const;
 
+        // === Persistence ===
+
+        /// @brief Active cooldowns for @p heroId (skills whose remaining cooldown is above zero).
+        std::vector<SkillCooldownState> GetCooldowns(uint32_t heroId) const;
+
+        /**
+         * @brief Check a saved learned-skill set and cooldown list against a hero of the given class and level.
+         *
+         * Every learned skill must exist, belong to @p heroClass, be unlocked at @p heroLevel and appear once.
+         * Every cooldown must name a distinct learned skill with a finite remaining time in (0, skill cooldown].
+         */
+        [[nodiscard]] bool CanRestoreHeroSkills(ARPGHeroClass heroClass, int heroLevel,
+                                                const std::vector<uint32_t>& learnedSkills,
+                                                const std::vector<SkillCooldownState>& cooldowns) const;
+
+        /**
+         * @brief Replace a hero's learned skills and cooldowns with saved state.
+         * @return false (and no change) when the hero is unknown or CanRestoreHeroSkills rejects the state.
+         */
+        bool RestoreHeroSkills(uint32_t heroId, const std::vector<uint32_t>& learnedSkills,
+                               const std::vector<SkillCooldownState>& cooldowns);
+
       private:
         void RegisterSkillTrees();
         void AddSkill(const SkillData& skill);

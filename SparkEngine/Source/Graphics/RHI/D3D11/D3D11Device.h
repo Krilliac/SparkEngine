@@ -20,6 +20,7 @@
 
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <d3d11_1.h>
+#include <d3d11sdklayers.h>
 #include <dxgi1_3.h>
 #include <d3dcompiler.h>
 #include <wrl/client.h>
@@ -350,6 +351,9 @@ namespace Spark
                 ID3D11Device1* GetD3D11Device() const { return m_device.Get(); }
                 ID3D11DeviceContext1* GetD3D11Context() const { return m_immediateContext.Get(); }
                 bool IsSoftwareDevice() const { return m_isSoftwareDevice; }
+                /// Debug-layer message queue, or nullptr when RHIDeviceDesc::enableDebugLayer was false.
+                /// Never breaks on a message; the caller drains it (RHI-210 validation tests).
+                ID3D11InfoQueue* GetInfoQueue() const { return m_infoQueue.Get(); }
 
               private:
                 DXGI_FORMAT ConvertFormat(PixelFormat format) const;
@@ -364,6 +368,7 @@ namespace Spark
                 ComPtr<ID3D11Device1> m_device;
                 ComPtr<ID3D11DeviceContext1> m_immediateContext;
                 ComPtr<IDXGIFactory2> m_dxgiFactory;
+                ComPtr<ID3D11InfoQueue> m_infoQueue;
 
                 std::unique_ptr<D3D11CommandList> m_immediateCommandList;
 

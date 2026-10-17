@@ -17,7 +17,10 @@
 #include "../../Core/Platform.h"
 
 #include <atomic>
+#include <condition_variable>
+#include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -97,7 +100,16 @@ namespace Spark::Streaming
      *
      * On Windows 11+ with supported hardware, uses DirectStorage for
      * GPU-direct I/O with hardware decompression. Otherwise falls back
-     * to standard async file I/O with background threads.
+     * to standard async file I/O on a small fixed pool of worker threads.
+     *
+     * Contract:
+     * - Thread affinity: Submit/Flush/ProcessCompletions/Cancel are called from the
+     *   game thread; the fallback I/O runs on at most kMaxIoWorkers worker threads.
+     * - Ownership: the process-wide singleton owns its workers. Workers start lazily on
+     *   the first Flush that has work and are joined by Shutdown() and the destructor,
+     *   so repeated area loads reuse the same threads instead of retaining one
+     *   finished thread per request.
+     * - Allocation: one heap request record per Submit plus the loaded bytes.
      *
      * Usage:
      * @code
@@ -166,6 +178,12 @@ namespace Spark::Streaming
         /// @brief Console status report
         std::string Console_GetStatus() const;
 
+        /// @brief Upper bound on fallback I/O worker threads, however many requests are flushed
+        static constexpr size_t kMaxIoWorkers = 4;
+
+        /// @brief Number of fallback I/O worker threads currently owned (diagnostics and tests)
+        size_t GetIoWorkerCount() const;
+
       private:
         DirectStorageLoader() = default;
         ~DirectStorageLoader();
@@ -181,8 +199,18 @@ namespace Spark::Streaming
             std::atomic<bool> cancelled{false};
         };
 
-        /// @brief Fallback: async file I/O via background thread
+        /// @brief Fallback: queue the request for the bounded I/O worker pool
+        /// @details Caller holds m_mutex; takes m_threadsMutex (lock order m_mutex -> m_threadsMutex).
         void FallbackAsyncLoad(std::shared_ptr<InternalRequest> req);
+
+        /// @brief Worker body: pop queued requests until the pool is stopped
+        void IoWorkerLoop();
+
+        /// @brief Blocking file read for one request; sets its final status
+        void ExecuteLoad(InternalRequest& req);
+
+        /// @brief Stop and join every worker, dropping queued I/O. Caller must NOT hold m_mutex.
+        void StopIoWorkers();
 
         mutable std::mutex m_mutex;
         std::vector<std::shared_ptr<InternalRequest>> m_activeRequests;
@@ -190,8 +218,12 @@ namespace Spark::Streaming
         DirectStorageStats m_stats;
         uint64_t m_nextHandleId = 1;
         bool m_initialized = false;
-        std::vector<std::thread> m_backgroundThreads;
-        std::mutex m_threadsMutex;
+        // Bounded fallback I/O pool, guarded by m_threadsMutex.
+        std::vector<std::thread> m_ioWorkers;
+        std::deque<std::shared_ptr<InternalRequest>> m_ioQueue;
+        std::condition_variable m_ioCv;
+        bool m_stopIoWorkers = false;
+        mutable std::mutex m_threadsMutex;
     };
 
 } // namespace Spark::Streaming

@@ -24,11 +24,14 @@
 
 #ifdef ENABLE_NETWORKING
 #include "Engine/Networking/NetworkManager.h"
+#include "Utils/EventBus.h"
 #endif
 
 #ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
+
+#include <cstdio>
 
 namespace Terrafront
 {
@@ -36,8 +39,19 @@ namespace Terrafront
     TFServerSim::TFServerSim() = default;
     TFServerSim::~TFServerSim()
     {
-        if (m_initialized)
+        if (!m_initialized)
+            return;
+        try
+        {
             Shutdown();
+        }
+        catch (...)
+        {
+            // Shutdown publishes to host event handlers, which may throw; that must not escape a
+            // destructor. Members release on their own. The engine logger may itself throw, so
+            // report through the C stdio layer, which cannot.
+            std::fputs("TFServerSim: Shutdown threw during destruction\n", stderr);
+        }
     }
 
     bool TFServerSim::Initialize(TFGameContext& ctx, TFEventBus& events)
@@ -52,6 +66,17 @@ namespace Terrafront
         events.Subscribe<EvPlayerKilled>([this](const EvPlayerKilled& ev) { OnPlayerKilled(ev); });
 
         m_initialized = true;
+#ifdef ENABLE_NETWORKING
+        if (ctx.db)
+        {
+            m_handoff = std::make_unique<TFHandoffParticipant>(*ctx.db, *this);
+            // The host (SparkServer) follows this notice on its own bus; see AreaHandoffParticipantChanged.
+            if (Spark::EventBus* hostBus = ctx.engine ? ctx.engine->GetEventBus() : nullptr)
+            {
+                hostBus->Publish(Spark::Net::AreaHandoffParticipantChanged{m_handoff.get()});
+            }
+        }
+#endif
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] TFServerSim initialized");
         return true;
     }
@@ -59,6 +84,21 @@ namespace Terrafront
     void TFServerSim::Update(float deltaTime)
     {
         (void)deltaTime; // authoritative work runs on the fixed step only
+#ifdef ENABLE_NETWORKING
+        // A destination authority must have its database bound before any player logs in, or it cannot accept a
+        // handoff. Opening does file I/O and logs on failure, so a failed attempt is retried at most every 5 s.
+        auto& network = Spark::Net::NetworkManager::GetInstance();
+        if (m_initialized && m_ctx && m_ctx->IsAuthority() && m_ctx->db && !m_ctx->db->IsOpen() &&
+            network.IsInitialized() && network.GetRole() == Spark::Net::NetworkRole::Server)
+        {
+            m_dbOpenRetrySeconds -= deltaTime;
+            if (m_dbOpenRetrySeconds <= 0.0f)
+            {
+                m_dbOpenRetrySeconds = 5.0f;
+                (void)EnsureAuthorityDatabaseOpen();
+            }
+        }
+#endif
     }
 
     void TFServerSim::FixedUpdate(float fixedDeltaTime)
@@ -114,6 +154,15 @@ namespace Terrafront
         if (!m_initialized)
             return;
 #ifdef ENABLE_NETWORKING
+        if (m_handoff)
+        {
+            if (Spark::EventBus* hostBus = m_ctx->engine ? m_ctx->engine->GetEventBus() : nullptr)
+            {
+                hostBus->Publish(Spark::Net::AreaHandoffParticipantChanged{nullptr});
+            }
+        }
+        m_handoff.reset();
+        m_suspendedCharacters.clear();
         PrepareNetworkStop();
 #endif
         m_inputs.clear();

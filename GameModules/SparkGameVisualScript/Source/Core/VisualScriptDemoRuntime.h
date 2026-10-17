@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include "Core/RuntimePackage.h"
+
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -14,6 +16,8 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 namespace Spark::VisualScriptDemo
 {
@@ -77,7 +81,42 @@ namespace Spark::VisualScriptDemo
     };
 
     inline constexpr uint32_t ExpectedEntityCount = 11;
+
+    /// Every sound name the shipped scripts pass to playSound(); OnLoad registers each with the AudioEngine.
+    inline constexpr std::array<std::string_view, 5> SoundCues = {"coin_pickup", "enemy_attack", "health_pickup",
+                                                                  "pickup_respawn", "victory_fanfare"};
+
+    /**
+     * Cue audio ships in the same content root as the scripts that request it:
+     * `<root>/Assets/Audio/VisualScript/<cue>.wav` beside `<root>/Assets/Scripts/Generated`.
+     * @param scriptRoot The directory DemoWorld::LoadScripts() selected (GetScriptRoot()).
+     */
+    inline std::filesystem::path SoundCuePath(const std::filesystem::path& scriptRoot, std::string_view cue)
+    {
+        return (scriptRoot / ".." / ".." / "Audio" / "VisualScript" / (std::string(cue) + ".wav")).lexically_normal();
+    }
+
     inline constexpr std::string_view SelfEntityDeclaration = "uint selfEntity = 0;";
+
+    /**
+     * Script roots OnLoad searches, in priority order. Staged or packaged content beside the executable wins, so a
+     * launch from another working directory still finds it; the working directory and the module's source tree
+     * under either are development fallbacks.
+     * @param executableDirectory RuntimePackage::GetExecutableDirectory(), or empty when unknown
+     * @param workingDirectory    std::filesystem::current_path(), or empty when unknown
+     */
+    inline std::vector<std::filesystem::path> ScriptSearchPaths(const std::filesystem::path& executableDirectory,
+                                                                const std::filesystem::path& workingDirectory)
+    {
+        std::vector<std::filesystem::path> searchPaths =
+            RuntimePackage::ResolveContentRoots("Assets/Scripts/Generated", executableDirectory, workingDirectory);
+        for (auto& devRoot : RuntimePackage::ResolveContentRoots(
+                 "GameModules/SparkGameVisualScript/Assets/Scripts/Generated", executableDirectory, workingDirectory))
+        {
+            searchPaths.push_back(std::move(devRoot));
+        }
+        return searchPaths;
+    }
 
     using IsRegularFile = std::function<bool(const std::filesystem::path&)>;
 

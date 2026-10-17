@@ -23,7 +23,11 @@
 #else
 #include <cerrno>
 #include <cstring>
+#include <fcntl.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/un.h>
+#include <unistd.h>
 #endif
 
 namespace Spark::Daemon::Detail
@@ -72,16 +76,58 @@ namespace Spark::Daemon::Detail
                                                           std::to_string(timeout.count()) + " ms at " + endpoint +
                                                           " (last Win32 error " + std::to_string(lastError) + ")");
 #else
+            sockaddr_un address{};
+            if (endpoint.size() >= sizeof(address.sun_path))
+                return Spark::Daemon::Unexpected<std::string>("Unix-socket endpoint exceeds sockaddr_un capacity: " +
+                                                              endpoint);
+            address.sun_family = AF_UNIX;
+            std::memcpy(address.sun_path, endpoint.data(), endpoint.size());
+
             int lastError = ENOENT;
             do
             {
                 struct stat endpointStatus = {};
                 if (::stat(endpoint.c_str(), &endpointStatus) == 0)
                 {
-                    if (S_ISSOCK(endpointStatus.st_mode))
+                    if (!S_ISSOCK(endpointStatus.st_mode))
+                    {
+                        return Spark::Daemon::Unexpected<std::string>(
+                            "daemon endpoint exists but is not a Unix-domain socket: " + endpoint);
+                    }
+
+                    // The socket file appears at bind(), before the daemon calls listen(), so its
+                    // existence is not readiness: a connect() in that window is refused. Probe with
+                    // a real connect and keep waiting while it is refused. A non-blocking AF_UNIX
+                    // connect either completes or reports EAGAIN when the backlog is full, and both
+                    // mean the daemon is listening.
+                    const int probe = ::socket(AF_UNIX, SOCK_STREAM, 0);
+                    if (probe < 0)
+                    {
+                        return Spark::Daemon::Unexpected<std::string>(
+                            std::string("Unix-socket readiness probe could not create a socket: ") +
+                            std::strerror(errno));
+                    }
+                    const int probeFlags = ::fcntl(probe, F_GETFL, 0);
+                    if (probeFlags >= 0)
+                    {
+                        (void)::fcntl(probe, F_SETFL, probeFlags | O_NONBLOCK);
+                    }
+                    const int connected =
+                        ::connect(probe, reinterpret_cast<const sockaddr*>(&address), sizeof(address));
+                    const int connectError = connected == 0 ? 0 : errno;
+                    ::close(probe);
+                    if (connected == 0 || connectError == EAGAIN || connectError == EINPROGRESS)
+                    {
                         return {};
-                    return Spark::Daemon::Unexpected<std::string>(
-                        "daemon endpoint exists but is not a Unix-domain socket: " + endpoint);
+                    }
+                    lastError = connectError;
+                    if (lastError != ECONNREFUSED && lastError != ENOENT)
+                    {
+                        return Spark::Daemon::Unexpected<std::string>("Unix-socket readiness probe failed for " +
+                                                                      endpoint + ": " + std::strerror(lastError));
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    continue;
                 }
 
                 lastError = errno;

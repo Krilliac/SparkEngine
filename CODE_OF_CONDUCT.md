@@ -36,4 +36,7 @@ investigated promptly and fairly.
 ## Attribution
 
 This Code of Conduct is adapted from the [Contributor Covenant](https://www.contributor-covenant.org),
-version 2.1.
+[version 2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct.html).
+This adaptation is abridged; it omits the upstream enforcement-guidelines
+ladder and does not yet name a reporting contact (tracked by GOV-400; see
+`docs/governance/GOV-400-DECISIONS.md`).

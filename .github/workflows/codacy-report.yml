@@ -4,7 +4,7 @@
 name: Codacy Trusted Reporter
 
 on:
-  workflow_run:
+  workflow_run: # zizmor: ignore[dangerous-triggers] -- checks out only the default branch (SHA attested); the artifact is downloaded outside the checkout and parsed as data, never executed
     workflows: ["Codacy Security Scan"]
     types: [completed]
 

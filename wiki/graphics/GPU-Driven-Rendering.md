@@ -4,7 +4,7 @@ SparkEngine implements a GPU-driven rendering pipeline that performs frustum and
 
 **Source:** `SparkEngine/Source/Graphics/GPUDrivenRenderer.h`, `SparkEngine/Source/Graphics/GPUOcclusionCulling.h`
 **Namespace:** `Spark::Graphics`
-**Tests:** `Tests/TestGPUDrivenRenderer.cpp` (13 test cases)
+**Tests:** `Tests/TestGPUDrivenRenderer.cpp`
 
 ---
 

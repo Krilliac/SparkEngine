@@ -251,7 +251,13 @@ namespace Spark::AI
         return ptr;
     }
 
-    void AISystem::UpdatePerception(World& world, EntityID selfEntity, AIComponent& ai, const Transform& transform,
+    void AISystem::ClearBehaviors()
+    {
+        m_behaviorInstances.clear();
+        m_behaviorTemplates.clear();
+    }
+
+    void AISystem::UpdatePerception(World& world, ::EntityID selfEntity, AIComponent& ai, const Transform& transform,
                                     float deltaTime)
     {
         // Compute agent forward direction from yaw rotation
@@ -261,7 +267,7 @@ namespace Spark::AI
         // (typically the player and other opposing faction entities)
         bool targetVisible = false;
         float closestThreatDistSq = ai.config.detectionRange * ai.config.detectionRange;
-        EntityID closestThreat = entt::null;
+        ::EntityID closestThreat = entt::null;
         XMFLOAT3 closestThreatPos{0, 0, 0};
 
         auto potentialTargets = world.GetEntitiesWith<Transform, HealthComponent>();
@@ -477,7 +483,8 @@ namespace Spark::AI
         }
     }
 
-    void AISystem::UpdateMovement(World& world, EntityID entity, AIComponent& ai, Transform& transform, float deltaTime)
+    void AISystem::UpdateMovement(World& world, ::EntityID entity, AIComponent& ai, Transform& transform,
+                                  float deltaTime)
     {
         // Dead or idle agents don't move — clear physics velocity if present
         if (ai.state == AIComponent::State::Dead || ai.state == AIComponent::State::Idle)
@@ -676,7 +683,7 @@ namespace Spark::AI
         return ss.str();
     }
 
-    std::string AISystem::Console_GetAgentInfo(World& world, EntityID entity) const
+    std::string AISystem::Console_GetAgentInfo(World& world, ::EntityID entity) const
     {
         auto* ai = world.GetComponent<AIComponent>(entity);
         if (!ai)

@@ -25,7 +25,7 @@ MAX_REACHABILITY_DEPTH = 32
 
 ROOT_CMAKE = "CMakeLists.txt"
 FUZZ_LABEL = "fuzz"
-SANITIZER_LITERAL = "fsanitize=fuzzer"
+REQUIRED_SANITIZER_OPTIONS = ("-fsanitize=fuzzer,address,undefined", "-fno-sanitize-recover=undefined")
 
 _COMMAND_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _TARGET_FILE_EXPR = re.compile(r"^\$<TARGET_FILE:([A-Za-z0-9_.+-]+)>$")
@@ -124,6 +124,8 @@ def _parse_arguments(text: str, index: int, line: int, field: str, name: str) ->
             value, index = ")", index + 1
         elif char == "(":
             depth += 1
+            if depth > MAX_REACHABILITY_DEPTH:
+                raise PolicyError(f"{field} command {name!r} exceeds nesting depth {MAX_REACHABILITY_DEPTH}")
             value, index = "(", index + 1
         elif char == "#":
             index, line = _skip_comment(text, index, line, field)
@@ -234,11 +236,12 @@ SOURCE_DIR_VARIABLES = ("${CMAKE_SOURCE_DIR}/", "${CMAKE_CURRENT_LIST_DIR}/", "$
 def _resolve_path(directory: str, value: str, field: str) -> str:
     """Resolve a CMake path argument to a repository-relative path.
 
-    Only the two directory variables whose value this checker actually knows are
+    Only repository-root variables whose value this checker actually knows are
     honoured; anything else is unresolvable and therefore unprovable.
     """
-    if value.startswith("${CMAKE_SOURCE_DIR}/"):
-        return _join("", value[len("${CMAKE_SOURCE_DIR}/"):], field)
+    for variable in ("${CMAKE_SOURCE_DIR}/", "${SPARK_FUZZ_PROJECT_ROOT}/"):
+        if value.startswith(variable):
+            return _join("", value[len(variable):], field)
     for variable in ("${CMAKE_CURRENT_LIST_DIR}/", "${CMAKE_CURRENT_SOURCE_DIR}/"):
         if value.startswith(variable):
             return _join(directory, value[len(variable):], field)
@@ -341,14 +344,18 @@ def verify_cmake_registration(
     if harness not in sources:
         raise PolicyError(f"{field} target {cmake_target!r} does not compile the declared harness {harness}")
 
-    sanitized = any(
-        command.arguments
-        and _literal(command.arguments[0], field) == cmake_target
-        and any(SANITIZER_LITERAL in argument for argument in command.arguments[1:])
-        for command in commands
-    )
-    if not sanitized:
-        raise PolicyError(f"{field} target {cmake_target!r} is not built with -{SANITIZER_LITERAL}")
+    for command_name in ("target_compile_options", "target_link_options"):
+        options = {
+            _literal(argument, field)
+            for command in commands_named(commands, command_name)
+            if command.arguments and _literal(command.arguments[0], field) == cmake_target
+            for argument in command.arguments[1:]
+        }
+        for required in REQUIRED_SANITIZER_OPTIONS:
+            if required not in options:
+                raise PolicyError(f"{field} target {cmake_target!r} {command_name} must include {required}")
+        if any(option in options for option in ("-fsanitize-recover=undefined", "-fsanitize-recover=all", "-fno-sanitize=undefined")):
+            raise PolicyError(f"{field} target {cmake_target!r} {command_name} overrides fatal UBSan")
 
     test = _single(
         commands,

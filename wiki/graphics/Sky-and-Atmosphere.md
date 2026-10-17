@@ -4,7 +4,7 @@ SparkEngine provides an analytical sky rendering system based on the Preetham 19
 
 **Source:** `SparkEngine/Source/Graphics/SkyAtmosphere.h`
 **Namespace:** `Spark::Graphics`
-**Tests:** `Tests/TestSkyAtmosphere.cpp` (5 test cases)
+**Tests:** `Tests/TestSkyAtmosphere.cpp`
 
 ---
 
@@ -169,7 +169,7 @@ sky.Shutdown();
 | File | Description |
 |------|-------------|
 | `SparkEngine/Source/Graphics/SkyAtmosphere.h` | `SkyAtmosphereSystem`, `SkySettings`, `SkyColor`, `PerezCoefficients` |
-| `Tests/TestSkyAtmosphere.cpp` | Unit tests (5 test cases) |
+| `Tests/TestSkyAtmosphere.cpp` | Unit tests |
 
 ---
 

@@ -1,0 +1,19 @@
+{
+  "windowLayout": {
+    "name": "Garbage",
+    "version": 1,
+    "dockLayoutINI": "",
+    "panels": [
+      {
+        "panelName": "A",
+        "isOpen": true,
+        "isFloating": false,
+        "posX": "12",
+        "posY": 1e39,
+        "width": --5,
+        "height": 1.5e,
+        "monitorIndex": 2.9
+      }
+    ]
+  }
+}

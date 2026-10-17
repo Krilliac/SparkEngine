@@ -1,0 +1,89 @@
+{
+  "layout": {
+    "name": "Workbench",
+    "description": "Five registered panels",
+    "version": 1,
+    "panels": [
+      {
+        "name": "Hierarchy",
+        "displayName": "Hierarchy",
+        "dock": 0,
+        "sizeX": 280.5,
+        "sizeY": 900,
+        "posX": 0,
+        "posY": 0,
+        "visible": true,
+        "floating": false,
+        "canClose": true,
+        "canDock": true,
+        "dockRatio": 0.25,
+        "tabOrder": 0,
+        "parentDock": ""
+      },
+      {
+        "name": "Inspector",
+        "displayName": "Inspector",
+        "dock": 1,
+        "sizeX": 350,
+        "sizeY": 200,
+        "posX": 1600,
+        "posY": 120,
+        "visible": true,
+        "floating": true,
+        "canClose": true,
+        "canDock": true,
+        "dockRatio": 0.25,
+        "tabOrder": 0,
+        "parentDock": ""
+      },
+      {
+        "name": "SceneView",
+        "displayName": "SceneView",
+        "dock": 4,
+        "sizeX": 300,
+        "sizeY": 200,
+        "posX": 0,
+        "posY": 0,
+        "visible": true,
+        "floating": false,
+        "canClose": false,
+        "canDock": true,
+        "dockRatio": 0.6000000238,
+        "tabOrder": 0,
+        "parentDock": ""
+      },
+      {
+        "name": "Console",
+        "displayName": "Console",
+        "dock": 3,
+        "sizeX": 300,
+        "sizeY": 200,
+        "posX": 0,
+        "posY": 0,
+        "visible": false,
+        "floating": false,
+        "canClose": true,
+        "canDock": true,
+        "dockRatio": 0.25,
+        "tabOrder": 2,
+        "parentDock": ""
+      },
+      {
+        "name": "Asset Browser",
+        "displayName": "Assets {All}",
+        "dock": 3,
+        "sizeX": 300,
+        "sizeY": 200,
+        "posX": 0,
+        "posY": 0,
+        "visible": true,
+        "floating": false,
+        "canClose": true,
+        "canDock": true,
+        "dockRatio": 0.25,
+        "tabOrder": 1,
+        "parentDock": "Console"
+      }
+    ]
+  }
+}

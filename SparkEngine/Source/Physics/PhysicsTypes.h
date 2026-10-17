@@ -757,6 +757,12 @@ struct VehicleDesc
     // Motorcycle-specific
     float leanSpringConstant = 5000.0f; ///< Lean stabilization spring (motorcycle only)
     float leanSpringDamping = 1000.0f;  ///< Lean stabilization damping (motorcycle only)
+
+    // Tracked-specific. Wheels join the +X or -X track by the sign of position.x (x must not be
+    // 0, and both sides need wheels); each track is driven through its rearmost wheel, brakes with
+    // the sum of its wheels' maxBrakeTorque, and scales Jolt's track friction by the wheels'
+    // friction multipliers. differentialRatio is the gearbox-to-driven-wheel ratio of each track.
+    float trackedFullSteerAngle = 0.5f; ///< SetInput steer angle (radians) that fully reverses the inner track
 };
 
 // =============================================================================

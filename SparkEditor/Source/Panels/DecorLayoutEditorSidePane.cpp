@@ -22,6 +22,8 @@
 #include <cstddef>
 #include <cstdio>
 #include <string>
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
@@ -34,10 +36,11 @@ namespace SparkEditor
     {
         if (!m_statusMsg.empty())
         {
-            ImGui::PushStyleColor(ImGuiCol_Text,
-                                  m_statusIsError ? IM_COL32(255, 110, 110, 255) : IM_COL32(150, 210, 150, 255));
-            ImGui::TextWrapped("%s", m_statusMsg.c_str());
-            ImGui::PopStyleColor();
+            const Spark::Ui::Status status = m_statusIsError ? Spark::Ui::Status::Error : Spark::Ui::Status::Success;
+            if (Spark::Ui::Banner(status, m_statusMsg.c_str(), true))
+            {
+                m_statusMsg.clear();
+            }
             ImGui::Separator();
         }
         if (!m_loaded)
@@ -48,9 +51,13 @@ namespace SparkEditor
         }
 
         if (m_selPiece >= 0 && m_selPiece < static_cast<int>(t.pieces.size()))
+        {
             RenderPieceEditor(t);
+        }
         else
+        {
             RenderTierEditor(t);
+        }
 
         ImGui::Separator();
         RenderValidationAndSave();
@@ -73,10 +80,14 @@ namespace SparkEditor
         }
 
         if (ImGui::DragFloat("Clearance (m)", &m_clearanceM, 0.25f, 0.5f, 64.0f, "%.1f"))
+        {
             MarkDirty();
+        }
         if (ImGui::IsItemHovered())
+        {
             ImGui::SetTooltip("Root-level clearanceM - the game demotes collidable pieces within this "
                               "distance of any capture point/spawn/terminal to visual-only.");
+        }
 
         ImGui::Spacing();
         ImGui::Text("Pieces (%d)", static_cast<int>(t.pieces.size()));
@@ -87,11 +98,15 @@ namespace SparkEditor
             std::snprintf(row, sizeof(row), "%d  %s  [%s]##piece%d", static_cast<int>(i), ModelLabel(p.model).c_str(),
                           p.collideParts.empty() ? (p.collide ? "solid" : "walk") : "parts", static_cast<int>(i));
             if (ImGui::Selectable(row, static_cast<int>(i) == m_selPiece))
+            {
                 SelectPiece(static_cast<int>(i), -1);
+            }
         }
         ImGui::InputText("##newmodel", m_newModelBuf, sizeof(m_newModelBuf));
         if (ImGui::IsItemHovered())
+        {
             ImGui::SetTooltip("OBJ path, e.g. Assets/Models/MMOFPS/buildings/barracks.obj");
+        }
         ImGui::SameLine();
         if (ImGui::SmallButton("Add piece") && m_newModelBuf[0] != '\0')
         {
@@ -112,7 +127,9 @@ namespace SparkEditor
             ImGui::PushID(3000 + static_cast<int>(i));
             ImGui::BulletText("%s", ModelLabel(t.scatter.models[i]).c_str());
             if (ImGui::IsItemHovered())
+            {
                 ImGui::SetTooltip("%s", t.scatter.models[i].c_str());
+            }
             ImGui::SameLine();
             if (ImGui::SmallButton("X##sc"))
             {
@@ -171,10 +188,15 @@ namespace SparkEditor
         {
             const ObjBounds& b = BoundsForModel(p.model);
             if (b.valid)
-                ImGui::TextDisabled("footprint %.1f x %.1f m, height %.1f m", static_cast<double>(b.mx[0] - b.mn[0]),
-                                    static_cast<double>(b.mx[2] - b.mn[2]), static_cast<double>(b.mx[1] - b.mn[1]));
+            {
+                Spark::Ui::SecondaryText("footprint %.1f x %.1f m, height %.1f m",
+                                         static_cast<double>(b.mx[0] - b.mn[0]), static_cast<double>(b.mx[2] - b.mn[2]),
+                                         static_cast<double>(b.mx[1] - b.mn[1]));
+            }
             else
-                ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.45f, 1.0f), "OBJ missing - unit-cube footprint shown");
+            {
+                Spark::Ui::StatusText(Spark::Ui::Status::Error, "OBJ missing - unit-cube footprint shown");
+            }
         }
 
         float off[2] = {p.offX, p.offZ};
@@ -185,7 +207,9 @@ namespace SparkEditor
             MarkDirty();
         }
         if (ImGui::DragFloat("Yaw (deg)", &p.yawDeg, 1.0f, -180.0f, 180.0f, "%.0f"))
+        {
             MarkDirty();
+        }
         ImGui::SameLine();
         if (ImGui::SmallButton("Snap 15"))
         {
@@ -200,19 +224,27 @@ namespace SparkEditor
         if (p.collideParts.empty())
         {
             if (ImGui::Checkbox("Collide (whole-model OBB)", &p.collide))
+            {
                 MarkDirty();
+            }
         }
         else
         {
-            ImGui::TextDisabled("Collide: implied by collideParts (whole-model OBB skipped)");
+            Spark::Ui::SecondaryText("Collide: implied by collideParts (whole-model OBB skipped)");
         }
         if (ImGui::Checkbox("Terrain align", &p.terrainAlign))
+        {
             MarkDirty();
+        }
         ImGui::SameLine();
         if (ImGui::Checkbox("Cast shadows", &p.castShadows))
+        {
             MarkDirty();
+        }
         if (ImGui::DragFloat("Emissive", &p.emissive, 0.05f, 0.0f, 4.0f, "%.2f"))
+        {
             MarkDirty();
+        }
         if (ImGui::InputText("Material", m_materialBuf, sizeof(m_materialBuf)))
         {
             p.material = m_materialBuf;
@@ -224,8 +256,10 @@ namespace SparkEditor
         ImGui::Text("Collide parts (%d/%d)", static_cast<int>(p.collideParts.size()),
                     static_cast<int>(kMaxCollideParts));
         if (ImGui::IsItemHovered())
+        {
             ImGui::SetTooltip("Model-local boxes that REPLACE the whole-model OBB - pillars/legs block "
                               "while the archway/underside stays walkable.");
+        }
         for (size_t k = 0; k < p.collideParts.size(); ++k)
         {
             CollidePart& part = p.collideParts[k];
@@ -235,23 +269,33 @@ namespace SparkEditor
             std::snprintf(header, sizeof(header), "part %d%s###parthdr", static_cast<int>(k),
                           partSel ? " (selected)" : "");
             if (ImGui::Selectable(header, partSel))
+            {
                 m_selPart = static_cast<int>(k);
+            }
             ImGui::SameLine();
             if (ImGui::SmallButton("X##part"))
             {
                 p.collideParts.erase(p.collideParts.begin() + static_cast<std::ptrdiff_t>(k));
                 if (m_selPart >= static_cast<int>(p.collideParts.size()))
+                {
                     m_selPart = -1;
+                }
                 MarkDirty();
                 ImGui::PopID();
                 break;
             }
             if (ImGui::DragFloat3("offset", part.off.data(), 0.1f, -60.0f, 60.0f, "%.2f"))
+            {
                 MarkDirty();
+            }
             if (ImGui::DragFloat3("size", part.size.data(), 0.1f, 0.1f, 120.0f, "%.2f"))
+            {
                 MarkDirty();
+            }
             if (ImGui::DragFloat("yawDeg", &part.yawDeg, 1.0f, -180.0f, 180.0f, "%.0f"))
+            {
                 MarkDirty();
+            }
             ImGui::PopID();
         }
         if (p.collideParts.size() < kMaxCollideParts && ImGui::SmallButton("Add part"))
@@ -277,7 +321,7 @@ namespace SparkEditor
             return;
         }
         ImGui::SameLine();
-        if (ImGui::Button("Remove piece"))
+        if (Spark::Ui::DangerButton("Remove piece"))
         {
             t.pieces.erase(t.pieces.begin() + static_cast<std::ptrdiff_t>(m_selPiece));
             SelectPiece(-1, -1);
@@ -288,7 +332,9 @@ namespace SparkEditor
     void DecorLayoutEditorPanel::RenderValidationAndSave()
     {
         if (ImGui::Button("Validate"))
+        {
             RunValidation();
+        }
         ImGui::SameLine();
         const bool blocked = !m_validationRan || !m_violations.empty();
         if (ImGui::Button("Save decor.json"))
@@ -319,22 +365,25 @@ namespace SparkEditor
             }
         }
         if (blocked && ImGui::IsItemHovered())
+        {
             ImGui::SetTooltip("Validation runs automatically on save; violations block it unless overridden.");
+        }
 
         if (m_validationRan)
         {
             if (m_violations.empty())
             {
-                ImGui::TextColored(ImVec4(0.55f, 0.85f, 0.55f, 1.0f),
-                                   "Validation OK - the game will accept this file.");
+                Spark::Ui::StatusText(Spark::Ui::Status::Success, "Validation OK - the game will accept this file.");
             }
             else
             {
-                ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.45f, 1.0f),
-                                   "%d violation(s):", static_cast<int>(m_violations.size()));
-                ImGui::BeginChild("decor_violation_list", ImVec2(0.0f, 140.0f), true);
+                Spark::Ui::StatusText(Spark::Ui::Status::Error,
+                                      "%d violation(s):", static_cast<int>(m_violations.size()));
+                ImGui::BeginChild("decor_violation_list", Spark::Ui::Px2(0.0f, 140.0f), true);
                 for (const std::string& v : m_violations)
+                {
                     ImGui::TextWrapped("- %s", v.c_str());
+                }
                 ImGui::EndChild();
                 ImGui::Checkbox("I know what I am doing (save despite violations)", &m_overrideSave);
             }

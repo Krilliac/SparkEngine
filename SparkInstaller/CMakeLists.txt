@@ -26,29 +26,33 @@ set(INSTALLER_SOURCES
     src/Installer.h
     src/Installer.cpp
     src/InstallerContext.h
+    src/InstallerPreflight.h
+    src/InstallerPreflight.cpp
     src/GitRunner.h
     src/GitRunner.cpp
     src/GitBootstrap.h
     src/GitBootstrap.cpp
     src/InstallState.h
     src/InstallState.cpp
+    src/PathUtf8.h
+    src/PathUtf8.cpp
     src/tui/WizardTui.h
     src/tui/WizardTui.cpp
 )
 
 # ---------------------------------------------------------------------------
-# Optional GUI frontend (ImGui + platform backend)
+# Optional GUI frontend (ImGui + platform backend + the shared Spark UI kit)
 # ---------------------------------------------------------------------------
+# The wizard is styled, laid out and DPI-scaled by SparkUIKit, so the GUI needs both the shared
+# `imgui` target and SparkUIKit. The engine superproject creates them (cmake/BuildImGui.cmake and
+# SparkUI/) before it adds this directory; a standalone configure has neither and builds the
+# TUI/headless installer only, with no ImGui or SparkUIKit anywhere in the link line.
 set(INSTALLER_GUI_AVAILABLE OFF)
 if(SPARKINSTALLER_ENABLE_GUI)
-    # If the engine superproject already built ImGui via BuildImGui.cmake, reuse that target.
-    if(TARGET imgui)
+    if(TARGET imgui AND TARGET SparkUIKit)
         set(INSTALLER_GUI_AVAILABLE ON)
-    elseif(EXISTS "${CMAKE_SOURCE_DIR}/cmake/BuildImGui.cmake")
-        include("${CMAKE_SOURCE_DIR}/cmake/BuildImGui.cmake")
-        if(IMGUI_FOUND AND TARGET imgui)
-            set(INSTALLER_GUI_AVAILABLE ON)
-        endif()
+    else()
+        message(STATUS "SparkInstaller: GUI disabled (needs the imgui and SparkUIKit targets from the engine superproject)")
     endif()
 endif()
 
@@ -64,6 +68,16 @@ if(INSTALLER_GUI_AVAILABLE)
     endif()
 endif()
 
+# The application icon (the Spark logomark) is a resource of the executable itself, so it is
+# attached whether or not the GUI is built. The .rc names the icon by file name and the include
+# path below resolves it, which works for rc.exe and for MinGW windres alike.
+set(_sparkinstaller_branding_dir "${CMAKE_CURRENT_SOURCE_DIR}/../Assets/Engine/Branding")
+if(WIN32 AND EXISTS "${_sparkinstaller_branding_dir}/sparkengine.ico")
+    list(APPEND INSTALLER_SOURCES resources/SparkInstaller.rc)
+    set_source_files_properties(resources/SparkInstaller.rc PROPERTIES
+        OBJECT_DEPENDS "${_sparkinstaller_branding_dir}/sparkengine.ico")
+endif()
+
 add_executable(SparkInstaller ${INSTALLER_SOURCES})
 target_compile_definitions(SparkInstaller PRIVATE
     SPARK_INSTALLER_VERSION=\"${PROJECT_VERSION}\"
@@ -74,12 +88,24 @@ spark_target_windows_version_info(SparkInstaller)
 target_include_directories(SparkInstaller PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
+if(WIN32 AND EXISTS "${_sparkinstaller_branding_dir}/sparkengine.ico")
+    target_include_directories(SparkInstaller PRIVATE "${_sparkinstaller_branding_dir}")
+endif()
 
 target_link_libraries(SparkInstaller PRIVATE SparkBuildCore)
+if(WIN32)
+    # main.cpp reads the UTF-16 command line with CommandLineToArgvW.
+    target_link_libraries(SparkInstaller PRIVATE shell32)
+endif()
 
 if(INSTALLER_GUI_AVAILABLE)
     target_compile_definitions(SparkInstaller PRIVATE SPARKINSTALLER_ENABLE_GUI=1)
-    target_link_libraries(SparkInstaller PRIVATE imgui)
+    target_link_libraries(SparkInstaller PRIVATE imgui SparkUIKit)
+    # The superproject stages the Spark UI fonts next to the executable; without them (a bare
+    # install tree) the wizard falls back to ImGui's embedded vector font.
+    if(COMMAND spark_stage_ui_fonts)
+        spark_stage_ui_fonts(SparkInstaller)
+    endif()
     if(WIN32)
         # d3dcompiler: imgui_impl_dx11 calls D3DCompile and relies on MSVC's
         # #pragma comment(lib) auto-link, which MinGW ignores — link explicitly.
@@ -116,6 +142,9 @@ if(NOT CMAKE_PROJECT_NAME STREQUAL "SparkEngine")
 endif()
 
 install(TARGETS SparkInstaller RUNTIME DESTINATION bin COMPONENT tools)
+# The wizard GUI loads the Spark UI fonts from bin/EditorAssets/Fonts. The required runtime
+# component installs them (cmake/SparkUIFonts.cmake), and every package profile in
+# cmake/PackageProfiles.json carries runtime, so tools does not install a second copy.
 
 set(_sparkinstaller_tests_default ON)
 if(DEFINED BUILD_TESTS)
@@ -129,8 +158,10 @@ if(SPARKINSTALLER_BUILD_TESTS)
     enable_testing()
     add_executable(SparkInstallerGitTests
         tests/GitContractTests.cpp
+        tests/PortableGitCacheTests.cpp
         src/GitRunner.cpp
         src/GitBootstrap.cpp
+        src/PathUtf8.cpp
     )
     target_include_directories(SparkInstallerGitTests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -143,7 +174,88 @@ if(SPARKINSTALLER_BUILD_TESTS)
         target_compile_options(SparkInstallerGitTests PRIVATE -Wall -Wextra -Wpedantic)
     endif()
     add_test(NAME SparkInstallerGitTests COMMAND SparkInstallerGitTests)
-    set_tests_properties(SparkInstallerGitTests PROPERTIES TIMEOUT 15)
+    set_tests_properties(SparkInstallerGitTests PROPERTIES TIMEOUT 15 LABELS installer)
+
+    add_executable(SparkInstallerInstallStateTests
+        tests/InstallStateTests.cpp
+        src/InstallState.cpp
+        src/PathUtf8.cpp
+    )
+    target_include_directories(SparkInstallerInstallStateTests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    if(MSVC)
+        target_compile_definitions(SparkInstallerInstallStateTests PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX)
+    endif()
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(SparkInstallerInstallStateTests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME SparkInstallerInstallStateTests COMMAND SparkInstallerInstallStateTests)
+    set_tests_properties(SparkInstallerInstallStateTests PROPERTIES TIMEOUT 10 LABELS installer)
+
+    add_executable(SparkInstallerTransactionTests
+        tests/InstallerTransactionTests.cpp
+        src/Installer.cpp
+        src/InstallerPreflight.cpp
+        src/InstallState.cpp
+        src/GitRunner.cpp
+        src/GitBootstrap.cpp
+        src/PathUtf8.cpp
+    )
+    target_include_directories(SparkInstallerTransactionTests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    target_link_libraries(SparkInstallerTransactionTests PRIVATE SparkBuildCore)
+    target_compile_definitions(SparkInstallerTransactionTests PRIVATE
+        SPARK_INSTALLER_VERSION="${PROJECT_VERSION}"
+        SPARK_INSTALLER_TEST_EXE="$<TARGET_FILE:SparkInstaller>"
+    )
+    # The interruption case kills the real installer, whose output directory
+    # differs from the contract test in a standalone multi-config build.
+    add_dependencies(SparkInstallerTransactionTests SparkInstaller)
+    if(MSVC)
+        target_compile_definitions(SparkInstallerTransactionTests PRIVATE _CRT_SECURE_NO_WARNINGS NOMINMAX)
+    endif()
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(SparkInstallerTransactionTests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+    add_test(NAME SparkInstallerTransactionTests COMMAND SparkInstallerTransactionTests)
+    # Each case drives the installer through the fake git/cmake executable;
+    # the fresh-install, resume and rollback cases spawn about 150 processes.
+    set_tests_properties(SparkInstallerTransactionTests PROPERTIES TIMEOUT 60 LABELS installer)
+
+    # INST-130/131/132 readiness selectors. These run local fake-tool and mocked
+    # msiexec fixtures on every host; they are contract tests, not native signed
+    # Windows install evidence.
+    add_test(NAME Installer_AtomicUpdate COMMAND SparkInstallerTransactionTests --spark-case=atomic-update)
+    add_test(NAME Installer_Interrupted COMMAND SparkInstallerTransactionTests --spark-case=interrupted)
+    # Tampered, interrupted or wrong-archive MinGit cache populations (PortableGitCacheTests.cpp).
+    add_test(NAME Installer_Tamper COMMAND SparkInstallerGitTests)
+    set_tests_properties(Installer_AtomicUpdate Installer_Interrupted Installer_Tamper PROPERTIES
+        TIMEOUT 60 LABELS installer)
+    # Hostile archives: format mismatch, escaping member names and links, no-replace commit.
+    if(TARGET SparkBuildDownloaderTests)
+        add_test(NAME Installer_Tamper_Downloader COMMAND SparkBuildDownloaderTests)
+        set_tests_properties(Installer_Tamper_Downloader PROPERTIES TIMEOUT 10 LABELS installer)
+    endif()
+    # MSI lifecycle drills from the Windows qualification script, run against mocked
+    # msiexec. A filter that matches no test is a failure, not a pass.
+    find_package(Python3 QUIET COMPONENTS Interpreter)
+    if(Python3_FOUND)
+        set(_sparkinstaller_msi_tests "${CMAKE_CURRENT_SOURCE_DIR}/../.github/scripts/test_qualify_windows_msi.py")
+        add_test(NAME Installer_Uninstall COMMAND ${Python3_EXECUTABLE} -B "${_sparkinstaller_msi_tests}" -k uninstall)
+        add_test(NAME Installer_Upgrade COMMAND ${Python3_EXECUTABLE} -B "${_sparkinstaller_msi_tests}" -k upgrade)
+        add_test(NAME Installer_Rollback COMMAND ${Python3_EXECUTABLE} -B "${_sparkinstaller_msi_tests}" -k roll)
+        add_test(NAME Installer_Interrupted_Msi COMMAND ${Python3_EXECUTABLE} -B "${_sparkinstaller_msi_tests}" -k interrupt)
+        add_test(NAME Installer_Repair_Msi COMMAND ${Python3_EXECUTABLE} -B "${_sparkinstaller_msi_tests}" -k repair)
+        add_test(NAME Installer_Repeatability_Msi COMMAND ${Python3_EXECUTABLE} -B "${_sparkinstaller_msi_tests}" -k repeatability)
+        set_tests_properties(Installer_Uninstall Installer_Upgrade Installer_Rollback
+            Installer_Interrupted_Msi Installer_Repair_Msi Installer_Repeatability_Msi PROPERTIES
+            FAIL_REGULAR_EXPRESSION "NO TESTS RAN;Ran 0 tests"
+            TIMEOUT 120 LABELS "installer;python")
+        unset(_sparkinstaller_msi_tests)
+    endif()
+
     if(WIN32)
         set(_sparkinstaller_platform "Windows")
     elseif(APPLE)
@@ -184,7 +296,26 @@ endif()
             "-DSPARK_VERSION_EXECUTABLE=$<TARGET_FILE:SparkInstaller>"
             "-DSPARK_EXPECTED_VERSION_OUTPUT=SparkInstaller ${PROJECT_VERSION} (${_sparkinstaller_platform})"
             -P "${_sparkinstaller_version_test_script}")
-    set_tests_properties(SparkInstallerVersion PROPERTIES TIMEOUT 15)
+    set_tests_properties(SparkInstallerVersion PROPERTIES TIMEOUT 15 LABELS installer)
     unset(_sparkinstaller_version_test_script)
     unset(_sparkinstaller_platform)
+
+    # CI-110: the shipped binary's behavioural lane -- a headless install, resume
+    # and refusal against a local fixture repository, with no network. Without
+    # git the lane is not registered, and Tools/validate_ctest_policy.py then
+    # reports SparkInstaller as a shipped binary with only a --version test.
+    find_package(Git QUIET)
+    if(GIT_FOUND)
+        add_test(NAME SparkInstallerHeadlessSmoke
+            COMMAND "${CMAKE_COMMAND}"
+                "-DSPARK_INSTALLER=$<TARGET_FILE:SparkInstaller>"
+                "-DSPARK_GIT=${GIT_EXECUTABLE}"
+                "-DSPARK_WORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/installer-headless-smoke/$<CONFIG>"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/InstallerHeadlessSmoke.cmake")
+        set_tests_properties(SparkInstallerHeadlessSmoke PROPERTIES
+            TIMEOUT 60
+            LABELS "installer;integration;process")
+    else()
+        message(WARNING "git was not found: SparkInstallerHeadlessSmoke is not registered")
+    endif()
 endif()

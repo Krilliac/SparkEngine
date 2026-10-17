@@ -102,13 +102,15 @@ auto* combat = ctx->GetSystem<MyCombatDirector>();
 - Keeps ownership clear (fewer leaks/double frees).
 - Allows game modules to access subsystems without singletons everywhere.
 
-## Dependency-aware startup
+## Ordered startup and shutdown
 
-SparkEngine supports dependency-aware subsystem registration.
+`EngineRuntime` owns every engine-lifetime subsystem, and `LifecycleCompositionRoot`
+(`Core/Lifecycle/`) runs its stages in a fixed order.
 
-- Each subsystem can declare dependencies (`DependsOn<...>`).
-- `InitializeAll()` performs ordered startup (topological dependency order).
-- `ShutdownAll()` runs reverse order.
+- Startup runs the stages in order; a stage that fails or throws aborts startup and
+  the stages already started are torn down in reverse order.
+- Shutdown runs the stages in reverse order.
+- `EngineContext` only locates subsystems; it does not start or stop them.
 
 **Why this matters:**
 - Prevents "system used before initialized" crashes.

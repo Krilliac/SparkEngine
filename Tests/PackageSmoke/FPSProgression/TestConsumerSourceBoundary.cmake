@@ -27,7 +27,9 @@ file(COPY "${INSTALLED_INCLUDE_DIR}/Spark" DESTINATION "${FIXTURE}/include")
 
 set(configure "${CMAKE_COMMAND}" -S "${consumer_copy}" -B "${FIXTURE}/build"
     -G "${CONSUMER_GENERATOR}" "-DSPARK_ENGINE_INCLUDE_DIR=${FIXTURE}/include"
-    "-DCMAKE_CXX_COMPILER=${CONSUMER_COMPILER}")
+    "-DCMAKE_CXX_COMPILER=${CONSUMER_COMPILER}"
+    "-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded"
+    "-DCMAKE_CXX_COMPILER_LAUNCHER=")
 if(CONSUMER_PLATFORM)
     list(APPEND configure -A "${CONSUMER_PLATFORM}")
 endif()
@@ -45,7 +47,7 @@ if(CONSUMER_CONFIG)
     list(APPEND build --config "${CONSUMER_CONFIG}")
 endif()
 set(test "${CONSUMER_CTEST}" --test-dir "${FIXTURE}/build" --output-on-failure --no-tests=error
-    -E "^SparkFPSProgressionConsumerSourceBoundary$")
+    -E "^(SparkFPSProgressionConsumerSourceBoundary|SparkSDKHeaderRefresh)$")
 if(CONSUMER_CONFIG)
     list(APPEND test -C "${CONSUMER_CONFIG}")
 endif()

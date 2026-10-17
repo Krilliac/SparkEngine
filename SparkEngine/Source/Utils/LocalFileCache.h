@@ -250,7 +250,7 @@ namespace Spark
             }
 
             std::error_code ec;
-            fs::remove(path, ec);
+            fs::remove(FileUtils::PathFromUtf8(path), ec);
             if (ec)
             {
                 return Err("Failed to delete file: " + path + " (" + ec.message() + ")");

@@ -276,7 +276,6 @@ settings_reset                        # Reset everything to defaults
 | `ConnectionTimeout` | 10.0 | Connection timeout (seconds) |
 | `ReplicationRate` | 20.0 | Network updates per second |
 | `EnableCompression` | false | Compress network packets |
-| `EnableEncryption` | false | Legacy XOR obfuscation prototype (not encryption or authentication) |
 | `SimulatedLatencyMs` | 0.0 | Simulated latency for testing |
 | `SimulatedPacketLoss` | 0.0 | Simulated packet loss (0.0–1.0) |
 
@@ -322,6 +321,14 @@ settings_reset                        # Reset everything to defaults
 Per-category overrides (set to empty string to inherit `GlobalLevel`):
 
 `CoreLevel`, `GraphicsLevel`, `PhysicsLevel`, `AudioLevel`, `AILevel`, `AnimationLevel`, `ECSLevel`, `NetworkLevel`, `InputLevel`, `ScriptingLevel`, `SceneLevel`, `SaveLevel`, `CinematicLevel`, `ProceduralLevel`, `EditorLevel`, `GameLevel`
+
+**Log file flush policy** (`Utils/Logger.h`): the log tail must survive a crash or a force-kill, so
+`Warn`/`Error`/`Fatal` lines are flushed to the OS before `Log()` returns; lower levels are flushed by a
+Logger-owned thread within `Logger::kPeriodicFlushInterval` (100 ms); the Windows SEH/assert and macOS
+crash paths call `Logger::FlushForCrash()` (bounded try-lock waits) before writing their dump, while the
+Linux signal handler skips it because it is not async-signal-safe; `Shutdown()` flushes every sink.
+A force-killed run therefore loses at most the last ~100 ms of Trace/Debug/Info lines. Per-line flushing
+was measured at ~3.5 us/line against ~0.5 us buffered, which is why Info is interval-flushed.
 
 ---
 

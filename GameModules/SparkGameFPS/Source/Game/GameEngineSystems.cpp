@@ -9,10 +9,19 @@
  */
 
 #include "Core/Platform.h"
+#include "Core/FPSLog.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
 #endif
 #include <cstdint>
+#include <cmath>
+#include <cstdio>
+#include <map>
+#include <sstream>
+#include <stdexcept>
+#include <string_view>
+#include "Input/InputManager.h"
+#include "Core/FaultIsolation.h"
 #ifdef SPARK_PLATFORM_WINDOWS
 #include "Core/Platform.h"
 #endif
@@ -20,17 +29,15 @@
 #include "Game.h"
 #include "Player.h"
 #include "FPSAssetPaths.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include "FPSQuickLoad.h"
+#include "Console/AdvancedConsoleCommands.h"
+#include <Spark/IConsole.h>
 
 // Engine systems
-#include "Audio/AudioEngine.h"
 #include "Audio/MusicManager.h"
-#include "Graphics/WeatherSystem.h"
 #include "Engine/Destruction/DestructionSystem.h"
 #include "Engine/Dialogue/DialogueSystem.h"
 #include "Engine/SaveSystem/SaveSystem.h"
-#include "Engine/Coroutine/CoroutineScheduler.h"
 #include "Engine/Cinematic/Sequencer.h"
 #include "Engine/Replay/ReplaySystem.h"
 
@@ -60,11 +67,11 @@ void Game::InitializeEngineSystems()
         return;
     }
 
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "Initializing engine system connections");
+    FPS_LOG_INFO("Initializing engine system connections");
     if (!m_engineContext)
     {
-        SPARK_LOG_WARN(Spark::LogCategory::Game, "EngineContext not available — skipping engine system wiring");
-        LOG_TO_CONSOLE_IMMEDIATE(L"EngineContext not available - skipping engine system wiring", L"WARNING");
+        FPS_LOG_WARN("EngineContext not available — skipping engine system wiring");
+        FPS_CONSOLE("EngineContext not available - skipping engine system wiring", "WARNING");
         return;
     }
 
@@ -97,15 +104,20 @@ void Game::InitializeEngineSystems()
         music->Play("arena_ambient", 1.0f);
 
         m_audioInitialized = true;
-        LOG_TO_CONSOLE_IMMEDIATE(L"Audio: game music tracks registered, ambient playing", L"SUCCESS");
+        FPS_CONSOLE("Audio: game music tracks registered, ambient playing", "SUCCESS");
     }
 
     // ---- Weather ------------------------------------------------------
-    if (auto* weather = m_engineContext->GetWeather())
+    if (m_weatherIntegration.Initialize())
     {
-        weather->SetWeather(Spark::WeatherType::Clear, 1.0f, 0.0f);
         m_weatherActive = true;
-        LOG_TO_CONSOLE_IMMEDIATE(L"Weather: clear skies set for arena", L"SUCCESS");
+        FPS_CONSOLE(m_weatherActive ? "Weather: clear skies set for arena" : "Weather: optional capability unavailable",
+                    m_weatherActive ? "SUCCESS" : "WARNING");
+    }
+    else
+    {
+        m_weatherActive = false;
+        FPS_CONSOLE("Weather: optional capability unavailable", "WARNING");
     }
 
     // ---- Destruction --------------------------------------------------
@@ -157,7 +169,7 @@ void Game::InitializeEngineSystems()
         barrelPattern.SetParticleEffect("vfx_sparks");
         destruction->RegisterPattern("metal_barrel", barrelPattern);
 
-        LOG_TO_CONSOLE_IMMEDIATE(L"Destruction: 2 fracture patterns registered (crate, barrel)", L"SUCCESS");
+        FPS_CONSOLE("Destruction: 2 fracture patterns registered (crate, barrel)", "SUCCESS");
     }
 
     // ---- Dialogue -----------------------------------------------------
@@ -207,7 +219,7 @@ void Game::InitializeEngineSystems()
         vendorTree->AddNode(ammoReply);
 
         dialogue->RegisterTree("arena_vendor", std::move(vendorTree));
-        LOG_TO_CONSOLE_IMMEDIATE(L"Dialogue: arena vendor dialogue tree registered", L"SUCCESS");
+        FPS_CONSOLE("Dialogue: arena vendor dialogue tree registered", "SUCCESS");
     }
 
     // ---- Save System --------------------------------------------------
@@ -216,16 +228,16 @@ void Game::InitializeEngineSystems()
     m_saveSystemReady = (m_engineContext->GetSaveSystem() != nullptr) && (m_engineContext->GetWorld() != nullptr);
     if (m_saveSystemReady)
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Save system: ready for quicksave/quickload", L"SUCCESS");
+        FPS_CONSOLE("Save system: ready for quicksave/quickload", "SUCCESS");
     }
     else
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Save system: unavailable - quicksave/quickload disabled", L"WARNING");
+        FPS_CONSOLE("Save system: unavailable - quicksave/quickload disabled", "WARNING");
     }
 
     // ---- Coroutine Scheduler ------------------------------------------
     {
-        LOG_TO_CONSOLE_IMMEDIATE(L"Coroutine scheduler: game coroutines available", L"SUCCESS");
+        FPS_CONSOLE("Coroutine scheduler: game coroutines available", "SUCCESS");
     }
 
     // ---- Cinematic Sequencer ------------------------------------------
@@ -264,7 +276,7 @@ void Game::InitializeEngineSystems()
         auto* eventTrack = intro->AddEventTrack("GameEvents");
         eventTrack->AddCue({5.0f, "enable_player_control", ""});
 
-        LOG_TO_CONSOLE_IMMEDIATE(L"Cinematic: arena_intro sequence registered (5s, 4 tracks)", L"SUCCESS");
+        FPS_CONSOLE("Cinematic: arena_intro sequence registered (5s, 4 tracks)", "SUCCESS");
     }
 
     // ---- Replay System ------------------------------------------------
@@ -272,12 +284,20 @@ void Game::InitializeEngineSystems()
     {
         replay->SetRecordInterval(1.0f / 20.0f); // 20 fps recording
         replay->SetMetadata("combat_arena", "freeplay");
-        LOG_TO_CONSOLE_IMMEDIATE(L"Replay: system configured (20fps, combat_arena)", L"SUCCESS");
+        FPS_CONSOLE("Replay: system configured (20fps, combat_arena)", "SUCCESS");
+    }
+
+    // ---- Advanced console commands ------------------------------------
+    // Registered through the host's public console; a host without one gets no commands.
+    // Game::Shutdown removes them from the same console before the module unloads.
+    if (auto* console = m_engineContext->GetConsole())
+    {
+        SparkConsole::RegisterAdvancedCommands(*console, this, m_graphics);
     }
 
     m_engineSystemsInitialized = true;
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "All engine systems wired into game");
-    LOG_TO_CONSOLE_IMMEDIATE(L"All engine systems wired into game", L"SUCCESS");
+    FPS_LOG_INFO("All engine systems wired into game");
+    FPS_CONSOLE("All engine systems wired into game", "SUCCESS");
 }
 
 // ============================================================================
@@ -320,8 +340,8 @@ void Game::ApplyLocalProfile(const Spark::FPSLocalProfile& profile)
     if (m_progression)
     {
         m_progression->RestoreProgress(profile.progressionXP);
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Progression restored from save (level %d, %d XP)",
-                       m_progression->GetLevel(), m_progression->GetCurrentXP());
+        FPS_LOG_INFO("Progression restored from save (level {}, {} XP)", m_progression->GetLevel(),
+                     m_progression->GetCurrentXP());
     }
 
     if (m_player)
@@ -333,13 +353,17 @@ void Game::ApplyLocalProfile(const Spark::FPSLocalProfile& profile)
         m_player->SetActive(profile.health > 0.0f);
     }
     if (m_hudSystem)
+    {
         m_hudSystem->SetCurrentClass(static_cast<PlayerClass>(profile.playerClass));
+    }
 
     // The scoreboard lives outside the ECS, so a loaded save has to put it back
     // explicitly. Capturing kills/deaths/score and then not restoring them is what made
     // a quickload silently reset the match score.
     if (m_gameMode)
+    {
         m_gameMode->RestorePlayerScore("Player1", profile.kills, profile.deaths, profile.score);
+    }
 
     // A profile captured while dead restores an inactive player. Player::Update()
     // early-returns while dead and only a PlayerRespawnEvent revives it, so the respawn
@@ -347,10 +371,10 @@ void Game::ApplyLocalProfile(const Spark::FPSLocalProfile& profile)
     if (m_respawnSystem && profile.health <= 0.0f && !m_respawnSystem->IsWaitingForRespawn())
     {
         m_respawnSystem->ArmRespawn();
-        LOG_TO_CONSOLE_IMMEDIATE(L"Restored profile was captured while dead - respawn countdown re-armed", L"WARNING");
+        FPS_CONSOLE("Restored profile was captured while dead - respawn countdown re-armed", "WARNING");
     }
 
-    LOG_TO_CONSOLE_IMMEDIATE(L"Local profile applied from save", L"SUCCESS");
+    FPS_CONSOLE("Local profile applied from save", "SUCCESS");
 }
 
 bool Game::QuickSaveProfile(std::string& outMessage)
@@ -381,6 +405,11 @@ bool Game::QuickSaveProfile(std::string& outMessage)
     }
 
     const Spark::FPSLocalProfile profile = CaptureLocalProfile();
+    if (m_inputObservationEnabled)
+    {
+        m_inputObservationTransfer = profile;
+        m_inputObservationTransferred = true;
+    }
     metadata.playerKills = profile.kills;
     metadata.playerDeaths = profile.deaths;
 
@@ -414,25 +443,35 @@ bool Game::QuickLoadProfile(std::string& outMessage)
     }
     if (!saveSystem->SaveExists(kQuickSaveSlot))
     {
+        if (m_inputObservationEnabled)
+        {
+            m_inputObservationReason = 1;
+        }
         outMessage = std::string("No quicksave found in slot '") + kQuickSaveSlot + "'";
         return false;
     }
 
-    std::unordered_map<std::string, std::string> customState;
-    if (!saveSystem->Load(kQuickSaveSlot, *world, customState))
+    // The profile is validated before the world is replaced, so a rejected profile block
+    // leaves both the world and the current profile as they were.
+    Spark::FPSLocalProfile profile;
+    std::string profileError;
+    switch (Spark::LoadSlotWithProfile(*saveSystem, kQuickSaveSlot, *world, profile, profileError))
     {
+    case Spark::FPSQuickLoadStatus::Loaded:
+        break;
+    case Spark::FPSQuickLoadStatus::ProfileRejected:
+        outMessage = "Quick load rejected the local profile; the world is unchanged: " + profileError;
+        return false;
+    case Spark::FPSQuickLoadStatus::LoadFailed:
         outMessage = std::string("Quick load FAILED for slot '") + kQuickSaveSlot + "'";
         return false;
     }
 
-    Spark::FPSLocalProfile profile;
-    std::string profileError;
-    if (!profile.ReadFrom(customState, profileError))
+    if (m_inputObservationEnabled)
     {
-        outMessage = "Quick load restored the world but the local profile was rejected: " + profileError;
-        return false;
+        m_inputObservationTransfer = profile;
+        m_inputObservationTransferred = true;
     }
-
     ApplyLocalProfile(profile);
 
     // Report the level the session is actually at: ApplyLocalProfile re-derives it from
@@ -442,4 +481,151 @@ bool Game::QuickLoadProfile(std::string& outMessage)
     outMessage = "Quick load restored level " + std::to_string(restoredLevel) + " (" +
                  std::to_string(profile.progressionXP) + " XP)";
     return true;
+}
+
+namespace
+{
+    std::string ObservationHex(const std::string& value)
+    {
+        constexpr char digits[] = "0123456789abcdef";
+        std::string result;
+        for (unsigned char c : value)
+        {
+            result += digits[c >> 4];
+            result += digits[c & 15];
+        }
+        return result.empty() ? "-" : result;
+    }
+
+    std::string ObservationProfile(const Spark::FPSLocalProfile& profile)
+    {
+        if (!std::isfinite(profile.health) || !std::isfinite(profile.armor) || !std::isfinite(profile.playTimeSeconds))
+        {
+            throw std::runtime_error("nonfinite profile observation");
+        }
+        std::unordered_map<std::string, std::string> fields;
+        profile.WriteTo(fields); // Same production profile serializer used by QuickSaveProfile.
+        std::map<std::string, std::string> ordered(fields.begin(), fields.end());
+        std::string serialized;
+        for (const auto& [key, value] : ordered)
+        {
+            serialized.append(key);
+            serialized.push_back('=');
+            serialized.append(value);
+            serialized.push_back('\n');
+        }
+        return ObservationHex(serialized);
+    }
+} // namespace
+
+void Game::BeginInputObservation() noexcept
+{
+    if (!m_inputObservationChecked)
+    {
+        m_inputObservationChecked = true;
+#ifdef SPARK_PLATFORM_WINDOWS
+        wchar_t setting[2]{};
+        m_inputObservationEnabled =
+            GetEnvironmentVariableW(L"SPARK_FPS_INPUT_TRACE", setting, 2) == 1 && setting[0] == L'1';
+#endif
+    }
+    if (!m_inputObservationEnabled || m_inputObservationFailed || !m_input)
+    {
+        return;
+    }
+    ++m_inputObservationUpdate;
+    m_inputObservationMask = m_inputObservationPressed = m_inputObservationReleased = 0;
+    constexpr int keys[] = {VK_F2, VK_F3, VK_F5, VK_F9};
+    for (unsigned int i = 0; i < 4; ++i)
+    {
+        m_inputObservationMask |= static_cast<unsigned int>(m_input->IsFrameKeyDown(keys[i])) << i;
+        m_inputObservationPressed |= static_cast<unsigned int>(m_input->WasKeyPressed(keys[i])) << i;
+        m_inputObservationReleased |= static_cast<unsigned int>(m_input->WasKeyReleased(keys[i])) << i;
+    }
+    if (m_inputObservationMask != m_inputObservationPreviousMask)
+    {
+        m_inputObservationStableFrames = 0;
+    }
+    m_inputObservationPreviousMask = m_inputObservationMask;
+    m_inputObservationWanted =
+        m_inputObservationStableFrames < 3 || m_inputObservationPressed != 0 || m_inputObservationReleased != 0;
+    if (m_inputObservationStableFrames < 3)
+    {
+        ++m_inputObservationStableFrames;
+    }
+    m_inputObservationAction = 0;
+    m_inputObservationResult = -1;
+    m_inputObservationReason = 0;
+    m_inputObservationTransferred = false;
+    RecordInputObservation("before");
+}
+
+void Game::RecordInputObservation(const char* phase) noexcept
+{
+    if (!m_inputObservationEnabled || m_inputObservationFailed || !m_inputObservationWanted || !m_input)
+    {
+        return;
+    }
+    try
+    {
+        auto* save = m_engineContext ? m_engineContext->GetSaveSystem() : nullptr;
+        unsigned long long faults = 0;
+        for (const auto& [name, record] : Spark::SubsystemFaultIsolator::GetInstance().GetRecordsSnapshot())
+        {
+            faults += record.faultCount;
+        }
+        std::ostringstream line;
+        line << "SPARK_FPS_INPUT v=1 phase=" << phase << " input=" << m_input->GetInputFrameSequence()
+             << " update=" << m_inputObservationUpdate << " mask=" << m_inputObservationMask
+             << " pressed=" << m_inputObservationPressed << " released=" << m_inputObservationReleased
+             << " paused=" << static_cast<int>(m_isPaused) << " action=" << m_inputObservationAction
+             << " result=" << m_inputObservationResult << " reason=" << m_inputObservationReason
+             << " operation=" << m_inputObservationOperation << " faults=" << faults
+             << " profile=" << ObservationProfile(CaptureLocalProfile())
+             << " transfer=" << (m_inputObservationTransferred ? ObservationProfile(m_inputObservationTransfer) : "-")
+             << " saves="
+             << ((m_inputObservationUpdate == 1 || std::string_view(phase) == "operation")
+                     ? ObservationHex(save ? save->GetSaveDirectory() : "")
+                     : "-")
+             << '\n';
+        const std::string text = line.str();
+        if (text.size() > 8192 || m_inputObservationRecords >= 256 || m_inputObservationBytes + text.size() > 98304)
+        {
+            m_inputObservationFailed = true;
+            return;
+        }
+        ++m_inputObservationRecords;
+        m_inputObservationBytes += text.size();
+        if (std::fwrite(text.data(), 1, text.size(), stdout) != text.size() || std::fflush(stdout) != 0)
+        {
+            m_inputObservationFailed = true;
+        }
+    }
+    catch (...)
+    {
+        m_inputObservationFailed = true; // Observations must never alter gameplay control flow.
+    }
+}
+
+void Game::EndInputObservation() noexcept
+{
+    if (!m_inputObservationEnabled)
+    {
+        return;
+    }
+    try
+    {
+        for (const auto& [name, record] : Spark::SubsystemFaultIsolator::GetInstance().GetRecordsSnapshot())
+        {
+            m_inputObservationFailed = m_inputObservationFailed || record.faultCount != 0;
+        }
+    }
+    catch (...)
+    {
+        m_inputObservationFailed = true;
+    }
+    std::printf("SPARK_FPS_INPUT_END v=1 records=%u bytes=%zu failed=%d\n", m_inputObservationRecords,
+                m_inputObservationBytes, static_cast<int>(m_inputObservationFailed));
+    std::fflush(stdout);
+    m_inputObservationEnabled = false;
 }

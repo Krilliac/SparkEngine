@@ -1,11 +1,10 @@
 /**
  * @file TestFPSComponentsReal.cpp
- * @brief Production-source companion for TestFPSComponents.cpp
+ * @brief Production-source tests for the shipped FPS gameplay components
  *
- * TestFPSComponents.cpp exercises TestDecalComponent — a test-local struct that
- * mirrors DecalComponent. A regression in the shipped component is invisible to
- * it. This file includes the real header and exercises the shipped structs:
- * DecalComponent, ProjectileComponent, and InteractionComponent.
+ * Exercises the real DecalComponent, ProjectileComponent, and InteractionComponent
+ * from FPSComponents.h. (RDY-010 retired the test-local TestFPSComponents.cpp
+ * mirror these tests replaced.)
  *
  * Header-only structs — no additional production .cpp is required.
  */
@@ -45,6 +44,11 @@ TEST(FPSComponentsReal_DecalOpacityScalesInsideFadeWindow)
 
     decal.remainingLifetime = 0.5f;
     EXPECT_NEAR(decal.GetCurrentOpacity(), 0.25f, 0.0001f);
+
+    // The fade scales the tint alpha, not a fixed 1.0.
+    decal.color.w = 0.5f;
+    decal.remainingLifetime = 1.0f;
+    EXPECT_NEAR(decal.GetCurrentOpacity(), 0.25f, 0.0001f);
 }
 
 TEST(FPSComponentsReal_DecalOpacityZeroWhenExpired)
@@ -69,11 +73,16 @@ TEST(FPSComponentsReal_ProjectileExpiresOnRangeOrLifetime)
     ProjectileComponent projectile;
     EXPECT_FALSE(projectile.IsExpired());
 
+    projectile.distanceTraveled = projectile.maxRange * 0.5f;
+    projectile.age = projectile.maxLifetime * 0.5f;
+    EXPECT_FALSE(projectile.IsExpired());
+
     projectile.distanceTraveled = projectile.maxRange;
     EXPECT_TRUE(projectile.IsExpired());
 
+    // Both limits are inclusive: a projectile exactly at maxLifetime is expired.
     ProjectileComponent aged;
-    aged.age = aged.maxLifetime + 1.0f;
+    aged.age = aged.maxLifetime;
     EXPECT_TRUE(aged.IsExpired());
 }
 
@@ -85,6 +94,16 @@ TEST(FPSComponentsReal_ProjectileDefaultsValidate)
     EXPECT_TRUE(projectile.impactBehavior == ProjectileComponent::ImpactBehavior::Destroy);
     EXPECT_EQ(projectile.teamId, -1);
     EXPECT_EQ(projectile.ownerEntityId, 0u);
+    EXPECT_NEAR(projectile.speed, 100.0f, 0.0001f);
+    EXPECT_NEAR(projectile.damage, 25.0f, 0.0001f);
+    EXPECT_NEAR(projectile.maxRange, 500.0f, 0.0001f);
+    EXPECT_NEAR(projectile.maxLifetime, 10.0f, 0.0001f);
+    EXPECT_NEAR(projectile.gravityScale, 1.0f, 0.0001f);
+    EXPECT_NEAR(projectile.explosionRadius, 0.0f, 0.0001f);
+    EXPECT_NEAR(projectile.distanceTraveled, 0.0f, 0.0001f);
+    EXPECT_EQ(projectile.bouncesRemaining, 0);
+    EXPECT_EQ(projectile.piercesRemaining, 0);
+    EXPECT_NEAR(projectile.direction.z, 1.0f, 0.0001f);
 }
 
 TEST(FPSComponentsReal_InteractionUnlimitedUsesStayInteractable)
@@ -117,6 +136,10 @@ TEST(FPSComponentsReal_InteractionBlockedOutsideIdleState)
     EXPECT_FALSE(interaction.CanInteract());
     interaction.state = InteractionComponent::State::Disabled;
     EXPECT_FALSE(interaction.CanInteract());
+    interaction.state = InteractionComponent::State::Destroyed;
+    EXPECT_FALSE(interaction.CanInteract());
+    interaction.state = InteractionComponent::State::Active;
+    EXPECT_FALSE(interaction.CanInteract());
     interaction.state = InteractionComponent::State::Idle;
     EXPECT_TRUE(interaction.CanInteract());
 }
@@ -128,4 +151,8 @@ TEST(FPSComponentsReal_InteractionDefaultsValidate)
     EXPECT_TRUE(interaction.actionVerb == "Use");
     EXPECT_TRUE(interaction.type == InteractionComponent::InteractionType::Use);
     EXPECT_NEAR(interaction.interactionRadius, 2.5f, 0.0001f);
+    EXPECT_TRUE(interaction.state == InteractionComponent::State::Idle);
+    EXPECT_TRUE(interaction.showHighlight);
+    EXPECT_NEAR(interaction.holdDuration, 0.0f, 0.0001f);
+    EXPECT_NEAR(interaction.cooldownDuration, 0.0f, 0.0001f);
 }

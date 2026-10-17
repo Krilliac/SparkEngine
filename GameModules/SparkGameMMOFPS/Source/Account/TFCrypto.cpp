@@ -1,17 +1,19 @@
 /**
  * @file TFCrypto.cpp
- * @brief SHA-256 / HMAC-SHA256 / PBKDF2-HMAC-SHA256 implementation.
- *
- * SHA-256 core follows the standard FIPS 180-4 compression function (the same
- * public-domain construction shipped in countless small C SHA-256 libraries);
- * HMAC follows RFC 2104; PBKDF2 follows RFC 8018 5.2. See TFCrypto.h for the
- * known-answer tests that pin these down.
+ * @brief libsodium SHA-256 / HMAC-SHA256 with PBKDF2-HMAC-SHA256 composition.
  */
 #include "Account/TFCrypto.h"
 
+#include "Utils/SecureMemory.h"
+
+#include <sodium.h>
+
+#ifndef SPARK_HAS_LIBSODIUM
+#error "TFCrypto requires libsodium"
+#endif
+
 #include <algorithm>
-#include <atomic>
-#include <cstring>
+#include <stdexcept>
 
 namespace Terrafront::Crypto
 {
@@ -19,16 +21,9 @@ namespace Terrafront::Crypto
     namespace
     {
 
-        void SecureErase(void* data, size_t size) noexcept
-        {
-            auto* bytes = static_cast<volatile uint8_t*>(data);
-            while (bytes && size > 0)
-            {
-                *bytes++ = 0;
-                --size;
-            }
-            std::atomic_signal_fence(std::memory_order_seq_cst);
-        }
+        // One non-elidable bulk erase (Utils/SecureMemory.h): the PBKDF2 loop below
+        // erases its schedule and intermediate states every round.
+        using Spark::SecureErase;
 
         class EraseOnExit
         {
@@ -64,130 +59,40 @@ namespace Terrafront::Crypto
             bool m_armed = true;
         };
 
-        constexpr uint32_t kK[64] = {
-            0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-            0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-            0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-            0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-            0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-            0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-            0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-            0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2};
+        // libsodium keeps both keyed HMAC pad states after init. A per-round copy
+        // preserves the existing PBKDF2 key-schedule optimization.
+        using HmacSha256Key = crypto_auth_hmacsha256_state;
 
-        inline uint32_t RotR(uint32_t x, uint32_t n)
+        void RequireSodium(int result)
         {
-            return (x >> n) | (x << (32 - n));
+            if (result < 0)
+            {
+                throw std::runtime_error("libsodium SHA-256 operation failed");
+            }
         }
 
-        // Streaming SHA-256 state -- shared by the free Sha256() functions and HMAC
-        // (HMAC needs two independent SHA-256 computations, so it uses this directly
-        // rather than round-tripping through Sha256Digest-returning wrappers).
-        struct Sha256State
+        void PrepareHmacSha256Key(HmacSha256Key& prepared, const uint8_t* key, size_t keyLen)
         {
-            uint32_t h[8] = {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-                             0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
-            uint8_t buf[64] = {};
-            size_t bufLen = 0;
-            uint64_t totalLen = 0; // total input bytes seen (for the length suffix)
+            RequireSodium(sodium_init());
+            RequireSodium(crypto_auth_hmacsha256_init(&prepared, key, keyLen));
+        }
 
-            void Transform(const uint8_t block[64])
+        Sha256Digest HmacSha256WithKey(const HmacSha256Key& prepared, const uint8_t* data, size_t dataLen)
+        {
+            HmacSha256Key state = prepared;
+            const EraseOnExit clearState(&state, sizeof(state));
+            if (dataLen > 0)
             {
-                uint32_t w[64];
-                const EraseOnExit clearSchedule(w, sizeof(w));
-                for (int i = 0; i < 16; ++i)
-                {
-                    w[i] = (uint32_t(block[i * 4]) << 24) | (uint32_t(block[i * 4 + 1]) << 16) |
-                           (uint32_t(block[i * 4 + 2]) << 8) | uint32_t(block[i * 4 + 3]);
-                }
-                for (int i = 16; i < 64; ++i)
-                {
-                    uint32_t s0 = RotR(w[i - 15], 7) ^ RotR(w[i - 15], 18) ^ (w[i - 15] >> 3);
-                    uint32_t s1 = RotR(w[i - 2], 17) ^ RotR(w[i - 2], 19) ^ (w[i - 2] >> 10);
-                    w[i] = w[i - 16] + s0 + w[i - 7] + s1;
-                }
-
-                uint32_t working[8] = {h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7]};
-                const EraseOnExit clearWorking(working, sizeof(working));
-                auto& [a, b, c, d, e, f, g, hh] = working;
-                for (int i = 0; i < 64; ++i)
-                {
-                    uint32_t S1 = RotR(e, 6) ^ RotR(e, 11) ^ RotR(e, 25);
-                    uint32_t ch = (e & f) ^ (~e & g);
-                    uint32_t t1 = hh + S1 + ch + kK[i] + w[i];
-                    uint32_t S0 = RotR(a, 2) ^ RotR(a, 13) ^ RotR(a, 22);
-                    uint32_t maj = (a & b) ^ (a & c) ^ (b & c);
-                    uint32_t t2 = S0 + maj;
-                    hh = g;
-                    g = f;
-                    f = e;
-                    e = d + t1;
-                    d = c;
-                    c = b;
-                    b = a;
-                    a = t1 + t2;
-                }
-                h[0] += a;
-                h[1] += b;
-                h[2] += c;
-                h[3] += d;
-                h[4] += e;
-                h[5] += f;
-                h[6] += g;
-                h[7] += hh;
+                RequireSodium(crypto_auth_hmacsha256_update(&state, data, dataLen));
             }
-
-            void Update(const uint8_t* data, size_t len)
+            Sha256Digest output{};
+            if (crypto_auth_hmacsha256_final(&state, output.data()) < 0)
             {
-                totalLen += len;
-                while (len > 0)
-                {
-                    size_t n = std::min(len, size_t(64) - bufLen);
-                    std::memcpy(buf + bufLen, data, n);
-                    bufLen += n;
-                    data += n;
-                    len -= n;
-                    if (bufLen == 64)
-                    {
-                        Transform(buf);
-                        bufLen = 0;
-                    }
-                }
+                SecureErase(output.data(), output.size());
+                throw std::runtime_error("libsodium HMAC-SHA256 operation failed");
             }
-
-            Sha256Digest Finalize()
-            {
-                const uint64_t bitLen = totalLen * 8; // capture before padding mutates totalLen further
-
-                const uint8_t pad = 0x80;
-                Update(&pad, 1);
-
-                static const uint8_t zeros[64] = {};
-                if (bufLen <= 56)
-                {
-                    Update(zeros, 56 - bufLen);
-                }
-                else
-                {
-                    Update(zeros, 64 - bufLen); // completes and transforms the current block
-                    Update(zeros, 56);          // pad the next block up to the length-suffix slot
-                }
-
-                uint8_t lenBytes[8];
-                for (int i = 0; i < 8; ++i)
-                    lenBytes[i] = static_cast<uint8_t>(bitLen >> (56 - 8 * i));
-                Update(lenBytes, 8);
-
-                Sha256Digest out{};
-                for (int i = 0; i < 8; ++i)
-                {
-                    out[i * 4 + 0] = static_cast<uint8_t>(h[i] >> 24);
-                    out[i * 4 + 1] = static_cast<uint8_t>(h[i] >> 16);
-                    out[i * 4 + 2] = static_cast<uint8_t>(h[i] >> 8);
-                    out[i * 4 + 3] = static_cast<uint8_t>(h[i]);
-                }
-                return out;
-            }
-        };
+            return output;
+        }
 
         int HexNibble(char c)
         {
@@ -204,10 +109,17 @@ namespace Terrafront::Crypto
 
     Sha256Digest Sha256(const uint8_t* data, size_t len)
     {
-        Sha256State st;
-        const EraseOnExit clearState(&st, sizeof(st));
-        st.Update(data, len);
-        return st.Finalize();
+        RequireSodium(sodium_init());
+        crypto_hash_sha256_state state{};
+        const EraseOnExit clearState(&state, sizeof(state));
+        RequireSodium(crypto_hash_sha256_init(&state));
+        if (len > 0)
+        {
+            RequireSodium(crypto_hash_sha256_update(&state, data, len));
+        }
+        Sha256Digest output{};
+        RequireSodium(crypto_hash_sha256_final(&state, output.data()));
+        return output;
     }
 
     Sha256Digest Sha256(const std::string& data)
@@ -217,42 +129,10 @@ namespace Terrafront::Crypto
 
     Sha256Digest HmacSha256(const uint8_t* key, size_t keyLen, const uint8_t* data, size_t dataLen)
     {
-        constexpr size_t kBlockSize = 64;
-        uint8_t keyBlock[kBlockSize] = {};
-        const EraseOnExit clearKeyBlock(keyBlock, sizeof(keyBlock));
-
-        if (keyLen > kBlockSize)
-        {
-            Sha256Digest hashedKey = Sha256(key, keyLen);
-            const EraseOnExit clearHashedKey(hashedKey.data(), hashedKey.size());
-            std::memcpy(keyBlock, hashedKey.data(), hashedKey.size());
-        }
-        else if (keyLen > 0)
-        {
-            std::memcpy(keyBlock, key, keyLen);
-        }
-
-        uint8_t ipad[kBlockSize], opad[kBlockSize];
-        const EraseOnExit clearIpad(ipad, sizeof(ipad));
-        const EraseOnExit clearOpad(opad, sizeof(opad));
-        for (size_t i = 0; i < kBlockSize; ++i)
-        {
-            ipad[i] = static_cast<uint8_t>(keyBlock[i] ^ 0x36);
-            opad[i] = static_cast<uint8_t>(keyBlock[i] ^ 0x5c);
-        }
-
-        Sha256State inner;
-        const EraseOnExit clearInner(&inner, sizeof(inner));
-        inner.Update(ipad, kBlockSize);
-        inner.Update(data, dataLen);
-        Sha256Digest innerHash = inner.Finalize();
-        const EraseOnExit clearInnerHash(innerHash.data(), innerHash.size());
-
-        Sha256State outer;
-        const EraseOnExit clearOuter(&outer, sizeof(outer));
-        outer.Update(opad, kBlockSize);
-        outer.Update(innerHash.data(), innerHash.size());
-        return outer.Finalize();
+        HmacSha256Key prepared;
+        const EraseOnExit clearPrepared(&prepared, sizeof(prepared));
+        PrepareHmacSha256Key(prepared, key, keyLen);
+        return HmacSha256WithKey(prepared, data, dataLen);
     }
 
     Sha256Digest HmacSha256(const std::string& key, const std::string& data)
@@ -269,8 +149,9 @@ namespace Terrafront::Crypto
         EraseVectorOnFailure clearDerivedKeyOnFailure(dk);
         dk.reserve(dkLen);
 
-        const uint8_t* pw = reinterpret_cast<const uint8_t*>(password.data());
-        const size_t pwLen = password.size();
+        HmacSha256Key prepared;
+        const EraseOnExit clearPrepared(&prepared, sizeof(prepared));
+        PrepareHmacSha256Key(prepared, reinterpret_cast<const uint8_t*>(password.data()), password.size());
         const uint32_t blockCount = static_cast<uint32_t>((dkLen + kHLen - 1) / kHLen);
 
         for (uint32_t i = 1; i <= blockCount; ++i)
@@ -281,13 +162,13 @@ namespace Terrafront::Crypto
             saltIdx.push_back(static_cast<uint8_t>(i >> 8));
             saltIdx.push_back(static_cast<uint8_t>(i));
 
-            Sha256Digest u = HmacSha256(pw, pwLen, saltIdx.data(), saltIdx.size());
+            Sha256Digest u = HmacSha256WithKey(prepared, saltIdx.data(), saltIdx.size());
             Sha256Digest t = u;
             const EraseOnExit clearU(u.data(), u.size());
             const EraseOnExit clearT(t.data(), t.size());
             for (uint32_t round = 1; round < iterations; ++round)
             {
-                Sha256Digest nextU = HmacSha256(pw, pwLen, u.data(), u.size());
+                Sha256Digest nextU = HmacSha256WithKey(prepared, u.data(), u.size());
                 const EraseOnExit clearNextU(nextU.data(), nextU.size());
                 u = nextU;
                 for (size_t k = 0; k < t.size(); ++k)
@@ -354,6 +235,87 @@ namespace Terrafront::Crypto
         for (size_t i = 0; i < a.size(); ++i)
             diff |= static_cast<uint8_t>(a[i]) ^ static_cast<uint8_t>(b[i]);
         return diff == 0;
+    }
+
+    Sha256Digest XorBytes(const Sha256Digest& a, const Sha256Digest& b)
+    {
+        Sha256Digest out{};
+        for (size_t i = 0; i < out.size(); ++i)
+        {
+            out[i] = static_cast<uint8_t>(a[i] ^ b[i]);
+        }
+        return out;
+    }
+
+    bool ConstantTimeEquals(const Sha256Digest& a, const Sha256Digest& b)
+    {
+        uint8_t diff = 0;
+        for (size_t i = 0; i < a.size(); ++i)
+        {
+            diff |= static_cast<uint8_t>(a[i] ^ b[i]);
+        }
+        return diff == 0;
+    }
+
+    std::string Base64Encode(const std::vector<uint8_t>& data)
+    {
+        static const char kAlphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        std::string out;
+        out.reserve((data.size() + 2) / 3 * 4);
+        for (size_t i = 0; i < data.size(); i += 3)
+        {
+            const size_t remaining = data.size() - i;
+            uint32_t group = static_cast<uint32_t>(data[i]) << 16;
+            if (remaining > 1)
+            {
+                group |= static_cast<uint32_t>(data[i + 1]) << 8;
+            }
+            if (remaining > 2)
+            {
+                group |= data[i + 2];
+            }
+            out.push_back(kAlphabet[(group >> 18) & 0x3F]);
+            out.push_back(kAlphabet[(group >> 12) & 0x3F]);
+            out.push_back(remaining > 1 ? kAlphabet[(group >> 6) & 0x3F] : '=');
+            out.push_back(remaining > 2 ? kAlphabet[group & 0x3F] : '=');
+        }
+        return out;
+    }
+
+    ScramKeys::~ScramKeys()
+    {
+        SecureErase(clientKey.data(), clientKey.size());
+        SecureErase(storedKey.data(), storedKey.size());
+        SecureErase(serverKey.data(), serverKey.size());
+    }
+
+    ScramKeys DeriveScramKeysFromSaltedPassword(const std::vector<uint8_t>& saltedPassword)
+    {
+        static const std::string kClientKeyLabel = "Client Key";
+        static const std::string kServerKeyLabel = "Server Key";
+        ScramKeys keys;
+        keys.clientKey = HmacSha256(saltedPassword.data(), saltedPassword.size(),
+                                    reinterpret_cast<const uint8_t*>(kClientKeyLabel.data()), kClientKeyLabel.size());
+        keys.storedKey = Sha256(keys.clientKey.data(), keys.clientKey.size());
+        keys.serverKey = HmacSha256(saltedPassword.data(), saltedPassword.size(),
+                                    reinterpret_cast<const uint8_t*>(kServerKeyLabel.data()), kServerKeyLabel.size());
+        return keys;
+    }
+
+    ScramKeys DeriveScramKeys(const std::string& password, const std::vector<uint8_t>& salt, uint32_t iterations)
+    {
+        std::vector<uint8_t> saltedPassword = Pbkdf2HmacSha256(password, salt, iterations, 32);
+        const EraseOnExit clearSaltedPassword(saltedPassword.data(), saltedPassword.size());
+        return DeriveScramKeysFromSaltedPassword(saltedPassword);
+    }
+
+    Sha256Digest ScramClientProof(const ScramKeys& keys, const std::string& authMessage)
+    {
+        Sha256Digest clientSignature =
+            HmacSha256(keys.storedKey.data(), keys.storedKey.size(),
+                       reinterpret_cast<const uint8_t*>(authMessage.data()), authMessage.size());
+        const EraseOnExit clearSignature(clientSignature.data(), clientSignature.size());
+        return XorBytes(keys.clientKey, clientSignature);
     }
 
 } // namespace Terrafront::Crypto

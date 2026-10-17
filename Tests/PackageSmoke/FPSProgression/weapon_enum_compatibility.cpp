@@ -1,8 +1,8 @@
 /** @file weapon_enum_compatibility.cpp
- * @brief The legacy engine header and public SDK must name the same weapon enum.
+ * @brief The public SDK weapon and gameplay headers must name the same weapon enum.
  */
 #include <Spark/WeaponTypes.h>
-#include "Enums/GameSystemEnums.h"
+#include <Spark/GameTypes.h>
 
 #include <type_traits>
 

@@ -17,6 +17,9 @@
 #include <algorithm>
 #include <iostream>
 
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
+
 namespace SparkEditor
 {
 
@@ -99,7 +102,7 @@ namespace SparkEditor
 
         if (selected->isBuiltIn)
         {
-            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f), ICON_FA_LOCK " Built-in material (read-only)");
+            Spark::Ui::TextRole(Spark::Ui::Role::WarningText, ICON_FA_LOCK " Built-in material (read-only)");
             ImGui::Spacing();
         }
 
@@ -126,9 +129,9 @@ namespace SparkEditor
 
     void MaterialEditorPanel::RenderParameterGroup(const std::string& groupName, std::vector<ShaderParameter*>& params)
     {
-        if (ImGui::CollapsingHeader(groupName.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader(groupName.c_str()))
         {
-            ImGui::Indent(8.0f);
+            ImGui::Indent(Spark::Ui::Px(8.0f));
             MaterialDefinition* selected = GetSelectedMaterial();
             bool isReadOnly = (selected != nullptr && selected->isBuiltIn);
 
@@ -192,7 +195,7 @@ namespace SparkEditor
                 ImGui::EndDisabled();
             }
 
-            ImGui::Unindent(8.0f);
+            ImGui::Unindent(Spark::Ui::Px(8.0f));
         }
     }
 
@@ -290,7 +293,7 @@ namespace SparkEditor
                       std::min(param.texturePath.size(), static_cast<size_t>(sizeof(pathBuf) - 1)),
                   pathBuf);
 
-        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 70.0f);
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - Spark::Ui::Px(70.0f));
         std::string inputId = "##TexPath_" + param.name;
         if (ImGui::InputText(inputId.c_str(), pathBuf, sizeof(pathBuf)))
         {
@@ -323,11 +326,11 @@ namespace SparkEditor
             // Show current path
             if (!param.texturePath.empty())
             {
-                ImGui::TextColored(ImVec4(0.6f, 0.8f, 0.6f, 1.0f), "Current: %s", param.texturePath.c_str());
+                Spark::Ui::KeyValue("Current:", "%s", param.texturePath.c_str());
             }
             else
             {
-                ImGui::TextColored(ImVec4(0.8f, 0.6f, 0.3f, 1.0f), "No texture assigned");
+                Spark::Ui::StatusText(Spark::Ui::Status::Warning, "No texture assigned");
             }
 
             ImGui::Separator();
@@ -420,9 +423,9 @@ namespace SparkEditor
             headerLabel = ICON_FA_TIMES " " + headerLabel;
         }
 
-        if (ImGui::CollapsingHeader(headerLabel.c_str()))
+        if (Spark::Ui::SectionHeader(headerLabel.c_str(), nullptr, false))
         {
-            ImGui::Indent(8.0f);
+            ImGui::Indent(Spark::Ui::Px(8.0f));
 
             // Texture path
             char pathBuf[256] = {};
@@ -433,7 +436,7 @@ namespace SparkEditor
 
             ImGui::Text("Texture:");
             ImGui::SameLine();
-            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 70.0f);
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - Spark::Ui::Px(70.0f));
             if (ImGui::InputText("##SlotTexture", pathBuf, sizeof(pathBuf)))
             {
                 slot.texturePath = pathBuf;
@@ -474,7 +477,7 @@ namespace SparkEditor
             // Filter mode
             const char* filterNames[] = {"Point", "Bilinear", "Trilinear", "Anisotropic"};
             int currentFilter = static_cast<int>(slot.filter);
-            ImGui::SetNextItemWidth(150.0f);
+            ImGui::SetNextItemWidth(Spark::Ui::Px(150.0f));
             if (ImGui::Combo("Filter", &currentFilter, filterNames, 4))
             {
                 slot.filter = static_cast<TextureSlot::FilterMode>(currentFilter);
@@ -490,7 +493,7 @@ namespace SparkEditor
             int currentWrapU = static_cast<int>(slot.wrapU);
             int currentWrapV = static_cast<int>(slot.wrapV);
 
-            ImGui::SetNextItemWidth(150.0f);
+            ImGui::SetNextItemWidth(Spark::Ui::Px(150.0f));
             if (ImGui::Combo("Wrap U", &currentWrapU, wrapNames, 4))
             {
                 slot.wrapU = static_cast<TextureSlot::WrapMode>(currentWrapU);
@@ -501,7 +504,7 @@ namespace SparkEditor
                 }
             }
 
-            ImGui::SetNextItemWidth(150.0f);
+            ImGui::SetNextItemWidth(Spark::Ui::Px(150.0f));
             if (ImGui::Combo("Wrap V", &currentWrapV, wrapNames, 4))
             {
                 slot.wrapV = static_cast<TextureSlot::WrapMode>(currentWrapV);
@@ -530,7 +533,7 @@ namespace SparkEditor
                 }
             }
 
-            ImGui::Unindent(8.0f);
+            ImGui::Unindent(Spark::Ui::Px(8.0f));
         }
     }
 

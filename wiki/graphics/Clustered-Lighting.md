@@ -4,7 +4,7 @@ SparkEngine uses GPU-based clustered light culling to efficiently determine whic
 
 **Source:** `SparkEngine/Source/Graphics/ClusteredLightCulling.h`, `SparkEngine/Source/Graphics/ClusteredLightGPU.h`
 **Namespace:** `Spark::Graphics`
-**Tests:** `Tests/TestClusteredLightGPU.cpp` (7 test cases)
+**Tests:** `Tests/TestClusteredLightGPU.cpp`
 
 ---
 

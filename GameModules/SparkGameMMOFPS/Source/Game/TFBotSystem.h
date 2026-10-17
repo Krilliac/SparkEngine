@@ -52,7 +52,7 @@
  *    reloading bots give ground while keeping the target in their sights.
  *
  * Authority-only: inert on pure clients (and it despawns everything if the
- * process stops being the authority). Cap 32 bots, flat storage, no
+ * process stops being the authority). Cap kTFMaxBots (98), flat storage, no
  * allocations in the fixed-tick path.
  */
 #pragma once

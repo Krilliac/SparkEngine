@@ -4,13 +4,12 @@
  */
 
 #include "RacingAIDriver.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
 #include <algorithm>
 #include <cmath>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -33,7 +32,9 @@ namespace Racing
         [[nodiscard]] float NormalizeSigned(float value, float range)
         {
             if (range <= 0.0f)
+            {
                 return 0.0f;
+            }
             return std::clamp(value / range, -1.0f, 1.0f);
         }
     } // namespace
@@ -44,21 +45,24 @@ namespace Racing
         m_context = context;
         m_initialized = true;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing AI driver system initialized");
-        console.LogInfo("[Racing AI] AI driver system initialized");
+        Spark::ModuleLog::Info(m_context, "Racing AI driver system initialized");
+        Spark::ModuleLog::Info(m_context, "[Racing AI] AI driver system initialized");
         return true;
     }
 
     void RacingAIDriver::Update(float deltaTime)
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         for (size_t i = 0; i < m_drivers.size(); ++i)
         {
             if (i < m_states.size())
+            {
                 UpdateDriver(m_drivers[i], m_states[i], deltaTime);
+            }
         }
     }
 
@@ -110,17 +114,20 @@ namespace Racing
             driver.aggressiveness = preset.aggressiveness;
         }
 
-        auto& console = Spark::SimpleConsole::GetInstance();
         const char* names[] = {"Easy", "Medium", "Hard", "Expert"};
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Racing AI global difficulty set to: %s",
-                       names[static_cast<int>(difficulty)]);
-        console.LogInfo("[Racing AI] Global difficulty set to: " + std::string(names[static_cast<int>(difficulty)]));
+        Spark::ModuleLog::Info(m_context, "Racing AI global difficulty set to: {}",
+                               names[static_cast<int>(difficulty)]);
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[Racing AI] Global difficulty set to: " +
+                                   std::string(names[static_cast<int>(difficulty)]));
     }
 
     void RacingAIDriver::UpdateRubberBanding(float playerDistance, float leadDistance, float lastDistance)
     {
         if (m_states.empty())
+        {
             return;
+        }
 
         // Rubber-banding model with synthetic race positions:
         // - m_states index 0 is considered race leader, last index is tail.
@@ -160,11 +167,24 @@ namespace Racing
         }
     }
 
+    void RacingAIDriver::SetTrackSteer(uint32_t vehicleId, float steer)
+    {
+        const auto it = m_stateIndexByVehicleId.find(vehicleId);
+        if (it == m_stateIndexByVehicleId.end() || it->second >= m_states.size() || !std::isfinite(steer))
+        {
+            return;
+        }
+        m_states[it->second].trackSteer = std::clamp(steer, -1.0f, 1.0f);
+        m_states[it->second].hasTrackSteer = true;
+    }
+
     const AIDriverState* RacingAIDriver::GetDriverState(uint32_t vehicleId) const
     {
         const auto it = m_stateIndexByVehicleId.find(vehicleId);
         if (it == m_stateIndexByVehicleId.end())
+        {
             return nullptr;
+        }
         const size_t index = it->second;
         return (index < m_states.size()) ? &m_states[index] : nullptr;
     }
@@ -174,7 +194,9 @@ namespace Racing
         m_stateIndexByVehicleId.clear();
         m_stateIndexByVehicleId.reserve(m_states.size());
         for (size_t i = 0; i < m_states.size(); ++i)
+        {
             m_stateIndexByVehicleId[m_states[i].vehicleId] = i;
+        }
     }
 
     std::string RacingAIDriver::GetDriverListString() const
@@ -189,7 +211,9 @@ namespace Racing
             result += " | " + std::string(diffNames[static_cast<int>(d.difficulty)]);
             result += " | Speed: " + std::to_string(static_cast<int>(d.speedFactor * 100.0f)) + "%";
             if (i < m_states.size() && m_states[i].isOvertaking)
+            {
                 result += " [OVERTAKING]";
+            }
             result += "\n";
         }
         return result;
@@ -198,7 +222,9 @@ namespace Racing
     void RacingAIDriver::UpdateDriver(AIDriverConfig& config, AIDriverState& state, float dt)
     {
         if (dt <= 0.0f)
+        {
             return;
+        }
 
         dt = std::min(dt, 0.1f);
 
@@ -224,17 +250,18 @@ namespace Racing
         state.targetWaypoint = (state.targetWaypoint + static_cast<uint32_t>(std::max(1.0f, waypointAdvance))) %
                                static_cast<uint32_t>(kSyntheticTrackWaypointCount);
 
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Racing AI driver %u: throttle=%.2f steer=%.2f nitro=%s",
-                        state.vehicleId, state.throttle, state.steer, state.useNitro ? "yes" : "no");
+        // No per-driver, per-frame log here: the SDK logger has no Trace level, and at Debug a full
+        // simulated race emits ~87k lines, flooding the sanitizer lanes' 16 MiB capture cap.
     }
 
     void RacingAIDriver::ComputeSteering(const AIDriverConfig& config, AIDriverState& state)
     {
-        // Synthetic racing line (sine-cosine blend) for deterministic behavior
-        // when no track-waypoint service is injected yet.
+        // Follow the authored track line when the race flow supplies it; otherwise fall back to a
+        // synthetic racing line (sine-cosine blend) for deterministic standalone behavior.
         const float phase = GetTrackPhase(state);
         const float upcomingPhase = phase + (state.lookAheadCount * 0.05f);
-        const float targetAngle = std::sin(phase) * 0.55f + std::sin(upcomingPhase * 0.7f) * 0.25f;
+        const float targetAngle =
+            state.hasTrackSteer ? state.trackSteer : std::sin(phase) * 0.55f + std::sin(upcomingPhase * 0.7f) * 0.25f;
 
         // Line accuracy adds noise: lower accuracy = wider, less precise lines
         const float deterministicSeed = static_cast<float>((state.vehicleId * 1103515245u + 12345u) & 0x3FFu) / 1023.0f;
@@ -245,7 +272,9 @@ namespace Racing
 
         // Apply overtake lateral offset
         if (state.isOvertaking)
+        {
             state.steer += state.overtakeOffset * 0.5f;
+        }
 
         state.steer = std::clamp(state.steer, -1.0f, 1.0f);
     }
@@ -287,16 +316,22 @@ namespace Racing
         // Synthetic overtake trigger: only attempt on mild steering and when
         // aggressiveness plus rubber-band pressure indicates catch-up intent.
         if (std::abs(state.steer) > 0.35f)
+        {
             return;
+        }
 
         const float overtakeIntent = std::clamp(config.aggressiveness * state.rubberBandFactor, 0.0f, 1.5f);
         if (overtakeIntent < 0.35f)
+        {
             return;
+        }
 
         const float phase = GetTrackPhase(state);
         const float triggerWave = 0.5f + 0.5f * std::sin(phase * 4.0f + static_cast<float>(state.vehicleId) * 0.17f);
         if (triggerWave > overtakeIntent)
+        {
             return;
+        }
 
         state.isOvertaking = true;
         state.overtakeTimer = std::clamp(0.8f + (1.4f - overtakeIntent), 0.5f, 2.0f);
@@ -352,9 +387,11 @@ namespace Racing
 
     void RacingAIDriver::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Racing AI Drivers"))
+        {
             return;
+        }
 
         const char* diffNames[] = {"Easy", "Medium", "Hard", "Expert"};
         ImGui::Text("Global Difficulty: %s", diffNames[static_cast<int>(m_globalDifficulty)]);

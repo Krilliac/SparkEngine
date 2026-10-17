@@ -11,11 +11,13 @@
 #ifndef SPARK_PLATFORM_WINDOWS
 
 #include "GraphicsEngine.h"
+#include "AssetPipeline.h"
 #include "GraphicsEngineRHI.h"
 #include "ProjectAssetPath.h"
 #include "RHI/RHI.h"
 #include "../Utils/Validate.h"
 
+#include <cstddef>
 #include <string>
 #include <cstring>
 
@@ -31,24 +33,88 @@ HRESULT GraphicsEngine::InitializeBasicShaders()
     if (!rhi.initialized)
         return E_FAIL;
 
-    // Register basic shader pairs (HLSL for Windows, GLSL for Linux). Every
-    // path here must name a file that ships: the previous Shaders/Basic.*
-    // names existed nowhere in the repository. There is no SPIR-V variant of
-    // the basic pair, so the SPIR-V slot is left empty rather than pointing at
-    // a .spv that is never produced.
+    // Register basic shader pairs (HLSL for D3D, GLSL for OpenGL, SPIR-V for
+    // Vulkan). Every path here must name a file that ships: the previous
+    // Shaders/Basic.* names existed nowhere in the repository. The SPIR-V
+    // modules are compiled from the GLSL by the root CMakeLists.txt (section
+    // 9.4), which makes glslangValidator a configure-time requirement whenever
+    // the Vulkan backend is built.
     rhi.bridge.RegisterShader("basic_vs", Spark::RHI::RHIShaderStage::Vertex, "Shaders/HLSL/BasicVS.hlsl",
-                              "Shaders/GLSL/BasicVS.glsl", "", "main");
+                              "Shaders/GLSL/BasicVS.glsl", "Shaders/SPIRV/BasicVS.vert.spv", "main");
     rhi.bridge.RegisterShader("basic_ps", Spark::RHI::RHIShaderStage::Pixel, "Shaders/HLSL/BasicPS.hlsl",
-                              "Shaders/GLSL/BasicPS.glsl", "", "main");
+                              "Shaders/GLSL/BasicPS.glsl", "Shaders/SPIRV/BasicPS.frag.spv", "main");
 
-    // Verify shaders can be loaded
-    Spark::RHI::IRHIShader* vs = rhi.bridge.GetShader("basic_vs");
-    Spark::RHI::IRHIShader* ps = rhi.bridge.GetShader("basic_ps");
-
-    if (!vs || !ps)
+    // NullRHI has no shader language and records no GPU work, so its pipeline is built without
+    // shaders. Every GPU backend must load both stages, or the forward pass stays unavailable.
+    const bool headless = rhi.bridge.GetActiveBackend() == Spark::RHI::GraphicsBackend::None;
+    Spark::RHI::IRHIShader* vs = headless ? nullptr : rhi.bridge.GetShader("basic_vs");
+    Spark::RHI::IRHIShader* ps = headless ? nullptr : rhi.bridge.GetShader("basic_ps");
+    if (!headless && (!vs || !ps))
     {
         SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to load basic shaders via RHI");
         return E_FAIL;
+    }
+
+    HRESULT hr = CreateBasicConstantBuffer();
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    auto& pass = rhi.basicForward;
+    pass.sampler = rhi.bridge.CreateSamplerLinearWrap();
+    if (!pass.sampler)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create the basic forward-pass sampler");
+        return E_FAIL;
+    }
+
+    // The input layout describes the whole MeshAssetData::Vertex. BasicVS reads locations 0-2
+    // (POSITION, NORMAL, TEXCOORD0); the remaining elements are listed so every backend derives
+    // the real vertex stride from the layout (Vulkan takes the binding stride from the furthest
+    // element end, not from the bound buffer).
+    using Vertex = MeshAssetData::Vertex;
+    using Spark::RHI::RHIVertexFormat;
+    static_assert(offsetof(Vertex, boneWeights) + sizeof(DirectX::XMFLOAT4) == sizeof(Vertex),
+                  "the basic forward input layout must end at the end of MeshAssetData::Vertex");
+    Spark::RHI::RHIPipelineStateDesc desc;
+    desc.inputLayout.elements = {
+        {"POSITION", 0, RHIVertexFormat::Float3, 0, offsetof(Vertex, position), false, 0},
+        {"NORMAL", 0, RHIVertexFormat::Float3, 0, offsetof(Vertex, normal), false, 0},
+        {"TEXCOORD", 0, RHIVertexFormat::Float2, 0, offsetof(Vertex, texCoord0), false, 0},
+        {"TANGENT", 0, RHIVertexFormat::Float3, 0, offsetof(Vertex, tangent), false, 0},
+        {"TEXCOORD", 1, RHIVertexFormat::Float2, 0, offsetof(Vertex, texCoord1), false, 0},
+        {"COLOR", 0, RHIVertexFormat::Float4, 0, offsetof(Vertex, color), false, 0},
+        {"BLENDINDICES", 0, RHIVertexFormat::UInt4, 0, offsetof(Vertex, boneIndices), false, 0},
+        {"BLENDWEIGHT", 0, RHIVertexFormat::Float4, 0, offsetof(Vertex, boneWeights), false, 0},
+    };
+    // The backends share no clip-space Y convention (Vulkan flips it and with it the winding),
+    // so the basic pass does not cull; depth testing resolves closed meshes.
+    desc.rasterizer.cullMode = Spark::RHI::RHICullMode::None;
+    Spark::RHI::IRHITexture* backBuffer = rhi.bridge.GetBackBuffer();
+    Spark::RHI::IRHITexture* depthBuffer = rhi.bridge.GetDepthBuffer();
+    desc.renderTargetFormats[0] = backBuffer ? backBuffer->GetFormat() : Spark::RHI::PixelFormat::R8G8B8A8_UNORM;
+    if (depthBuffer)
+    {
+        desc.depthStencilFormat = depthBuffer->GetFormat();
+    }
+    desc.debugName = "BasicForwardPass";
+
+    Spark::RHI::IRHIDevice* device = rhi.bridge.GetDevice();
+    pass.pipeline = device ? device->CreatePipelineState(desc, vs, ps) : nullptr;
+    if (!pass.pipeline)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create the basic forward-pass pipeline");
+        return E_FAIL;
+    }
+
+    // The tone-mapping post pass is optional: without it a frame that asks for tone mapping
+    // renders straight to the back buffer and is counted as rejected (see TonemapPass).
+    if (!CreateTonemapPass(rhi, desc, vs, ps, headless))
+    {
+        SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                       "GraphicsEngine (Linux): tone-mapping post pass unavailable; tone-mapped frames will be "
+                       "rejected");
     }
 
     return S_OK;
@@ -102,15 +168,32 @@ HRESULT GraphicsEngine::CreateBasicConstantBuffer()
     if (!rhi.initialized)
         return E_FAIL;
 
-    constexpr uint64_t CB_SIZE = 256;
-    auto cb = rhi.bridge.CreateConstantBuffer(CB_SIZE);
-    if (!cb)
+    // Per-frame and per-material buffers; per-object buffers are created by ProcessDrawList
+    // as the frame's draw count requires (see BasicForwardPass).
+    auto& pass = rhi.basicForward;
+    pass.frameConstants = rhi.bridge.CreateConstantBuffer(sizeof(BasicFrameConstants));
+    pass.materialConstants = rhi.bridge.CreateConstantBuffer(sizeof(BasicMaterialConstants));
+    if (!pass.frameConstants || !pass.materialConstants)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create the basic forward-pass constant buffers");
         return E_FAIL;
+    }
 
-    constexpr uint64_t FRAME_CB_SIZE = 256;
-    auto frameCB = rhi.bridge.CreateConstantBuffer(FRAME_CB_SIZE);
-    if (!frameCB)
-        return E_FAIL;
+    // The basic material has no normal, emissive or occlusion map (the default white texture
+    // is bound there), so the factors keep those slots neutral: normalScale 0 selects the
+    // geometric normal, emissiveFactor 0 adds nothing, occlusion 1 leaves ambient unscaled.
+    BasicMaterialConstants material{};
+    material.albedoColor = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+    material.metallicFactor = 1.0f;
+    material.roughnessFactor = 1.0f;
+    material.normalScale = 0.0f;
+    material.occlusionStrength = 1.0f;
+    material.emissiveFactor = 0.0f;
+    material.alphaCutoff = 0.0f;
+    if (Spark::RHI::IRHIDevice* device = rhi.bridge.GetDevice())
+    {
+        device->UpdateBuffer(pass.materialConstants.get(), &material, sizeof(material));
+    }
 
     return S_OK;
 }
@@ -122,10 +205,10 @@ HRESULT GraphicsEngine::CreateDefaultTexture()
         return E_FAIL;
 
     const uint32_t whitePixel = 0xFFFFFFFF;
-    auto defaultTex = rhi.bridge.CreateTexture2D(1, 1, Spark::RHI::PixelFormat::R8G8B8A8_UNORM,
-                                                 Spark::RHI::RHITextureUsage::ShaderResource, &whitePixel);
+    rhi.defaultTexture = rhi.bridge.CreateTexture2D(1, 1, Spark::RHI::PixelFormat::R8G8B8A8_UNORM,
+                                                    Spark::RHI::RHITextureUsage::ShaderResource, &whitePixel);
 
-    if (!defaultTex)
+    if (!rhi.defaultTexture)
     {
         SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create default texture via RHI");
         return E_FAIL;
@@ -335,6 +418,27 @@ void GraphicsEngine::SetBasicMaterialTextures(ID3D11ShaderResourceView* /*normal
                                               ID3D11ShaderResourceView* /*roughnessSrv*/)
 {
     // Basic D3D11 SRVs are not part of the non-Windows RHI path.
+}
+
+// --- Basic-path output-merger state and the blob-shadow SRV are part of the
+//     public basic-draw surface game modules link against (SparkGameMMOFPS's
+//     transparent, FX and blob-shadow passes). Without Linux definitions the
+//     module fails dlopen(RTLD_NOW) with an undefined symbol and never loads.
+//     As with ApplyBasicRenderStates, the active RHI pipeline owns blend and
+//     depth state on Linux, and a null SRV means "no texture" to SetBasicTexture.
+void GraphicsEngine::SetBasicBlendMode(BasicBlendMode /*mode*/)
+{
+    // Blend state is owned by the RHI pipeline state on non-Windows builds.
+}
+
+void GraphicsEngine::SetBasicDepthMode(BasicDepthMode /*mode*/)
+{
+    // Depth-stencil state is owned by the RHI pipeline state on non-Windows builds.
+}
+
+ID3D11ShaderResourceView* GraphicsEngine::GetOrCreateSoftCircleShadowSRV()
+{
+    return nullptr;
 }
 
 const GraphicsEngine::BasicMaterial* GraphicsEngine::GetOrLoadBasicMaterial(const std::string& /*jsonPath*/,

@@ -122,12 +122,20 @@ namespace Spark
         EntityEventBus(const EntityEventBus&) = delete;
         EntityEventBus& operator=(const EntityEventBus&) = delete;
 
-        /// @brief Access the engine-wide entity event bus singleton.
-        static EntityEventBus& Global()
-        {
-            static EntityEventBus instance;
-            return instance;
-        }
+        /**
+         * @brief Access the engine-wide entity event bus singleton.
+         *
+         * Defined out of line so that on POSIX, where game modules resolve engine symbols from the
+         * exporting host, the instance lives only in the host image (Windows modules link the
+         * static engine and keep a private bus, as before). Because the bus outlives modules, a
+         * game module must not subscribe or create channels on it: their handlers and channel
+         * vtables would dangle after the module unloads. An inline
+         * function-local static is emitted as a weak symbol in every game module; on macOS the
+         * exporting host coalesces it with the module's copy, the module that first constructs
+         * it registers the destructor against its own image, and unloading that module destroys
+         * the live bus (the next lock fails with EINVAL).
+         */
+        static EntityEventBus& Global();
 
         /**
          * @brief Subscribe a handler to events of type E for a specific entity.

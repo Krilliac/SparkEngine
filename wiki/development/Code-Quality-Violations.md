@@ -14,13 +14,13 @@ The original audit was marked **"Mostly Resolved."** As of 2026-06-08 verificati
 
 ## Progress Timeline (from original entry)
 
-- **2026-03-31:** Down from 66 oversized functions to 9 remaining (86% reduction). `RegisterDefaultCommands` split into 3 focused functions. `InspectorComponentRenderers.cpp` split into 4 domain files. `MaterialSystem` "duplicates" confirmed as wrapper+impl, not true duplicates.
-- **2026-03-31 (optimization pass):** `SaveSystem::RegisterBuiltins()` (425 lines) split into 3 domain functions; `SaveSystem::SerializeWorld()` (124 lines) refactored with a `TrySerialize<T>` template; `ConsoleApp` Run/ReadEngineInput/ReadUserInput split into focused helpers.
+- **2026-03-31:** Down from 66 oversized functions to 9 remaining (86% reduction). `RegisterDefaultCommands` split into 3 focused functions. `InspectorComponentRenderers.cpp` split into domain files. `MaterialSystem` "duplicates" confirmed as wrapper+impl, not true duplicates.
+- **2026-03-31 (optimization pass):** `SaveSystem::RegisterBuiltins()` split into 3 domain functions; `SaveSystem::SerializeWorld()` refactored with a `TrySerialize<T>` template; `ConsoleApp` Run/ReadEngineInput/ReadUserInput split into focused helpers.
 - **2026-04-04:** All 9 remaining oversized functions reviewed and annotated with `// NOTE: Intentionally exceeds 50-line guideline` comments explaining why each is left as-is (linear initialization, rendering pipeline, event wiring, UI layout).
 
 ## 1. Functions Over the Length Guideline (originally 66)
 
-The original audit used a 50-line trigger. The current `CLAUDE.md` guideline is ~60 lines, and explicitly treats clear linear flow as acceptable. The remaining intentionally-long functions carry `// NOTE: Intentionally exceeds ...` annotations — verified present (10 occurrences across files including `GraphicsEngineWindows.cpp`, `SparkEngineWindows.cpp`, `EditorUI.cpp`, `EditorNotificationManager.cpp`).
+The original audit used a 50-line trigger. The current `CLAUDE.md` guideline is ~60 lines, and explicitly treats clear linear flow as acceptable. The remaining intentionally-long functions carry `// NOTE: Intentionally exceeds ...` annotations — verified present (in files including `GraphicsEngineWindows.cpp`, `SparkEngineWindows.cpp`, `EditorUI.cpp`, `EditorNotificationManager.cpp`).
 
 ### Original top offenders — current status
 
@@ -28,11 +28,11 @@ Many cited files have been **split or relocated**, so the original line counts n
 
 | Function (as cited) | Original file | Original lines | Current reality (2026-06-08) |
 |---------------------|---------------|----------------|------------------------------|
-| `RegisterEngineConsoleCommands()` | SparkEngine.cpp | 555 | `SparkEngine.cpp` is now 443 lines total — split out |
+| `RegisterEngineConsoleCommands()` | SparkEngine.cpp | 555 | `SparkEngine.cpp` was split into smaller units |
 | `main()` / `wWinMain()` | SparkEngine.cpp | 488 / 330 | Platform entry points split into `SparkEngineWindows.cpp` / `SparkEngineLinux.cpp` |
-| `RenderMainMenuBar()` / `CreatePanels()` | EditorUI.cpp | 514 / 412 | `EditorUI.cpp` still large (1,516 lines) — see live offenders below |
-| `RegisterHealthCommands()` etc. | SparkConsole.cpp | 453 + | `SparkConsole.cpp` trimmed to 641 lines total |
-| `LoadFromFile()` / `Console_ValidateMaterials()` | MaterialSystem.cpp | 407 / 247 | `MaterialSystem.cpp` is now 486 lines total |
+| `RenderMainMenuBar()` / `CreatePanels()` | EditorUI.cpp | 514 / 412 | `EditorUI.cpp` still large in the recorded audit — see live offenders below |
+| `RegisterHealthCommands()` etc. | SparkConsole.cpp | 453 + | `SparkConsole.cpp` trimmed in the recorded audit |
+| `LoadFromFile()` / `Console_ValidateMaterials()` | MaterialSystem.cpp | 407 / 247 | `MaterialSystem.cpp` was reduced |
 | `CreateCombatArena()` / `Initialize()` | Game.cpp | 379 / 364 | `Game.cpp` relocated to `GameModules/SparkGameFPS/Source/Game/Game.cpp` |
 | Various | GraphicsEngine.cpp | — | `GraphicsEngine.cpp` is now a 13-line shim; platform code lives in `GraphicsEngineWindows.cpp` |
 
@@ -44,10 +44,10 @@ The original audit flagged 7 classes against a "10 max private helpers" guidelin
 
 | Class | File | Original count | Current (2026-06-08) |
 |-------|------|----------------|----------------------|
-| PostProcessingPipeline | `Graphics/PostProcessingPipeline.h` (434 lines) | 84 | ~13 private methods — **drastically reduced** |
-| PhysicsSystem | `Physics/PhysicsSystem.h` (685 lines, relocated from `Engine/Physics/`) | 42 | Still data-heavy; not re-counted |
-| RenderGraph | `Graphics/RenderGraph.h` (1,125 lines, relocated from `Graphics/RenderGraph/`) | 26 | Still large |
-| SimpleConsole | `Utils/SparkConsole.h` (193 lines) | 42 | **Reduced** — header trimmed to 193 lines |
+| PostProcessingPipeline | `Graphics/PostProcessingPipeline.h` | 84 | ~13 private methods — **drastically reduced** |
+| PhysicsSystem | `Physics/PhysicsSystem.h` (relocated from `Engine/Physics/`) | 42 | Still data-heavy; not re-counted |
+| RenderGraph | `Graphics/RenderGraph.h` (relocated from `Graphics/RenderGraph/`) | 26 | Still large |
+| SimpleConsole | `Utils/SparkConsole.h` | 42 | **Reduced** — header trimmed |
 | PlatformInputManager, WaterSystem, BehaviorTree | various | 53 / 23 / 16+ | Not re-counted |
 
 Note the relocations: `PhysicsSystem.h` moved from `Engine/Physics/` to `Source/Physics/`, and `RenderGraph.h` moved from `Graphics/RenderGraph/` to `Source/Graphics/`.
@@ -87,9 +87,9 @@ CI also gates TODO/FIXME/HACK/XXX comment count at a threshold of 20 via the `to
 
 - **Original entry date:** 2026-04-02 (`.claude/knowledge/code-quality-violations.md`, type: Observation, status: Mostly Resolved)
 - **Verified against codebase 2026-06-08.**
-- **UPDATED — many cited files moved or shrank:** `SparkEngine.cpp` 443 lines (entry implied ~1,660 in oversized functions); `GraphicsEngine.cpp` is now a 13-line shim with platform code in `GraphicsEngineWindows.cpp`; `MaterialSystem.cpp` 486 lines; `SparkConsole.cpp` 641 / `SparkConsole.h` 193. `Game.cpp` relocated to `GameModules/SparkGameFPS/Source/Game/`; `PhysicsSystem.h` to `Source/Physics/`; `RenderGraph.h` to `Source/Graphics/`.
-- **UPDATED — private-method counts:** `PostProcessingPipeline.h` dropped from 84 to ~13 private methods (now 434 lines). SimpleConsole/SparkConsole header trimmed.
-- **VERIFIED — STALE claims re-checked:** commented-out code in `SeamlessAreaManager.cpp` is gone (resolved, as the entry claimed). The `// NOTE: Intentionally exceeds ...` annotations still exist (10 occurrences). `EditorUI.cpp` remains genuinely large at 1,516 lines.
+- **UPDATED — many cited files moved or shrank:** `SparkEngine.cpp` was reduced (entry implied ~1,660 in oversized functions); `GraphicsEngine.cpp` is now a 13-line shim with platform code in `GraphicsEngineWindows.cpp`; `MaterialSystem.cpp` was reduced; `SparkConsole.cpp` 641 / `SparkConsole.h` 193. `Game.cpp` relocated to `GameModules/SparkGameFPS/Source/Game/`; `PhysicsSystem.h` to `Source/Physics/`; `RenderGraph.h` to `Source/Graphics/`.
+- **UPDATED — private-method counts:** `PostProcessingPipeline.h` dropped from 84 to ~13 private methods. SimpleConsole/SparkConsole header trimmed.
+- **VERIFIED — STALE claims re-checked:** commented-out code in `SeamlessAreaManager.cpp` is gone (resolved, as the entry claimed). The `// NOTE: Intentionally exceeds ...` annotations still exist (10 occurrences). `EditorUI.cpp` remained large in that snapshot.
 - **UNVERIFIABLE / not re-counted:** PhysicsSystem, RenderGraph, PlatformInputManager, WaterSystem, BehaviorTree private-method counts and the per-file oversized-function totals were not re-tallied; treat the original numbers as historical.
 
 ## Related Pages

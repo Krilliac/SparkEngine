@@ -24,7 +24,8 @@ _RAW_STRING = re.compile(r'(?:u8|u|U|L)?R"([^ ()\\\t\r\n]{0,16})\(')
 _SYMBOL = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*$")
 _HARNESS_DEFINITION = re.compile(
     r"\bint\s+" + ENTRY_POINT + r"\s*\(\s*const\s+(?:std\s*::\s*)?(?:uint8_t|unsigned\s+char)\s*\*"
-    r"[^)]{0,120}?\b(?:std\s*::\s*)?size_t\b[^)]{0,80}\)\s*\{"
+    r"\s*[A-Za-z_][A-Za-z0-9_]*\s*,\s*"
+    r"(?:std\s*::\s*)?size_t\s+(?P<size>[A-Za-z_][A-Za-z0-9_]*)\s*\)\s*\{"
 )
 _INCLUDE = re.compile(r'^\s*#\s*include\s*[<"]', re.MULTILINE)
 
@@ -107,6 +108,63 @@ def _constant_binding(code: str, name: str, value: int, field: str) -> None:
         raise PolicyError(f"{field} defines {name} but never uses it")
 
 
+def _has_direct_input_rejection(code: str, size_name: str, entry_leaf: str, field: str) -> bool:
+    """Require the oversized-input branch to exit before it can call the parser."""
+    guard = re.compile(
+        r"\bif\s*\(\s*(?:"
+        + re.escape(size_name)
+        + r"\s*>\s*"
+        + INPUT_CONSTANT
+        + r"|"
+        + INPUT_CONSTANT
+        + r"\s*<\s*"
+        + re.escape(size_name)
+        + r")\s*\)"
+    )
+    parser_call = re.compile(r"\b" + re.escape(entry_leaf) + r"\s*\(")
+    direct_return = re.compile(r"\breturn\b[^;{}]*;")
+
+    for match in guard.finditer(code):
+        # A later guard cannot bound a parser call that already received the
+        # untrusted buffer. Be conservative around any earlier call-shaped use.
+        if parser_call.search(code[: match.start()]) is not None:
+            continue
+        cursor = match.end()
+        while cursor < len(code) and code[cursor].isspace():
+            cursor += 1
+        if cursor >= len(code):
+            continue
+        if code[cursor] == "{":
+            body_start = cursor + 1
+            depth = 1
+            index = body_start
+            while index < len(code) and depth:
+                if code[index] == "{":
+                    depth += 1
+                elif code[index] == "}":
+                    depth -= 1
+                index += 1
+            if depth:
+                continue
+            body = code[body_start : index - 1]
+            return_match = direct_return.search(body)
+            if return_match is None:
+                continue
+            prefix = body[: return_match.start()]
+            # A return nested in another control-flow block is not a proof that
+            # every oversized input exits. Nested braces are equally ambiguous.
+            if re.search(r"\b(?:if|for|while|switch|goto)\b|[{}]", prefix):
+                continue
+            if parser_call.search(prefix) is not None:
+                continue
+            return True
+        else:
+            statement = direct_return.match(code, cursor)
+            if statement is not None:
+                return True
+    raise PolicyError(f"{field}.harness does not reject oversized input before calling the parser")
+
+
 def require_entry_symbol(symbol: str, field: str) -> str:
     if not _SYMBOL.fullmatch(symbol):
         raise PolicyError(f"{field} must be a C++ identifier or qualified name: {symbol!r}")
@@ -124,7 +182,8 @@ def verify_harness(
 ) -> None:
     """Require a compilable harness shape that calls the production entry point."""
     code = _read_source(root, harness, f"{field}.harness", max_bytes=MAX_HARNESS_BYTES)
-    if _HARNESS_DEFINITION.search(code) is None:
+    definition = _HARNESS_DEFINITION.search(code)
+    if definition is None:
         raise PolicyError(f"{field}.harness does not define {ENTRY_POINT}(const uint8_t*, size_t)")
     if _INCLUDE.search(code) is None:
         raise PolicyError(f"{field}.harness includes no headers, so it cannot call a production parser")
@@ -138,6 +197,7 @@ def verify_harness(
         raise PolicyError(f"{field}.harness never compares its input size against {INPUT_CONSTANT}")
 
     leaf = require_entry_symbol(entry_symbol, f"{field}.entry_symbol").rsplit("::", 1)[-1]
+    _has_direct_input_rejection(code, definition.group("size"), leaf, f"{field}.harness")
     if re.search(r"\b" + re.escape(leaf) + r"\s*\(", code) is None:
         raise PolicyError(f"{field}.harness never calls the declared entry symbol {entry_symbol}")
 

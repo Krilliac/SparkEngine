@@ -1,0 +1,29 @@
+{
+  "windowLayout": {
+    "name": "Monitors",
+    "version": 1,
+    "dockLayoutINI": "",
+    "panels": [
+      {
+        "panelName": "Far",
+        "isOpen": true,
+        "isFloating": false,
+        "posX": 0,
+        "posY": 0,
+        "width": 400,
+        "height": 300,
+        "monitorIndex": 3e9
+      },
+      {
+        "panelName": "Below",
+        "isOpen": true,
+        "isFloating": false,
+        "posX": 0,
+        "posY": 0,
+        "width": 400,
+        "height": 300,
+        "monitorIndex": -1e10
+      }
+    ]
+  }
+}

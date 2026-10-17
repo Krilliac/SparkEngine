@@ -34,6 +34,33 @@ enum class VRAMPressureLevel : uint8_t
 };
 
 /**
+ * @brief The source selected for a user-visible VRAM usage reading.
+ *
+ * A few WDDM/driver combinations can report a transient zero from
+ * QueryVideoMemoryInfo while the engine already owns GPU resources.  Keep
+ * that case distinguishable from a genuine live zero instead of presenting a
+ * zero as authoritative telemetry.
+ */
+struct VRAMUsageSelection
+{
+    size_t bytes = 0;
+    bool fromLiveQuery = false;
+    bool liveQueryReportedZero = false;
+};
+
+/**
+ * @brief Select a truthful reading from live DXGI data and an existing
+ *        engine-side estimate.
+ */
+inline VRAMUsageSelection SelectVRAMUsage(size_t liveUsage, bool liveAvailable, size_t estimate) noexcept
+{
+    if (liveAvailable && (liveUsage != 0 || estimate == 0))
+        return {liveUsage, true, false};
+
+    return {estimate, false, liveAvailable && liveUsage == 0 && estimate != 0};
+}
+
+/**
  * @brief Monitors GPU dedicated-memory budget via DXGI and recommends a
  *        texture-cache budget to the TextureSystem.
  *
@@ -73,8 +100,11 @@ class VRAMBudgetMonitor
     /** @brief Total dedicated VRAM reported by the adapter (bytes). */
     size_t GetTotalVRAM() const { return m_totalVRAM; }
 
-    /** @brief Current VRAM usage as reported by DXGI (bytes). */
+    /** @brief Current VRAM usage from the last successful DXGI query (bytes). */
     size_t GetCurrentUsage() const { return m_currentUsage; }
+
+    /** @brief Whether the current-usage value came from a successful query. */
+    bool IsCurrentUsageValid() const { return m_currentUsageValid; }
 
     /** @brief OS-managed VRAM budget the process should stay under (bytes). */
     size_t GetBudget() const { return m_budget; }
@@ -105,5 +135,6 @@ class VRAMBudgetMonitor
     float m_pressureRatio = 0.0f;
     VRAMPressureLevel m_pressureLevel = VRAMPressureLevel::None;
     bool m_querySupported = false;
+    bool m_currentUsageValid = false;
     bool m_initialized = false;
 };

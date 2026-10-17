@@ -4,15 +4,15 @@
  */
 
 #include "RPGWorldSetup.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 #include "Engine/Streaming/SeamlessAreaManager.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
 #include <sstream>
+#include <utility>
 
 namespace RPG
 {
@@ -47,6 +47,8 @@ namespace RPG
         village.suggestedLevel = 1;
         village.isSafeZone = true;
         village.connectedAreas = {2, 5}; // Forest, Swamp
+        village.propMeshPaths = {"Assets/Models/RPG/Kit/village_well.obj", "Assets/Models/RPG/Kit/quest_signpost.obj",
+                                 "Assets/Models/RPG/Kit/barrel.obj"};
         // No encounters in safe zone
         m_areas.push_back(village);
 
@@ -64,6 +66,7 @@ namespace RPG
         forest.suggestedLevel = 2;
         forest.isSafeZone = false;
         forest.connectedAreas = {1, 3, 4}; // Village, Dungeon, Castle
+        forest.propMeshPaths = {"Assets/Models/RPG/Kit/quest_signpost.obj"};
         forest.encounters = {
             {100, "Shadow Wolf", 1, 3, 10.0f}, {101, "Forest Spider", 2, 4, 7.0f},    {102, "Goblin Scout", 2, 5, 5.0f},
             {103, "Wild Boar", 1, 2, 8.0f},    {104, "Thornwood Treant", 4, 6, 2.0f},
@@ -84,6 +87,8 @@ namespace RPG
         dungeon.suggestedLevel = 5;
         dungeon.isSafeZone = false;
         dungeon.connectedAreas = {2}; // Forest
+        dungeon.propMeshPaths = {"Assets/Models/RPG/Kit/wall_sconce.obj", "Assets/Models/RPG/Kit/treasure_chest.obj",
+                                 "Assets/Models/RPG/Kit/barrel.obj"};
         dungeon.encounters = {
             {200, "Skeleton Warrior", 4, 6, 8.0f},   {201, "Phantom", 5, 7, 5.0f},
             {202, "Crypt Crawler", 4, 5, 7.0f},      {203, "Bone Golem", 6, 8, 3.0f},
@@ -105,6 +110,8 @@ namespace RPG
         castle.suggestedLevel = 8;
         castle.isSafeZone = false;
         castle.connectedAreas = {2}; // Forest
+        castle.propMeshPaths = {"Assets/Models/RPG/Kit/wall_sconce.obj", "Assets/Models/RPG/Kit/treasure_chest.obj",
+                                "Assets/Models/RPG/Kit/barrel.obj"};
         castle.encounters = {
             {300, "Undead Soldier", 7, 10, 8.0f},
             {301, "Wraith Knight", 8, 11, 5.0f},
@@ -127,6 +134,7 @@ namespace RPG
         swamp.suggestedLevel = 4;
         swamp.isSafeZone = false;
         swamp.connectedAreas = {1}; // Village
+        swamp.propMeshPaths = {"Assets/Models/RPG/Kit/quest_signpost.obj"};
         swamp.encounters = {
             {400, "Swamp Leech", 3, 5, 9.0f},
             {401, "Bog Troll", 5, 7, 4.0f},
@@ -135,16 +143,18 @@ namespace RPG
         };
         m_areas.push_back(swamp);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG world defined %zu areas", m_areas.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG World] Defined " + std::to_string(m_areas.size()) +
-                                                    " world areas");
+        Spark::ModuleLog::Info(m_context, "RPG world defined {} areas", m_areas.size());
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[RPG World] Defined " + std::to_string(m_areas.size()) + " world areas");
     }
 
     void RPGWorldSetup::RegisterAreasWithStreaming()
     {
         auto* streamingMgr = m_context ? m_context->GetAreaStreaming() : nullptr;
         if (!streamingMgr)
+        {
             streamingMgr = &Spark::Streaming::SeamlessAreaManager::GetInstance();
+        }
 
         for (const auto& area : m_areas)
         {
@@ -153,14 +163,20 @@ namespace RPG
             def.name = area.name;
             def.boundsMin = {area.boundsMinX, area.boundsMinY, area.boundsMinZ};
             def.boundsMax = {area.boundsMaxX, area.boundsMaxY, area.boundsMaxZ};
-            def.scenePath = "Assets/Scenes/RPG/" + area.name + ".scene";
+            // No scenePath: SeamlessAreaManager streams an area from its manifest. The Blender kit
+            // (tools/blender/author_rpg_kit.py) is listed per area as complete literals so
+            // tools/check-module-asset-refs.py can prove each file exists.
             def.priority = area.isSafeZone ? 2 : 1;
 
-            streamingMgr->RegisterArea(def);
+            Spark::Streaming::SceneManifest manifest;
+            manifest.name = area.name;
+            manifest.meshPaths = area.propMeshPaths;
+
+            streamingMgr->RegisterArea(def, std::move(manifest));
         }
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG areas registered with SeamlessAreaManager");
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG World] Registered areas with SeamlessAreaManager");
+        Spark::ModuleLog::Info(m_context, "RPG areas registered with SeamlessAreaManager");
+        Spark::ModuleLog::Info(m_context, "[RPG World] Registered areas with SeamlessAreaManager");
     }
 
     void RPGWorldSetup::ConfigureOriginRebasing()
@@ -168,33 +184,43 @@ namespace RPG
         m_originSystem.SetRebasingThreshold(3000.0f);
         m_originSystem.SetEnabled(true);
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG origin rebasing enabled (threshold: 3000m)");
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG World] Origin rebasing enabled (threshold: 3000m)");
+        Spark::ModuleLog::Info(m_context, "RPG origin rebasing enabled (threshold: 3000m)");
+        Spark::ModuleLog::Info(m_context, "[RPG World] Origin rebasing enabled (threshold: 3000m)");
     }
 
     void RPGWorldSetup::Update(float deltaTime)
     {
         if (!m_initialized || !(deltaTime > 0.0f))
+        {
             return;
+        }
 
         m_worldTime += deltaTime;
 
         // The engine lifecycle owns the host service tick. Standalone tests that
         // use the per-image fallback own that fallback's tick locally.
         if (!m_context || !m_context->GetAreaStreaming())
+        {
             Spark::Streaming::SeamlessAreaManager::GetInstance().Update(deltaTime);
+        }
     }
 
     void RPGWorldSetup::Shutdown()
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         auto* streamingMgr = m_context ? m_context->GetAreaStreaming() : nullptr;
         if (!streamingMgr)
+        {
             streamingMgr = &Spark::Streaming::SeamlessAreaManager::GetInstance();
+        }
         for (const auto& area : m_areas)
+        {
             streamingMgr->UnregisterArea(area.areaId);
+        }
 
         m_areas.clear();
         m_context = nullptr;
@@ -206,7 +232,9 @@ namespace RPG
         for (const auto& area : m_areas)
         {
             if (area.areaId == areaId)
+            {
                 return &area;
+            }
         }
         return nullptr;
     }
@@ -219,14 +247,18 @@ namespace RPG
         {
             ss << "[" << area.areaId << "] " << area.name << " (Lv" << area.suggestedLevel << ")";
             if (area.isSafeZone)
+            {
                 ss << " [Safe]";
+            }
             ss << "\n    " << area.description << "\n";
             ss << "    Encounters: " << area.encounters.size();
             ss << " | Connections: ";
             for (size_t i = 0; i < area.connectedAreas.size(); ++i)
             {
                 if (i > 0)
+                {
                     ss << ", ";
+                }
                 const auto* connected = GetArea(area.connectedAreas[i]);
                 ss << (connected ? connected->name : "?");
             }
@@ -237,9 +269,11 @@ namespace RPG
 
     void RPGWorldSetup::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("RPG World"))
+        {
             return;
+        }
 
         ImGui::Text("World Time: %.1f s", m_worldTime);
         ImGui::Text("Areas: %zu", m_areas.size());

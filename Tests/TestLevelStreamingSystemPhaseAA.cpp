@@ -21,7 +21,9 @@
 #include "TestFramework.h"
 #include "LevelStreaming/LevelStreamingSystem.h"
 
+#include <cstddef>
 #include <string>
+#include <utility>
 #include <vector>
 
 TEST(LevelStreamingPhaseAA_InitializeShutdown)
@@ -165,20 +167,41 @@ TEST(LevelStreamingPhaseAA_ShutdownIsIdempotent)
 {
     SparkEditor::LevelStreamingSystem ls;
     ls.Initialize();
+
+    SparkEditor::WorldTile tile;
+    tile.name = "TileA";
+    tile.filePath = "world/TileA.scene";
+    EXPECT_TRUE(ls.AddTile(std::move(tile))); // WorldTile is move-only (std::future).
+    SparkEditor::StreamingVolume volume;
+    volume.name = "VolumeA";
+    ls.AddStreamingVolume(volume);
+
     ls.Shutdown();
-    // Second Shutdown is safe.
+    // Shutdown releases the world: no tiles remain and the volume is gone.
+    EXPECT_TRUE(ls.GetAllTiles().empty());
+    EXPECT_FALSE(ls.RemoveStreamingVolume("VolumeA"));
+
+    // A second Shutdown on the released world keeps it released.
     ls.Shutdown();
-    EXPECT_NO_CRASH("LevelStreamingSystem exposes no post-shutdown state to assert on");
+    EXPECT_TRUE(ls.GetAllTiles().empty());
+    EXPECT_FALSE(ls.RemoveStreamingVolume("VolumeA"));
 }
 
 TEST(LevelStreamingPhaseAA_UpdateCallIsSafe)
 {
     SparkEditor::LevelStreamingSystem ls;
     ls.Initialize();
-    // Calling Update without a streaming viewer or tiles must not
-    // crash.
+    // Update without a streaming viewer or tiles has nothing to stream: it must
+    // not invent tiles or load requests, and its statistics describe an empty world.
     ls.Update(0.016f);
     ls.Update(0.016f);
-    EXPECT_NO_CRASH("Update has no observable effect without a viewer or tiles");
+
+    EXPECT_TRUE(ls.GetAllTiles().empty());
+    const SparkEditor::StreamingStatistics stats = ls.GetStreamingStatistics();
+    EXPECT_EQ(stats.totalTiles, 0);
+    EXPECT_EQ(stats.loadedTiles, 0);
+    EXPECT_EQ(stats.loadingTiles, 0);
+    EXPECT_EQ(stats.loadRequests, 0);
+    EXPECT_EQ(stats.memoryUsage, static_cast<size_t>(0));
     ls.Shutdown();
 }

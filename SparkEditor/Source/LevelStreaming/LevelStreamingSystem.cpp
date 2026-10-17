@@ -1,4 +1,7 @@
 #include "LevelStreamingSystem.h"
+#include "../Core/EditorIcons.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #include "Utils/LogMacros.h"
 #include "Utils/MathUtils.h"
 #include "Utils/Validate.h"
@@ -8,10 +11,55 @@
 #include <cstring>
 #include <fstream>
 #include <chrono>
+#include <iterator>
 
 using namespace DirectX;
 namespace SparkEditor
 {
+
+    namespace
+    {
+        /// Semantic status of a tile's streaming state; the tile list shows it as glyph + word and the
+        /// overview canvas tints tiles with the same status colour (named once in the canvas legend).
+        Spark::Ui::Status TileStatus(StreamingState state)
+        {
+            switch (state)
+            {
+            case StreamingState::LOADED:
+                return Spark::Ui::Status::Success;
+            case StreamingState::LOADING:
+                return Spark::Ui::Status::Info;
+            case StreamingState::UNLOADING:
+                return Spark::Ui::Status::Warning;
+            case StreamingState::FAILED:
+                return Spark::Ui::Status::Error;
+            case StreamingState::UNLOADED:
+            default:
+                return Spark::Ui::Status::Neutral;
+            }
+        }
+
+        const char* TileStateName(StreamingState state)
+        {
+            switch (state)
+            {
+            case StreamingState::LOADED:
+                return "Loaded";
+            case StreamingState::LOADING:
+                return "Loading";
+            case StreamingState::UNLOADING:
+                return "Unloading";
+            case StreamingState::FAILED:
+                return "Failed";
+            case StreamingState::UNLOADED:
+            default:
+                return "Unloaded";
+            }
+        }
+
+        /// Opacity of a tile's state tint on the overview canvas.
+        constexpr float kTileFillAlpha = 0.55f;
+    } // namespace
 
     // --- WorldTile ---
 
@@ -43,7 +91,9 @@ namespace SparkEditor
 
         float outsideDist = std::sqrt(dx * dx + dy * dy + dz * dz);
         if (outsideDist > 0.0f)
+        {
             return outsideDist;
+        }
 
         // Inside: return negative closest distance to face
         float mx = halfX - std::abs(point.x - worldPosition.x);
@@ -57,7 +107,9 @@ namespace SparkEditor
         for (size_t i = 0; i < lodDistances.size(); ++i)
         {
             if (distance < lodDistances[i])
+            {
                 return static_cast<LODLevel>(i);
+            }
         }
         return LODLevel::LOD_4;
     }
@@ -89,7 +141,9 @@ namespace SparkEditor
         float dz = pos.z - position.z;
         float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
         if (dist < 1e-6f)
+        {
             return true;
+        }
 
         // Dot product with forward vector
         float dot = (dx * forward.x + dy * forward.y + dz * forward.z) / dist;
@@ -119,7 +173,9 @@ namespace SparkEditor
         for (auto& thread : m_loadingThreads)
         {
             if (thread.joinable())
+            {
                 thread.join();
+            }
         }
     }
 
@@ -134,10 +190,14 @@ namespace SparkEditor
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::Scene);
         if (m_streamingPaused)
+        {
             return;
+        }
 
         if (m_automaticStreaming)
+        {
             UpdateAutomaticStreaming();
+        }
 
         ProcessLoadingQueue();
         ProcessUnloadingQueue();
@@ -155,20 +215,26 @@ namespace SparkEditor
         }
 
         // Toolbar
-        if (ImGui::Button("New World"))
+        if (Spark::Ui::BeginPanelToolbar("LevelStreamingToolbar"))
         {
-            CreateNewWorld("New World", m_worldSettings);
-        }
-        ImGui::SameLine();
-        bool streamingPaused = m_streamingPaused;
-        if (ImGui::Checkbox("Pause Streaming", &streamingPaused))
-        {
-            m_streamingPaused = streamingPaused;
-        }
+            if (Spark::Ui::SecondaryButton(ICON_FA_PLUS " New World"))
+            {
+                CreateNewWorld("New World", m_worldSettings);
+            }
+            ImGui::SameLine();
+            bool streamingPaused = m_streamingPaused;
+            if (ImGui::Checkbox("Pause Streaming", &streamingPaused))
+            {
+                m_streamingPaused = streamingPaused;
+            }
 
-        ImGui::Separator();
-        ImGui::Text("World: %s  |  Tiles: %d", m_worldName.c_str(), static_cast<int>(m_tiles.size()));
-        ImGui::Separator();
+            Spark::Ui::ToolbarSeparator();
+            ImGui::AlignTextToFramePadding();
+            Spark::Ui::KeyValue("World:", "%s", m_worldName.c_str());
+            ImGui::SameLine(0.0f, Spark::Ui::Em(1.0f));
+            Spark::Ui::KeyValue("Tiles:", "%d", static_cast<int>(m_tiles.size()));
+            Spark::Ui::EndPanelToolbar();
+        }
 
         // Tabs for sub-panels
         if (ImGui::BeginTabBar("LevelStreamingTabs"))
@@ -223,7 +289,9 @@ namespace SparkEditor
         for (auto& thread : m_loadingThreads)
         {
             if (thread.joinable())
+            {
                 thread.join();
+            }
         }
         m_loadingThreads.clear();
         m_tiles.clear();
@@ -261,7 +329,9 @@ namespace SparkEditor
         uint32_t nameLen = 0;
         file.read(reinterpret_cast<char*>(&nameLen), sizeof(nameLen));
         if (nameLen > 4096)
+        {
             return false;
+        }
         m_worldName.resize(nameLen);
         file.read(m_worldName.data(), nameLen);
 
@@ -269,7 +339,9 @@ namespace SparkEditor
         uint32_t tileCount = 0;
         file.read(reinterpret_cast<char*>(&tileCount), sizeof(tileCount));
         if (tileCount > 100000)
+        {
             return false;
+        }
 
         m_tiles.clear();
         m_tiles.reserve(tileCount);
@@ -280,7 +352,9 @@ namespace SparkEditor
             uint32_t tileNameLen = 0;
             file.read(reinterpret_cast<char*>(&tileNameLen), sizeof(tileNameLen));
             if (tileNameLen > 4096)
+            {
                 return false;
+            }
             tile.name.resize(tileNameLen);
             file.read(tile.name.data(), tileNameLen);
 
@@ -288,7 +362,9 @@ namespace SparkEditor
             uint32_t pathLen = 0;
             file.read(reinterpret_cast<char*>(&pathLen), sizeof(pathLen));
             if (pathLen > 4096)
+            {
                 return false;
+            }
             tile.filePath.resize(pathLen);
             file.read(tile.filePath.data(), pathLen);
 
@@ -309,7 +385,9 @@ namespace SparkEditor
         uint32_t volumeCount = 0;
         file.read(reinterpret_cast<char*>(&volumeCount), sizeof(volumeCount));
         if (volumeCount > 10000)
+        {
             return false;
+        }
 
         m_streamingVolumes.clear();
         m_streamingVolumes.reserve(volumeCount);
@@ -319,7 +397,9 @@ namespace SparkEditor
             uint32_t volNameLen = 0;
             file.read(reinterpret_cast<char*>(&volNameLen), sizeof(volNameLen));
             if (volNameLen > 4096)
+            {
                 return false;
+            }
             vol.name.resize(volNameLen);
             file.read(vol.name.data(), volNameLen);
             file.read(reinterpret_cast<char*>(&vol.center), sizeof(XMFLOAT3));
@@ -407,14 +487,20 @@ namespace SparkEditor
     {
         auto it = std::find_if(m_tiles.begin(), m_tiles.end(), [&](const WorldTile& t) { return t.name == tileName; });
         if (it == m_tiles.end())
+        {
             return false;
+        }
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Removing tile: '%s'", tileName.c_str());
 
         if (it->state == StreamingState::LOADED)
+        {
             UnloadTileSync(tileName);
+        }
 
         if (m_selectedTile == tileName)
+        {
             m_selectedTile.clear();
+        }
 
         m_tiles.erase(it);
         SetModified(true);
@@ -426,7 +512,9 @@ namespace SparkEditor
         for (auto& tile : m_tiles)
         {
             if (tile.name == tileName)
+            {
                 return &tile;
+            }
         }
         return nullptr;
     }
@@ -436,7 +524,9 @@ namespace SparkEditor
         for (auto& tile : m_tiles)
         {
             if (tile.ContainsPoint(worldPosition))
+            {
                 return &tile;
+            }
         }
         return nullptr;
     }
@@ -452,7 +542,9 @@ namespace SparkEditor
         auto it = std::find_if(m_streamingVolumes.begin(), m_streamingVolumes.end(),
                                [&](const StreamingVolume& v) { return v.name == volumeName; });
         if (it == m_streamingVolumes.end())
+        {
             return false;
+        }
         m_streamingVolumes.erase(it);
         SetModified(true);
         return true;
@@ -467,12 +559,16 @@ namespace SparkEditor
     {
         WorldTile* tile = GetTile(tileName);
         if (!tile || tile->state == StreamingState::LOADED || tile->state == StreamingState::LOADING)
+        {
             return false;
+        }
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Requesting tile load: '%s' (priority=%d, blocking=%s)",
                        tileName.c_str(), priority, blockOnLoad ? "true" : "false");
 
         if (blockOnLoad)
+        {
             return LoadTileSync(tileName);
+        }
 
         std::lock_guard<std::mutex> lock(m_queueMutex);
         LoadingRequest req;
@@ -489,12 +585,16 @@ namespace SparkEditor
     {
         WorldTile* tile = GetTile(tileName);
         if (!tile || tile->state != StreamingState::LOADED)
+        {
             return false;
+        }
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Requesting tile unload: '%s' (immediate=%s)", tileName.c_str(),
                        immediate ? "true" : "false");
 
         if (immediate)
+        {
             return ForceUnloadTile(tileName);
+        }
 
         std::lock_guard<std::mutex> lock(m_queueMutex);
         m_unloadingQueue.push(tileName);
@@ -518,7 +618,9 @@ namespace SparkEditor
         for (auto& tile : m_tiles)
         {
             if (tile.GetDistanceToBounds(position) <= distance)
+            {
                 result.push_back(&tile);
+            }
         }
         return result;
     }
@@ -537,12 +639,18 @@ namespace SparkEditor
             float bsRadius = tile.boundingSphere.w;
             XMFLOAT3 bsCenter = {tile.boundingSphere.x, tile.boundingSphere.y, tile.boundingSphere.z};
             if (bsCenter.x == 0.0f && bsCenter.y == 0.0f && bsCenter.z == 0.0f)
+            {
                 bsCenter = tile.worldPosition;
+            }
             if (bsRadius <= 0.0f)
+            {
                 bsRadius = std::max(tile.worldSize.x, tile.worldSize.z) * 0.5f;
+            }
 
             if (viewer.IsInViewFrustum(bsCenter, bsRadius))
+            {
                 result.push_back(&tile);
+            }
         }
         return result;
     }
@@ -551,7 +659,9 @@ namespace SparkEditor
     {
         WorldTile* tile = GetTile(tileName);
         if (!tile)
+        {
             return;
+        }
         tile->currentLOD = tile->CalculateLOD(viewerDistance * m_worldSettings.lodBias);
     }
 
@@ -586,7 +696,9 @@ namespace SparkEditor
                 tile.unloadingDistance = m_worldSettings.defaultUnloadingDistance;
                 tile.streamingMethod = m_worldSettings.defaultStreamingMethod;
                 if (AddTile(std::move(tile)))
+                {
                     ++count;
+                }
             }
         }
         return count;
@@ -599,7 +711,9 @@ namespace SparkEditor
         for (auto& tile : m_tiles)
         {
             if (tile.state == StreamingState::LOADED)
+            {
                 loadedTiles.push_back(&tile);
+            }
         }
 
         std::sort(loadedTiles.begin(), loadedTiles.end(),
@@ -610,9 +724,13 @@ namespace SparkEditor
         for (auto* tile : loadedTiles)
         {
             if (currentMemory <= targetMemoryUsage)
+            {
                 break;
+            }
             if (tile->alwaysLoaded)
+            {
                 continue;
+            }
             currentMemory -= tile->memoryUsage;
             UnloadTileSync(tile->name);
             ++optimized;
@@ -676,28 +794,53 @@ namespace SparkEditor
 
     void LevelStreamingSystem::RenderWorldOverview()
     {
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+        // Legend: the canvas codes tile state by colour, so each colour is named once here.
+        const StreamingState legendStates[] = {StreamingState::LOADED, StreamingState::LOADING,
+                                               StreamingState::UNLOADING, StreamingState::FAILED,
+                                               StreamingState::UNLOADED};
+        const float swatch = ImGui::GetTextLineHeight() * 0.75f;
+        for (size_t i = 0; i < std::size(legendStates); ++i)
+        {
+            if (i > 0)
+            {
+                ImGui::SameLine(0.0f, Spark::Ui::Em(1.0f));
+            }
+            const ImVec2 swatchPos = ImGui::GetCursorScreenPos();
+            const float inset = (ImGui::GetTextLineHeight() - swatch) * 0.5f;
+            drawList->AddRectFilled(
+                ImVec2(swatchPos.x, swatchPos.y + inset), ImVec2(swatchPos.x + swatch, swatchPos.y + inset + swatch),
+                Spark::Ui::Col(Spark::Ui::StatusTextRole(TileStatus(legendStates[i])), kTileFillAlpha));
+            ImGui::Dummy(ImVec2(swatch, ImGui::GetTextLineHeight()));
+            ImGui::SameLine(0.0f, Spark::Ui::Em(0.3f));
+            Spark::Ui::SecondaryText("%s", TileStateName(legendStates[i]));
+        }
+
         ImVec2 canvasSize = ImGui::GetContentRegionAvail();
         if (canvasSize.x < 50.0f || canvasSize.y < 50.0f)
+        {
             return;
+        }
 
         ImVec2 canvasPos = ImGui::GetCursorScreenPos();
-        ImDrawList* drawList = ImGui::GetWindowDrawList();
 
         // Background
         drawList->AddRectFilled(canvasPos, ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y),
-                                IM_COL32(30, 30, 30, 255));
+                                Spark::Ui::Col(Spark::Ui::Role::SurfaceSunken));
 
         // Draw grid
+        const ImU32 gridColor = Spark::Ui::Col(Spark::Ui::Role::BorderSubtle);
         float gridStep = 50.0f * m_overviewZoom;
         for (float x = 0; x < canvasSize.x; x += gridStep)
         {
             drawList->AddLine(ImVec2(canvasPos.x + x, canvasPos.y), ImVec2(canvasPos.x + x, canvasPos.y + canvasSize.y),
-                              IM_COL32(50, 50, 50, 255));
+                              gridColor);
         }
         for (float y = 0; y < canvasSize.y; y += gridStep)
         {
             drawList->AddLine(ImVec2(canvasPos.x, canvasPos.y + y), ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + y),
-                              IM_COL32(50, 50, 50, 255));
+                              gridColor);
         }
 
         // Draw tiles
@@ -712,45 +855,32 @@ namespace SparkEditor
             float halfW = tile.worldSize.x * scale * 0.5f;
             float halfH = tile.worldSize.z * scale * 0.5f;
 
-            ImU32 color;
-            switch (tile.state)
-            {
-            case StreamingState::LOADED:
-                color = IM_COL32(60, 180, 60, 200);
-                break;
-            case StreamingState::LOADING:
-                color = IM_COL32(200, 200, 60, 200);
-                break;
-            case StreamingState::UNLOADING:
-                color = IM_COL32(200, 120, 60, 200);
-                break;
-            case StreamingState::FAILED:
-                color = IM_COL32(200, 60, 60, 200);
-                break;
-            default:
-                color = IM_COL32(80, 80, 80, 200);
-                break;
-            }
+            const ImU32 color = Spark::Ui::Col(Spark::Ui::StatusTextRole(TileStatus(tile.state)), kTileFillAlpha);
 
             ImVec2 tileMin = {tileScreenX - halfW, tileScreenY - halfH};
             ImVec2 tileMax = {tileScreenX + halfW, tileScreenY + halfH};
             drawList->AddRectFilled(tileMin, tileMax, color);
+
+            // The selected tile gets the focus hue and a heavier outline, not just a different colour.
+            const bool isSelected = (tile.name == m_selectedTile);
             drawList->AddRect(tileMin, tileMax,
-                              (tile.name == m_selectedTile) ? IM_COL32(255, 255, 0, 255)
-                                                            : IM_COL32(150, 150, 150, 255));
+                              Spark::Ui::Col(isSelected ? Spark::Ui::Role::BorderFocus : Spark::Ui::Role::BorderStrong),
+                              0.0f, 0, isSelected ? Spark::Ui::Px(2.0f) : Spark::Ui::Px(1.0f));
 
             // Tile label
             if (halfW > 10.0f)
             {
-                drawList->AddText(ImVec2(tileMin.x + 2, tileMin.y + 2), IM_COL32(255, 255, 255, 200),
-                                  tile.name.c_str());
+                const float labelInset = Spark::Ui::Px(2.0f);
+                drawList->AddText(ImVec2(tileMin.x + labelInset, tileMin.y + labelInset),
+                                  Spark::Ui::Col(Spark::Ui::Role::TextPrimary, .78f), tile.name.c_str());
             }
         }
 
         // Draw viewer position
         float viewerX = centerX + m_streamingViewer.position.x * scale;
         float viewerY = centerY + m_streamingViewer.position.z * scale;
-        drawList->AddCircleFilled(ImVec2(viewerX, viewerY), 5.0f, IM_COL32(255, 255, 0, 255));
+        drawList->AddCircleFilled(ImVec2(viewerX, viewerY), Spark::Ui::Px(5.0f),
+                                  Spark::Ui::Col(Spark::Ui::Role::AccentFill));
 
         // Handle mouse interaction for pan/zoom
         ImGui::InvisibleButton("world_overview_canvas", canvasSize);
@@ -758,7 +888,9 @@ namespace SparkEditor
         {
             float wheel = ImGui::GetIO().MouseWheel;
             if (wheel != 0.0f)
+            {
                 m_overviewZoom = std::clamp(m_overviewZoom + wheel * 0.1f, 0.1f, 10.0f);
+            }
 
             if (ImGui::IsMouseDragging(ImGuiMouseButton_Middle))
             {
@@ -772,7 +904,7 @@ namespace SparkEditor
     void LevelStreamingSystem::RenderTileList()
     {
         // Add tile button
-        if (ImGui::Button("Add Tile"))
+        if (Spark::Ui::SecondaryButton(ICON_FA_PLUS " Add Tile"))
         {
             WorldTile newTile;
             newTile.name = "Tile_" + std::to_string(m_tiles.size());
@@ -786,77 +918,68 @@ namespace SparkEditor
         // Tile list
         if (ImGui::BeginChild("TileList", ImVec2(0, 0), true))
         {
+            if (m_tiles.empty())
+            {
+                Spark::Ui::EmptyState(ICON_FA_TH, "No tiles", "Add a tile or create a new world to start streaming.");
+            }
+
             for (size_t i = 0; i < m_tiles.size(); ++i)
             {
                 auto& tile = m_tiles[i];
                 bool isSelected = (tile.name == m_selectedTile);
 
-                // State indicator color
-                ImVec4 stateColor;
-                const char* stateStr;
-                switch (tile.state)
-                {
-                case StreamingState::LOADED:
-                    stateColor = {0.2f, 0.8f, 0.2f, 1.0f};
-                    stateStr = "Loaded";
-                    break;
-                case StreamingState::LOADING:
-                    stateColor = {0.8f, 0.8f, 0.2f, 1.0f};
-                    stateStr = "Loading";
-                    break;
-                case StreamingState::UNLOADING:
-                    stateColor = {0.8f, 0.5f, 0.2f, 1.0f};
-                    stateStr = "Unloading";
-                    break;
-                case StreamingState::FAILED:
-                    stateColor = {0.8f, 0.2f, 0.2f, 1.0f};
-                    stateStr = "Failed";
-                    break;
-                default:
-                    stateColor = {0.5f, 0.5f, 0.5f, 1.0f};
-                    stateStr = "Unloaded";
-                    break;
-                }
-
                 ImGui::PushID(static_cast<int>(i));
-                ImGui::TextColored(stateColor, "[%s]", stateStr);
-                ImGui::SameLine();
+                Spark::Ui::StatusText(TileStatus(tile.state), "%s", TileStateName(tile.state));
+                ImGui::SameLine(0.0f, Spark::Ui::Em(0.6f));
 
                 if (ImGui::Selectable(tile.name.c_str(), isSelected))
+                {
                     m_selectedTile = tile.name;
+                }
 
                 if (isSelected && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0))
                 {
                     // Double-click to load/unload
                     if (tile.state == StreamingState::UNLOADED)
+                    {
                         RequestTileLoad(tile.name, tile.priority);
+                    }
                     else if (tile.state == StreamingState::LOADED)
+                    {
                         RequestTileUnload(tile.name);
+                    }
                 }
 
                 // Tile details on selection
                 if (isSelected)
                 {
                     ImGui::Indent();
-                    ImGui::Text("Position: (%.0f, %.0f, %.0f)", tile.worldPosition.x, tile.worldPosition.y,
-                                tile.worldPosition.z);
-                    ImGui::Text("Size: (%.0f, %.0f, %.0f)", tile.worldSize.x, tile.worldSize.y, tile.worldSize.z);
-                    ImGui::Text("LOD: %d  |  Priority: %d", static_cast<int>(tile.currentLOD), tile.priority);
+                    Spark::Ui::KeyValue("Position:", "(%.0f, %.0f, %.0f)", tile.worldPosition.x, tile.worldPosition.y,
+                                        tile.worldPosition.z);
+                    Spark::Ui::KeyValue("Size:", "(%.0f, %.0f, %.0f)", tile.worldSize.x, tile.worldSize.y,
+                                        tile.worldSize.z);
+                    Spark::Ui::KeyValue("LOD:", "%d", static_cast<int>(tile.currentLOD));
+                    ImGui::SameLine(0.0f, Spark::Ui::Em(1.0f));
+                    Spark::Ui::KeyValue("Priority:", "%d", tile.priority);
                     ImGui::SliderFloat("Stream Dist", &tile.streamingDistance, 100.0f, 10000.0f);
                     ImGui::SliderFloat("Unload Dist", &tile.unloadingDistance, 100.0f, 15000.0f);
                     ImGui::Checkbox("Always Loaded", &tile.alwaysLoaded);
 
-                    if (tile.state == StreamingState::UNLOADED && ImGui::Button("Load"))
+                    if (tile.state == StreamingState::UNLOADED && Spark::Ui::SecondaryButton("Load"))
+                    {
                         RequestTileLoad(tile.name, tile.priority);
+                    }
                     if (tile.state == StreamingState::LOADED)
                     {
                         ImGui::SameLine();
-                        if (ImGui::Button("Unload"))
+                        if (Spark::Ui::SecondaryButton("Unload"))
+                        {
                             RequestTileUnload(tile.name);
+                        }
                     }
 
                     ImGui::SameLine();
-                    if (ImGui::Button("Remove"))
+                    if (Spark::Ui::DangerButton(ICON_FA_TRASH " Remove"))
                     {
                         RemoveTile(tile.name);
                         ImGui::PopID();
@@ -873,7 +996,7 @@ namespace SparkEditor
 
     void LevelStreamingSystem::RenderStreamingVolumes()
     {
-        if (ImGui::Button("Add Volume"))
+        if (Spark::Ui::SecondaryButton(ICON_FA_PLUS " Add Volume"))
         {
             StreamingVolume vol;
             vol.name = "Volume_" + std::to_string(m_streamingVolumes.size());
@@ -882,19 +1005,26 @@ namespace SparkEditor
 
         ImGui::Separator();
 
+        if (m_streamingVolumes.empty())
+        {
+            Spark::Ui::EmptyState(ICON_FA_VECTOR_SQUARE, "No streaming volumes",
+                                  "Add a volume to stream tiles when the viewer enters it.");
+            return;
+        }
+
         for (size_t i = 0; i < m_streamingVolumes.size(); ++i)
         {
             auto& vol = m_streamingVolumes[i];
             ImGui::PushID(static_cast<int>(i));
 
-            if (ImGui::CollapsingHeader(vol.name.c_str()))
+            if (Spark::Ui::SectionHeader(vol.name.c_str(), nullptr, false))
             {
                 ImGui::DragFloat3("Center", &vol.center.x, 1.0f);
                 ImGui::DragFloat3("Size", &vol.size.x, 1.0f, 1.0f, 10000.0f);
                 ImGui::Checkbox("Active", &vol.isActive);
-                ImGui::Text("Player Inside: %s", vol.playerInside ? "Yes" : "No");
+                Spark::Ui::KeyValue("Player Inside:", "%s", vol.playerInside ? "Yes" : "No");
 
-                if (ImGui::Button("Remove"))
+                if (Spark::Ui::DangerButton(ICON_FA_TRASH " Remove"))
                 {
                     RemoveStreamingVolume(vol.name);
                     ImGui::PopID();
@@ -907,37 +1037,34 @@ namespace SparkEditor
 
     void LevelStreamingSystem::RenderWorldSettings()
     {
-        ImGui::Text("Grid Settings");
+        Spark::Ui::SubHeader("Grid Settings");
         ImGui::DragFloat2("Tile Size", &m_worldSettings.tileSize.x, 10.0f, 100.0f, 10000.0f);
         ImGui::DragInt("Max Tiles X", &m_worldSettings.maxTilesX, 1, 1, 256);
         ImGui::DragInt("Max Tiles Y", &m_worldSettings.maxTilesY, 1, 1, 256);
 
-        ImGui::Separator();
-        ImGui::Text("Streaming Settings");
+        Spark::Ui::SubHeader("Streaming Settings");
         ImGui::DragFloat("Default Stream Distance", &m_worldSettings.defaultStreamingDistance, 10.0f, 100.0f, 50000.0f);
         ImGui::DragFloat("Default Unload Distance", &m_worldSettings.defaultUnloadingDistance, 10.0f, 100.0f, 50000.0f);
         ImGui::Checkbox("Predictive Streaming", &m_worldSettings.enablePredictiveStreaming);
         ImGui::DragFloat("Prediction Time (s)", &m_worldSettings.predictionTime, 0.1f, 0.0f, 10.0f);
 
-        ImGui::Separator();
-        ImGui::Text("Memory Settings");
+        Spark::Ui::SubHeader("Memory Settings");
         int maxMemMB = static_cast<int>(m_worldSettings.maxMemoryBudget / (1024 * 1024));
         if (ImGui::DragInt("Max Memory (MB)", &maxMemMB, 64, 256, 8192))
+        {
             m_worldSettings.maxMemoryBudget = static_cast<size_t>(maxMemMB) * 1024 * 1024;
+        }
         ImGui::Checkbox("Memory Pressure Unloading", &m_worldSettings.enableMemoryPressureUnloading);
 
-        ImGui::Separator();
-        ImGui::Text("LOD Settings");
+        Spark::Ui::SubHeader("LOD Settings");
         ImGui::Checkbox("Enable LOD", &m_worldSettings.enableLOD);
         ImGui::DragFloat("LOD Bias", &m_worldSettings.lodBias, 0.1f, 0.1f, 4.0f);
 
-        ImGui::Separator();
-        ImGui::Text("Performance");
+        Spark::Ui::SubHeader("Performance");
         ImGui::DragInt("Max Concurrent Loads", &m_worldSettings.maxConcurrentLoads, 1, 1, 16);
         ImGui::Checkbox("Background Loading", &m_worldSettings.loadInBackground);
 
-        ImGui::Separator();
-        ImGui::Text("Debug");
+        Spark::Ui::SubHeader("Debug");
         ImGui::Checkbox("Show Debug Info Tab", &m_showDebugInfo);
         ImGui::Checkbox("Show Tile Bounds", &m_worldSettings.showTileBounds);
         ImGui::Checkbox("Show Streaming Volumes", &m_worldSettings.showStreamingVolumes);
@@ -945,50 +1072,53 @@ namespace SparkEditor
 
     void LevelStreamingSystem::RenderStreamingStatistics()
     {
-        ImGui::Text("Tile Statistics");
-        ImGui::Text("Total Tiles: %d", m_statistics.totalTiles);
-        ImGui::Text("Loaded: %d  |  Loading: %d  |  Unloading: %d", m_statistics.loadedTiles, m_statistics.loadingTiles,
-                    m_statistics.unloadingTiles);
+        Spark::Ui::SubHeader("Tile Statistics");
+        Spark::Ui::KeyValue("Total Tiles:", "%d", m_statistics.totalTiles);
+        Spark::Ui::KeyValue("Loaded:", "%d", m_statistics.loadedTiles);
+        ImGui::SameLine(0.0f, Spark::Ui::Em(1.0f));
+        Spark::Ui::KeyValue("Loading:", "%d", m_statistics.loadingTiles);
+        ImGui::SameLine(0.0f, Spark::Ui::Em(1.0f));
+        Spark::Ui::KeyValue("Unloading:", "%d", m_statistics.unloadingTiles);
 
-        ImGui::Separator();
-        ImGui::Text("Memory");
-        ImGui::Text("Current: %.1f MB  |  Peak: %.1f MB", m_statistics.memoryUsage / (1024.0f * 1024.0f),
-                    m_statistics.peakMemoryUsage / (1024.0f * 1024.0f));
+        Spark::Ui::SubHeader("Memory");
+        Spark::Ui::KeyValue("Current:", "%.1f MB", m_statistics.memoryUsage / (1024.0f * 1024.0f));
+        ImGui::SameLine(0.0f, Spark::Ui::Em(1.0f));
+        Spark::Ui::KeyValue("Peak:", "%.1f MB", m_statistics.peakMemoryUsage / (1024.0f * 1024.0f));
         float memoryPercent =
             m_worldSettings.maxMemoryBudget > 0
                 ? (static_cast<float>(m_statistics.memoryUsage) / static_cast<float>(m_worldSettings.maxMemoryBudget))
                 : 0.0f;
         ImGui::ProgressBar(memoryPercent, ImVec2(-1, 0), "Memory Budget");
 
-        ImGui::Separator();
-        ImGui::Text("Performance");
-        ImGui::Text("Avg Load Time: %.1f ms  |  Avg Unload Time: %.1f ms", m_statistics.averageLoadTime * 1000.0f,
-                    m_statistics.averageUnloadTime * 1000.0f);
-        ImGui::Text("Load Requests: %d  |  Failed: %d", m_statistics.loadRequests, m_statistics.failedLoads);
-        ImGui::Text("Streaming Overhead: %.2f ms/frame", m_statistics.streamingOverhead * 1000.0f);
+        Spark::Ui::SubHeader("Performance");
+        Spark::Ui::KeyValue("Avg Load Time:", "%.1f ms", m_statistics.averageLoadTime * 1000.0f);
+        Spark::Ui::KeyValue("Avg Unload Time:", "%.1f ms", m_statistics.averageUnloadTime * 1000.0f);
+        Spark::Ui::KeyValue("Load Requests:", "%d", m_statistics.loadRequests);
+        ImGui::SameLine(0.0f, Spark::Ui::Em(1.0f));
+        Spark::Ui::KeyValue("Failed:", "%d", m_statistics.failedLoads);
+        Spark::Ui::KeyValue("Streaming Overhead:", "%.2f ms/frame", m_statistics.streamingOverhead * 1000.0f);
     }
 
     void LevelStreamingSystem::RenderDebugInfo()
     {
-        ImGui::Text("Viewer Position: (%.1f, %.1f, %.1f)", m_streamingViewer.position.x, m_streamingViewer.position.y,
-                    m_streamingViewer.position.z);
-        ImGui::Text("Viewer Velocity: (%.1f, %.1f, %.1f)", m_streamingViewer.velocity.x, m_streamingViewer.velocity.y,
-                    m_streamingViewer.velocity.z);
+        Spark::Ui::KeyValue("Viewer Position:", "(%.1f, %.1f, %.1f)", m_streamingViewer.position.x,
+                            m_streamingViewer.position.y, m_streamingViewer.position.z);
+        Spark::Ui::KeyValue("Viewer Velocity:", "(%.1f, %.1f, %.1f)", m_streamingViewer.velocity.x,
+                            m_streamingViewer.velocity.y, m_streamingViewer.velocity.z);
 
-        ImGui::Separator();
-        ImGui::Text("Loading Queue Size: %d", static_cast<int>(m_loadingQueue.size()));
-        ImGui::Text("Unloading Queue Size: %d", static_cast<int>(m_unloadingQueue.size()));
-        ImGui::Text("Background Threads: %d", static_cast<int>(m_loadingThreads.size()));
-        ImGui::Text("Automatic Streaming: %s", m_automaticStreaming ? "ON" : "OFF");
-        ImGui::Text("Streaming Paused: %s", m_streamingPaused ? "YES" : "NO");
+        Spark::Ui::SubHeader("Queues");
+        Spark::Ui::KeyValue("Loading Queue Size:", "%d", static_cast<int>(m_loadingQueue.size()));
+        Spark::Ui::KeyValue("Unloading Queue Size:", "%d", static_cast<int>(m_unloadingQueue.size()));
+        Spark::Ui::KeyValue("Background Threads:", "%d", static_cast<int>(m_loadingThreads.size()));
+        Spark::Ui::KeyValue("Automatic Streaming:", "%s", m_automaticStreaming ? "ON" : "OFF");
+        Spark::Ui::KeyValue("Streaming Paused:", "%s", m_streamingPaused ? "YES" : "NO");
 
-        ImGui::Separator();
-        ImGui::Text("Per-Tile Debug:");
+        Spark::Ui::SubHeader("Per-Tile Debug");
         for (const auto& tile : m_tiles)
         {
             float dist = tile.GetDistanceToCenter(m_streamingViewer.position);
-            ImGui::Text("  %s: dist=%.0f LOD=%d state=%d mem=%zuKB", tile.name.c_str(), dist,
-                        static_cast<int>(tile.currentLOD), static_cast<int>(tile.state), tile.memoryUsage / 1024);
+            Spark::Ui::MonoText("%s: dist=%.0f LOD=%d state=%s mem=%zuKB", tile.name.c_str(), dist,
+                                static_cast<int>(tile.currentLOD), TileStateName(tile.state), tile.memoryUsage / 1024);
         }
     }
 
@@ -999,7 +1129,9 @@ namespace SparkEditor
         UpdateDistanceBasedStreaming();
         UpdateTriggerBasedStreaming();
         if (m_worldSettings.enablePredictiveStreaming)
+        {
             UpdatePredictiveStreaming();
+        }
     }
 
     void LevelStreamingSystem::UpdateDistanceBasedStreaming()
@@ -1007,7 +1139,9 @@ namespace SparkEditor
         for (auto& tile : m_tiles)
         {
             if (tile.streamingMethod != StreamingMethod::DISTANCE_BASED && !tile.alwaysLoaded)
+            {
                 continue;
+            }
 
             float distance = tile.GetDistanceToBounds(m_streamingViewer.position);
 
@@ -1034,7 +1168,9 @@ namespace SparkEditor
         for (auto& vol : m_streamingVolumes)
         {
             if (!vol.isActive)
+            {
                 continue;
+            }
 
             bool inside = vol.ContainsPoint(m_streamingViewer.position);
             if (inside && !vol.playerInside)
@@ -1042,9 +1178,13 @@ namespace SparkEditor
                 // Entered volume
                 vol.playerInside = true;
                 for (const auto& tileName : vol.tilesToLoad)
+                {
                     RequestTileLoad(tileName, 10);
+                }
                 for (const auto& tileName : vol.tilesToUnload)
+                {
                     RequestTileUnload(tileName);
+                }
             }
             else if (!inside && vol.playerInside)
             {
@@ -1060,7 +1200,9 @@ namespace SparkEditor
         for (auto& tile : m_tiles)
         {
             if (tile.state != StreamingState::UNLOADED)
+            {
                 continue;
+            }
             float distance = tile.GetDistanceToBounds(predicted);
             if (distance <= tile.streamingDistance)
             {
@@ -1073,7 +1215,9 @@ namespace SparkEditor
     void LevelStreamingSystem::UpdateMemoryManagement()
     {
         if (!m_worldSettings.enableMemoryPressureUnloading)
+        {
             return;
+        }
 
         if (m_statistics.memoryUsage > m_worldSettings.softMemoryLimit)
         {
@@ -1085,12 +1229,16 @@ namespace SparkEditor
     void LevelStreamingSystem::UpdateLODSystem()
     {
         if (!m_worldSettings.enableLOD)
+        {
             return;
+        }
 
         for (auto& tile : m_tiles)
         {
             if (tile.state != StreamingState::LOADED)
+            {
                 continue;
+            }
             float distance = tile.GetDistanceToCenter(m_streamingViewer.position);
             tile.currentLOD = tile.CalculateLOD(distance * m_worldSettings.lodBias);
         }
@@ -1131,9 +1279,13 @@ namespace SparkEditor
                 std::unique_lock<std::mutex> lock(m_queueMutex);
                 m_loadingCondition.wait(lock, [this] { return m_shouldStopLoading.load() || !m_loadingQueue.empty(); });
                 if (m_shouldStopLoading.load())
+                {
                     break;
+                }
                 if (m_loadingQueue.empty())
+                {
                     continue;
+                }
                 tileName = m_loadingQueue.top().tileName;
                 m_loadingQueue.pop();
             }
@@ -1145,9 +1297,13 @@ namespace SparkEditor
     {
         WorldTile* tile = GetTile(tileName);
         if (!tile)
+        {
             return false;
+        }
         if (tile->state == StreamingState::LOADED)
+        {
             return true;
+        }
 
         tile->state = StreamingState::LOADING;
         tile->loadingProgress = 0.0f;
@@ -1196,9 +1352,13 @@ namespace SparkEditor
     {
         WorldTile* tile = GetTile(tileName);
         if (!tile)
+        {
             return false;
+        }
         if (tile->state != StreamingState::LOADED)
+        {
             return false;
+        }
 
         tile->state = StreamingState::UNLOADING;
         tile->memoryUsage = 0;
@@ -1221,7 +1381,9 @@ namespace SparkEditor
         for (const auto& tile : m_tiles)
         {
             if (tile.name == tileName)
+            {
                 return tile.memoryUsage;
+            }
         }
         return 0;
     }
@@ -1233,7 +1395,9 @@ namespace SparkEditor
         for (auto& tile : m_tiles)
         {
             if (tile.state == StreamingState::LOADED && !tile.alwaysLoaded)
+            {
                 candidates.push_back(&tile);
+            }
         }
 
         std::sort(candidates.begin(), candidates.end(), [this](const WorldTile* a, const WorldTile* b)
@@ -1243,7 +1407,9 @@ namespace SparkEditor
         for (auto* tile : candidates)
         {
             if (freed >= targetMemory)
+            {
                 break;
+            }
             freed += tile->memoryUsage;
             UnloadTileSync(tile->name);
         }
@@ -1278,7 +1444,9 @@ namespace SparkEditor
         }
 
         if (m_statistics.memoryUsage > m_statistics.peakMemoryUsage)
+        {
             m_statistics.peakMemoryUsage = m_statistics.memoryUsage;
+        }
     }
 
 } // namespace SparkEditor

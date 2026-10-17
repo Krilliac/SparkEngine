@@ -52,57 +52,68 @@ namespace Terrafront
         }
 
         InputManager* input = m_ctx->engine ? m_ctx->engine->GetInput() : nullptr;
-        if (!input)
+        const bool scripted = m_clock < m_scriptedMoveUntil;
+        if (!input && !scripted)
             return;
 
-        // --- mouse look (camera owns the angles; we read them back) -----------
-        // Module-owned camera: the engine context camera slot is empty in module
-        // mode (see TFWorldSetup::GetCamera).
-        SparkEngineCamera* cam = m_ctx->world ? m_ctx->world->GetCamera() : nullptr;
-        if (cam)
-        {
-            const auto [dx, dy] = input->GetMouseDelta();
-            if (dx != 0)
-                cam->Yaw(static_cast<float>(dx) * kMouseSens);
-            if (dy != 0)
-                cam->Pitch(static_cast<float>(-dy) * kMouseSens);
-            const auto rot = cam->GetRotation(); // (pitch, yaw, roll) radians
-            m_viewPitch = rot.x;
-            m_viewYaw = rot.y;
-        }
-
-        // --- buttons + axes ----------------------------------------------------
         uint16_t buttons = 0;
-        if (input->IsMouseButtonDown(0))
-        {
-            buttons |= TFB_Fire;
-            if (m_ctx->weapons)
-                m_ctx->weapons->ClientTriggerFire(); // RoF-paced internally
-        }
-        if (input->IsMouseButtonDown(1))
-            buttons |= TFB_AltFire;
-        if (input->IsKeyDown(kVkSpace))
-            buttons |= TFB_Jump;
-        if (input->IsKeyDown(kVkControl))
-            buttons |= TFB_Crouch;
-        if (input->IsKeyDown(kVkShift))
-            buttons |= TFB_Sprint;
-        if (input->WasKeyPressed('R'))
-            buttons |= TFB_Reload;
-        if (input->IsKeyDown('E'))
-            buttons |= TFB_Interact;
-        if (input->IsKeyDown('F'))
-            buttons |= TFB_Ability;
-
         float moveX = 0.0f, moveY = 0.0f;
-        if (input->IsKeyDown('D'))
-            moveX += 1.0f;
-        if (input->IsKeyDown('A'))
-            moveX -= 1.0f;
-        if (input->IsKeyDown('W'))
-            moveY += 1.0f;
-        if (input->IsKeyDown('S'))
-            moveY -= 1.0f;
+        if (input)
+        {
+            // --- mouse look (camera owns the angles; we read them back) -------
+            // Module-owned camera: the engine context camera slot is empty in
+            // module mode (see TFWorldSetup::GetCamera).
+            SparkEngineCamera* cam = m_ctx->world ? m_ctx->world->GetCamera() : nullptr;
+            if (cam)
+            {
+                const auto [dx, dy] = input->GetMouseDelta();
+                if (dx != 0)
+                    cam->Yaw(static_cast<float>(dx) * kMouseSens);
+                if (dy != 0)
+                    cam->Pitch(static_cast<float>(-dy) * kMouseSens);
+                const auto rot = cam->GetRotation(); // (pitch, yaw, roll) radians
+                m_viewPitch = rot.x;
+                m_viewYaw = rot.y;
+            }
+
+            // --- buttons + axes ------------------------------------------------
+            if (input->IsMouseButtonDown(0))
+            {
+                buttons |= TFB_Fire;
+                if (m_ctx->weapons)
+                    m_ctx->weapons->ClientTriggerFire(); // RoF-paced internally
+            }
+            if (input->IsMouseButtonDown(1))
+                buttons |= TFB_AltFire;
+            if (input->IsKeyDown(kVkSpace))
+                buttons |= TFB_Jump;
+            if (input->IsKeyDown(kVkControl))
+                buttons |= TFB_Crouch;
+            if (input->IsKeyDown(kVkShift))
+                buttons |= TFB_Sprint;
+            if (input->WasKeyPressed('R'))
+                buttons |= TFB_Reload;
+            if (input->IsKeyDown('E'))
+                buttons |= TFB_Interact;
+            if (input->IsKeyDown('F'))
+                buttons |= TFB_Ability;
+
+            if (input->IsKeyDown('D'))
+                moveX += 1.0f;
+            if (input->IsKeyDown('A'))
+                moveX -= 1.0f;
+            if (input->IsKeyDown('W'))
+                moveY += 1.0f;
+            if (input->IsKeyDown('S'))
+                moveY -= 1.0f;
+        }
+
+        // TF-110 harness: a scripted move replaces the keyboard axes.
+        if (scripted)
+        {
+            moveX = m_scriptedMoveX;
+            moveY = m_scriptedMoveY;
+        }
 
         // --- fixed 60 Hz send/predict steps -------------------------------------
         m_inputAccum += dt;
@@ -116,6 +127,26 @@ namespace Terrafront
         }
         if (steps == kMaxStepsPerFrame)
             m_inputAccum = 0.0f; // hitch: drop the backlog instead of bursting
+    }
+
+    void TFClientNet::SetScriptedMove(float forward, float right, float seconds)
+    {
+        m_scriptedMoveY = std::clamp(forward, -1.0f, 1.0f);
+        m_scriptedMoveX = std::clamp(right, -1.0f, 1.0f);
+        m_scriptedMoveUntil = m_clock + static_cast<double>(std::max(seconds, 0.0f));
+    }
+
+    void TFClientNet::SetViewAngles(float yaw, float pitch)
+    {
+        m_viewYaw = yaw;
+        m_viewPitch = pitch;
+        SparkEngineCamera* cam = (m_ctx && m_ctx->world) ? m_ctx->world->GetCamera() : nullptr;
+        if (cam)
+        {
+            const auto rot = cam->GetRotation(); // (pitch, yaw, roll) radians
+            cam->Yaw(yaw - rot.y);
+            cam->Pitch(pitch - rot.x);
+        }
     }
 
     void TFClientNet::SendOneInput(float moveX, float moveY, uint16_t buttons)

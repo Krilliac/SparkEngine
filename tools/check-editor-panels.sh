@@ -49,10 +49,14 @@ while IFS= read -r header; do
     filename=$(basename "$header")
     classname="${filename%.h}"
 
+    # Here-strings, not `echo | grep -q`: grep -q exits on the first match and closes
+    # the pipe while echo is still writing the whole factory, which spams
+    # "echo: write error: Broken pipe" (and fails the pipeline under pipefail).
+
     # Check 1: Is the header #included in the factory?
-    if ! echo "$factory_content" | grep -q "$filename"; then
+    if ! grep -qF "$filename" <<< "$factory_content"; then
         # Also check factory for the class name directly (some panels are included via different paths)
-        if ! echo "$factory_content" | grep -q "$classname"; then
+        if ! grep -qF "$classname" <<< "$factory_content"; then
             log_error "  $classname — NOT included in EditorPanelFactory.cpp"
             ISSUES=$((ISSUES + 1))
             continue
@@ -60,11 +64,11 @@ while IFS= read -r header; do
     fi
 
     # Check 2: Is the class instantiated (make_shared<ClassName>)?
-    if ! echo "$factory_content" | grep -q "make_shared<$classname>"; then
+    if ! grep -qF "make_shared<$classname>" <<< "$factory_content"; then
         # Some panels might use a different class name than the file name
         # Check if ANY make_shared references the header's class
         local_class=$(grep -oP 'class\s+(\w+Panel)' "$header" 2>/dev/null | head -1 | awk '{print $2}')
-        if [ -n "$local_class" ] && echo "$factory_content" | grep -q "make_shared<$local_class>"; then
+        if [ -n "$local_class" ] && grep -qF "make_shared<$local_class>" <<< "$factory_content"; then
             continue  # Found under a different class name
         fi
         log_warning "  $classname — included but NOT instantiated (no make_shared<$classname>)"

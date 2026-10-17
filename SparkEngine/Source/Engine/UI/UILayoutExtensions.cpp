@@ -440,9 +440,17 @@ namespace Spark::UI
             for (size_t i = pos; i < json.size(); ++i)
             {
                 char c = json[i];
-                if (c == '"' && (i == 0 || json[i - 1] != '\\'))
+                if (c == '"')
                 {
-                    inString = !inString;
+                    size_t backslashes = 0;
+                    for (size_t j = i; j > pos && json[j - 1] == '\\'; --j)
+                    {
+                        ++backslashes;
+                    }
+                    if ((backslashes % 2) == 0)
+                    {
+                        inString = !inString;
+                    }
                 }
                 if (inString)
                 {
@@ -467,27 +475,94 @@ namespace Spark::UI
 
     bool UILayoutLoader::LoadFromJSON(std::string_view json, UIPanel* parent)
     {
-        if (!parent || json.empty())
+        // Widgets created directly under the caller's panel are level 1.
+        if (!parent || ValidateChildren(json, 1) != LoadStatus::Loaded)
         {
             return false;
+        }
+        return LoadChildren(json, parent, 1) == LoadStatus::Loaded;
+    }
+
+    UILayoutLoader::LoadStatus UILayoutLoader::ValidateChildren(std::string_view json, uint32_t depth)
+    {
+        if (json.empty())
+        {
+            return LoadStatus::Malformed;
+        }
+
+        const auto childrenPos = json.find("\"children\"");
+        if (childrenPos == std::string_view::npos)
+        {
+            return LoadStatus::Malformed;
+        }
+        const auto arrayStart = json.find('[', childrenPos);
+        if (arrayStart == std::string_view::npos)
+        {
+            return LoadStatus::Malformed;
+        }
+        const auto arrayEnd = FindMatchingBracket(json, arrayStart);
+        if (arrayEnd == std::string_view::npos)
+        {
+            return LoadStatus::Malformed;
+        }
+
+        size_t pos = arrayStart + 1;
+        while (pos < arrayEnd)
+        {
+            const auto objStart = json.find('{', pos);
+            if (objStart == std::string_view::npos || objStart > arrayEnd)
+            {
+                break;
+            }
+            const auto objEnd = FindMatchingBrace(json, objStart);
+            if (objEnd == std::string_view::npos || objEnd > arrayEnd)
+            {
+                return LoadStatus::Malformed;
+            }
+
+            const auto block = json.substr(objStart, objEnd - objStart + 1);
+            std::string type = ExtractString(block, "type");
+            const std::string name = ExtractString(block, "name");
+            if (!name.empty() && depth > kMaxNestingDepth)
+            {
+                return LoadStatus::TooDeep;
+            }
+            if (type == "panel" && !name.empty())
+            {
+                const auto nested = ValidateChildren(block, depth + 1);
+                if (nested != LoadStatus::Loaded)
+                {
+                    return nested;
+                }
+            }
+            pos = objEnd + 1;
+        }
+        return LoadStatus::Loaded;
+    }
+
+    UILayoutLoader::LoadStatus UILayoutLoader::LoadChildren(std::string_view json, UIPanel* parent, uint32_t depth)
+    {
+        if (!parent || json.empty())
+        {
+            return LoadStatus::Malformed;
         }
 
         auto childrenPos = json.find("\"children\"");
         if (childrenPos == std::string_view::npos)
         {
-            return false;
+            return LoadStatus::Malformed;
         }
 
         auto arrayStart = json.find('[', childrenPos);
         if (arrayStart == std::string_view::npos)
         {
-            return false;
+            return LoadStatus::Malformed;
         }
 
         auto arrayEnd = FindMatchingBracket(json, arrayStart);
         if (arrayEnd == std::string_view::npos)
         {
-            return false;
+            return LoadStatus::Malformed;
         }
 
         size_t pos = arrayStart + 1;
@@ -503,15 +578,18 @@ namespace Spark::UI
             auto objEnd = FindMatchingBrace(json, objStart);
             if (objEnd == std::string_view::npos)
             {
-                return false;
+                return LoadStatus::Malformed;
             }
 
             auto block = json.substr(objStart, objEnd - objStart + 1);
-            ParseWidgetBlock(block, parent);
+            if (ParseWidgetBlock(block, parent, depth) == LoadStatus::TooDeep)
+            {
+                return LoadStatus::TooDeep;
+            }
             pos = objEnd + 1;
         }
 
-        return true;
+        return LoadStatus::Loaded;
     }
 
     size_t UILayoutLoader::FindMatchingBrace(std::string_view json, size_t pos)
@@ -521,9 +599,17 @@ namespace Spark::UI
         for (size_t i = pos; i < json.size(); ++i)
         {
             char c = json[i];
-            if (c == '"' && (i == 0 || json[i - 1] != '\\'))
+            if (c == '"')
             {
-                inString = !inString;
+                size_t backslashes = 0;
+                for (size_t j = i; j > pos && json[j - 1] == '\\'; --j)
+                {
+                    ++backslashes;
+                }
+                if ((backslashes % 2) == 0)
+                {
+                    inString = !inString;
+                }
             }
             if (inString)
             {
@@ -563,12 +649,51 @@ namespace Spark::UI
         {
             return {};
         }
-        auto quoteEnd = block.find('"', quoteStart + 1);
-        if (quoteEnd == std::string_view::npos)
+
+        std::string value;
+        value.reserve(block.size() - quoteStart);
+        bool escaped = false;
+        for (size_t i = quoteStart + 1; i < block.size(); ++i)
         {
-            return {};
+            const char c = block[i];
+            if (escaped)
+            {
+                switch (c)
+                {
+                case '"':
+                    value.push_back('"');
+                    break;
+                case '\\':
+                    value.push_back('\\');
+                    break;
+                case 'n':
+                    value.push_back('\n');
+                    break;
+                case 'r':
+                    value.push_back('\r');
+                    break;
+                case 't':
+                    value.push_back('\t');
+                    break;
+                default:
+                    value.push_back(c);
+                    break;
+                }
+                escaped = false;
+                continue;
+            }
+            if (c == '\\')
+            {
+                escaped = true;
+                continue;
+            }
+            if (c == '"')
+            {
+                return value;
+            }
+            value.push_back(c);
         }
-        return std::string(block.substr(quoteStart + 1, quoteEnd - quoteStart - 1));
+        return {};
     }
 
     float UILayoutLoader::ExtractFloat(std::string_view block, std::string_view key, float fallback)
@@ -613,7 +738,7 @@ namespace Spark::UI
         }
     }
 
-    void UILayoutLoader::ParseWidgetBlock(std::string_view block, UIPanel* parent)
+    UILayoutLoader::LoadStatus UILayoutLoader::ParseWidgetBlock(std::string_view block, UIPanel* parent, uint32_t depth)
     {
         // Extract* does a flat first-occurrence search, so scalar keys must be read from a view
         // of the widget with its nested "children" array excised — otherwise a child's
@@ -640,7 +765,13 @@ namespace Spark::UI
 
         if (widgetName.empty())
         {
-            return;
+            return LoadStatus::Loaded;
+        }
+        // A named object here would sit deeper than a layout may nest: refuse it before
+        // creating anything, which also bounds the panel recursion below.
+        if (depth > kMaxNestingDepth)
+        {
+            return LoadStatus::TooDeep;
         }
 
         UIWidget* created = nullptr;
@@ -667,7 +798,12 @@ namespace Spark::UI
         {
             auto* panel = parent->CreatePanel(widgetName);
             created = panel;
-            LoadFromJSON(block, panel);
+            // A malformed nested children array is skipped, as it always was; only the depth
+            // bound fails the whole load.
+            if (LoadChildren(block, panel, depth + 1) == LoadStatus::TooDeep)
+            {
+                return LoadStatus::TooDeep;
+            }
         }
 
         if (created)
@@ -679,6 +815,7 @@ namespace Spark::UI
             created->SetPosition(xPos, yPos);
             created->SetSize(w, h);
         }
+        return LoadStatus::Loaded;
     }
 
 } // namespace Spark::UI

@@ -558,6 +558,46 @@ def codeql_summary_artifact(**overrides):
     return value
 
 
+REAL_BUILD_WORKFLOW_YAML = (SCRIPT.parents[1] / "workflows" / "build.yml").read_text(encoding="utf-8")
+EVENT_GUARDED_WORKFLOW_YAML = BUILD_WORKFLOW_YAML.replace(
+    "  required-ci-gate:\n",
+    "  dispatch-only-lane:\n"
+    "    name: \"dispatch only lane\"\n"
+    "    if: github.event_name == 'workflow_dispatch'\n"
+    "    runs-on: ubuntu-24.04\n"
+    "    steps:\n"
+    "    - name: Run\n"
+    "      run: echo dispatch\n"
+    "\n"
+    "  required-ci-gate:\n",
+    1,
+)
+
+
+def real_build_attempt_jobs(skipped=(), failed=()):
+    """One job per job key of the real build.yml, shaped like a push attempt."""
+    workflow = MODULE._parse_source_workflow_jobs(REAL_BUILD_WORKFLOW_YAML)
+    jobs = [source_job(), required_gate()]
+    next_id = 700
+    for key, display in workflow.display_names:
+        if key in {"build-windows-shipping", "required-ci-gate"}:
+            continue
+        name = MODULE.WORKFLOW_EXPRESSION_PATTERN.sub("matrix", display)
+        conclusion = "skipped" if key in skipped else "failure" if key in failed else "success"
+        jobs.append(ordinary_job(id=next_id, name=name, conclusion=conclusion))
+        next_id += 1
+    return jobs
+
+
+def real_build_api(event="push", skipped=(), failed=()):
+    api = FakeApi()
+    api.build_workflow = REAL_BUILD_WORKFLOW_YAML
+    api.runs_responses = [[source_run(event=event)]]
+    api.source_live = source_run(event=event)
+    api.source_jobs = real_build_attempt_jobs(skipped=skipped, failed=failed)
+    return api
+
+
 class FakeApi:
     def __init__(self):
         self.repository = repository()
@@ -906,6 +946,14 @@ class VerifyExactRequiredGateTests(unittest.TestCase):
                 api, REPOSITORY, SHA, SOURCE_RUN_ID, 1
             )
 
+    def test_staged_build_only_rejects_skipped_required_job(self):
+        api = FakeApi()
+        api.source_jobs[2] = ordinary_job(conclusion="skipped")
+        with self.assertRaisesRegex(ValueError, "unexpected non-success Build job: ordinary required job"):
+            MODULE.verify_exact_staged_build(
+                api, REPOSITORY, SHA, SOURCE_RUN_ID, 1
+            )
+
     def test_staged_build_only_rejects_a_required_job_downgraded_to_advisory(self):
         api = FakeApi()
         api.build_workflow = BUILD_WORKFLOW_YAML.replace(
@@ -918,6 +966,88 @@ class VerifyExactRequiredGateTests(unittest.TestCase):
             MODULE.verify_exact_staged_build(
                 api, REPOSITORY, SHA, SOURCE_RUN_ID, 1
             )
+
+    def test_real_workflow_push_attempt_accepts_event_guarded_skips(self):
+        api = real_build_api(
+            skipped=("build-linux-mingw-wine", "report-coverage"),
+            failed=("build-linux-msan",),
+        )
+        self.assertGreaterEqual(len(api.source_jobs), 31)
+        evidence = MODULE.verify_exact_staged_build(api, REPOSITORY, SHA, SOURCE_RUN_ID, 1)
+        self.assertEqual(evidence.event, "push")
+
+    def test_real_workflow_dispatch_attempt_accepts_pull_request_only_skip(self):
+        api = real_build_api(event="workflow_dispatch", skipped=("report-coverage",))
+        evidence = MODULE.verify_exact_staged_build(api, REPOSITORY, SHA, SOURCE_RUN_ID, 1)
+        self.assertEqual(evidence.event, "workflow_dispatch")
+
+    def test_real_workflow_rejects_skipped_required_job(self):
+        for key in ("validate-ci-tools", "todo-count", "build-linux-gcc"):
+            with self.subTest(job=key):
+                api = real_build_api(skipped=("build-linux-mingw-wine", "report-coverage", key))
+                with self.assertRaisesRegex(ValueError, "unexpected non-success Build job"):
+                    MODULE.verify_exact_staged_build(api, REPOSITORY, SHA, SOURCE_RUN_ID, 1)
+
+    def test_real_workflow_rejects_failed_event_guarded_job_without_continue_on_error(self):
+        api = real_build_api(skipped=("build-linux-mingw-wine",), failed=("report-coverage",))
+        with self.assertRaisesRegex(ValueError, "unexpected non-success Build job: Coverage PR Comment"):
+            MODULE.verify_exact_staged_build(api, REPOSITORY, SHA, SOURCE_RUN_ID, 1)
+
+    def test_event_guarded_job_skipped_while_its_guard_is_true_is_rejected(self):
+        api = FakeApi()
+        api.build_workflow = EVENT_GUARDED_WORKFLOW_YAML
+        api.runs_responses = [[source_run(event="workflow_dispatch")]]
+        api.source_live = source_run(event="workflow_dispatch")
+        api.source_jobs.append(ordinary_job(id=510, name="dispatch only lane", conclusion="skipped"))
+        with self.assertRaisesRegex(ValueError, "unexpected non-success Build job: dispatch only lane"):
+            MODULE.verify_exact_staged_build(api, REPOSITORY, SHA, SOURCE_RUN_ID, 1)
+
+    def test_event_guarded_job_skipped_while_its_guard_is_false_is_accepted(self):
+        api = FakeApi()
+        api.build_workflow = EVENT_GUARDED_WORKFLOW_YAML
+        api.source_jobs.append(ordinary_job(id=510, name="dispatch only lane", conclusion="skipped"))
+        evidence = MODULE.verify_exact_staged_build(api, REPOSITORY, SHA, SOURCE_RUN_ID, 1)
+        self.assertEqual(evidence.event, "push")
+
+    def test_skipped_job_with_unrecognised_or_widened_guard_is_rejected(self):
+        guard = "if: github.event_name == 'workflow_dispatch'"
+        mutations = (
+            "if: always()",
+            "if: github.event_name != 'push'",
+            "if: ${{ github.event_name == 'workflow_dispatch' }}",
+            "if: github.event_name == 'workflow_dispatch' # comment",
+            "if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'",
+            "if: >-",
+        )
+        for mutated in mutations:
+            with self.subTest(guard=mutated):
+                api = FakeApi()
+                api.build_workflow = EVENT_GUARDED_WORKFLOW_YAML.replace(guard, mutated)
+                api.source_jobs.append(
+                    ordinary_job(id=510, name="dispatch only lane", conclusion="skipped")
+                )
+                with self.assertRaisesRegex(ValueError, "unexpected non-success Build job: dispatch only lane"):
+                    MODULE.verify_exact_staged_build(api, REPOSITORY, SHA, SOURCE_RUN_ID, 1)
+
+    def test_skipped_required_job_with_event_guard_is_rejected(self):
+        api = FakeApi()
+        api.build_workflow = BUILD_WORKFLOW_YAML.replace(
+            "  ordinary-required:\n    name: \"ordinary required job\"\n",
+            "  ordinary-required:\n    name: \"ordinary required job\"\n"
+            "    if: github.event_name == 'workflow_dispatch'\n",
+        )
+        api.source_jobs[2] = ordinary_job(conclusion="skipped")
+        with self.assertRaisesRegex(ValueError, "unexpected non-success Build job: ordinary required job"):
+            MODULE.verify_exact_staged_build(api, REPOSITORY, SHA, SOURCE_RUN_ID, 1)
+
+    def test_duplicate_job_condition_is_rejected(self):
+        api = FakeApi()
+        api.build_workflow = EVENT_GUARDED_WORKFLOW_YAML.replace(
+            "    if: github.event_name == 'workflow_dispatch'\n",
+            "    if: github.event_name == 'workflow_dispatch'\n    if: always()\n",
+        )
+        with self.assertRaisesRegex(ValueError, "condition twice"):
+            MODULE.verify_exact_staged_build(api, REPOSITORY, SHA, SOURCE_RUN_ID, 1)
 
     def test_staged_build_only_rejects_required_inventory_disagreement(self):
         api = FakeApi()
@@ -1295,6 +1425,8 @@ class VerifyExactRequiredGateTests(unittest.TestCase):
     def test_one_second_skipped_job_clock_skew_is_the_only_accepted_inversion(self):
         api = FakeApi()
         api.source_jobs[2] = ordinary_job(
+            id=504,
+            name="build-linux-msan",
             conclusion="skipped",
             started_at="2026-08-30T04:10:01Z",
             completed_at="2026-08-30T04:10:00Z",
@@ -1303,6 +1435,8 @@ class VerifyExactRequiredGateTests(unittest.TestCase):
 
         api = FakeApi()
         api.source_jobs[2] = ordinary_job(
+            id=504,
+            name="build-linux-msan",
             conclusion="skipped",
             started_at="2026-08-30T04:10:02Z",
             completed_at="2026-08-30T04:10:00Z",
@@ -1974,8 +2108,9 @@ class VerifyExactRequiredGateTests(unittest.TestCase):
         self.assertIn("      statuses: read", release)
         self.assertEqual(
             release.count("python3 .github/scripts/verify-exact-required-gate.py"),
-            3,
-            "publication must verify once at entry and immediately before both mutation boundaries",
+            5,
+            "publication must verify in profile-required-gates, at release entry, before both mutation "
+            "boundaries, and from the independent consumer",
         )
         self.assertIn(
             "build-matrix-trusted-receipt-${{ github.event.workflow_run.head_sha }}-"

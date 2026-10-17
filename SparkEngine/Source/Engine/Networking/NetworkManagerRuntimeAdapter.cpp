@@ -24,6 +24,12 @@ namespace Spark::Net
                                                    const NetworkEndpointPolicy& endpointPolicy,
                                                    bool allowLanAdvertisement)
     {
+        // NET-100: a dedicated server signs every handshake with its persistent identity
+        // (<user data>/net/server_identity.key unless the host configured one).
+        if (!m_networkManager.UseDefaultSecurityConfig(NetworkRole::Server))
+        {
+            return false;
+        }
         return m_networkManager.StartServer(port, maxClients, endpointPolicy, allowLanAdvertisement);
     }
 

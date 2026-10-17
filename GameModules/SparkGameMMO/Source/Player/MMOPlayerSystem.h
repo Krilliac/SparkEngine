@@ -26,10 +26,13 @@
 namespace MMO
 {
 
+    class MMOSessionGate;
+
     /// @brief Tracks a single MMO player's state across the game module
     struct MMOPlayer
     {
         uint32_t clientId = 0;
+        uint32_t characterId = 0;
         uint32_t networkId = 0;
         std::string name;
         uint32_t currentAreaId = 0;
@@ -45,6 +48,8 @@ namespace MMO
         float health = 100.0f;
         float maxHealth = 100.0f;
         int level = 1;
+        uint32_t lastInteractionTarget = 0;
+        uint32_t interactionCount = 0;
         bool isLocalPlayer = false;
     };
 
@@ -121,6 +126,25 @@ namespace MMO
         /// Remove a player by client ID
         void RemovePlayer(uint32_t clientId);
 
+        /// Spawn one authenticated session actor on the authoritative server.
+        bool SpawnSessionPlayer(uint32_t clientId, uint32_t characterId, const std::string& name, uint32_t areaId,
+                                float x, float y, float z, float health);
+
+        /// Apply one bounded movement input to an authenticated session actor.
+        bool MoveSessionPlayer(uint32_t clientId, float moveX, float moveZ, float deltaTime);
+
+        /// Record a safe interaction between two living actors in the same area.
+        bool InteractSessionPlayer(uint32_t clientId, uint32_t targetClientId);
+
+        /// Return the authoritative actor owned by a connected client.
+        const MMOPlayer* GetPlayer(uint32_t clientId) const;
+
+        /// Apply an authoritative snapshot to an existing actor.
+        bool ApplySessionState(uint32_t clientId, const MMOPlayer& state);
+
+        /// Route client movement through the authenticated session gate.
+        void SetSessionGate(MMOSessionGate* gate) { m_sessionGate = gate; }
+
       private:
         void SetupNetworkHandlers();
         void ProcessInput(float deltaTime);
@@ -141,6 +165,7 @@ namespace MMO
         AreaResolver m_areaResolver;
         AreaTransitionCallback m_areaTransitionCallback;
         bool m_initialized{false};
+        MMOSessionGate* m_sessionGate{nullptr};
 
         static constexpr float WALK_SPEED = 6.0f;
         static constexpr float SPRINT_MULTIPLIER = 1.75f;

@@ -1,0 +1,16 @@
+{
+  "rules": [
+    {
+      "name": "Saved",
+      "sourceEntityId": 0,
+      "trigger": "OnCustom",
+      "triggerParam": "boss_dead",
+      "enabled": true,
+      "oneShot": true,
+      "actions": [
+        { "type": "SetWorldFlag", "params": ["boss", true] },
+        { "type": "TeleportEntity", "params": [4, 10.25, 0.5, -7] }
+      ]
+    }
+  ]
+}

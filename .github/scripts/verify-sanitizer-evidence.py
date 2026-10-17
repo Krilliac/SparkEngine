@@ -896,6 +896,14 @@ def completion_count(
         errors.append(f"{label}: expected exactly one Running test-count marker")
     if len(result_matches) != 1 or text.count("=== Results ===") != 1:
         errors.append(f"{label}: missing unique terminal Results marker")
+    assertion_matches = re.findall(
+        r"^Assertions:[ \t]+[0-9]+ passed,[ \t]+[0-9]+ failed"
+        r"(?:,[ \t]+[0-9]+ waived)?(?:,[ \t]+[0-9]+ no-crash-only)?$",
+        text,
+        re.MULTILINE,
+    )
+    if len(assertion_matches) != 1:
+        errors.append(f"{label}: expected exactly one Assertions summary marker")
     if seed_matches != ["123"]:
         errors.append(f"{label}: expected exactly one Shuffle seed: 123 marker")
     if re.search(r"(?im)^Retry policy:|^Retries:|^\[\s*RETRY\s*\]", text):

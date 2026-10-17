@@ -1,0 +1,40 @@
+{
+  "layout": {
+    "name": "Legacy",
+    "description": "",
+    "panels": [
+      {
+        "name": "Hierarchy",
+        "displayName": "Hierarchy",
+        "dock": 0,
+        "sizeX": 280.5,
+        "sizeY": 900,
+        "posX": 0,
+        "posY": 0,
+        "visible": true,
+        "floating": false,
+        "canClose": true,
+        "canDock": true,
+        "dockRatio": 0.25,
+        "tabOrder": 0,
+        "parentDock": ""
+      },
+      {
+        "name": "Inspector",
+        "displayName": "Inspector",
+        "dock": 1,
+        "sizeX": 350,
+        "sizeY": 200,
+        "posX": 1600,
+        "posY": 120,
+        "visible": true,
+        "floating": true,
+        "canClose": true,
+        "canDock": true,
+        "dockRatio": 0.25,
+        "tabOrder": 0,
+        "parentDock": ""
+      }
+    ]
+  }
+}

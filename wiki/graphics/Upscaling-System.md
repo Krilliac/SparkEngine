@@ -311,7 +311,7 @@ The upscaling system manages its own intermediate render targets (history buffer
 
 ## Testing
 
-5 unit tests in `Tests/TestUpscalingSystem.cpp` covering quality presets, render resolution calculation, input requirements, FSR constants, and default settings.
+Unit tests in `Tests/TestUpscalingSystem.cpp` covering quality presets, render resolution calculation, input requirements, FSR constants, and default settings.
 
 ---
 

@@ -43,6 +43,14 @@ MAX_COPY_FILE_BYTES = 16 * 1024 * 1024
 MAX_OUTPUT_FILES = 5000
 MAX_OUTPUT_BYTES = 256 * 1024 * 1024
 MAX_JSON_BYTES = 8 * 1024 * 1024
+HEALTH_OUTPUT_PATH = PurePosixPath("docs/.health.json")
+# Keep this decision independent from the mutable ``os`` module object.  Tests
+# may need to exercise Windows path semantics on a non-Windows host; changing
+# ``os.name`` globally also changes pathlib's path factory and makes that test
+# construct WindowsPath instances that cannot run on Linux.
+WINDOWS_HOST = os.name == "nt"
+CASE_INSENSITIVE_TRACKED_PATHS = WINDOWS_HOST
+GIT_BASH_PATH = r"C:\Program Files\Git\bin\bash.exe"
 OUTPUT_OVERRIDE_ENVIRONMENT = (
     "SPARK_DOC_API_OUTPUT_DIR",
     "SPARK_DOC_API_DIR",
@@ -59,6 +67,35 @@ OUTPUT_OVERRIDE_ENVIRONMENT = (
 
 class CurrentnessError(RuntimeError):
     pass
+
+
+def case_aware_path(root: Path, relative: PurePosixPath) -> Path:
+    """Resolve a repository-relative path using the host's case semantics."""
+
+    candidate = root.joinpath(*relative.parts)
+    if not CASE_INSENSITIVE_TRACKED_PATHS:
+        return candidate
+    current = root
+    for part in relative.parts:
+        exact = current / part
+        if os.path.lexists(exact):
+            current = exact
+            continue
+        try:
+            matches = [
+                entry for entry in current.iterdir()
+                if entry.name.casefold() == part.casefold()
+            ]
+        except OSError:
+            return candidate
+        if len(matches) > 1:
+            raise CurrentnessError(
+                f"case-insensitive path collision under {current}: {part}"
+            )
+        if not matches:
+            return candidate
+        current = matches[0]
+    return current
 
 
 def safe_relative(raw: str) -> PurePosixPath:
@@ -161,16 +198,6 @@ def exact_identity(source_sha: str | None, committed_at: str | None) -> tuple[st
     return sha, timestamp
 
 
-def source_commit_utc_date(committed_at: str) -> str:
-    try:
-        parsed = datetime.fromisoformat(committed_at.replace("Z", "+00:00"))
-    except (AttributeError, ValueError) as exc:
-        raise CurrentnessError("source committed-at timestamp must be RFC 3339") from exc
-    if parsed.tzinfo is None or parsed.utcoffset() is None:
-        raise CurrentnessError("source committed-at timestamp must include an offset")
-    return parsed.astimezone(timezone.utc).date().isoformat()
-
-
 def tracked_inventory() -> tuple[list[str], dict[str, str]]:
     raw = git_output(["ls-files", "-s", "-z", "--cached"], text=False)
     assert isinstance(raw, bytes)
@@ -211,7 +238,7 @@ def copy_snapshot(destination: Path, tracked: list[str], modes: dict[str, str]) 
         if modes.get(raw) == "160000":
             target.mkdir(parents=True, exist_ok=True)
             continue
-        source = REPO_ROOT.joinpath(*rel.parts)
+        source = case_aware_path(REPO_ROOT, rel)
         try:
             docs_contract.assert_contained(source, REPO_ROOT, label="tracked documentation input")
             payload = docs_contract.read_regular_bytes(
@@ -245,10 +272,14 @@ def find_bash(*, allow_override: bool = True) -> str:
     explicit = os.environ.get("SPARK_DOC_BASH") if allow_override else None
     if explicit and Path(explicit).is_file():
         return explicit
+    if WINDOWS_HOST:
+        common = Path(GIT_BASH_PATH)
+        if common.is_file():
+            return str(common)
     found = shutil.which("bash")
     if found:
         return found
-    common = Path(r"C:\Program Files\Git\bin\bash.exe")
+    common = Path(GIT_BASH_PATH)
     if common.is_file():
         return str(common)
     raise CurrentnessError("bash is required for isolated documentation generation")
@@ -279,7 +310,10 @@ def run_snapshot(root: Path, tracked_manifest: Path, sha: str, committed_at: str
         "SPARK_DOC_TRACKED_PATHS": str(tracked_manifest),
         "SPARKENGINE_DOC_SOURCE_SHA": sha,
         "SPARKENGINE_DOC_SOURCE_COMMITTED_AT": committed_at,
-        "GENERATED_DATE": source_commit_utc_date(committed_at),
+        # The API generator imports repository modules.  Prevent Python from
+        # leaving __pycache__ files in the isolated snapshot, where they would
+        # look like undeclared generated documentation output.
+        "PYTHONDONTWRITEBYTECODE": "1",
         "SPARK_DOC_HEALTH_OUTPUT": str(root / "docs" / ".health.json"),
         "SPARK_DOC_HEALTH_INNER": "1",
     })
@@ -401,20 +435,69 @@ def tree_projection(root: Path) -> dict[str, tuple[int, str]]:
     except docs_contract.ContractError as exc:
         raise CurrentnessError(str(exc)) from exc
     for relative, identity in snapshot.items():
-        path = root.joinpath(*PurePosixPath(relative).parts)
+        path = case_aware_path(root, PurePosixPath(relative))
         result[relative] = (identity.size, file_digest(path))
     return result
 
 
+def undeclared_generated_paths(root: Path, tracked: set[str]) -> list[str]:
+    try:
+        snapshot = docs_contract.generated_tree_snapshot(
+            root,
+            label="isolated documentation output",
+            max_files=MAX_COPY_FILES + MAX_OUTPUT_FILES + 1,
+            max_bytes=MAX_COPY_BYTES + MAX_OUTPUT_BYTES + MAX_JSON_BYTES,
+        )
+    except docs_contract.ContractError as exc:
+        raise CurrentnessError(str(exc)) from exc
+    tracked_keys = {
+        path.casefold() if CASE_INSENSITIVE_TRACKED_PATHS else path
+        for path in tracked
+    }
+    return sorted(
+        relative
+        for relative in snapshot
+        if (relative.casefold() if CASE_INSENSITIVE_TRACKED_PATHS else relative) not in tracked_keys
+        and relative != ".docs-tracked-files"
+        and relative != HEALTH_OUTPUT_PATH.as_posix()
+    )
+
+
 def compare_outputs(contract: dict, first: Path, second: Path, tracked: list[str]) -> None:
     tracked_set = set(tracked)
+    declared_files: set[str] = set()
+    declared_trees: list[PurePosixPath] = []
+    for generator in contract["generators"]:
+        for row in generator["outputs"]:
+            relative = safe_relative(row["path"])
+            if row.get("tree", False):
+                declared_trees.append(relative)
+            else:
+                declared_files.add(relative.as_posix())
+
+    for snapshot in (first, second):
+        unexpected = []
+        for path in undeclared_generated_paths(snapshot, tracked_set):
+            relative = PurePosixPath(path)
+            if path in declared_files or any(
+                relative == tree or tree in relative.parents for tree in declared_trees
+            ):
+                continue
+            unexpected.append(path)
+        if unexpected:
+            raise CurrentnessError(f"generator changed undeclared generated output: {unexpected[0]}")
+
+    tracked_keys = {
+        path.casefold() if CASE_INSENSITIVE_TRACKED_PATHS else path
+        for path in tracked_set
+    }
     declared_tracked: set[str] = set()
     for generator in contract["generators"]:
         for row in generator["outputs"]:
             relative = safe_relative(row["path"])
             canonical = relative.as_posix()
-            left = first.joinpath(*relative.parts)
-            right = second.joinpath(*relative.parts)
+            left = case_aware_path(first, relative)
+            right = case_aware_path(second, relative)
             if row.get("tree", False):
                 if tree_projection(left) != tree_projection(right):
                     raise CurrentnessError(f"generated tree is nondeterministic: {canonical}")
@@ -424,10 +507,11 @@ def compare_outputs(contract: dict, first: Path, second: Path, tracked: list[str
             if file_digest(left) != file_digest(right):
                 raise CurrentnessError(f"generated file is nondeterministic: {canonical}")
             if row["tracked"]:
-                declared_tracked.add(canonical)
-                if canonical not in tracked_set:
+                canonical_key = canonical.casefold() if CASE_INSENSITIVE_TRACKED_PATHS else canonical
+                declared_tracked.add(canonical_key)
+                if canonical_key not in tracked_keys:
                     raise CurrentnessError(f"manifest says output is tracked but Git does not: {canonical}")
-                actual = REPO_ROOT.joinpath(*relative.parts)
+                actual = case_aware_path(REPO_ROOT, relative)
                 if not actual.is_file() or file_digest(actual) != file_digest(left):
                     raise CurrentnessError(f"tracked generated output is stale: {canonical}")
 
@@ -436,14 +520,14 @@ def compare_outputs(contract: dict, first: Path, second: Path, tracked: list[str
         rel = safe_relative(raw)
         if not should_copy(rel):
             continue
-        generated = first.joinpath(*rel.parts)
-        actual = REPO_ROOT.joinpath(*rel.parts)
+        generated = case_aware_path(first, rel)
+        actual = case_aware_path(REPO_ROOT, rel)
         generated_file = generated.is_file() and not generated.is_symlink()
         actual_file = actual.is_file() and not actual.is_symlink()
         if generated_file != actual_file:
-            changed.add(raw)
+            changed.add(raw.casefold() if CASE_INSENSITIVE_TRACKED_PATHS else raw)
         elif generated_file and file_digest(generated) != file_digest(actual):
-            changed.add(raw)
+            changed.add(raw.casefold() if CASE_INSENSITIVE_TRACKED_PATHS else raw)
     undeclared = sorted(changed - declared_tracked)
     if undeclared:
         raise CurrentnessError(f"generator changed undeclared tracked output: {undeclared[0]}")
@@ -459,7 +543,7 @@ def working_tree_projection(paths: list[str], modes: dict[str, str]) -> dict[str
             # worktree, and treating its checkout directory as a regular file
             # makes exact-currentness fail on every repository with submodules.
             continue
-        full = REPO_ROOT.joinpath(*rel.parts)
+        full = case_aware_path(REPO_ROOT, rel)
         if not os.path.lexists(full):
             continue
         try:

@@ -1,0 +1,11 @@
+{
+  "baselines": [
+    {
+      "scenario": "quote\"inside\\path",
+      "metrics": {
+        "a": 1
+      },
+      "tolerance": 5.0
+    }
+  ]
+}

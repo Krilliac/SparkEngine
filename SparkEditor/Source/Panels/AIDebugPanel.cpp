@@ -5,6 +5,10 @@
 
 #include "AIDebugPanel.h"
 
+#include "../Core/EditorIcons.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
+
 #include <imgui.h>
 
 #include <algorithm>
@@ -33,7 +37,7 @@ namespace SparkEditor
 
         // Refresh agent data from AISystem
         // In a real integration, this would query AISystem::GetInstance() for live agent data.
-        // For now, the panel is wired and ready — agents appear when play mode is active.
+        // The editor state preview does not tick AI or populate live agent data.
     }
 
     void AIDebugPanel::Render()
@@ -115,13 +119,13 @@ namespace SparkEditor
 
         if (m_agents.empty())
         {
-            ImGui::TextDisabled("No AI agents active. Enter Play mode to see live agent data.");
+            Spark::Ui::EmptyState(ICON_FA_BRAIN, "No editor AI agents",
+                                  "State preview does not tick AI. Use Play Control > Launch Game to test game AI.");
             return;
         }
 
         // Agent table
-        if (ImGui::BeginTable("AgentTable", 6,
-                              ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))
+        if (Spark::Ui::BeginDataTable("AgentTable", 6))
         {
             ImGui::TableSetupColumn("Entity");
             ImGui::TableSetupColumn("State");
@@ -151,43 +155,43 @@ namespace SparkEditor
 
                 ImGui::TableSetColumnIndex(1);
                 const char* stateStr = AgentStateToString(agent.state);
-                // Color-code state
+                // Threat states carry a status glyph as well as a colour; calm states stay muted.
                 switch (agent.state)
                 {
                 case AgentState::Idle:
-                    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", stateStr);
+                    Spark::Ui::SecondaryText("%s", stateStr);
                     break;
                 case AgentState::Combat:
-                    ImGui::TextColored(ImVec4(1.0f, 0.2f, 0.2f, 1.0f), "%s", stateStr);
+                    Spark::Ui::StatusText(Spark::Ui::Status::Error, "%s", stateStr);
                     break;
                 case AgentState::Alert:
-                    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.0f, 1.0f), "%s", stateStr);
+                    Spark::Ui::StatusText(Spark::Ui::Status::Warning, "%s", stateStr);
                     break;
                 case AgentState::Fleeing:
-                    ImGui::TextColored(ImVec4(0.2f, 0.6f, 1.0f, 1.0f), "%s", stateStr);
+                    Spark::Ui::StatusText(Spark::Ui::Status::Info, "%s", stateStr);
                     break;
                 case AgentState::Dead:
-                    ImGui::TextColored(ImVec4(0.4f, 0.4f, 0.4f, 1.0f), "%s", stateStr);
+                    Spark::Ui::TextRole(Spark::Ui::Role::TextDisabled, "%s", stateStr);
                     break;
                 default:
-                    ImGui::Text("%s", stateStr);
+                    ImGui::TextUnformatted(stateStr);
                     break;
                 }
 
                 ImGui::TableSetColumnIndex(2);
-                ImGui::Text("%s", agent.behaviorTreeName.c_str());
+                ImGui::TextUnformatted(agent.behaviorTreeName.c_str());
 
                 ImGui::TableSetColumnIndex(3);
-                ImGui::Text("%s", agent.currentAction.c_str());
+                ImGui::TextUnformatted(agent.currentAction.c_str());
 
                 ImGui::TableSetColumnIndex(4);
                 if (agent.hasTarget)
-                    ImGui::Text("%.1f m", agent.distanceToTarget);
+                    Spark::Ui::TableNumber("%.1f m", agent.distanceToTarget);
                 else
                     ImGui::TextDisabled("--");
 
                 ImGui::TableSetColumnIndex(5);
-                ImGui::Text("%d", agent.pathNodeCount);
+                Spark::Ui::TableNumber("%d", agent.pathNodeCount);
             }
 
             ImGui::EndTable();
@@ -202,21 +206,23 @@ namespace SparkEditor
     {
         if (m_selectedAgentID == 0)
         {
-            ImGui::TextDisabled("Select an agent from the Agents tab to inspect its blackboard.");
+            Spark::Ui::EmptyState(ICON_FA_HAND_POINTER, "No agent selected",
+                                  "Select an agent from the Agents tab to inspect its blackboard.");
             return;
         }
 
-        ImGui::Text("Agent %u Blackboard", m_selectedAgentID);
-        ImGui::Separator();
+        char header[48];
+        std::snprintf(header, sizeof(header), "Agent %u Blackboard", m_selectedAgentID);
+        Spark::Ui::SubHeader(header);
 
         if (m_blackboardEntries.empty())
         {
-            ImGui::TextDisabled("No blackboard entries. Agent may not be using a behavior tree.");
+            Spark::Ui::EmptyState(ICON_FA_DATABASE, "No blackboard entries",
+                                  "The agent may not be using a behavior tree.");
             return;
         }
 
-        if (ImGui::BeginTable("BlackboardTable", 3,
-                              ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))
+        if (Spark::Ui::BeginDataTable("BlackboardTable", 3))
         {
             ImGui::TableSetupColumn("Key");
             ImGui::TableSetupColumn("Type");
@@ -227,11 +233,11 @@ namespace SparkEditor
             {
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
-                ImGui::Text("%s", entry.key.c_str());
+                ImGui::TextUnformatted(entry.key.c_str());
                 ImGui::TableSetColumnIndex(1);
-                ImGui::TextDisabled("%s", entry.type.c_str());
+                Spark::Ui::SecondaryText("%s", entry.type.c_str());
                 ImGui::TableSetColumnIndex(2);
-                ImGui::Text("%s", entry.value.c_str());
+                Spark::Ui::MonoText("%s", entry.value.c_str());
             }
 
             ImGui::EndTable();
@@ -246,15 +252,17 @@ namespace SparkEditor
     {
         if (m_selectedAgentID == 0)
         {
-            ImGui::TextDisabled("Select an agent to view its behavior tree execution trace.");
+            Spark::Ui::EmptyState(ICON_FA_HAND_POINTER, "No agent selected",
+                                  "Select an agent to view its behavior tree execution trace.");
             return;
         }
 
         ImGui::Checkbox("Highlight Active Node", &m_highlightActiveNode);
         ImGui::Separator();
 
-        ImGui::TextDisabled("Behavior tree trace will display the call stack of the currently "
-                            "executing node, with timing data per node. Requires play mode.");
+        Spark::Ui::EmptyState(ICON_FA_SITEMAP, "No live trace in state preview",
+                              "Behavior tree trace will display the call stack of the currently executing node, "
+                              "with timing data per node.");
     }
 
     // =========================================================================
@@ -263,25 +271,24 @@ namespace SparkEditor
 
     void AIDebugPanel::RenderPerceptionOverlays()
     {
-        ImGui::Text("Debug Overlay Toggles");
-        ImGui::Separator();
+        Spark::Ui::SubHeader("Debug Overlay Toggles");
 
         SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "AIDebugPanel: rendering perception overlay toggles");
         ImGui::Checkbox("Detection Ranges", &m_showDetectionRanges);
         ImGui::SameLine();
-        ImGui::TextDisabled("(spheres around agents)");
+        Spark::Ui::SecondaryText("(spheres around agents)");
 
         ImGui::Checkbox("Attack Ranges", &m_showAttackRanges);
         ImGui::SameLine();
-        ImGui::TextDisabled("(inner spheres)");
+        Spark::Ui::SecondaryText("(inner spheres)");
 
         ImGui::Checkbox("Nav Paths", &m_showNavPaths);
         ImGui::SameLine();
-        ImGui::TextDisabled("(line segments)");
+        Spark::Ui::SecondaryText("(line segments)");
 
         ImGui::Checkbox("Target Lines", &m_showTargetLines);
         ImGui::SameLine();
-        ImGui::TextDisabled("(lines to current target)");
+        Spark::Ui::SecondaryText("(lines to current target)");
 
         ImGui::Separator();
         ImGui::SliderFloat("Refresh Rate", &m_refreshInterval, 0.033f, 1.0f, "%.0f ms");
@@ -293,8 +300,7 @@ namespace SparkEditor
 
     void AIDebugPanel::RenderStatistics()
     {
-        ImGui::Text("AI System Statistics");
-        ImGui::Separator();
+        Spark::Ui::SubHeader("AI System Statistics");
 
         int totalAgents = static_cast<int>(m_agents.size());
         int combatAgents = 0;
@@ -314,11 +320,11 @@ namespace SparkEditor
                 withTargets++;
         }
 
-        ImGui::Text("Total Agents: %d", totalAgents);
-        ImGui::Text("In Combat: %d", combatAgents);
-        ImGui::Text("Alert: %d", alertAgents);
-        ImGui::Text("Idle: %d", idleAgents);
-        ImGui::Text("With Targets: %d", withTargets);
+        Spark::Ui::KeyValue("Total Agents:", "%d", totalAgents);
+        Spark::Ui::KeyValue("In Combat:", "%d", combatAgents);
+        Spark::Ui::KeyValue("Alert:", "%d", alertAgents);
+        Spark::Ui::KeyValue("Idle:", "%d", idleAgents);
+        Spark::Ui::KeyValue("With Targets:", "%d", withTargets);
     }
 
 } // namespace SparkEditor

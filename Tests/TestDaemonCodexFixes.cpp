@@ -25,11 +25,14 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <memory>
 #include <string>
+#include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/un.h>
 #include <thread>
 #include <unistd.h>
 
@@ -42,14 +45,29 @@ namespace
         return buf;
     }
 
+    /// Waits until the daemon accepts connections, not just until its socket file exists: the
+    /// server binds the path, then verifies ownership and restricts permissions, and only then
+    /// calls listen(). A connect() in that window fails with ECONNREFUSED (seen on macOS).
     bool WaitForCodexSocket(const std::string& path, std::chrono::milliseconds timeout)
     {
+        sockaddr_un address{};
+        if (path.size() >= sizeof(address.sun_path))
+            return false;
+        address.sun_family = AF_UNIX;
+        std::memcpy(address.sun_path, path.data(), path.size());
+
         auto deadline = std::chrono::steady_clock::now() + timeout;
         while (std::chrono::steady_clock::now() < deadline)
         {
-            struct stat st;
-            if (::stat(path.c_str(), &st) == 0)
-                return true;
+            const int probe = ::socket(AF_UNIX, SOCK_STREAM, 0);
+            if (probe >= 0)
+            {
+                const bool listening =
+                    ::connect(probe, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0;
+                ::close(probe);
+                if (listening)
+                    return true;
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         return false;

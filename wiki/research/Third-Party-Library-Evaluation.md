@@ -87,7 +87,7 @@ curl -L https://raw.githubusercontent.com/syoyo/tinyexr/master/tinyexr.h -o Thir
 |---------|--------|
 | assimp | Too heavy (~5 MB). cgltf/tinygltf is sufficient for glTF. Only if 40+ format support is ever needed. |
 | spdlog | Custom Logger is adequate (async, category-filtered). Migration cost exceeds benefit. |
-| Google Test / Catch2 | Custom TestFramework handles the full suite (~6,000 tests). Migration not justified. |
+| Google Test / Catch2 | Custom TestFramework handles the full suite. Migration not justified. |
 | GLM | Thousands of DirectXMath references across the codebase. Massive migration; DirectXMath stubs suffice on Linux. |
 | TBB / Enki | JobSystem works. Replace only if work-stealing becomes a measured bottleneck. |
 | protobuf | Save system works. Adds build complexity for marginal gain. |

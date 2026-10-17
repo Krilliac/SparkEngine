@@ -96,6 +96,11 @@ namespace Spark::Daemon
 
     // =========================================================================
     // Payload codecs — BinaryWriter/BinaryReader
+    //
+    // Every Decode* is publish-on-success: it decodes into a local and assigns
+    // `out` only once the whole message was accepted, so a rejected payload never
+    // leaves a half-decoded struct behind. Bytes after the last field are
+    // tolerated (that is how the stats payload grew evictionCount).
     // =========================================================================
 
     [[nodiscard]] inline std::vector<uint8_t> EncodeGetAssetRequest(const GetAssetRequest& req)
@@ -109,9 +114,15 @@ namespace Spark::Daemon
     [[nodiscard]] inline bool DecodeGetAssetRequest(const std::vector<uint8_t>& bytes, GetAssetRequest& out)
     {
         Spark::BinaryReader r(bytes);
-        out.key.path = r.ReadString();
-        out.key.platform = r.Read<uint8_t>();
-        return !r.HasError();
+        GetAssetRequest decoded;
+        decoded.key.path = r.ReadString();
+        decoded.key.platform = r.Read<uint8_t>();
+        if (r.HasError())
+        {
+            return false;
+        }
+        out = std::move(decoded);
+        return true;
     }
 
     [[nodiscard]] inline std::vector<uint8_t> EncodeGetAssetResponse(const GetAssetResponse& resp)
@@ -181,8 +192,13 @@ namespace Spark::Daemon
                                                            InvalidateAssetRequest& out)
     {
         Spark::BinaryReader r(bytes);
-        out.path = r.ReadString();
-        return !r.HasError();
+        std::string path = r.ReadString();
+        if (r.HasError())
+        {
+            return false;
+        }
+        out.path = std::move(path);
+        return true;
     }
 
     [[nodiscard]] inline std::vector<uint8_t> EncodeInvalidateAssetResponse(const InvalidateAssetResponse& resp)
@@ -196,8 +212,13 @@ namespace Spark::Daemon
                                                             InvalidateAssetResponse& out)
     {
         Spark::BinaryReader r(bytes);
-        out.removedCount = r.Read<uint32_t>();
-        return !r.HasError();
+        const auto removedCount = r.Read<uint32_t>();
+        if (r.HasError())
+        {
+            return false;
+        }
+        out.removedCount = removedCount;
+        return true;
     }
 
     [[nodiscard]] inline std::vector<uint8_t> EncodeAssetCacheStats(const AssetCacheStats& stats)
@@ -214,17 +235,23 @@ namespace Spark::Daemon
     [[nodiscard]] inline bool DecodeAssetCacheStats(const std::vector<uint8_t>& bytes, AssetCacheStats& out)
     {
         Spark::BinaryReader r(bytes);
-        out.entryCount = r.Read<uint64_t>();
-        out.totalBytes = r.Read<uint64_t>();
-        out.hitCount = r.Read<uint64_t>();
-        out.missCount = r.Read<uint64_t>();
+        AssetCacheStats decoded;
+        decoded.entryCount = r.Read<uint64_t>();
+        decoded.totalBytes = r.Read<uint64_t>();
+        decoded.hitCount = r.Read<uint64_t>();
+        decoded.missCount = r.Read<uint64_t>();
         if (r.HasError())
             return false;
         // evictionCount was appended in a follow-up — tolerate older daemons
-        // that sent a 32-byte payload without it.
+        // that sent a 32-byte payload without it (the field then stays zero).
         if (r.Remaining() >= sizeof(uint64_t))
-            out.evictionCount = r.Read<uint64_t>();
-        return !r.HasError();
+            decoded.evictionCount = r.Read<uint64_t>();
+        if (r.HasError())
+        {
+            return false;
+        }
+        out = decoded;
+        return true;
     }
 
 } // namespace Spark::Daemon

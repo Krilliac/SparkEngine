@@ -1,0 +1,5 @@
+name = Junk
+metallic = 0.5abc
+roughness = 
+normalScale = 1e999999
+alphaCutoff = 0x1p-1

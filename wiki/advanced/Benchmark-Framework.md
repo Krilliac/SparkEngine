@@ -80,6 +80,7 @@ struct BenchmarkComparison
     std::string scenarioName;                  // Scenario that was compared
     bool passed = true;                        // True if no regressions detected
     std::vector<RegressionDetail> regressions; // Details of any regressions found
+    std::string failureReason;                 // Missing/invalid comparison evidence
 };
 ```
 
@@ -157,6 +158,12 @@ for (const auto& metric : singleResult.metrics)
 ### Saving and Loading Baselines
 
 Baselines are stored as simple JSON files. Save after a known-good run, then compare future runs against the baseline.
+
+The comparison is fail-closed for evidence: every measured scenario must have
+a matching baseline. A missing baseline produces a failed comparison with a
+`failureReason`, and an empty comparison list is also treated as a failure by
+`HasRegressions()`. A benchmark job must therefore provide real results and
+matching reference data before it can report a pass.
 
 ```cpp
 // Save baseline after a reference run
@@ -265,6 +272,11 @@ int main()
     {
         for (const auto& comp : comparisons)
         {
+            if (!comp.failureReason.empty())
+            {
+                std::print(stderr, "FAIL: {} -- {}\n",
+                           comp.scenarioName, comp.failureReason);
+            }
             for (const auto& reg : comp.regressions)
             {
                 std::print(stderr, "FAIL: {} {} {:+.1f}% (limit {}%)\n",

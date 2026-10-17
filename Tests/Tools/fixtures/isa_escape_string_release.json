@@ -1,0 +1,485 @@
+{
+  "provenance": {
+    "sourceSha": "d90b86e42fd586a56d53f077bbca6a457200d9bd",
+    "workflowSha": "73e5ecad196da36d1c3b4c364f7d2126f16ce616",
+    "run": "37109995282",
+    "originalImageSha256": "a78b3d3c6563a15a92af289e9da67e795a884e56098fe08f92be76b31fbfab3b",
+    "hashes": {
+      "image": "a78b3d3c6563a15a92af289e9da67e795a884e56098fe08f92be76b31fbfab3b",
+      "pdb": "8467d46e63f0a536299ffaeeb9c92972d2084523f5dfe875ee03e9c7d144bd86",
+      "objdump": "3250af97b9d8fd7d379710d561c312dc8b3a89b9a008014a4486805c840175b2",
+      "pdbutil": "5ecf2e51ad37498d8e35f4979670f938ec41dbead8a769a2b1650c69dac0c8a6",
+      "scanner": "4431c82aeb0af14d3ed5520e535fe6eee77e2e1d014219a634ddc117b3f9f9bc",
+      "codeMap": "8270eedfc8f3ac865f031cbef169d8a2486d44196b831a926681e4dee758e66d",
+      "symbolIdentityParser": "f123029eb41c297a190237aab765e73b7818a46b3cd505afd76fbe03b83e56b0"
+    }
+  },
+  "region": {
+    "start": 6443271264,
+    "end": 6443271817,
+    "pdbExtents": [
+      {
+        "start": 6443271264,
+        "end": 6443271817,
+        "name": "Spark::Json::Detail::EscapeString",
+        "ambiguous": false,
+        "noreturn": false
+      }
+    ],
+    "unclassifiedWindows": [],
+    "imageBase": 6442450944,
+    "startRva": 820320,
+    "endRva": 820873,
+    "fileOffset": 817248,
+    "byteCount": 553,
+    "rawHex": "405356574883ec30488b05d19b4e004833c44889442428488bda488bf1b222e86ceff3ff48837b180f488bcb760b488b0b488bd1488bf9eb06488bfb488bd3488b5b104803da483bcb0f844301000048896c2460488d2d457bf3ff0fb6170fbec283c0f883f8540f87c300000048980fb6842834860c008b8c8514860c004803cdffe141b802000000488d1590344200488bcee8f808f4ffe9e400000041b802000000488d157a314100488bcee8de08f4ffe9ca00000041b802000000488d154c344200488bcee8c408f4ffe9b000000041b802000000488d152e344200488bcee8aa08f4ffe99600000041b802000000488d1524314100488bcee89008f4ffeb7f41b802000000488d1511314100488bcee87908f4ffeb6841b802000000488d15f2304100488bcee86208f4ffeb5180fa207344448bca4c8d0581364200ba08000000488d4c2420e8e252f4ff488d44242049c7c0ffffffff660f1f44000049ffc042803c000075f6488d542420488bcee81908f4ffeb08488bcee80feef3ff48ffc7483bfb0f85cefeffff488b6c2460b222488bcee8f4edf3ff488b4c24284833cce837a33b004883c4305f5e5bc30f1f0017850c0079850c004b850c0031850c0062850c00e3840c00fd840c0090850c0000010207030407070707070707070707070707070707070707070507070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070707070706",
+    "rawSha256": "9ca77e2de29b8f38dd239437f4ada499a6235a01fb5afdc8f001b6de83bd47e1",
+    "disassembly": "\nD:\\a\\SparkEngine\\SparkEngine\\product\\build\\bin\\Release\\SparkGameMMOFPS.dll:\tfile format coff-x86-64\n\nDisassembly of section .text:\n\n0000000180039580 <DestroyModule>:\n1800c8460: 40 53                       \tpushq\t%rbx\n1800c8462: 56                          \tpushq\t%rsi\n1800c8463: 57                          \tpushq\t%rdi\n1800c8464: 48 83 ec 30                 \tsubq\t$0x30, %rsp\n1800c8468: 48 8b 05 d1 9b 4e 00        \tmovq\t0x4e9bd1(%rip), %rax    # 0x1805b2040\n1800c846f: 48 33 c4                    \txorq\t%rsp, %rax\n1800c8472: 48 89 44 24 28              \tmovq\t%rax, 0x28(%rsp)\n1800c8477: 48 8b da                    \tmovq\t%rdx, %rbx\n1800c847a: 48 8b f1                    \tmovq\t%rcx, %rsi\n1800c847d: b2 22                       \tmovb\t$0x22, %dl\n1800c847f: e8 6c ef f3 ff              \tcallq\t0x1800073f0 <.text+0x63f0>\n1800c8484: 48 83 7b 18 0f              \tcmpq\t$0xf, 0x18(%rbx)\n1800c8489: 48 8b cb                    \tmovq\t%rbx, %rcx\n1800c848c: 76 0b                       \tjbe\t0x1800c8499 <DestroyModule+0x8ef19>\n1800c848e: 48 8b 0b                    \tmovq\t(%rbx), %rcx\n1800c8491: 48 8b d1                    \tmovq\t%rcx, %rdx\n1800c8494: 48 8b f9                    \tmovq\t%rcx, %rdi\n1800c8497: eb 06                       \tjmp\t0x1800c849f <DestroyModule+0x8ef1f>\n1800c8499: 48 8b fb                    \tmovq\t%rbx, %rdi\n1800c849c: 48 8b d3                    \tmovq\t%rbx, %rdx\n1800c849f: 48 8b 5b 10                 \tmovq\t0x10(%rbx), %rbx\n1800c84a3: 48 03 da                    \taddq\t%rdx, %rbx\n1800c84a6: 48 3b cb                    \tcmpq\t%rbx, %rcx\n1800c84a9: 0f 84 43 01 00 00           \tje\t0x1800c85f2 <DestroyModule+0x8f072>\n1800c84af: 48 89 6c 24 60              \tmovq\t%rbp, 0x60(%rsp)\n1800c84b4: 48 8d 2d 45 7b f3 ff        \tleaq\t-0xc84bb(%rip), %rbp    # 0x180000000\n1800c84bb: 0f b6 17                    \tmovzbl\t(%rdi), %edx\n1800c84be: 0f be c2                    \tmovsbl\t%dl, %eax\n1800c84c1: 83 c0 f8                    \taddl\t$-0x8, %eax\n1800c84c4: 83 f8 54                    \tcmpl\t$0x54, %eax\n1800c84c7: 0f 87 c3 00 00 00           \tja\t0x1800c8590 <DestroyModule+0x8f010>\n1800c84cd: 48 98                       \tcltq\n1800c84cf: 0f b6 84 28 34 86 0c 00     \tmovzbl\t0xc8634(%rax,%rbp), %eax\n1800c84d7: 8b 8c 85 14 86 0c 00        \tmovl\t0xc8614(%rbp,%rax,4), %ecx\n1800c84de: 48 03 cd                    \taddq\t%rbp, %rcx\n1800c84e1: ff e1                       \tjmpq\t*%rcx\n1800c84e3: 41 b8 02 00 00 00           \tmovl\t$0x2, %r8d\n1800c84e9: 48 8d 15 90 34 42 00        \tleaq\t0x423490(%rip), %rdx    # 0x1804eb980\n1800c84f0: 48 8b ce                    \tmovq\t%rsi, %rcx\n1800c84f3: e8 f8 08 f4 ff              \tcallq\t0x180008df0 <.text+0x7df0>\n1800c84f8: e9 e4 00 00 00              \tjmp\t0x1800c85e1 <DestroyModule+0x8f061>\n1800c84fd: 41 b8 02 00 00 00           \tmovl\t$0x2, %r8d\n1800c8503: 48 8d 15 7a 31 41 00        \tleaq\t0x41317a(%rip), %rdx    # 0x1804db684\n1800c850a: 48 8b ce                    \tmovq\t%rsi, %rcx\n1800c850d: e8 de 08 f4 ff              \tcallq\t0x180008df0 <.text+0x7df0>\n1800c8512: e9 ca 00 00 00              \tjmp\t0x1800c85e1 <DestroyModule+0x8f061>\n1800c8517: 41 b8 02 00 00 00           \tmovl\t$0x2, %r8d\n1800c851d: 48 8d 15 4c 34 42 00        \tleaq\t0x42344c(%rip), %rdx    # 0x1804eb970\n1800c8524: 48 8b ce                    \tmovq\t%rsi, %rcx\n1800c8527: e8 c4 08 f4 ff              \tcallq\t0x180008df0 <.text+0x7df0>\n1800c852c: e9 b0 00 00 00              \tjmp\t0x1800c85e1 <DestroyModule+0x8f061>\n1800c8531: 41 b8 02 00 00 00           \tmovl\t$0x2, %r8d\n1800c8537: 48 8d 15 2e 34 42 00        \tleaq\t0x42342e(%rip), %rdx    # 0x1804eb96c\n1800c853e: 48 8b ce                    \tmovq\t%rsi, %rcx\n1800c8541: e8 aa 08 f4 ff              \tcallq\t0x180008df0 <.text+0x7df0>\n1800c8546: e9 96 00 00 00              \tjmp\t0x1800c85e1 <DestroyModule+0x8f061>\n1800c854b: 41 b8 02 00 00 00           \tmovl\t$0x2, %r8d\n1800c8551: 48 8d 15 24 31 41 00        \tleaq\t0x413124(%rip), %rdx    # 0x1804db67c\n1800c8558: 48 8b ce                    \tmovq\t%rsi, %rcx\n1800c855b: e8 90 08 f4 ff              \tcallq\t0x180008df0 <.text+0x7df0>\n1800c8560: eb 7f                       \tjmp\t0x1800c85e1 <DestroyModule+0x8f061>\n1800c8562: 41 b8 02 00 00 00           \tmovl\t$0x2, %r8d\n1800c8568: 48 8d 15 11 31 41 00        \tleaq\t0x413111(%rip), %rdx    # 0x1804db680\n1800c856f: 48 8b ce                    \tmovq\t%rsi, %rcx\n1800c8572: e8 79 08 f4 ff              \tcallq\t0x180008df0 <.text+0x7df0>\n1800c8577: eb 68                       \tjmp\t0x1800c85e1 <DestroyModule+0x8f061>\n1800c8579: 41 b8 02 00 00 00           \tmovl\t$0x2, %r8d\n1800c857f: 48 8d 15 f2 30 41 00        \tleaq\t0x4130f2(%rip), %rdx    # 0x1804db678\n1800c8586: 48 8b ce                    \tmovq\t%rsi, %rcx\n1800c8589: e8 62 08 f4 ff              \tcallq\t0x180008df0 <.text+0x7df0>\n1800c858e: eb 51                       \tjmp\t0x1800c85e1 <DestroyModule+0x8f061>\n1800c8590: 80 fa 20                    \tcmpb\t$0x20, %dl\n1800c8593: 73 44                       \tjae\t0x1800c85d9 <DestroyModule+0x8f059>\n1800c8595: 44 8b ca                    \tmovl\t%edx, %r9d\n1800c8598: 4c 8d 05 81 36 42 00        \tleaq\t0x423681(%rip), %r8     # 0x1804ebc20\n1800c859f: ba 08 00 00 00              \tmovl\t$0x8, %edx\n1800c85a4: 48 8d 4c 24 20              \tleaq\t0x20(%rsp), %rcx\n1800c85a9: e8 e2 52 f4 ff              \tcallq\t0x18000d890 <.text+0xc890>\n1800c85ae: 48 8d 44 24 20              \tleaq\t0x20(%rsp), %rax\n1800c85b3: 49 c7 c0 ff ff ff ff        \tmovq\t$-0x1, %r8\n1800c85ba: 66 0f 1f 44 00 00           \tnopw\t(%rax,%rax)\n1800c85c0: 49 ff c0                    \tincq\t%r8\n1800c85c3: 42 80 3c 00 00              \tcmpb\t$0x0, (%rax,%r8)\n1800c85c8: 75 f6                       \tjne\t0x1800c85c0 <DestroyModule+0x8f040>\n1800c85ca: 48 8d 54 24 20              \tleaq\t0x20(%rsp), %rdx\n1800c85cf: 48 8b ce                    \tmovq\t%rsi, %rcx\n1800c85d2: e8 19 08 f4 ff              \tcallq\t0x180008df0 <.text+0x7df0>\n1800c85d7: eb 08                       \tjmp\t0x1800c85e1 <DestroyModule+0x8f061>\n1800c85d9: 48 8b ce                    \tmovq\t%rsi, %rcx\n1800c85dc: e8 0f ee f3 ff              \tcallq\t0x1800073f0 <.text+0x63f0>\n1800c85e1: 48 ff c7                    \tincq\t%rdi\n1800c85e4: 48 3b fb                    \tcmpq\t%rbx, %rdi\n1800c85e7: 0f 85 ce fe ff ff           \tjne\t0x1800c84bb <DestroyModule+0x8ef3b>\n1800c85ed: 48 8b 6c 24 60              \tmovq\t0x60(%rsp), %rbp\n1800c85f2: b2 22                       \tmovb\t$0x22, %dl\n1800c85f4: 48 8b ce                    \tmovq\t%rsi, %rcx\n1800c85f7: e8 f4 ed f3 ff              \tcallq\t0x1800073f0 <.text+0x63f0>\n1800c85fc: 48 8b 4c 24 28              \tmovq\t0x28(%rsp), %rcx\n1800c8601: 48 33 cc                    \txorq\t%rsp, %rcx\n1800c8604: e8 37 a3 3b 00              \tcallq\t0x180482940 <DestroyModule+0x4493c0>\n1800c8609: 48 83 c4 30                 \taddq\t$0x30, %rsp\n1800c860d: 5f                          \tpopq\t%rdi\n1800c860e: 5e                          \tpopq\t%rsi\n1800c860f: 5b                          \tpopq\t%rbx\n1800c8610: c3                          \tretq\n1800c8611: 0f 1f 00                    \tnopl\t(%rax)\n1800c8614: 17                          \t<unknown>\n1800c8615: 85 0c 00                    \ttestl\t%ecx, (%rax,%rax)\n1800c8618: 79 85                       \tjns\t0x1800c859f <DestroyModule+0x8f01f>\n1800c861a: 0c 00                       \torb\t$0x0, %al\n1800c861c: 4b 85 0c 00                 \ttestq\t%rcx, (%r8,%r8)\n1800c8620: 31 85 0c 00 62 85           \txorl\t%eax, -0x7a9dfff4(%rbp)\n1800c8626: 0c 00                       \torb\t$0x0, %al\n1800c8628: e3 84                       \tjrcxz\t0x1800c85ae <DestroyModule+0x8f02e>\n1800c862a: 0c 00                       \torb\t$0x0, %al\n1800c862c: fd                          \tstd\n1800c862d: 84 0c 00                    \ttestb\t%cl, (%rax,%rax)\n1800c8630: 90                          \tnop\n1800c8631: 85 0c 00                    \ttestl\t%ecx, (%rax,%rax)\n1800c8634: 00 01                       \taddb\t%al, (%rcx)\n1800c8636: 02 07                       \taddb\t(%rdi), %al\n1800c8638: 03 04 07                    \taddl\t(%rdi,%rax), %eax\n1800c863b: 07                          \t<unknown>\n1800c863c: 07                          \t<unknown>\n1800c863d: 07                          \t<unknown>\n1800c863e: 07                          \t<unknown>\n1800c863f: 07                          \t<unknown>\n1800c8640: 07                          \t<unknown>\n1800c8641: 07                          \t<unknown>\n1800c8642: 07                          \t<unknown>\n1800c8643: 07                          \t<unknown>\n1800c8644: 07                          \t<unknown>\n1800c8645: 07                          \t<unknown>\n1800c8646: 07                          \t<unknown>\n1800c8647: 07                          \t<unknown>\n1800c8648: 07                          \t<unknown>\n1800c8649: 07                          \t<unknown>\n1800c864a: 07                          \t<unknown>\n1800c864b: 07                          \t<unknown>\n1800c864c: 07                          \t<unknown>\n1800c864d: 07                          \t<unknown>\n1800c864e: 05 07 07 07 07              \taddl\t$0x7070707, %eax        # imm = 0x7070707\n1800c8653: 07                          \t<unknown>\n1800c8654: 07                          \t<unknown>\n1800c8655: 07                          \t<unknown>\n1800c8656: 07                          \t<unknown>\n1800c8657: 07                          \t<unknown>\n1800c8658: 07                          \t<unknown>\n1800c8659: 07                          \t<unknown>\n1800c865a: 07                          \t<unknown>\n1800c865b: 07                          \t<unknown>\n1800c865c: 07                          \t<unknown>\n1800c865d: 07                          \t<unknown>\n1800c865e: 07                          \t<unknown>\n1800c865f: 07                          \t<unknown>\n1800c8660: 07                          \t<unknown>\n1800c8661: 07                          \t<unknown>\n1800c8662: 07                          \t<unknown>\n1800c8663: 07                          \t<unknown>\n1800c8664: 07                          \t<unknown>\n1800c8665: 07                          \t<unknown>\n1800c8666: 07                          \t<unknown>\n1800c8667: 07                          \t<unknown>\n1800c8668: 07                          \t<unknown>\n1800c8669: 07                          \t<unknown>\n1800c866a: 07                          \t<unknown>\n1800c866b: 07                          \t<unknown>\n1800c866c: 07                          \t<unknown>\n1800c866d: 07                          \t<unknown>\n1800c866e: 07                          \t<unknown>\n1800c866f: 07                          \t<unknown>\n1800c8670: 07                          \t<unknown>\n1800c8671: 07                          \t<unknown>\n1800c8672: 07                          \t<unknown>\n1800c8673: 07                          \t<unknown>\n1800c8674: 07                          \t<unknown>\n1800c8675: 07                          \t<unknown>\n1800c8676: 07                          \t<unknown>\n1800c8677: 07                          \t<unknown>\n1800c8678: 07                          \t<unknown>\n1800c8679: 07                          \t<unknown>\n1800c867a: 07                          \t<unknown>\n1800c867b: 07                          \t<unknown>\n1800c867c: 07                          \t<unknown>\n1800c867d: 07                          \t<unknown>\n1800c867e: 07                          \t<unknown>\n1800c867f: 07                          \t<unknown>\n1800c8680: 07                          \t<unknown>\n1800c8681: 07                          \t<unknown>\n1800c8682: 07                          \t<unknown>\n1800c8683: 07                          \t<unknown>\n1800c8684: 07                          \t<unknown>\n1800c8685: 07                          \t<unknown>\n1800c8686: 07                          \t<unknown>\n1800c8687: 07                          \t<unknown>\n1800c8688: 06                          \t<unknown>\n"
+  },
+  "findings": [
+    {
+      "feature": "undecodable",
+      "address": "1800c8614",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c863b",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c863c",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c863d",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c863e",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c863f",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8640",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8641",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8642",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8643",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8644",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8645",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8646",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8647",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8648",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8649",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c864a",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c864b",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c864c",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c864d",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8653",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8654",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8655",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8656",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8657",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8658",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8659",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c865a",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c865b",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c865c",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c865d",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c865e",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c865f",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8660",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8661",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8662",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8663",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8664",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8665",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8666",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8667",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8668",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8669",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c866a",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c866b",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c866c",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c866d",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c866e",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c866f",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8670",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8671",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8672",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8673",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8674",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8675",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8676",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8677",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8678",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8679",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c867a",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c867b",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c867c",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c867d",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c867e",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c867f",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8680",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8681",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8682",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8683",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8684",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8685",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8686",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8687",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    },
+    {
+      "feature": "undecodable",
+      "address": "1800c8688",
+      "symbol": "Spark::Json::Detail::EscapeString",
+      "text": "<unknown>"
+    }
+  ]
+}

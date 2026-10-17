@@ -282,6 +282,8 @@ namespace SparkEditor
                 inst.exitCode = exitCode;
                 CloseEditorProcessHandles(inst.processHandle, nullptr);
                 inst.processHandle = nullptr;
+                m_statusMessage = "PID " + std::to_string(inst.pid) + " (" + inst.label + ") exited with code " +
+                                  std::to_string(exitCode);
                 SPARK_LOG_INFO(Spark::LogCategory::Editor, "PlayControlPanel: PID %lu (%s) exited with code %lu",
                                inst.pid, inst.label.c_str(), exitCode);
             }

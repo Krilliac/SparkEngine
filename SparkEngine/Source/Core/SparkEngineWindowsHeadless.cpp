@@ -38,6 +38,9 @@
 #include "FaultIsolation.h"
 #include "FixedTimestepAccumulator.h"
 #include "GameplaySystemLifecycle.h"
+#include "Core/Lifecycle/GameplayLifecycleShared.h"
+#include "HeadlessTickStats.h"
+#include "HostScenePreview.h"
 #include "Graphics/RHI/RHIBridge.h"
 #include "ModuleHotReload.h"
 #include "ModuleManager.h"
@@ -57,13 +60,17 @@
 #include "Utils/Timer.h"
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <format>
 #include <memory>
+#include <optional>
 #include <string>
 #include <thread>
 
 #ifdef SPARK_PLATFORM_WINDOWS
+#include <psapi.h> // K32GetProcessMemoryInfo for the peak-RSS record
+
 #ifdef SPARK_HEADLESS_SUPPORT
 
 // g_headlessMode is defined in EngineContext.cpp (SparkEngineLib)
@@ -137,13 +144,9 @@ static bool InitHeadlessEngineContext()
     // EngineRuntime gives the no-render device the same bounded startup and
     // teardown lifetime as the other core services without exposing a fake
     // GraphicsEngine to game modules.
-    runtime.headlessRhiBridge = std::make_unique<Spark::RHI::RHIBridge>();
-    if (!runtime.headlessRhiBridge->Initialize(nullptr, 1, 1, Spark::RHI::GraphicsBackend::None, false) ||
-        !runtime.headlessRhiBridge->IsHeadless() ||
-        runtime.headlessRhiBridge->GetActiveBackend() != Spark::RHI::GraphicsBackend::None)
+    if (!runtime.InitializeHeadlessRhi())
     {
         SPARK_LOG_ERROR(Spark::LogCategory::Core, "Windows headless startup could not establish NullRHI");
-        runtime.headlessRhiBridge.reset();
         return false;
     }
 
@@ -155,9 +158,8 @@ static bool InitHeadlessEngineContext()
     auto* ctx = EngineContext::Get();
     if (!ctx)
     {
-        SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null after SetOwned — headless init aborted");
-        runtime.headlessRhiBridge->Shutdown();
-        runtime.headlessRhiBridge.reset();
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null after SetOwned — headless init stopped");
+        runtime.ShutdownHeadlessRhi();
         return false;
     }
 
@@ -169,7 +171,6 @@ static bool InitHeadlessEngineContext()
 
     InitPhysics();
 
-    Spark::EngineSetup::RegisterCoreSubsystems(*ctx);
     if (!g_noJobSystem)
     {
         Spark::EngineSetup::InitializeJobSystem(g_maxWorkerThreads);
@@ -195,6 +196,13 @@ static bool InitHeadlessEngineContext()
     g_engineEcsWorld = std::make_unique<::World>();
     ctx->SetWorld(g_engineEcsWorld.get());
 
+    // Game modules compile and attach scripts in OnLoad, which runs before the
+    // gameplay lifecycle stage, so the script engine is a core service. Prime the
+    // console command registry first: the script sandbox registers sandbox.*
+    // commands during engine init, and registration is dropped until then.
+    Spark::SimpleConsole::GetInstance().Initialize();
+    Spark::Core::Lifecycle::InitializeScriptingServiceImpl();
+
     return true;
 }
 
@@ -206,11 +214,26 @@ static size_t LoadHeadlessModules(LPWSTR lpCmdLine)
     GetEngineRuntime().moduleManager = std::make_unique<ModuleManager>();
     auto& console = Spark::SimpleConsole::GetInstance();
 
-    if (LoadGameModules(*GetEngineRuntime().moduleManager, lpCmdLine))
+    // -scene without -game/-manifest is an explicit engine-only scene run:
+    // implicit discovery would let a module beside the executable own the loop
+    // and leave the requested scene unused (Linux parity).
+    const bool engineOnlySceneRun = !g_scenePath.empty() &&
+                                    !Spark::Platform::HasWindowsCommandLineOption(lpCmdLine, L"-game") &&
+                                    !Spark::Platform::HasWindowsCommandLineOption(lpCmdLine, L"-manifest");
+    if (engineOnlySceneRun)
     {
-        GetEngineRuntime().moduleManager->InitializeAll(EngineContext::Get());
+        console.LogInfo("[-scene] Engine-only scene run: implicit module discovery skipped");
+    }
+    else if (LoadGameModules(*GetEngineRuntime().moduleManager, lpCmdLine))
+    {
+        const bool moduleInitializationSucceeded =
+            GetEngineRuntime().moduleManager->InitializeAll(EngineContext::Get());
         const size_t initializedModules = GetEngineRuntime().moduleManager->GetInitializedModuleCount();
-        console.LogSuccess("Loaded " + std::to_string(initializedModules) + " module(s)");
+        if (moduleInitializationSucceeded)
+            console.LogSuccess("Loaded " + std::to_string(initializedModules) + " module(s)");
+        else
+            console.LogError("Module initialization failed; " + std::to_string(initializedModules) +
+                             " module(s) initialized");
         if (initializedModules > 0)
         {
             SPARK_LOG_INFO(Spark::LogCategory::Core, "SPARK_MODULE_READY count=%zu", initializedModules);
@@ -264,7 +287,16 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
         Spark::SimpleConsole::GetInstance().LogWarning("SaveSystem initialization failed — save/load unavailable");
     SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessWindows: SaveSystem initialized");
 
-    InitConsole();
+    if (!InitConsole())
+    {
+        // The lifecycle root already rolled its stages back and no module has
+        // been loaded yet, so the module preflight is vacuous: tear down and fail.
+        SPARK_LOG_ERROR(Spark::LogCategory::Core, "RunHeadlessWindows: engine lifecycle failed to initialize");
+        GetEngineRuntime().moduleHotReload.reset();
+        ShutdownEngineAfterPreflight();
+        FreeConsole();
+        return 1;
+    }
     Spark::ConsoleProcessManager::GetInstance().SetShutdownRequestHandler(
         [] { g_shutdownRequested.store(true, std::memory_order_relaxed); });
     SPARK_LOG_INFO(Spark::LogCategory::Core, "RunHeadlessWindows: InitConsole returned");
@@ -322,6 +354,34 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
         exitCode = 2;
     }
 
+    // -scene: load into the engine-owned ECS world that EngineContext already
+    // publishes. A scene that cannot run fails the launch instead of leaving an
+    // empty server loop to exit 0; the ordinary preflight + teardown still runs.
+    if (exitCode == 0 && !g_scenePath.empty())
+    {
+        extern std::unique_ptr<::World> g_engineEcsWorld;
+        auto& sceneConsole = Spark::SimpleConsole::GetInstance();
+        Spark::HostSceneLoadReport sceneReport;
+        if (initializedModuleCount > 0)
+            sceneReport.error = "a game module is active; the requested scene cannot run";
+        else if (!g_engineEcsWorld)
+            sceneReport.error = "the engine ECS world is unavailable";
+        if (sceneReport.error.empty() && Spark::LoadHostScene(*g_engineEcsWorld, g_scenePath, sceneReport))
+        {
+            sceneConsole.LogSuccess(
+                std::format("[-scene] Loaded '{}' ({} entities)", g_scenePath, sceneReport.entities));
+            Spark::PrintHostSceneRecords(sceneReport);
+        }
+        else
+        {
+            sceneConsole.LogError(std::format("[-scene] Failed to load '{}': {}", g_scenePath, sceneReport.error));
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "[-scene] Failed to load '%s': %s", g_scenePath.c_str(),
+                            sceneReport.error.c_str());
+            g_shutdownRequested.store(true, std::memory_order_relaxed);
+            exitCode = Spark::kHostSceneLoadFailedExitCode;
+        }
+    }
+
     // Fixed 60 Hz server loop
     constexpr auto TICK_INTERVAL = std::chrono::microseconds(16667);
     auto& console = Spark::SimpleConsole::GetInstance();
@@ -334,6 +394,7 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
     int frameCount = 0;
     int nullRhiFrameCount = 0;
     bool quitPosted = false;
+    Spark::HeadlessTickStats tickStats;
 
     while (true)
     {
@@ -349,13 +410,12 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
         // Matches the behaviour already present in SparkEngineLinux.cpp's
         // RunHeadlessLinux — without this parity the Windows headless loop
         // runs forever even on -test-frames and CI jobs time out.
-        if ((g_testFrameLimit > 0 && frameCount >= g_testFrameLimit) ||
-            (g_testSecondsLimit > 0.0 && ExecElapsedSeconds() >= g_testSecondsLimit))
+        if ((g_testFrameLimit > 0 && frameCount >= g_testFrameLimit) || g_execScript.TestSecondsLimitReached())
         {
             if (CanShutdownEngine())
             {
                 console.LogInfo(std::format("[TEST] Limit reached (frame {} / t={:.1f}s). Exiting.", frameCount,
-                                            ExecElapsedSeconds()));
+                                            g_execScript.ElapsedSeconds()));
                 break;
             }
             console.LogError("[TEST] Exit postponed: a module could not checkpoint for unload");
@@ -400,7 +460,7 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
             console.Update();
         });
 
-        RunDueScriptedCommands(frameCount);
+        g_execScript.RunDue(frameCount, console);
         if (GetEngineRuntime().headlessRhiBridge)
         {
             GetEngineRuntime().headlessRhiBridge->EndFrame();
@@ -408,7 +468,10 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
         }
         ++frameCount;
 
+        // Record work time only: the loop sleeps to a fixed 60 Hz cadence, so
+        // wall-clock frame time would measure the sleep, not the engine.
         auto elapsed = std::chrono::steady_clock::now() - tickStart;
+        tickStats.Record(static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count()));
         if (elapsed < TICK_INTERVAL)
             std::this_thread::sleep_for(TICK_INTERVAL - elapsed);
     }
@@ -420,25 +483,10 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
     // path otherwise AVs in ~UIPanel (dead ImGui/graphics) and then hangs
     // inside the crash handler.
     //
-    // Deregister them from EngineContext FIRST. Module OnUnload runs later,
-    // inside ShutdownEngineAfterPreflight, and a module that unregisters what
-    // it installed in OnLoad reaches these systems through ctx->GetUI() /
-    // GetDialogue() / GetWeather() / GetModSystem(). Leaving the slots set
-    // handed that module freed memory; clearing them makes the getters return
-    // null, which the documented contract allows.
-    if (EngineContext* shutdownContext = EngineContext::Get())
-    {
-        shutdownContext->SetModSystem(nullptr);
-        shutdownContext->SetDialogue(nullptr);
-        shutdownContext->SetUI(nullptr);
-        shutdownContext->SetWeather(nullptr);
-    }
-    g_modSystem.reset();
-    g_dialogueSystem.reset();
-    g_uiSystem.reset();
-    g_weatherSystem.reset();
     console.LogInfo("Headless server shutting down...");
-    ShutdownEngineAfterPreflight();
+    const auto teardownStart = std::chrono::steady_clock::now();
+    const bool teardownClean = ShutdownEngineAfterPreflight();
+    const auto teardownElapsed = std::chrono::steady_clock::now() - teardownStart;
 
     // Publish machine-readable records only after ordinary teardown has
     // destroyed the ModuleManager and NullRHI bridge. This proves the complete
@@ -454,9 +502,31 @@ int RunHeadlessWindows(LPWSTR lpCmdLine)
         static_cast<unsigned long long>(evidence.initialized), static_cast<unsigned long long>(evidence.updated),
         static_cast<unsigned long long>(evidence.fixedUpdated), static_cast<unsigned long long>(evidence.rendered),
         static_cast<unsigned long long>(evidence.unloaded), static_cast<unsigned long long>(evidence.faults));
+    // NullRHI resources an owner kept past device shutdown (the soak harness,
+    // tools/perf-budget/run_nullrhi_soak.py, requires live=0), as on Linux.
+    if (const std::optional<uint32_t> liveResources = GetEngineRuntime().headlessRhiLiveResourcesAtShutdown)
+        std::fprintf(stdout, "SPARK_HEADLESS_NULLRHI_RESOURCES live=%u\n", static_cast<unsigned>(*liveResources));
+    // Teardown wall time, rounded up so a finished teardown never reads 0 ms;
+    // Tests/PackageSmoke/run_headless_boot_loop.py enforces the
+    // nullrhi.headless.shutdown_time ceiling of perf-budgets/v1/budget.json.
+    std::fprintf(
+        stdout, "SPARK_HEADLESS_SHUTDOWN ms=%llu\n",
+        static_cast<unsigned long long>(std::chrono::ceil<std::chrono::milliseconds>(teardownElapsed).count()));
     std::fflush(stdout);
+    // Work-time distribution for tools/perf-budget/collect_headless_result.py.
+    // Every tick above ran on NullRHI: startup returns when it is unavailable.
+    // Peak working set of this process only (a new process never inherits the
+    // launcher's counters); 0 if the query fails, which the collector rejects.
+    // The K32 entry point lives in kernel32, so no psapi.lib link is needed.
+    PROCESS_MEMORY_COUNTERS memoryCounters{};
+    const uint64_t peakRssKib = K32GetProcessMemoryInfo(GetCurrentProcess(), &memoryCounters, sizeof(memoryCounters))
+                                    ? static_cast<uint64_t>(memoryCounters.PeakWorkingSetSize) / 1024u
+                                    : 0u;
+    tickStats.EmitRecord(/*nullRhiActive=*/nullRhiFrameCount == frameCount, peakRssKib);
     if (!nullRhiShutdown && exitCode == 0)
         exitCode = 3;
+    if (!teardownClean && exitCode == 0)
+        exitCode = 1;
 
     // Only free the console if we successfully allocated one in
     // AllocHeadlessConsole. Calling FreeConsole on an inherited console

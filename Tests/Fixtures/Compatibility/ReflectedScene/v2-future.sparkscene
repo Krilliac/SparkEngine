@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "entities": [
+    {"id": 0, "name": "Written By A Newer Build", "parent": -1, "components": [
+      {"type": "Transform", "fields": {"position": "1.000000,2.000000,3.000000"}}
+    ]}
+  ]
+}

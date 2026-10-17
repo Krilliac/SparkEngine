@@ -21,6 +21,7 @@ API_VERSION = "2026-03-10"
 MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 REPOSITORY_RE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 VERSION_TAG_RE = re.compile(r"v[0-9]+\.[0-9]+\.[0-9]+")
+IMMUTABLE_NIGHTLY_TAG_RE = re.compile(r"nightly-[1-9][0-9]*-[1-9][0-9]*-[0-9a-f]{12}")
 
 
 class RecoveryError(RuntimeError):
@@ -82,6 +83,10 @@ def resolve_durable_recovery_target(
     if is_versioned:
         if VERSION_TAG_RE.fullmatch(release_tag) is None:
             raise RecoveryError("matching versioned operation has a malformed release tag")
+    elif IMMUTABLE_NIGHTLY_TAG_RE.fullmatch(release_tag):
+        # Unique nightly releases are immutable once published. Recovery must
+        # never attempt the legacy hide/redraft mutation against them.
+        return None
     elif release_tag != "nightly":
         raise RecoveryError("matching nightly operation does not target the nightly tag")
     prepared_public = getattr(pending, "target_draft_at_prepare", None) is False
@@ -127,13 +132,14 @@ def resolve_durable_recovery_target(
         )
     if is_versioned and prepared_public:
         return None
-    return DurableRecoveryTarget(release_id, release_tag, not is_versioned)
+    return DurableRecoveryTarget(release_id, release_tag, not is_versioned,
+                                 "inspect-stable" if is_versioned else "redraft")
 
 
 class ReleaseApi(Protocol):
     def get_release(self, release_id: int) -> dict[str, Any]: ...
 
-    def hide_release(self, release_id: int) -> None: ...
+    def hide_release(self, release_id: int, *, stable_tag: str | None = None) -> None: ...
 
     def get_release_assets(self, release_id: int) -> list[dict[str, Any]]: ...
 
@@ -199,6 +205,15 @@ def recover_durable_publication(
     attempts: int = 3,
     sleep_seconds: float = 1.0,
 ) -> RecoveryResult:
+    if action == "inspect-stable":
+        if expected_prerelease is not False or VERSION_TAG_RE.fullmatch(release_tag) is None:
+            raise RecoveryError("stable inspection identity is malformed")
+        # Inspect exact identity/mutability; only a proven mutable stable target
+        # may be quarantined. Immutable or ambiguous targets stay untouched.
+        return recover_release_publication(
+            api, release_id=release_id, release_tag=release_tag,
+            expected_prerelease=False, attempts=attempts, sleep_seconds=sleep_seconds,
+        )
     if action == "redraft":
         return recover_release_publication(
             api,
@@ -312,12 +327,19 @@ def recover_release_publication(
                     tag_matches=current["tag_name"] == release_tag,
                     channel_matches=current["prerelease"] is expected_prerelease,
                 )
+            if expected_prerelease is False and (
+                current["tag_name"] != release_tag or current["prerelease"] is not False
+            ):
+                raise RecoveryError("stable target identity is ambiguous; preserve for owner investigation")
             if current["immutable"]:
                 raise RecoveryError("the published release is immutable and cannot be hidden")
 
             # RELEASE_ID is durably checkpointed and cannot be reassigned. Hide
             # that exact object without overwriting a concurrent tag/channel edit.
-            api.hide_release(release_id)
+            if expected_prerelease is False:
+                api.hide_release(release_id, stable_tag=release_tag)
+            else:
+                api.hide_release(release_id)
             mutated = True
             recovered = _release_state(
                 api.get_release(release_id), release_id, "recovered"
@@ -351,20 +373,25 @@ class GitHubReleaseApi:
         self._timeout = timeout
 
     def _request(
-        self, method: str, release_id: int, payload: dict[str, Any] | None = None
+        self, method: str, release_id: int | None, payload: dict[str, Any] | None = None
     ) -> dict[str, Any]:
+        access_token = self._token
+        if release_id is None:
+            access_token = os.environ.get("RELEASE_POLICY_READ_TOKEN", "")
+            if not access_token:
+                raise RecoveryError("environment RELEASE_POLICY_READ_TOKEN with Administration(read) is required")
         body = None if payload is None else json.dumps(payload).encode("utf-8")
         headers = {
             "Accept": "application/vnd.github+json",
-            "Authorization": f"Bearer {self._token}",
+            "Authorization": f"Bearer {access_token}",
             "User-Agent": "SparkEngine-release-recovery",
             "X-GitHub-Api-Version": API_VERSION,
         }
         if body is not None:
             headers["Content-Type"] = "application/json"
-        api_request = request.Request(
-            f"{self._base}/{release_id}", data=body, headers=headers, method=method
-        )
+        url = (f"{self._base}/{release_id}" if release_id is not None
+               else self._base.removesuffix("/releases") + "/immutable-releases")
+        api_request = request.Request(url, data=body, headers=headers, method=method)
         try:
             with request.urlopen(api_request, timeout=self._timeout) as response:
                 raw = response.read(MAX_RESPONSE_BYTES + 1)
@@ -388,10 +415,23 @@ class GitHubReleaseApi:
     def get_release(self, release_id: int) -> dict[str, Any]:
         return self._request("GET", release_id)
 
-    def hide_release(self, release_id: int) -> None:
+    def hide_release(self, release_id: int, *, stable_tag: str | None = None) -> None:
+        if stable_tag is None:
+            self._require_mutable_policy()
+        else:
+            current = _release_state(self.get_release(release_id), release_id, "stable quarantine")
+            if (VERSION_TAG_RE.fullmatch(stable_tag) is None or current["tag_name"] != stable_tag
+                    or current["draft"] is not False or current["prerelease"] is not False
+                    or current["immutable"] is not False):
+                raise RecoveryError("stable quarantine identity or mutability is ambiguous; no mutation permitted")
         self._request(
             "PATCH", release_id, {"draft": True, "make_latest": "false"}
         )
+
+    def _require_mutable_policy(self) -> None:
+        policy = self._request("GET", None)
+        if policy.get("enabled") is not False or policy.get("enforced_by_owner") is not False:
+            raise RecoveryError("nightly recovery cannot mutate under immutable or unknown repository policy")
 
     def get_release_assets(self, release_id: int) -> list[dict[str, Any]]:
         headers = {
@@ -428,6 +468,7 @@ class GitHubReleaseApi:
         return value
 
     def publish_release(self, release_id: int, *, prerelease: bool) -> None:
+        self._require_mutable_policy()
         self._request(
             "PATCH",
             release_id,
@@ -521,7 +562,7 @@ def main(argv: list[str] | None = None) -> int:
             attempts=args.attempts,
         )
     except RecoveryError as exc:
-        print(f"::error::Automatic release redraft failed: {exc}")
+        print(f"::error::Release recovery or inspection failed: {exc}")
         return 1
     if not result.tag_matches or not result.channel_matches:
         print(

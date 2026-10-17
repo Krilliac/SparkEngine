@@ -7,6 +7,8 @@
  * the Jolt SDK.
  */
 
+#if !defined(SPARK_JOLT_PHYSICS_AVAILABLE) || !SPARK_JOLT_PHYSICS_AVAILABLE
+
 #include "Core/Platform.h"
 #include "PhysicsSystem.h"
 #include "Utils/LogMacros.h"
@@ -302,7 +304,12 @@ XMMATRIX PhysicsBody::GetInterpolatedTransform(float /*alpha*/) const
 
 void PhysicsBody::StoreCurrentState() {}
 
-void PhysicsBody::UpdateCurrentState() {}
+void PhysicsBody::UpdateCurrentState(const JPH::Body* /*lockedBody*/) {}
+
+JPH::PhysicsSystem* PhysicsBody::ContextJoltSystem()
+{
+    return nullptr;
+}
 
 // ============================================================================
 // PhysicsConstraint — stub
@@ -869,3 +876,5 @@ size_t PhysicsSystem::HashShape(const CollisionShapeDesc& desc) const
     Spark::CombineHash(hash, std::hash<float>{}(desc.height));
     return hash;
 }
+
+#endif // !defined(SPARK_JOLT_PHYSICS_AVAILABLE) || !SPARK_JOLT_PHYSICS_AVAILABLE

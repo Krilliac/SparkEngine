@@ -1,0 +1,90 @@
+name: Installed MinSizeRel native diagnostic
+on:
+  push:
+    branches: [codex/installed-native-config-20261003]
+permissions:
+  contents: read
+concurrency:
+  group: installed-native-qualification-20261003
+  cancel-in-progress: false
+jobs:
+  installed-native:
+    runs-on: windows-2022
+    timeout-minutes: 240
+    env:
+      PYTHONUTF8: '1'
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout orchestration at workflow SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      - name: Checkout exact product source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 2b14035640e9e1ee00967dd60905d56eb7000adf
+          path: product
+          submodules: recursive
+          persist-credentials: false
+      - name: Require installed VS 2022 v143 environment and record host
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $q = Join-Path $env:RUNNER_TEMP "spark-msr-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          if (Test-Path -LiteralPath $q) { throw 'Evidence root already exists' }
+          New-Item -ItemType Directory -Path $q | Out-Null
+          "QUAL_ROOT=$q" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vs = & $vswhere -latest -products * -version '[17.0,18.0)' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if ($LASTEXITCODE -ne 0 -or -not $vs) { throw 'Preinstalled VS 2022 v143 unavailable' }
+          $before = @{}
+          Get-ChildItem env: | ForEach-Object { $before[$_.Name] = $_.Value }
+          Import-Module (Join-Path $vs 'Common7/Tools/Microsoft.VisualStudio.DevShell.dll')
+          Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64'
+          if ($env:VCToolsVersion -notmatch '^14\.[34][0-9]\.') { throw 'Expected v143 toolset' }
+          foreach ($entry in Get-ChildItem env:) {
+            if ($entry.Name.StartsWith('=') -or $entry.Value -match "[`r`n]") { continue }
+            if ($before[$entry.Name] -ne $entry.Value) {
+              "$($entry.Name)=$($entry.Value)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+            }
+          }
+          $tools = @{}
+          foreach ($name in @('cl.exe', 'cmake.exe', 'ninja.exe', 'python.exe', 'rc.exe')) {
+            $file = (Get-Command $name -ErrorAction Stop).Source
+            $tools[$name] = @{ path=$file; version=(Get-Item -LiteralPath $file).VersionInfo.FileVersion; sha256=(Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant() }
+          }
+          $os = Get-CimInstance Win32_OperatingSystem
+          @{ vs=$vs; vcToolsVersion=$env:VCToolsVersion; windowsSdkVersion=$env:WindowsSDKVersion; tools=$tools; os=$os.Caption; osVersion=$os.Version; osBuild=$os.BuildNumber; totalMemoryKiB=$os.TotalVisibleMemorySize; freeMemoryKiB=$os.FreePhysicalMemory; runnerImage=$env:ImageVersion; workflowSha=$env:GITHUB_SHA } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath "$q/host.json" -Encoding utf8
+          cmake --version
+          if ($LASTEXITCODE -ne 0) { throw 'CMake unavailable' }
+          ninja --version
+          if ($LASTEXITCODE -ne 0) { throw 'Ninja unavailable' }
+          python --version
+          if ($LASTEXITCODE -ne 0) { throw 'Python unavailable' }
+      - name: Build exact MinSizeRel product and two fixtures
+        timeout-minutes: 185
+        run: python harness/.github/scripts/qualify-installed-native.py build --source product --root "$env:QUAL_ROOT"
+      - name: Installed SDK positive lifecycle
+        timeout-minutes: 30
+        run: python harness/.github/scripts/qualify-installed-native.py sdk --source product --root "$env:QUAL_ROOT"
+      - name: Same installed host ABI rejection
+        timeout-minutes: 5
+        run: python harness/.github/scripts/qualify-installed-native.py abi --source product --root "$env:QUAL_ROOT"
+      - name: Package closure and same-host graph binding
+        timeout-minutes: 15
+        run: python harness/.github/scripts/qualify-installed-native.py closure --source product --root "$env:QUAL_ROOT"
+      - name: Collect compact text diagnostics
+        if: ${{ always() && env.QUAL_ROOT != '' }}
+        run: python harness/.github/scripts/qualify-installed-native.py pack --source product --root "$env:QUAL_ROOT"
+      - name: Retain diagnostic evidence only
+        if: ${{ always() && env.QUAL_ROOT != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: installed-native-2b1403564
+          path: ${{ env.QUAL_ROOT }}/diagnostics-text
+          if-no-files-found: error
+          retention-days: 1

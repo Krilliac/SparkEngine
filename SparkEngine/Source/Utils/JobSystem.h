@@ -28,6 +28,10 @@
 
 #pragma once
 
+#include <algorithm>
+#include <charconv>
+#include <string_view>
+#include <system_error>
 #include <vector>
 #include <queue>
 #include <thread>
@@ -61,30 +65,136 @@ namespace Spark
             return instance;
         }
 
+        /// Upper bound on worker threads. More workers than this add contention, not
+        /// throughput, and an unbounded request (`-threads 4000000000`,
+        /// SPARK_MAX_WORKER_THREADS) would otherwise exhaust memory or thread handles.
+        static constexpr uint32_t kMaxWorkerThreads = 256;
+
+        /**
+         * @brief Resolve a requested worker count against the host and the policy cap.
+         * @param requested        Requested workers; 0 selects hardwareThreads - 1.
+         * @param hardwareThreads  std::thread::hardware_concurrency(), which may legally be 0.
+         * @return A count in [1, kMaxWorkerThreads]. Never underflows when the host reports 0 or 1.
+         */
+        [[nodiscard]] static constexpr uint32_t ResolveWorkerCount(uint32_t requested,
+                                                                   uint32_t hardwareThreads) noexcept
+        {
+            uint32_t count = requested;
+            if (count == 0)
+            {
+                count = hardwareThreads > 1 ? hardwareThreads - 1 : 1;
+            }
+            return count < kMaxWorkerThreads ? count : kMaxWorkerThreads;
+        }
+
+        /**
+         * @brief Parse a worker count from a command-line or environment value.
+         *
+         * Accepts only an unsigned decimal number (surrounding spaces allowed). Anything
+         * else, including a negative number, yields 0 ("use the default"). A number too
+         * large for uint32_t saturates to UINT32_MAX, which ResolveWorkerCount then caps.
+         * Unlike std::atoi this has no undefined behaviour on overflow.
+         */
+        [[nodiscard]] static uint32_t ParseWorkerCount(std::string_view text) noexcept
+        {
+            while (!text.empty() && (text.front() == ' ' || text.front() == '\t'))
+            {
+                text.remove_prefix(1);
+            }
+            while (!text.empty() && (text.back() == ' ' || text.back() == '\t'))
+            {
+                text.remove_suffix(1);
+            }
+
+            uint32_t value = 0;
+            const char* const end = text.data() + text.size();
+            const auto [next, error] = std::from_chars(text.data(), end, value);
+            if (text.empty() || next != end)
+            {
+                return 0;
+            }
+            if (error == std::errc::result_out_of_range)
+            {
+                return UINT32_MAX;
+            }
+            return error == std::errc{} ? value : 0;
+        }
+
+        /**
+         * @brief Start @p count threads, or none at all.
+         *
+         * If reserving or starting any thread throws, @p requestStop is called so the
+         * threads already started can exit, every one of them is joined, @p threads is
+         * cleared and the exception is rethrown. A joinable std::thread is never left
+         * behind, so the failure cannot turn into std::terminate at destruction.
+         *
+         * @param threads      Destination; must be empty.
+         * @param count        Number of threads to start.
+         * @param makeThread   Callable returning a started std::thread.
+         * @param requestStop  Callable that makes every started thread return.
+         */
+        template <typename MakeThread, typename RequestStop>
+        static void StartThreadsOrRollback(std::vector<std::thread>& threads, uint32_t count, MakeThread&& makeThread,
+                                           RequestStop&& requestStop)
+        {
+            try
+            {
+                threads.reserve(count);
+                for (uint32_t i = 0; i < count; ++i)
+                {
+                    // Capacity is reserved, so push_back cannot throw and drop a started thread.
+                    threads.push_back(makeThread());
+                }
+            }
+            catch (...)
+            {
+                requestStop();
+                for (auto& thread : threads)
+                {
+                    if (thread.joinable())
+                    {
+                        thread.join();
+                    }
+                }
+                threads.clear();
+                throw;
+            }
+        }
+
         /**
          * @brief Initialize the thread pool with a given number of worker threads
-         * @param numThreads Number of worker threads. 0 = hardware_concurrency - 1
+         * @param numThreads Number of worker threads. 0 = hardware_concurrency - 1.
+         *                   Values above kMaxWorkerThreads are clamped (and logged).
+         * @throws std::system_error / std::bad_alloc if the workers cannot be started.
+         *         No worker is left running in that case and Initialize may be retried.
          */
         void Initialize(uint32_t numThreads = 0)
         {
-            std::call_once(m_initFlag,
-                           [&, numThreads]() mutable
-                           {
-                               if (numThreads == 0)
-                               {
-                                   numThreads = std::max(1u, std::thread::hardware_concurrency() - 1);
-                               }
+            std::call_once(
+                m_initFlag,
+                [this, numThreads]()
+                {
+                    const uint32_t workerCount = ResolveWorkerCount(numThreads, std::thread::hardware_concurrency());
+                    if (numThreads > workerCount)
+                    {
+                        SPARK_LOG_WARN(Spark::LogCategory::Core, "JobSystem: requested %u worker threads, capped at %u",
+                                       numThreads, workerCount);
+                    }
 
-                               m_stop.store(false, std::memory_order_relaxed);
+                    m_stop.store(false, std::memory_order_relaxed);
+                    StartThreadsOrRollback(
+                        m_workers, workerCount, [this] { return std::thread(&JobSystem::WorkerThread, this); },
+                        [this]
+                        {
+                            {
+                                std::lock_guard<std::mutex> lock(m_queueMutex);
+                                m_stop.store(true, std::memory_order_release);
+                            }
+                            m_condition.notify_all();
+                        });
 
-                               m_workers.reserve(numThreads);
-                               for (uint32_t i = 0; i < numThreads; ++i)
-                               {
-                                   m_workers.emplace_back(&JobSystem::WorkerThread, this);
-                               }
-
-                               m_initialized.store(true, std::memory_order_release);
-                           });
+                    m_initialized.store(true, std::memory_order_release);
+                });
         }
 
         /**

@@ -28,42 +28,24 @@
 
 #include "../Core/Platform.h"
 
+// StateViolationSeverity, StateViolation and StateCheckFn are public SDK types:
+// game modules register rules through IEngineContext::GetStateValidation().
+// The header also forward-declares ::World, which keeps ECS headers out of every
+// translation unit.
+#include <Spark/IStateValidation.h>
+
 #include <algorithm>
 #include <cstdint>
 #include <functional>
 #include <string>
 #include <vector>
 
-// Forward declaration — avoids pulling ECS headers into every translation unit
-class World;
-
 namespace Spark
 {
 
     // =========================================================================
-    // Enums & Data Types
+    // Rules
     // =========================================================================
-
-    /// Severity of a detected state violation.
-    enum class StateViolationSeverity : uint8_t
-    {
-        Warning, ///< Suspicious but possibly transient (e.g. one-frame desync).
-        Error,   ///< Likely bug — state should not persist.
-        Critical ///< Definitely wrong — immediate investigation needed.
-    };
-
-    /// A single detected state violation.
-    struct StateViolation
-    {
-        std::string ruleName;  ///< Which rule was violated.
-        uint32_t entityId = 0; ///< Entity with the invalid state.
-        std::string details;   ///< Human-readable description.
-        StateViolationSeverity severity = StateViolationSeverity::Error;
-    };
-
-    /// Callback signature for a validation rule check.
-    /// The rule iterates the World for its target components and appends any violations found.
-    using StateCheckFn = std::function<void(::World&, std::vector<StateViolation>&)>;
 
     /// A registered validation rule.
     struct StateValidationRule
@@ -73,6 +55,7 @@ namespace Spark
         StateViolationSeverity severity = StateViolationSeverity::Error;
         bool enabled = true;  ///< Can be toggled at runtime.
         StateCheckFn checkFn; ///< The actual validation logic.
+        std::string ownerId;  ///< Module image that registered the rule; empty for engine rules.
     };
 
     // =========================================================================
@@ -115,6 +98,24 @@ namespace Spark
       public:
         static InvalidStateDetector& GetInstance();
 
+        /** @brief Inject the host detector into a statically linked module image. */
+        static void SetGlobalInstance(InvalidStateDetector* instance);
+
+        /** @brief Attribute implicit rule registrations to one module image. */
+        class ScopedRegistrationOwner final
+        {
+          public:
+            ScopedRegistrationOwner(InvalidStateDetector& detector, std::string ownerId);
+            ~ScopedRegistrationOwner();
+
+            ScopedRegistrationOwner(const ScopedRegistrationOwner&) = delete;
+            ScopedRegistrationOwner& operator=(const ScopedRegistrationOwner&) = delete;
+
+          private:
+            InvalidStateDetector& m_detector;
+            std::string m_previousOwner;
+        };
+
         void Initialize();
         void Update(float dt);
         void Shutdown();
@@ -148,6 +149,9 @@ namespace Spark
          */
         void RemoveRulesByCategory(const std::string& category);
 
+        /** @brief Remove every rule registered by one module image. */
+        size_t RemoveRulesByOwner(const std::string& ownerId);
+
         /**
          * @brief Remove all registered rules (including the engine defaults).
          */
@@ -159,6 +163,9 @@ namespace Spark
                                [&](const StateValidationRule& rule) { return rule.name == name; });
         }
         [[nodiscard]] uint32_t GetRuleCount() const { return static_cast<uint32_t>(m_rules.size()); }
+
+        /// True between Initialize() and Shutdown(); rules added before Initialize() are kept, Shutdown() clears them.
+        [[nodiscard]] bool IsInitialized() const { return m_initialized; }
 
         // -- Query --
         [[nodiscard]] InvalidStateDetectorStatus GetStatus() const;
@@ -184,6 +191,7 @@ namespace Spark
         uint32_t m_totalChecks = 0;
         uint32_t m_totalViolations = 0;
         bool m_initialized = false;
+        std::string m_registrationOwner;
     };
 
 } // namespace Spark
