@@ -496,6 +496,7 @@ jobs:
           --version "$env:SPARK_CMAKE_VERSION" `
           --commit-sha "${{ github.sha }}" --out $packageManifest
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        & "${{ github.workspace }}/.github/scripts/set-hosted-msi-client-policy.ps1" -Evidence "${{ github.workspace }}/msi-install-policy/install-policy.json"
         python .github/scripts/qualify-windows-msi.py `
           --packages "${{ github.workspace }}/$env:SPARK_BUILD_DIR/packages" `
           --version "$env:SPARK_CMAKE_VERSION" `
@@ -543,6 +544,7 @@ jobs:
         $previousManifest = Join-Path $previousRoot "shipping-package-manifest.json"
         if (-not (Test-Path -LiteralPath $previousPackages -PathType Container) -or
             -not (Test-Path -LiteralPath $previousManifest -PathType Leaf)) { throw "Previous-release provisioner did not publish the required MSI and manifest" }
+        & "${{ github.workspace }}/.github/scripts/set-hosted-msi-client-policy.ps1" -Evidence "${{ github.workspace }}/msi-install-policy/install-policy.json"
         python .github/scripts/qualify-windows-msi.py `
           --packages "${{ github.workspace }}/$env:SPARK_BUILD_DIR/packages" `
           --version "$env:SPARK_CMAKE_VERSION" `
@@ -572,7 +574,9 @@ jobs:
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: SparkEngine-Windows-${{ matrix.config }}-msi-qualification
-        path: msi-qualification/
+        path: |
+          msi-qualification/
+          msi-install-policy/
         if-no-files-found: ignore
         retention-days: 7
 

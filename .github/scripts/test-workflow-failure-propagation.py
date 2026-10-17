@@ -5513,8 +5513,36 @@ class WorkflowFailurePropagationTests(unittest.TestCase):
         self.assertIn("shipping-package-manifest.json", upload)
         logs = named_step(windows, "Upload native MSI qualification diagnostics")
         self.assertIn("if: always()", logs)
-        self.assertIn("path: msi-qualification/", logs)
+        self.assertIn("          msi-qualification/\n", logs)
+        self.assertIn("          msi-install-policy/\n", logs)
         self.assertIn("test_qualify_windows_msi.py", self.build)
+
+    def test_msi_qualification_aligns_hosted_server_install_policy_first(self) -> None:
+        # Windows Server images default DisableMsi to 1, which blocks the non-elevated
+        # per-user Shipping MSI (exit 1625). Every qualification must first apply the
+        # hosted-only client-default policy script and keep its evidence.
+        policy = ('& "${{ github.workspace }}/.github/scripts/set-hosted-msi-client-policy.ps1" '
+                  '-Evidence "${{ github.workspace }}/msi-install-policy/install-policy.json"')
+        windows = yaml_section(self.release, "build-windows", indent=2)
+        smoke = yaml_section(self.build, "module-profile-package-smoke", indent=2)
+        blocks = [
+            named_step(windows, "Qualify Windows v0.9.0 predecessor MSI bootstrap install repair and uninstall"),
+            named_step(windows, "Qualify Windows stable MSI install upgrade rollback repair and uninstall"),
+            named_step(smoke, "Qualify installed SparkGameFPS package"),
+        ]
+        for block in blocks:
+            self.assertEqual(block.count(policy), 1, block)
+            self.assertLess(block.index(policy), block.index("python .github/scripts/qualify-windows-msi.py"))
+        evidence = named_step(smoke, "Upload package smoke evidence")
+        self.assertIn("msi-install-policy/install-policy.json", evidence)
+        diagnostics = named_step(smoke, "Upload package smoke diagnostics")
+        self.assertIn("msi-install-policy/", diagnostics)
+        script = (REPO_ROOT / ".github/scripts/set-hosted-msi-client-policy.ps1").read_text(encoding="utf-8")
+        # Only GitHub-hosted Server runners are changed; self-hosted and client policy is never touched.
+        self.assertIn("$isHosted = $runnerEnvironment -eq 'github-hosted'", script)
+        self.assertIn("$isServer = [int]$os.ProductType -ne 1", script)
+        self.assertIn("certifiesWindows11 = $false", script)
+        self.assertNotIn("AlwaysInstallElevated", script.split("#>", 1)[1])
 
     def test_shipping_ci_publishes_exact_msi_for_package_smoke_without_rebuilding(self) -> None:
         shipping = yaml_section(self.build, "build-windows-shipping", indent=2)
