@@ -1,0 +1,14 @@
+{
+  "contentCommit": null,
+  "repository": "Krilliac/SparkEngine",
+  "run": {
+    "attempt": 1,
+    "conclusion": "cancelled",
+    "headSha": "614bca17b41ef0d4c9b645cc1a020b070e7e023a",
+    "id": 39101506474,
+    "url": "https://github.com/Krilliac/SparkEngine/actions/runs/39101506474/attempts/1"
+  },
+  "schemaVersion": 1,
+  "sourceCommit": "614bca17b41ef0d4c9b645cc1a020b070e7e023a",
+  "state": "blocked"
+}
