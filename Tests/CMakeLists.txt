@@ -1820,7 +1820,11 @@ enable_testing()
 # why one constant could not serve both.
 set(SPARK_TEST_TIMEOUT_DEBUG 900 CACHE STRING
     "Wall-clock budget in seconds for the Debug SparkEngineTests run")
-set(SPARK_TEST_TIMEOUT_OPTIMIZED 240 CACHE STRING
+# The optimized budget is a hang guard, not a speed target: hosted Windows Release
+# runs of the main suite took 177-206 s in October 2026 and one vs2026 run hit the
+# old 240 s budget mid-run; this leaves about 75% headroom over the slowest completed
+# run (206 s). It does not track suite duration: a slow-down shows only at this ceiling.
+set(SPARK_TEST_TIMEOUT_OPTIMIZED 360 CACHE STRING
     "Wall-clock budget in seconds for optimized-configuration SparkEngineTests runs")
 set(SPARK_TEST_LOAD_TIMEOUT_DEBUG 900 CACHE STRING
     "Wall-clock budget in seconds for the Debug SparkEngineLoadTests run")

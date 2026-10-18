@@ -85,7 +85,7 @@ Layout facts (verified):
   registered ctest entries (`SparkSaveCompatibilityTests`, `TelemetrySpool`,
   `SparkCollabProcessSmoke`, …) drive the same binary with their own arguments.
 - **Per-configuration timeouts**: `SPARK_TEST_TIMEOUT_SECONDS` is a generator expression —
-  `SPARK_TEST_TIMEOUT_DEBUG` (900) vs `SPARK_TEST_TIMEOUT_OPTIMIZED` (240), and
+  `SPARK_TEST_TIMEOUT_DEBUG` (900) vs `SPARK_TEST_TIMEOUT_OPTIMIZED` (360), and
   `SPARK_TEST_LOAD_TIMEOUT_DEBUG` (900) vs `SPARK_TEST_LOAD_TIMEOUT_OPTIMIZED` (300) for the load
   lane. The wrapper's inner timeout always fires before ctest's own `TIMEOUT`
   (`_spark_ctest_inner_max + SPARK_TEST_CTEST_MARGIN_SECONDS`), so a hang is reported as a test

@@ -303,7 +303,7 @@ cmake --build build --config Release
 # Via CTest (recommended). SparkTests is registered as two ctest lanes:
 #   SparkEngineTests      -- everything except LoadTest_ / DeepStress_
 #   SparkEngineLoadTests  -- labels "load;slow", SPARK_TEST_EXPECT_COUNT=22
-# Budgets are configuration-dependent (Debug 900 s; optimized 240 s / 300 s for the load lane).
+# Budgets are configuration-dependent (Debug 900 s; optimized 360 s / 300 s for the load lane).
 # A heavy family that already has its own pinned prefix lane is also excluded from
 # SparkEngineTests via spark_exclude_from_main_suite() in Tests/CMakeLists.txt, and
 # only under the condition that registers that lane: FPSLAN_ (FPSLANTwoClientConvergence),
