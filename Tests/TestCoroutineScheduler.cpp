@@ -4,6 +4,7 @@
  */
 
 #include "TestFramework.h"
+#include "Engine/Coroutine/CoroutineScheduler.h"
 #include <functional>
 #include <string>
 #include <vector>
@@ -333,4 +334,63 @@ TEST(Coroutine_ChainedWaits)
     co.Update(1.0f); // second wait: 1.0s >= 1.0s — Do(step=3)
     EXPECT_EQ(step, 3);
     EXPECT_TRUE(co.IsFinished());
+}
+
+// ============================================================================
+// Production Spark::CoroutineScheduler (shared engine singleton)
+// ============================================================================
+
+TEST(CoroutineSchedulerReal_StopOutsideUpdateKeepsUnchainedBuilder)
+{
+    auto& scheduler = Spark::CoroutineScheduler::GetInstance();
+    scheduler.StopAll();
+    ASSERT_EQ(scheduler.ActiveCount(), size_t{0});
+
+    // A builder with no steps yet reports IsFinished(); stopping an unrelated coroutine outside
+    // Update() must destroy only cancelled entries, so the returned reference stays valid.
+    bool ran = false;
+    auto& pending = scheduler.StartCoroutine("real.pending");
+    scheduler.StopCoroutine("real.other");
+    EXPECT_EQ(scheduler.ActiveCount(), size_t{1});
+    pending.Do([&ran]() { ran = true; });
+
+    scheduler.Update(0.016f);
+    EXPECT_TRUE(ran);
+    EXPECT_EQ(scheduler.ActiveCount(), size_t{0});
+}
+
+TEST(CoroutineSchedulerReal_StopOutsideUpdateDestroysCancelled)
+{
+    auto& scheduler = Spark::CoroutineScheduler::GetInstance();
+    scheduler.StopAll();
+
+    scheduler.StartCoroutine("real.stopped").WaitForSeconds(10.0f);
+    scheduler.StartCoroutine("real.kept").WaitForSeconds(10.0f);
+    scheduler.StopCoroutine("real.stopped");
+    EXPECT_EQ(scheduler.ActiveCount(), size_t{1});
+    EXPECT_TRUE(scheduler.IsRunning("real.kept"));
+
+    scheduler.StopAll();
+    EXPECT_EQ(scheduler.ActiveCount(), size_t{0});
+}
+
+TEST(CoroutineSchedulerReal_ActionCancellingItselfRunsNoLaterStep)
+{
+    auto& scheduler = Spark::CoroutineScheduler::GetInstance();
+    scheduler.StopAll();
+
+    int stepsRun = 0;
+    scheduler.StartCoroutine("real.self_cancel")
+        .Do(
+            [&stepsRun, &scheduler]()
+            {
+                ++stepsRun;
+                scheduler.StopCoroutine("real.self_cancel");
+            })
+        .Do([&stepsRun]() { ++stepsRun; });
+
+    // Destruction is deferred to the end of the tick, and the following step must not run.
+    scheduler.Update(0.016f);
+    EXPECT_EQ(stepsRun, 1);
+    EXPECT_EQ(scheduler.ActiveCount(), size_t{0});
 }

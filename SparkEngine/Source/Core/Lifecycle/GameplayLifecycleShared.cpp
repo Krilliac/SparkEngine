@@ -138,10 +138,10 @@
 #include "Engine/Build/GamePackager.h"
 #include "Engine/OnlineServices/OnlineServices.h"
 #include "Engine/DataTable/DataTableSystem.h"
-#include "Engine/Rendering/MovieRenderPipeline.h"
 #include "Engine/RemoteDebug/RemoteDebugSystem.h"
 #include "Engine/Crafting/LootAndCraftingSystem.h"
 #include "Utils/FileWatcher/FileWatcher.h"
+#include "Utils/FileUtils.h"
 #include "Utils/TimerManager.h"
 #include "Utils/InGameConsole.h"
 #include "Engine/Modding/VirtualFileSystem.h"
@@ -169,6 +169,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -282,18 +283,31 @@ namespace Spark::Core::Lifecycle
         int32_t priorityOffset = 0;
         for (const auto& archivePath : archives)
         {
-            auto provider = std::make_unique<Spark::ArchiveResourceProvider>(archivePath.string());
+            // Names are shown and used as mount keys in UTF-8. The reader reopens the
+            // archive through a narrow path, and path::string() throws on Windows for a
+            // name the ANSI code page cannot spell, so such an archive is reported and
+            // skipped instead of aborting engine start-up.
+            const std::string displayName =
+                Spark::FileUtils::TryPathToUtf8(archivePath.filename()).value_or("<unrepresentable name>");
+            const std::optional<std::string> narrowPath = Spark::FileUtils::TryPathToNarrow(archivePath);
+            if (!narrowPath)
+            {
+                console.LogWarning("[SparkPak] Skipped (name has no spelling in the active code page): " + displayName);
+                continue;
+            }
+
+            auto provider = std::make_unique<Spark::ArchiveResourceProvider>(*narrowPath);
             if (provider->IsValid())
             {
-                auto name = archivePath.stem().string();
+                auto name = Spark::FileUtils::TryPathToUtf8(archivePath.stem()).value_or(displayName);
                 vfs.Mount(name, std::move(provider), Spark::ENGINE_PRIORITY + priorityOffset);
-                console.Log("[SparkPak] Mounted: " + archivePath.filename().string() + " (priority " +
+                console.Log("[SparkPak] Mounted: " + displayName + " (priority " +
                             std::to_string(Spark::ENGINE_PRIORITY + priorityOffset) + ")");
                 ++priorityOffset;
             }
             else
             {
-                console.LogWarning("[SparkPak] Failed to open: " + archivePath.filename().string());
+                console.LogWarning("[SparkPak] Failed to open: " + displayName);
             }
         }
     }
@@ -344,11 +358,13 @@ namespace Spark::Core::Lifecycle
     // Debug system lifecycle
     // ============================================================================
 
-    void InitializeDebugSystemsImpl()
+    bool InitializeDebugSystemsImpl()
     {
+#if SPARK_DEBUG_HOOKS_ENABLED
         // Initialize the debug hook manager first so subsequent inits can be observed
         Spark::DebugHookManager::GetInstance().SetEnabled(true);
         SPARK_DEBUG_HOOK(EnginePreInit, 0, 0.0f);
+#endif
 
         // Initialize the unified Logger and install the engine's standard sink set
         // (stderr + rotating per-user log file + SparkConsole bridge). Platform entry
@@ -450,6 +466,10 @@ namespace Spark::Core::Lifecycle
 
         // Register default weapon definitions
         Spark::Gameplay::WeaponRegistry::GetInstance().RegisterDefaults();
+
+        // Every diagnostic above is optional: a detector that cannot start leaves
+        // the engine runnable, so none of them fails startup.
+        return true;
     }
 
     // ============================================================================
@@ -475,6 +495,11 @@ namespace Spark::Core::Lifecycle
                 SPARK_LOG_WARN(Spark::LogCategory::Network, "Network service failed to initialize");
             }
         }
+
+        // [Network] Simulated* values from settings files take effect before any
+        // -exec script hosts or connects; ApplyImpairmentSettings logs at WARN
+        // whenever impairment is enabled.
+        Spark::Net::ApplyImpairmentSettings(EngineSettings::GetInstance());
 
         SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "NetworkingLifecycle", 0.0);
     }
@@ -745,7 +770,6 @@ namespace Spark::Core::Lifecycle
         // before any network handshake fires.
         (void)Spark::Net::DatablockRegistry::Get();
 
-        Spark::Rendering::MovieRenderPipeline::GetInstance().Initialize();
         Spark::RemoteDebug::RemoteDebugSystem::GetInstance().Initialize();
         // HLODSystem: no cluster registration or per-frame Update exists in
         // production, so it is not lifecycle-initialized.
@@ -757,23 +781,60 @@ namespace Spark::Core::Lifecycle
         SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "RenderingAndUtility", 0.0);
     }
 
+    bool InitializeScriptingServiceImpl()
+    {
+        auto* ctx = EngineContext::Get();
+        if (!ctx)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null — scripting service cannot initialize");
+            return false;
+        }
+
+        // Already published by the host core init; the gameplay stage calls this
+        // again. Only the published engine counts: GetInstance() alone can name an
+        // engine some other owner started, which is not this boot's service.
+        if (ctx->GetScriptEngine() != nullptr && ctx->GetScriptEngine() == AngelScriptEngine::GetInstance())
+        {
+            return true;
+        }
+
+        static AngelScriptEngine s_angelScript;
+        if (!s_angelScript.Initialize())
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Core, "AngelScriptEngine init failed — scripts disabled");
+            return false;
+        }
+
+        ctx->SetScriptEngine(&s_angelScript);
+        AngelScriptEngine::BindWorld(ctx->GetWorld());
+        // Physics and trigger-volume contacts reach script OnCollision/OnTriggerEnter/OnTriggerExit
+        // through the engine EventBus; Shutdown() disconnects.
+        s_angelScript.ConnectEventBus(ctx->GetEventBus());
+        SPARK_LOG_INFO(Spark::LogCategory::Core, "AngelScriptEngine initialized");
+        return true;
+    }
+
+    void ShutdownScriptingServiceImpl()
+    {
+        // The context holds the engine InitializeScriptingServiceImpl published,
+        // and nothing else publishes one. Withdraw it before shutting it down so
+        // nothing reaches a dead engine through the context and the next boot
+        // starts it afresh; an engine another owner started is left alone. A
+        // second call (gameplay stage, then host teardown) finds nothing to do.
+        auto* ctx = EngineContext::Get();
+        AngelScriptEngine* scriptEngine = ctx != nullptr ? ctx->GetScriptEngine() : nullptr;
+        if (scriptEngine == nullptr)
+        {
+            return;
+        }
+        ctx->SetScriptEngine(nullptr);
+        scriptEngine->Shutdown();
+    }
+
     static void InitScriptingAndPlatformSystems(EngineContext* ctx)
     {
         SPARK_DEBUG_HOOK_SYSTEM(SystemPreInit, "ScriptingAndPlatform", 0.0);
-        {
-            static AngelScriptEngine s_angelScript;
-            if (s_angelScript.Initialize())
-            {
-                ctx->SetScriptEngine(&s_angelScript);
-                AngelScriptEngine::BindWorld(ctx->GetWorld());
-                SPARK_LOG_INFO(Spark::LogCategory::Core, "AngelScriptEngine initialized");
-            }
-            else
-            {
-                SPARK_LOG_WARN(Spark::LogCategory::Core, "AngelScriptEngine init failed — scripts disabled");
-            }
-        }
-
+        InitializeScriptingServiceImpl();
 
         (void)Spark::Animation::BlendSpaceManager::GetInstance();
         Profiler::GetInstance().SetEnabled(true);
@@ -819,16 +880,19 @@ namespace Spark::Core::Lifecycle
         SPARK_DEBUG_HOOK_SYSTEM(SystemPostInit, "ScriptingAndPlatform", 0.0);
     }
 
-    void InitializeNetworkingSystemsImpl()
+    bool InitializeNetworkingSystemsImpl()
     {
         auto* ctx = EngineContext::Get();
         if (!ctx)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null — networking init skipped");
-            return;
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null — networking lifecycle cannot initialize");
+            return false;
         }
 
+        // A network service that fails to start is logged and tolerated (offline
+        // play remains valid); only a missing EngineContext is fatal.
         InitNetworkingLifecycle(ctx);
+        return true;
     }
 
     Spark::ECS::PhaseSystemManager& GetPhaseSystemManagerImpl()
@@ -854,21 +918,23 @@ namespace Spark::Core::Lifecycle
                        GetPhaseSystemManagerImpl().GetSystemCount());
     }
 
-    void InitializeGameplaySystemsImpl()
+    bool InitializeGameplaySystemsImpl()
     {
         auto* ctx = EngineContext::Get();
         if (!ctx)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null — all gameplay systems skipped");
-            return;
+            SPARK_LOG_ERROR(Spark::LogCategory::Core, "EngineContext is null — gameplay systems cannot initialize");
+            return false;
         }
 
         InitCoreGameplaySystems(ctx);
+        GetEngineRuntime().CheckInitializationPointForTesting("gameplay-core");
 
         // Register snapshot serializers for play-in-editor mode and publish the
         // host registry so module DLLs register into the one SaveSystem consults.
         Spark::Editor::RegisterCoreComponentSerializers();
         ctx->SetComponentSerializers(&Spark::ComponentSerializerRegistry::GetInstance());
+        GetEngineRuntime().CheckInitializationPointForTesting("gameplay-serializers");
 
         if (auto* eventBus = ctx->GetEventBus())
         {
@@ -879,13 +945,17 @@ namespace Spark::Core::Lifecycle
             SPARK_LOG_WARN(Spark::LogCategory::Core, "EventBus is null — AI/World systems skipped");
         }
         InitRenderingAndUtilitySystems(ctx);
+        GetEngineRuntime().CheckInitializationPointForTesting("gameplay-utilities");
         InitScriptingAndPlatformSystems(ctx);
+        GetEngineRuntime().CheckInitializationPointForTesting("gameplay-scripting");
 
         // Canonical ECS phase pipeline (architecture contract, Invariant 3).
         // Registered last so the subsystem pointers CreatePhaseSystemManager
         // reads from the context (physics, audio, graphics) are all set.
         // UpdateGameplaySystemsImpl pumps UpdateAll on this manager each frame.
         InitializeEcsPhaseSystemsImpl();
+        GetEngineRuntime().CheckInitializationPointForTesting("gameplay-phases");
+        return true;
     }
 
     // ============================================================================
@@ -1334,9 +1404,11 @@ namespace Spark::Core::Lifecycle
             return;
 
         ++g_frameCounter;
+#if SPARK_DEBUG_HOOKS_ENABLED
         auto& debugHooks = Spark::DebugHookManager::GetInstance();
         debugHooks.SetFrameNumber(g_frameCounter);
         debugHooks.SetDeltaTime(dt);
+#endif
 
         // Update fault isolation auto-recovery (re-enables subsystems after cooldown)
         static float s_engineTime = 0.0f;
@@ -1356,8 +1428,6 @@ namespace Spark::Core::Lifecycle
         SPARK_GUARDED_UPDATE("InputActions", "Core", { Spark::Input::InputActionSystem::GetInstance().Update(); });
         SPARK_GUARDED_UPDATE("OnlineServices", "Core",
                              { Spark::OnlineServices::OnlineServiceManager::GetInstance().Update(dt); });
-        SPARK_GUARDED_UPDATE("MovieRender", "Core",
-                             { Spark::Rendering::MovieRenderPipeline::GetInstance().Update(dt); });
         SPARK_GUARDED_UPDATE("RemoteDebug", "Core",
                              { Spark::RemoteDebug::RemoteDebugSystem::GetInstance().Update(dt); });
         SPARK_GUARDED_UPDATE("Crafting", "Core", { Spark::Gameplay::CraftingSystem::GetInstance().Update(dt); });
@@ -1389,6 +1459,8 @@ namespace Spark::Core::Lifecycle
         // (architecture contract, Invariant 3). This is the ONLY tick site for
         // the Spark::ECS phase systems — Tests/harden/Test_lifecycle_ecs_phase_wiring.cpp
         // guards the registration; do not remove this pump without replacing it.
+        // Each system is fault-isolated under its own "ECS:<name>" key inside
+        // UpdateAll; this outer guard is only a backstop.
         SPARK_GUARDED_UPDATE("ECS_Phases", "Core", { GetPhaseSystemManagerImpl().UpdateAll(*world, dt); });
 
         Profiler::GetInstance().EndFrame();
@@ -1500,6 +1572,13 @@ namespace Spark::Core::Lifecycle
         ShutdownAIAndWorldSystems();
         ShutdownRenderingAndUtilitySystems();
 
+        // Game modules register fracture callbacks and animation clips built in
+        // their own image (AI behavior trees are released by AIIntegratedSystem::Shutdown
+        // above). This runs after module OnUnload and before the images are unmapped;
+        // the singletons' process-exit destructors would run that code after unload.
+        Spark::DestructionSystem::GetInstance().Shutdown();
+        Spark::Animation::AnimationManager::GetInstance().Clear();
+
         GetEngineRuntime().weaponSystem.reset();
         Spark::Audio::AudioMixer::GetInstance().SetPhysics(nullptr);
         Spark::Audio::AudioMixer::GetInstance().Shutdown();
@@ -1541,7 +1620,6 @@ namespace Spark::Core::Lifecycle
         Spark::Gameplay::CraftingSystem::GetInstance().Shutdown();
         Spark::Gameplay::LootTableManager::GetInstance().Shutdown();
         Spark::RemoteDebug::RemoteDebugSystem::GetInstance().Shutdown();
-        Spark::Rendering::MovieRenderPipeline::GetInstance().Shutdown();
         Spark::Data::DataTableRegistry::GetInstance().Shutdown();
 
         // Engine-orphan singletons wired in this branch — teardown
@@ -1582,10 +1660,7 @@ namespace Spark::Core::Lifecycle
             }
         }
 
-        if (auto* as = AngelScriptEngine::GetInstance())
-        {
-            as->Shutdown();
-        }
+        ShutdownScriptingServiceImpl();
 
         Profiler::GetInstance().Shutdown();
 
@@ -1628,6 +1703,10 @@ namespace Spark::Core::Lifecycle
 
         Spark::TweenManager::GetInstance().KillAll();
         Spark::DebugDrawManager::GetInstance().Clear();
+        // InitializeDebugSystemsImpl enabled the overlay; undo that and drop its frame
+        // stats so the next boot in this process starts from a clean overlay.
+        Spark::DebugOverlay::GetInstance().SetEnabled(false);
+        Spark::DebugOverlay::GetInstance().ResetStats();
         Spark::MemoryMonitor::GetInstance().Shutdown();
         Spark::HitchDetector::GetInstance().Shutdown();
         Spark::BenchmarkFramework::GetInstance().Shutdown();

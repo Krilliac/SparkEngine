@@ -27,6 +27,8 @@
 #include "Utils/ContainerUtils.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 #include "Utils/LogMacros.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
@@ -90,15 +92,11 @@ namespace SparkEditor
                 // ECS entities. The legacy SceneFile tree below stays dormant
                 // while a World is set.
                 RenderWorldToolbar();
-                ImGui::Separator();
                 RenderWorldHierarchy();
             }
             else
             {
                 RenderToolbar();
-                ImGui::Separator();
-                RenderSearchBar();
-                ImGui::Separator();
                 RenderHierarchyTree();
             }
         }
@@ -233,12 +231,16 @@ namespace SparkEditor
 
     void HierarchyPanel::RenderToolbar()
     {
-        if (ImGui::Button(ICON_FA_PLUS " Create"))
+        if (!Spark::Ui::BeginPanelToolbar("##HierarchyToolbar"))
+            return;
+
+        if (Spark::Ui::IconButton("Create", ICON_FA_PLUS, "Create object"))
         {
             ImGui::OpenPopup("CreateObject");
         }
         ImGui::SameLine();
-        if (ImGui::Button(ICON_FA_TRASH " Delete"))
+        if (Spark::Ui::IconButton("Delete", ICON_FA_TRASH, "Delete selected objects", false,
+                                  !m_selectedObjects.empty()))
         {
             // Copy selection since deleting will modify it
             auto toDelete = m_selectedObjects;
@@ -251,40 +253,26 @@ namespace SparkEditor
 
         // Undo/Redo buttons
         auto& history = Spark::Editor::CommandHistory::GetInstance();
-        bool canUndo = history.CanUndo();
-        bool canRedo = history.CanRedo();
+        const bool canUndo = history.CanUndo();
+        const bool canRedo = history.CanRedo();
+        const std::string undoTooltip = canUndo ? "Undo: " + history.GetUndoDescription() : "Nothing to undo";
+        const std::string redoTooltip = canRedo ? "Redo: " + history.GetRedoDescription() : "Nothing to redo";
 
-        if (!canUndo)
-            ImGui::BeginDisabled();
-        if (ImGui::Button(ICON_FA_UNDO))
+        if (Spark::Ui::IconButton("Undo", ICON_FA_UNDO, undoTooltip.c_str(), false, canUndo))
         {
             history.Undo();
             m_needsSelectionUpdate = true;
             m_filterCacheDirty = true;
         }
-        if (ImGui::IsItemHovered() && canUndo)
-        {
-            ImGui::SetTooltip("Undo: %s", history.GetUndoDescription().c_str());
-        }
-        if (!canUndo)
-            ImGui::EndDisabled();
-
         ImGui::SameLine();
-
-        if (!canRedo)
-            ImGui::BeginDisabled();
-        if (ImGui::Button(ICON_FA_REDO))
+        if (Spark::Ui::IconButton("Redo", ICON_FA_REDO, redoTooltip.c_str(), false, canRedo))
         {
             history.Redo();
             m_needsSelectionUpdate = true;
             m_filterCacheDirty = true;
         }
-        if (ImGui::IsItemHovered() && canRedo)
-        {
-            ImGui::SetTooltip("Redo: %s", history.GetRedoDescription().c_str());
-        }
-        if (!canRedo)
-            ImGui::EndDisabled();
+        Spark::Ui::ToolbarSeparator();
+        RenderSearchBar();
 
         if (ImGui::BeginPopup("CreateObject"))
         {
@@ -318,13 +306,12 @@ namespace SparkEditor
             }
             ImGui::EndPopup();
         }
+        Spark::Ui::EndPanelToolbar();
     }
 
     void HierarchyPanel::RenderSearchBar()
     {
-        ImGui::SetNextItemWidth(-1);
-        if (ImGui::InputTextWithHint("##HierarchySearch", ICON_FA_SEARCH " Search objects...", m_searchBuffer,
-                                     sizeof(m_searchBuffer)))
+        if (Spark::Ui::SearchField("##HierarchySearch", m_searchBuffer, sizeof(m_searchBuffer), "Search objects"))
         {
             SetSearchFilter(m_searchBuffer);
         }
@@ -336,7 +323,7 @@ namespace SparkEditor
 
         if (!m_scene)
         {
-            ImGui::Text("No scene loaded");
+            Spark::Ui::EmptyState(ICON_FA_SITEMAP, "No scene loaded", "Open or create a scene to list its objects.");
             ImGui::EndChild();
             return;
         }
@@ -442,39 +429,35 @@ namespace SparkEditor
 
     void HierarchyPanel::RenderWorldToolbar()
     {
-        if (!m_world)
+        if (!m_world || !Spark::Ui::BeginPanelToolbar("##WorldHierarchyToolbar"))
             return;
 
-        if (ImGui::Button(ICON_FA_PLUS " Create Entity"))
+        if (Spark::Ui::IconButton("CreateEntity", ICON_FA_PLUS, "Create entity"))
         {
             if (m_selectionSink)
                 m_selectionSink->CreateDocumentEntity("Empty");
         }
-
         ImGui::SameLine();
 
         ::EntityID selected = m_selectionSink ? m_selectionSink->GetSelectedEntity() : entt::null;
         bool hasValidSelection = selected != entt::null && m_world->GetRegistry().valid(selected);
 
-        if (!hasValidSelection)
-            ImGui::BeginDisabled();
-        if (ImGui::Button(ICON_FA_TRASH " Delete"))
+        if (Spark::Ui::IconButton("Delete", ICON_FA_TRASH, "Delete entity (Del)", false, hasValidSelection))
         {
             if (m_selectionSink)
                 m_selectionSink->DeleteSelectedDocumentEntity();
         }
         ImGui::SameLine();
-        if (ImGui::Button(ICON_FA_COPY " Duplicate"))
+        if (Spark::Ui::IconButton("Duplicate", ICON_FA_COPY, "Duplicate entity (Ctrl+D)", false, hasValidSelection))
         {
             SceneEditTools::DuplicateEntity(*m_world, selected);
         }
         ImGui::SameLine();
-        if (ImGui::Button(ICON_FA_EDIT " Rename"))
+        if (Spark::Ui::IconButton("Rename", ICON_FA_EDIT, "Rename entity (F2)", false, hasValidSelection))
         {
             BeginWorldEntityRename(selected);
         }
-        if (!hasValidSelection)
-            ImGui::EndDisabled();
+        Spark::Ui::EndPanelToolbar();
     }
 
     void HierarchyPanel::BeginWorldEntityRename(::EntityID entity)
@@ -502,44 +485,6 @@ namespace SparkEditor
     {
         /// Drag-and-drop payload type for World-backed hierarchy rows (raw uint32 entity id).
         constexpr const char* kWorldEntityPayload = "SPARK_WORLD_ENTITY";
-
-        /// Relink an entity under a new parent (or entt::null to unparent),
-        /// maintaining both Transform.parent and the parents' children vectors.
-        /// Adds a Transform to child/new parent if missing. No-ops on invalid
-        /// entities so stale undo/redo lambdas are safe after deletions.
-        void SetWorldEntityParent(::World* world, ::EntityID child, ::EntityID newParent)
-        {
-            if (!world)
-                return;
-            entt::registry& registry = world->GetRegistry();
-            if (!registry.valid(child))
-                return;
-
-            ::Transform* childT = world->GetComponent<::Transform>(child);
-            if (!childT)
-                childT = &world->AddComponent<::Transform>(child);
-
-            // Detach from the current parent's children list.
-            if (childT->parent != entt::null && registry.valid(childT->parent))
-            {
-                if (::Transform* oldPT = world->GetComponent<::Transform>(childT->parent))
-                {
-                    auto& kids = oldPT->children;
-                    kids.erase(std::remove(kids.begin(), kids.end(), child), kids.end());
-                }
-            }
-            childT->parent = entt::null;
-
-            // Attach to the new parent (if any).
-            if (newParent != entt::null && registry.valid(newParent))
-            {
-                ::Transform* newPT = world->GetComponent<::Transform>(newParent);
-                if (!newPT)
-                    newPT = &world->AddComponent<::Transform>(newParent);
-                childT->parent = newParent;
-                newPT->children.push_back(child);
-            }
-        }
     } // namespace
 
     void HierarchyPanel::RenderWorldHierarchy()
@@ -548,7 +493,7 @@ namespace SparkEditor
 
         if (!m_world)
         {
-            ImGui::Text("No world loaded");
+            Spark::Ui::EmptyState(ICON_FA_SITEMAP, "No world loaded", "Open or create a scene to list its entities.");
             ImGui::EndChild();
             return;
         }
@@ -783,39 +728,9 @@ namespace SparkEditor
 
     void HierarchyPanel::ReparentWorldEntity(::EntityID child, ::EntityID newParent)
     {
-        if (!m_world)
+        // Same undo surface as rename/duplicate; refuses cycles and no-ops.
+        if (!m_world || !SceneEditTools::CommitEntityReparent(*m_world, child, newParent))
             return;
-        entt::registry& registry = m_world->GetRegistry();
-        if (!registry.valid(child) || child == newParent)
-            return;
-
-        // Refuse cycles: newParent must not be child itself (above) or any
-        // descendant of child — walk up from newParent looking for child.
-        for (::EntityID walk = newParent; walk != entt::null && registry.valid(walk);)
-        {
-            if (walk == child)
-            {
-                SPARK_LOG_WARN(Spark::LogCategory::Editor,
-                               "Reparent refused: entity %u is an ancestor of target parent %u",
-                               static_cast<uint32_t>(child), static_cast<uint32_t>(newParent));
-                return;
-            }
-            const ::Transform* wt = m_world->GetComponent<::Transform>(walk);
-            walk = wt ? wt->parent : entt::null;
-        }
-
-        const ::Transform* childT = m_world->GetComponent<::Transform>(child);
-        const ::EntityID oldParent =
-            (childT && childT->parent != entt::null && registry.valid(childT->parent)) ? childT->parent : entt::null;
-        if (oldParent == newParent)
-            return; // No-op.
-
-        ::World* capturedWorld = m_world;
-        auto& history = Spark::Editor::CommandHistory::GetInstance();
-        history.Execute(std::make_unique<Spark::Editor::LambdaCommand>(
-            [capturedWorld, child, newParent]() { SetWorldEntityParent(capturedWorld, child, newParent); },
-            [capturedWorld, child, oldParent]() { SetWorldEntityParent(capturedWorld, child, oldParent); },
-            "Reparent Entity"));
 
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "Reparented ECS entity %u under %s", static_cast<uint32_t>(child),
                        newParent == entt::null ? "<root>" : std::to_string(static_cast<uint32_t>(newParent)).c_str());
@@ -877,7 +792,7 @@ namespace SparkEditor
             // Grey out inactive objects
             if (!object->active)
             {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Text, Spark::Ui::ColV(Spark::Ui::Role::TextDisabled));
             }
 
             bool nodeOpen;
@@ -891,15 +806,16 @@ namespace SparkEditor
                 nodeOpen = ImGui::TreeNodeEx("##node", flags, "%s %s", icon, object->name.c_str());
             }
 
-            // Hi-fi design accent: 2 px ember strip at the left edge of the selected row.
+            // Selected rows carry a 2 px strip at the left edge in the focus colour. ImGuiCol_NavCursor
+            // reads transparent mid-frame while the focus-ring hook owns the cursor, so use the token.
             if (IsObjectSelected(object->id))
             {
                 const ImVec2 itemMin = ImGui::GetItemRectMin();
                 const ImVec2 itemMax = ImGui::GetItemRectMax();
-                const ImVec4 accent = ImGui::GetStyleColorVec4(ImGuiCol_NavHighlight);
-                ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(ImGui::GetWindowPos().x, itemMin.y),
-                                                          ImVec2(ImGui::GetWindowPos().x + 2.0f, itemMax.y),
-                                                          ImGui::GetColorU32(accent));
+                ImGui::GetWindowDrawList()->AddRectFilled(
+                    ImVec2(ImGui::GetWindowPos().x, itemMin.y),
+                    ImVec2(ImGui::GetWindowPos().x + Spark::Ui::Px(2.0f), itemMax.y),
+                    Spark::Ui::Col(Spark::Ui::Role::BorderFocus));
             }
 
             if (!object->active)

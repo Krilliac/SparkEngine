@@ -12,6 +12,7 @@
 
 #include "EditorUI.h"
 #include "EditorFonts.h"
+#include "EditorTheme.h"
 #include "ProjectManager.h"
 #include "EditorWindowManager.h"
 #include "EditorCrashHandler.h"
@@ -19,6 +20,9 @@
 #include "Utils/SparkConsole.h"
 #include "Utils/Validate.h"
 #include "Utils/LogMacros.h"
+#include "SparkUI/Dpi.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #include <imgui.h>
 #include <imgui_impl_sdl2.h>
 #include <imgui_impl_opengl3.h>
@@ -66,6 +70,7 @@ namespace SparkEditor
             return false;
         }
 
+        m_dpiScale = Spark::Ui::WindowDpiScale(m_window);
         console.LogInfo("SDL2 window created successfully");
         console.LogInfo("Window is now visible and active");
         return true;
@@ -116,8 +121,17 @@ namespace SparkEditor
         io.ConfigDockingWithShift = false;
         io.ConfigWindowsResizeFromEdges = true;
 
-        // Load custom fonts before backend initialization
-        EditorFonts::LoadFonts(15.0f);
+        // Load custom fonts before backend initialization, then install the Spark UI runtime at
+        // the window's DPI and the saved user scale (0 = Auto: DPI only). The startup theme
+        // replaces these Ember tokens once EditorUI applies it.
+        EditorFonts::LoadFonts(Spark::Ui::Typography{}.body);
+        Spark::Ui::Install(ImGui::GetCurrentContext(),
+                           Spark::Ui::GenerateTokens(Spark::Ui::BuiltinSeed(Spark::Ui::PaletteId::Ember),
+                                                     Spark::Ui::Appearance::Dark, m_preferences.density),
+                           m_dpiScale, m_preferences.uiScale > 0.0f ? m_preferences.uiScale : 1.0f,
+                           m_preferences.reduceMotion);
+        Spark::Ui::InstallFocusRing(ImGui::GetCurrentContext());
+        io.ConfigNavCursorVisibleAlways = m_preferences.alwaysShowFocus;
 
         // Setup Platform/Renderer backends
         if (!ImGui_ImplSDL2_InitForOpenGL(m_window, m_glContext))
@@ -226,6 +240,12 @@ namespace SparkEditor
                 else if (event.window.event == SDL_WINDOWEVENT_RESIZED)
                 {
                     OnWindowResize(event.window.data1, event.window.data2);
+                    OnDpiChanged(Spark::Ui::WindowDpiScale(m_window));
+                }
+                else if (event.window.event == SDL_WINDOWEVENT_MOVED)
+                {
+                    // A move can land the window on a monitor with a different scale.
+                    OnDpiChanged(Spark::Ui::WindowDpiScale(m_window));
                 }
                 break;
             }
@@ -235,6 +255,9 @@ namespace SparkEditor
 
     void EditorApplication::Render()
     {
+        // A DPI or user-scale change queued since the last frame is applied before NewFrame.
+        EditorTheme::ApplyPendingScale();
+
         // Start ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL2_NewFrame();
@@ -254,11 +277,14 @@ namespace SparkEditor
 
         ImGuiIO& io = ImGui::GetIO();
         glViewport(0, 0, static_cast<int>(io.DisplaySize.x), static_cast<int>(io.DisplaySize.y));
-        glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
+        // Clear to the theme's sunken surface so resize gaps match the dock background.
+        const Spark::Ui::Rgba clear = Spark::Ui::Get(Spark::Ui::ActiveTokens(), Spark::Ui::Role::SurfaceSunken);
+        glClearColor(clear.r, clear.g, clear.b, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         SDL_GL_SwapWindow(m_window);
+        ++m_renderedFrameCount;
     }
 
     void EditorApplication::OnWindowResize(int width, int height)

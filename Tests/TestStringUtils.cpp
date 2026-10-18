@@ -4,6 +4,11 @@
 #include "TestFramework.h"
 #include "Utils/StringUtils.h"
 
+#include <charconv>
+#include <cmath>
+#include <limits>
+#include <string_view>
+
 using namespace Spark::StringUtils;
 
 // =============================================================================
@@ -149,6 +154,31 @@ TEST(StringUtils_ParseFloat)
 
     EXPECT_FALSE(ParseFloat("abc").has_value());
     EXPECT_FALSE(ParseFloat("").has_value());
+}
+
+// ParseFloatingExact stands in for floating-point std::from_chars, which the libc++ of the
+// Clang/MSan/macOS lanes deletes, so it must accept and reject exactly what from_chars does.
+TEST(StringUtils_ParseFloatingExactMatchesFromChars)
+{
+    EXPECT_EQ(ParseFloatingExact<double>("0.05").value(), 0.05);
+    EXPECT_EQ(ParseFloatingExact<double>("-1e3").value(), -1000.0);
+    EXPECT_EQ(ParseFloatingExact<float>("12.5").value(), 12.5f);
+    EXPECT_TRUE(std::isinf(ParseFloatingExact<double>("inf").value()));
+
+    for (const char* rejected : {"", "abc", "50ms", " 5", "\t5", "+5", "0x10", "-0X1p3", "5 ", "1e999"})
+        EXPECT_FALSE(ParseFloatingExact<double>(rejected).has_value());
+    EXPECT_FALSE(ParseFloatingExact<float>("1e39").has_value());
+    const char embeddedNul[] = {'5', '\0', '1'};
+    EXPECT_FALSE(ParseFloatingExact<double>(std::string_view(embeddedNul, sizeof(embeddedNul))).has_value());
+
+    // Shortest round-trip text from std::to_chars reads back bit-exactly.
+    for (const float value :
+         {0.1f, 1.0f / 3.0f, std::numeric_limits<float>::max(), std::numeric_limits<float>::denorm_min()})
+    {
+        char buffer[64];
+        const auto written = std::to_chars(buffer, buffer + sizeof(buffer), value);
+        EXPECT_EQ(ParseFloatingExact<float>(std::string_view(buffer, written.ptr)).value(), value);
+    }
 }
 
 TEST(StringUtils_ParseBool)

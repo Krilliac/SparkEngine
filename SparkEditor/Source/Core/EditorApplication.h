@@ -8,11 +8,13 @@
 #pragma once
 
 #include <chrono>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "EditorPluginManager.h"
+#include "EditorPreferences.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -48,7 +50,7 @@ namespace SparkEditor
         int windowHeight = 900;                           ///< Initial window height (pixels).
         bool testMode = false;                            ///< Skip project browser, auto-create test project.
         int testFrameLimit = 0;                           ///< If >0, exit after this many frames (test mode).
-        std::string startupTheme;                         ///< Override default theme by name (empty = use default).
+        std::string startupTheme;                         ///< Session-only --theme override; empty = saved palette.
         std::vector<std::string> editorPluginDirectories; ///< Explicit project-owned plugin directories.
     };
 
@@ -84,6 +86,18 @@ namespace SparkEditor
         void RequestExit();
 
         PerformanceMetrics GetPerformanceMetrics() const;
+        /** @brief Number of completed frame presentation calls (D3D11 success or OpenGL swap completion). */
+        uint64_t GetRenderedFrameCount() const { return m_renderedFrameCount; }
+        /** @brief Number of frame presentation failures reported by the active graphics backend. */
+        uint64_t GetPresentFailureCount() const { return m_presentFailureCount; }
+        std::string GetGraphicsBackend() const
+        {
+#ifdef _WIN32
+            return "d3d11";
+#else
+            return "opengl";
+#endif
+        }
         EditorPluginManager& GetPluginManager() { return m_pluginManager; }
         void OnWindowResize(int width, int height);
         bool OnShutdownRequested();
@@ -115,6 +129,15 @@ namespace SparkEditor
         void Render();
         void UpdatePerformanceMetrics();
         bool SaveProjectForShutdown();
+        /// Load editor-preferences.ini once (skipped in test mode; a file the reader rejects is moved
+        /// aside, never overwritten) and resolve the startup palette, appearance override and density.
+        /// Precedence: --theme (session only) > preferences > Ember Studio. Main thread, before the ImGui
+        /// context exists.
+        void ApplyStartupPreferences(EditorConfig& config);
+        /// Tell the user, through a toast, that the preferences file was moved aside or could not be read.
+        void NotifyPreferencesLoadProblem();
+        /// Queue a UI-scale change for the new monitor DPI; applied at the next frame start.
+        void OnDpiChanged(float dpiScale);
 
       private:
         // Configuration and state
@@ -130,10 +153,21 @@ namespace SparkEditor
         // Window management
         int m_windowWidth = 1600;
         int m_windowHeight = 900;
+        float m_dpiScale = 1.0f; ///< DPI scale of the main window's monitor (1.0 = 96 DPI).
+
+        // Per-user UI preferences read once at startup (defaults in test mode). They size the ImGui install and are
+        // then moved into EditorUI, which owns the live copy; this member is left at defaults after that.
+        EditorPreferences m_preferences;
+        EditorPreferencesLoadResult m_preferencesLoad; ///< What the startup read found (Missing in test mode)
 
 #ifdef _WIN32
         HWND m_hwnd = nullptr;
         bool m_windowClassRegistered = false;
+        /// EditorTheme revision last pushed to the native (DWM) caption; 0 = never.
+        std::uint64_t m_appliedCaptionRevision = 0;
+        /// Set by WindowProc when Windows reports a light/dark or high-contrast change; consumed before the
+        /// next NewFrame so "Match Windows" follows the system without restyling mid-frame.
+        bool m_systemAppearanceChanged = false;
 
         // DirectX 11 resources
         Microsoft::WRL::ComPtr<ID3D11Device> m_device;
@@ -153,6 +187,8 @@ namespace SparkEditor
 
         // Performance tracking
         PerformanceMetrics m_performanceMetrics;
+        uint64_t m_renderedFrameCount = 0;
+        uint64_t m_presentFailureCount = 0;
         std::chrono::high_resolution_clock::time_point m_startTime;
         std::chrono::high_resolution_clock::time_point m_lastFrameTime;
     };

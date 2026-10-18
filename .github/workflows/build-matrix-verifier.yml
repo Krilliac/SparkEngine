@@ -16,7 +16,7 @@ name: "Build Matrix Verifier"
 # verify-exact-required-gate.py requires that field to equal the workflow name
 # exactly, so a run-name would fail every publication gate closed.
 on:
-  workflow_run:
+  workflow_run: # zizmor: ignore[dangerous-triggers] -- checks out only the default branch, attests the checkout SHA equals the executing workflow and current Working, and treats the triggering run as data (SHAs validated by regex)
     workflows: ["Build SparkEngine"]
     branches: [Working]
     types: [in_progress, completed]

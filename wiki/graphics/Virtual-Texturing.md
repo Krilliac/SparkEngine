@@ -109,7 +109,7 @@ Each frame follows this cycle:
 | `tileSize` | 128 | Pixels per tile edge |
 | `framesToKeep` | 60 | Frames a page stays resident without use |
 
-At default settings: 1024 pages x 128x128 pixels x 4 bytes (RGBA8) = **64 MB** page cache.
+Page-cache capacity follows the page-count and tile-size arguments to `VirtualTextureManager::Initialize`; see [VirtualTexture.h](../../SparkEngine/Source/Graphics/VirtualTexture.h) for the defaults.
 
 ---
 

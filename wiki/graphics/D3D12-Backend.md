@@ -12,7 +12,8 @@ SparkEngine's D3D12 backend provides a modern, low-level graphics API implementa
 ## Architecture
 
 - **Namespace:** `Spark::RHI::D3D12`
-- **Files:** `Graphics/RHI/D3D12/D3D12Device.h` (773 lines), `D3D12Device.cpp` (1507 lines)
+- **Files:** `Graphics/RHI/D3D12/D3D12Device.h`, `D3D12Device.cpp`, `D3D12Types.h`,
+  `D3D12CommandList.cpp`, `D3D12DescriptorHeap.cpp` (descriptor heaps and per-draw table binding)
 - **Guard:** `#ifdef _WIN32`
 
 ## Key Classes
@@ -23,14 +24,16 @@ SparkEngine's D3D12 backend provides a modern, low-level graphics API implementa
 | `D3D12CommandList` | Command recording — implements `IRHICommandList` |
 | `D3D12SwapChain` | DXGI swap chain — implements `IRHISwapChain` |
 | `D3D12Buffer/Texture/Shader/Sampler/PipelineState` | GPU resources |
-| `DescriptorHeapAllocator` | Free-list descriptor heap management |
+| `DescriptorHeapAllocator` | Free-list allocator over a CPU-only descriptor heap |
+| `D3D12DescriptorPagePool` | Fence-recycled pages of a shader-visible heap that draws carve tables from |
 | `D3D12Fence` | RAII CPU/GPU synchronization |
 
 ## Features
 
 - **Debug Layer:** Optional validation with GPU-based validation support
-- **3 Command Queues:** Direct (graphics), Copy, Compute
-- **4 Descriptor Heaps:** CBV/SRV/UAV (1M), RTV (256), DSV (64), Sampler (2048)
+- **Command Queues:** Direct (graphics), Copy, and Compute queues
+- **4 CPU-only Descriptor Heaps:** CBV/SRV/UAV (1M), RTV (256), DSV (64), Sampler (2048)
+- **Shader-Visible Table Heaps:** CBV/SRV/UAV and Sampler tables sized by the backend descriptor limits
 - **Flip-Model Swap Chain:** DXGI 1.5+ with `FLIP_DISCARD` and tearing support
 - **Deferred Deletion:** Resources queued with fence values, released when GPU completes
 - **Per-Frame Resources:** Double-buffered command allocators with fence sync
@@ -42,19 +45,150 @@ SparkEngine's D3D12 backend provides a modern, low-level graphics API implementa
 
 ```cpp
 auto& caps = device->GetCapabilities();
-caps.rayTracingSupport;          // DXR 1.0+
-caps.meshShaderSupport;          // Mesh shader tier
-caps.bindlessResourceSupport;    // Tier 3 binding
-caps.conservativeRasterSupport;  // Conservative raster
+caps.rayTracing.supportsHardwareRT; // DXR tier reported (OPTIONS5)
+caps.rayTracingSupport;             // Any RT backend, including the software fallback
+caps.meshShaderSupport;             // Mesh shader tier (OPTIONS7)
+caps.bindlessResourceSupport;       // Resource binding tier 3
+caps.conservativeRasterSupport;     // Conservative raster
+caps.enhancedBarrierSupport;        // OPTIONS12
+caps.hostImageCopySupport;          // GPU upload heaps (OPTIONS16)
 ```
+
+`rayTracingSupport` is not "DXR": `FinalizeDeviceCapabilities` sets it for any
+backend other than `Disabled`, and a D3D12 device without a DXR tier selects
+`RayTracingBackend::Software_SDFGI`. Use `rayTracing.supportsHardwareRT` or
+`GetDXRDevice()` for DXR. Without a DXR tier, whichever query failed (no
+`ID3D12Device5`, no `OPTIONS5`, or tier `NOT_SUPPORTED`), `GetDXRDevice()` is
+null and the hardware-only fields (inline RT, tier, recursion depth) are zero.
+
+**Fallback evidence (RHI-225).** CTest `D3D12Fallback` (Windows MSVC,
+`D3D12Fallback_*`, exact count 3, label `d3d12`) runs
+`Tests/TestRHI225D3D12FallbackReal.cpp` on the adapter `D3D12Device` selects
+(the largest hardware adapter, or WARP on a GPU-less host). Every advanced flag
+must equal an independent `CheckFeatureSupport` query on the same device, two
+initializations must report identical capabilities, and the DXR entry point
+must follow its flag. The RHI cannot pick WARP on a host with a GPU, so one
+host exercises one adapter's answers; hosted runners (WARP) and GPU hosts
+cover different ones. Mesh shaders, enhanced barriers and GPU upload heaps have
+no D3D12 RHI entry point yet (`MeshShaderPipeline` always takes the traditional
+path), so for those only the reported flag is verified.
 
 ## Root Signature Layout
 
-The default root signature provides:
-- **Param 0:** CBV table (b0-b13, all stages)
-- **Param 1:** SRV table (t0-t31, pixel shader)
-- **Param 2:** Sampler table (s0-s15, pixel shader)
-- **Param 3:** UAV table (u0-u7, all stages)
+Every RHI graphics pipeline shares one root signature (`DefaultRootLayout` in
+`D3D12Types.h`; 19 of the 64 root DWORDs), visible to all stages:
+- **Params 0-7:** root CBVs b0-b7 (data volatile)
+- **Param 8:** SRV table t0-t31 (data volatile)
+- **Param 9:** Sampler table s0-s15
+- **Param 10:** UAV table u0-u7 (declared; the RHI has no UAV binding call yet)
+
+Because every stage sees every parameter, the `RHIShaderStage` argument of the
+binding calls selects no separate slot space on D3D12 (it does on D3D11): one
+slot number is one register for all stages.
+
+## Resource Binding
+
+`IRHICommandList` binding calls stage state; each draw applies what changed
+(`D3D12CommandList::PrepareDraw`, `D3D12DescriptorHeap.cpp`):
+
+| Call | D3D12 behaviour |
+|------|-----------------|
+| `SetConstantBuffer(stage, slot, buffer)` | Stages the buffer's GPU address for root CBV `slot`; slot >= 8 logs a rate-limited error and drops the binding |
+| `SetShaderResource(stage, slot, texture)` | Stages the texture's CPU SRV handle for t`slot` and batches a transition to a shader-read state (as D3D11 does implicitly); a texture without an SRV logs an error and leaves the slot unbound |
+| `SetSampler(stage, slot, sampler)` | Stages the sampler's CPU handle for s`slot` |
+| `SetRenderTargets`, `ClearRenderTarget`, `ClearDepthStencil` | Batch transitions of the targets to `RENDER_TARGET`/`DEPTH_WRITE`; a depth clear sets the stencil flag only for formats with stencil |
+
+Views and samplers live in CPU-only heaps because `CopyDescriptors` cannot read
+from a shader-visible heap. Before a draw with dirty SRV or sampler slots, the
+list copies all 32 (or 16) slots, with a null Texture2D SRV or a point/clamp
+sampler in unbound slots, into a table carved linearly from its current page
+of the shader-visible heap, then calls `SetGraphicsRootDescriptorTable`.
+`Begin()`/`Reset()` bind the two shader-visible heaps once and clear the
+staged bindings (bindings do not survive a reset).
+`D3D12Device::ExecuteCommandList` hands the pages a list filled back to their
+pool tagged with the next frame-fence value; a page is reused only after the
+GPU passes it. Pages are the only shared state, so several lists can record at
+once. There is no per-draw heap allocation; when no page is free (or one list
+reaches `kMaxHeldPages` without submitting) the draw is logged and skipped rather than
+bound to stale descriptors. Compute root signatures are out of scope:
+`Dispatch` binds nothing.
+
+`CreateBuffer` with `RHIBufferAccess::Static` and initial data copies the data
+into the DEFAULT-heap buffer through the immediate list and waits, like
+`UpdateTexture`. Before this, the data was staged into an upload buffer that
+was never copied, so static buffers read zeros. Both calls reuse the immediate
+list and must not run while it is recording.
+
+## D3D11/D3D12 Parity Matrix
+
+**Parity evidence (RHI-225).** CTest `D3D12_Parity` (Windows MSVC,
+`D3D12_Parity_*`, exact count 12, labels `d3d12;d3d12-parity`, out of the
+main suite) runs `Tests/TestRHI225D3D12ParityReal.cpp`. The matrix is declared
+at the RHI level, where D3D12 actually executes (`GraphicsEngine` renders
+through D3D11 directly). Each scene renders the same HLSL through
+`D3D11Device` and `D3D12Device` using only `IRHIDevice`/`IRHICommandList`
+(readback is the one backend-specific step), records two 64x64 frames (the
+second into a reset list) and checks the second:
+
+- **Cross-backend:** a pixel differs when any channel is more than 2 apart; at
+  most 0.5% of the pixels may differ. The test prints the maximum channel
+  distance and the differing count per scene.
+- **Analytic:** each backend's frame must match a CPU expectation of the scene
+  (don't-care only within one pixel of a triangle edge or 0.002 of the bloom
+  threshold, and under 10% of the frame), so two equally broken backends
+  cannot pass together. Every target must also pass
+  `GoldenImageTestRunner::FrameHasRenderedContent(frame, 0.95)`.
+- **Same adapter:** D3D11 takes the default adapter and D3D12 the
+  largest-VRAM hardware adapter (WARP without one). Both adapters are logged;
+  unless their LUIDs match or both are software adapters, the scene fails, so a
+  hybrid iGPU + dGPU host cannot compare two GPUs. WARP counts as software
+  however DXGI flags it: on a GPU-less hosted runner D3D11's hardware driver
+  type lands on the Microsoft Basic Render Driver (VendorId 0x1414, DeviceId
+  0x8C) without `DXGI_ADAPTER_FLAG_SOFTWARE` and with its own LUID, while
+  D3D12 uses `EnumWarpAdapter`. Before this was recognised, all 12 scenes failed
+  this check on hosted runners without rendering (run at `3d330173c`).
+
+These are cross-backend checks, not goldens: there are no baseline images and
+no owner-reviewed thresholds. A scene whose D3D12 feature is missing fails; no
+scene skips. The table below mirrors the test's scene table, and every test
+checks that the two list the same scenes in the same order.
+
+<!-- parity-matrix:begin -->
+| Scene | What it pins |
+|-------|--------------|
+| `SolidTriangle` | Position-only triangle, constant pixel shader |
+| `VertexColorInterpolation` | Per-vertex colour interpolated across a triangle (tolerance 2 against barycentrics) |
+| `ConstantBufferColor` | Pixel shader colour from `cbuffer` b0 via `SetConstantBuffer` |
+| `TexturedQuadPoint` | 4x4 texture from `UpdateTexture`, point/clamp sampler, every texel block exact |
+| `TexturedQuadLinear` | 2x2 texture, linear/clamp sampler (tolerance 3 against CPU bilinear) |
+| `DepthTestOrdering` | D32_FLOAT depth, `Less`: a far quad drawn second must not cover the near one |
+| `AlphaBlendOver` | `SrcAlpha`/`InvSrcAlpha` colour blend, `One`/`Zero` alpha blend over a cleared target |
+| `IndexedInstanced` | Static vertex, 16-bit index and per-instance buffers, `DrawIndexedInstanced` with a second vertex stream |
+| `ViewportScissor` | Right-half viewport intersected with a top-half scissor rect |
+| `MRTClearAndDraw` | Two render targets cleared to different colours and written by one draw |
+| `RenderToTextureThenSample` | Pass 1 renders a texture that pass 2 samples and inverts (render-target to shader-resource and back) |
+| `ShippedBloomExtract` | `Shaders/HLSL/BloomExtract.hlsl` (`PS_BloomExtract`) over a 64x64 RGBA32F HDR ramp, threshold in b1 |
+<!-- parity-matrix:end -->
+
+Local run (2026-09-28, RTX 5070 Ti, both devices on the same adapter): all 12
+scenes produced bit-identical D3D11 and D3D12 frames (maximum channel distance
+0) and met their CPU expectations. Mutation checks, each run against the lane
+and reverted: forcing the D3D12 sampler filter to point sampling fails
+`TexturedQuadLinear` (3,072 pixels beyond tolerance); making
+`SetConstantBuffer` a no-op fails `ConstantBufferColor` and
+`ShippedBloomExtract`; dropping the static-buffer upload copy fails
+`IndexedInstanced`. Hosted runners exercise WARP instead; WARP frames have not
+yet been observed, because the first hosted run stopped at the same-adapter
+check. Found on the way: `D3D11Device::CreateShader` passes `debugName` to
+`D3DCompile` as the source name and returns null without logging when it is
+empty, so the scenes set a debug name.
+
+Known differences from D3D11 that callers must handle:
+
+- D3D12 always scissor-tests (`rasterizer.scissorEnable` is ignored), so set a
+  scissor rect covering the target.
+- The swap-chain back buffers get no `PRESENT` transition; the Windows renderer
+  presents through D3D11.
 
 ## RHI Factory Registration
 
@@ -126,14 +260,18 @@ Copy and compute queues run concurrently with the direct queue, enabling texture
 
 ## Descriptor Heap Management
 
-The `DescriptorHeapAllocator` manages GPU-visible descriptor heaps using a free-list allocator:
+The `DescriptorHeapAllocator` manages the CPU-only heaps views are created in,
+using a free-list allocator; the shader-visible heaps are the table pages
+described under [Resource Binding](#resource-binding):
 
 | Heap Type | Capacity | Visibility |
 |-----------|----------|------------|
-| CBV/SRV/UAV | 1,000,000 | Shader-visible |
+| CBV/SRV/UAV | 1,000,000 | CPU-only |
 | RTV | 256 | CPU-only |
 | DSV | 64 | CPU-only |
-| Sampler | 2,048 | Shader-visible |
+| Sampler | 2,048 | CPU-only |
+| CBV/SRV/UAV tables | 64 x 1,024 | Shader-visible |
+| Sampler tables | 16 x 128 | Shader-visible (2,048 is the D3D12 limit) |
 
 ```cpp
 // Allocate a range of descriptors
@@ -146,16 +284,76 @@ heapAllocator.Free(allocation);
 
 ## Debug and Validation
 
-When enabled in debug builds, the backend activates:
+`RHIDeviceDesc::enableDebugLayer` turns on the D3D12 debug layer (and
+`enableGPUValidation` adds GPU-based validation). A requested debug layer that
+is not installed (no `d3d12SDKLayers.dll`, the Windows "Graphics Tools"
+optional feature) logs a warning and the device runs without validation.
 
-- **D3D12 Debug Layer** — Validates API usage, reports errors
-- **GPU-Based Validation** — Catches shader-level errors (expensive, use sparingly)
+With the layer active, `D3D12Device`:
+
+- stores warning, error and corruption messages in its `ID3D12InfoQueue`
+  (a storage filter drops INFO/MESSAGE chatter so the queue limit is spent on
+  real findings);
+- breaks on error and corruption **only when a debugger is attached**. An
+  unconditional break raised a breakpoint exception that killed any process
+  without a debugger, so a validation run could not count what it found;
+- exposes `GetValidationCounts()` (`active`, `corruption`, `errors`,
+  `warnings`, `discarded`). A non-zero `discarded` means warnings or worse were
+  lost to the queue limit, so the other counts are a floor, not a total;
+- logs the totals at `Shutdown()`: an error line when any error, corruption or
+  discard occurred, otherwise "clean".
+
+**Validation evidence (RHI-225).** CTest `D3D12_Validation` (Windows MSVC,
+`D3D12_Validation_*`, exact count 5, labels `d3d12;d3d12-validation`) runs
+`Tests/TestRHI225D3D12ValidationReal.cpp` with the debug layer and GPU-based
+validation on whichever adapter `D3D12Device` selects (hardware, or WARP on a
+GPU-less host):
+
+| Test | Declared scope |
+|------|----------------|
+| `D3D12_Validation_TriangleFrameIsClean` | HLSL VS/PS compiled through `CreateShader`, PSO without depth, dynamic vertex buffer, render-target transitions, clear, draw and a READBACK copy, recorded twice into the reset immediate list; the centre pixel must be the triangle colour, so an empty frame cannot pass |
+| `D3D12_Validation_ConstantBufferColorDrawIsClean` | A pixel shader reading its colour from `cbuffer` b0, bound with `SetConstantBuffer`; the centre pixel must equal the constant-buffer colour exactly |
+| `D3D12_Validation_SampledTextureDrawIsClean` | A 4x4 texture uploaded with `UpdateTexture`, bound with `SetShaderResource` and a point `SetSampler`, drawn on a full-target quad; all 16 texel blocks must read back exactly, and after `WaitForIdle` every table page must be free again |
+| `D3D12_Validation_ResourceChurnIsClean` | 200 frames that create dynamic and static buffers and a render-target texture, use the texture on the GPU and destroy all three while that work is in flight (fence-deferred release) |
+| `D3D12_Validation_CounterSeesInjectedError` | Negative control: an invalid `CreateCommittedResource` through the native device raises the error count and the process survives |
+
+Each clean test requires zero corruption, zero errors and zero discarded
+messages, and fails if the info queue is not active. The lane is registered on
+every MSVC Windows configure, so a host without Graphics Tools fails it rather
+than skipping it. Every Windows CI job that runs the whole CTest tree
+(`build-windows-vs2022`, `build-windows-vs2026` and the release
+`build-windows`) therefore runs an "Install D3D12 debug layer" step first: it
+adds the `Tools.Graphics.DirectX~~~~0.0.1.0` capability when
+`d3d12SDKLayers.dll` is absent and fails the job if the DLL is still missing.
+Locally, install it with `Add-WindowsCapability -Online -Name
+Tools.Graphics.DirectX~~~~0.0.1.0` from an elevated PowerShell (or Settings >
+Optional features > Graphics Tools). This is RHI-level
+evidence for the listed operations only. Engine frames are not covered:
+`GraphicsEngine` renders through D3D11 directly on Windows.
+
+The lane found and fixed two defects on the way: `ConvertFormat` mapped
+`PixelFormat::Unknown` to RGBA8, so a PSO without depth got an invalid DSV
+format, and `D3D12CommandList::Begin()` kept the previous recording's PSO and
+root signature cached, so re-recording the same pipeline skipped its bind on a
+freshly reset list. The immediate command list owns a single allocator: it must
+be idle (for example after `WaitForIdle()`) before its next `Begin()`.
+
+The two binding tests fail at the commit before the binding path (b76a7e55a),
+run on an RTX 5070 Ti: the constant-buffer draw raised debug-layer error 710
+("parameter [0] with type descriptor table, so it is invalid to set a root CBV
+here") plus a GPU-based-validation "uninitialized root argument" error and read
+back black, and the sampled draw read black in all 16 blocks with
+"uninitialized root argument" errors, because `SetShaderResource` and
+`SetSampler` were empty.
+
+Other tooling:
+
 - **DRED (Device Removed Extended Data)** — Provides detailed crash diagnostics
-- **PIX Event Markers** — Named regions for GPU profiling in PIX/RenderDoc
+- **PIX Event Markers** — `BeginEvent`/`EndEvent`/`SetMarker` are currently no-ops
 
 ## Integration with RHI
 
-The D3D12 backend exposes resource, command-list, and capability-query paths through the [RHI abstraction layer](RHI-Abstraction-Layer.md) and `IRHIDevice`. That interface coverage is implementation evidence only: pass parity, synchronization, shader tooling, golden-scene, performance, and driver evidence remain incomplete.
+The D3D12 backend exposes resource, command-list, and capability-query paths through the [RHI abstraction layer](RHI-Abstraction-Layer.md) and `IRHIDevice`. The [parity matrix](#d3d11d3d12-parity-matrix) covers the declared RHI-level scene set against D3D11; engine render-graph passes, packaged scenes, performance, and multi-driver evidence remain incomplete.
 
 ## Threading Model
 
@@ -163,7 +361,8 @@ The D3D12 backend exposes resource, command-list, and capability-query paths thr
 - Command list recording: thread-safe (one list per thread)
 - Command submission: serialized via `m_submitMutex`
 - Deferred deletion: frame-fenced, processed on main thread
-- Descriptor allocation: lock-free within pre-allocated ranges
+- Descriptor allocation: CPU heaps take a mutex per allocation; per-draw tables are carved from
+  a page the recording list owns, and only page acquire/retire touch the shared pool (mutex)
 
 ## Console Commands
 
@@ -338,12 +537,13 @@ The `D3D12Device` selects appropriate initial states based on buffer access patt
 The engine provides a default root signature via `CreateDefaultRootSignature()` that covers the majority of shader needs:
 
 ```cpp
-// Root parameter layout:
-// [0] CBV table:     b0-b13 (14 constant buffers, all shader stages)
-// [1] SRV table:     t0-t31 (32 textures/buffers, pixel shader)
-// [2] Sampler table: s0-s15 (16 samplers, pixel shader)
-// [3] UAV table:     u0-u7  (8 UAVs, all shader stages)
+// Root parameter layout (DefaultRootLayout, all shader stages):
+// [0-7] root CBVs:     b0-b7
+// [8]   SRV table:     t0-t31
+// [9]   Sampler table: s0-s15
+// [10]  UAV table:     u0-u7
 
+// CreatePipelineState() shares one instance; this creates another with the same layout.
 ComPtr<ID3D12RootSignature> rootSig = device->CreateDefaultRootSignature();
 ```
 
@@ -432,18 +632,10 @@ When enabled, DRED provides detailed diagnostics after a device-lost crash:
 
 ### Info Queue Filtering
 
-The `m_infoQueue` member (active in debug builds) filters validation messages:
-
-```cpp
-// The D3D12Device filters out known benign messages and promotes
-// warnings to errors for critical issues:
-//
-// Suppressed: D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE
-//             (harmless when using different clear colors)
-//
-// Promoted to error: D3D12_MESSAGE_SEVERITY_CORRUPTION
-//                    (memory corruption, must be fixed immediately)
-```
+`m_infoQueue` exists only when `enableDebugLayer` was requested and the layer is
+installed. Its storage filter denies INFO and MESSAGE severities; no message IDs
+are suppressed and no severities are promoted. See
+[Debug and Validation](#debug-and-validation) for the counts and break policy.
 
 ---
 
@@ -453,42 +645,28 @@ The deferred deletion system is critical for D3D12 correctness. Unlike D3D11, de
 
 ### How It Works
 
+Every buffer and texture that `D3D12Device` creates holds a `std::weak_ptr` to the device's
+`D3D12DeferredReleaseQueue` (`D3D12Types.h`). The resource destructors are the single release
+route, so a `unique_ptr` reset, `RHIAdapter::DestroyTexture` and asset unload all defer:
+
 ```cpp
-// When a resource is destroyed:
-struct DeferredRelease
+// ~D3D12Texture(): hand the resource and its SRV/RTV/DSV/UAV slots to the queue.
+queue->Enqueue(std::move(m_resource), descriptors);   // tagged GetCurrentValue() + 1
+
+// BeginFrame() -> ProcessDeferredReleases() -> D3D12DeferredReleaseQueue::Process():
+while (!m_entries.empty() && m_entries.front().fenceValue <= fence.GetCompletedValue())
 {
-    ComPtr<IUnknown> resource;  // Prevents ref-count from hitting 0
-    uint64_t fenceValue;        // GPU must pass this value before release
-};
-
-// D3D12Device queues the resource:
-void D3D12Device::DeferredReleaseBuffer(D3D12Buffer* buffer)
-{
-    DeferredRelease entry;
-    entry.resource = buffer->GetD3D12Resource();
-    entry.fenceValue = m_frameFence.GetCurrentValue();
-
-    std::lock_guard lock(m_deferredReleaseMutex);
-    m_deferredReleaseQueue.push(std::move(entry));
-}
-
-// At the end of each frame, ProcessDeferredReleases() checks:
-void D3D12Device::ProcessDeferredReleases()
-{
-    uint64_t completedValue = m_frameFence.GetCompletedValue();
-
-    std::lock_guard lock(m_deferredReleaseMutex);
-    while (!m_deferredReleaseQueue.empty())
-    {
-        auto& front = m_deferredReleaseQueue.front();
-        if (front.fenceValue > completedValue)
-            break;  // GPU hasn't reached this fence yet
-
-        // Safe to release -- GPU is done with this resource
-        m_deferredReleaseQueue.pop();  // ComPtr destructor releases
-    }
+    // Descriptor slots return to their heaps only now, after the GPU is done with them,
+    // then the ComPtr drops the last reference.
+    ReleaseEntry(m_entries.front());
+    m_entries.pop_front();
 }
 ```
+
+The tag is the value the *next* `Signal()` will produce, so every submission made before the
+destroy completes first. `Shutdown()` waits for idle, calls `ReleaseAll()` and resets the queue;
+a resource destroyed after that (or a swap-chain back buffer, which has no queue) releases
+immediately. `D3D12Device::GetPendingReleaseCount()` exposes the queue depth for tests.
 
 ### Frame Resource Management
 

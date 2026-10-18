@@ -129,12 +129,14 @@ namespace Terrafront
 
     void TFDeployableSystem::ClientReleaseHandlers()
     {
-        // No per-type removal on NetworkManager — swap in no-ops so no dangling
-        // `this` survives shutdown (established TFReplication pattern).
+        // Remove (never replace) these observers. An empty placeholder lambda is itself code in this module
+        // image: it outlived unload, and during hot reload it overwrote the replacement module's handler.
+        // Inside the module's teardown scope NetworkManager leaves a slot the replacement already owns
+        // untouched.
         using Spark::Net::MessageType;
         auto& nm = Spark::Net::NetworkManager::GetInstance();
         for (uint16_t id : {kTFRepMsg_DeployCreate, kTFRepMsg_DeployUpdate, kTFRepMsg_DeployDestroy})
-            nm.RegisterHandler(static_cast<MessageType>(id), [](const Spark::Net::NetworkMessage&) {});
+            nm.UnregisterHandler(static_cast<MessageType>(id));
         m_clientHandlers = false;
     }
 

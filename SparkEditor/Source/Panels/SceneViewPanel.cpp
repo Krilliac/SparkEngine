@@ -11,7 +11,6 @@
 #include "../Core/EditorFonts.h"
 #include "../Core/EditorUI.h"
 #include "../Core/ProjectManager.h"
-#include "../CommandHistory.h"
 #include "../Gizmos/SceneEditTools.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
@@ -19,6 +18,8 @@
 #include <cmath>
 #include <functional>
 #include <iostream>
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
@@ -98,11 +99,12 @@ namespace SparkEditor
                     ImDrawList* drawList = ImGui::GetWindowDrawList();
                     if (m_showGrid)
                     {
-                        constexpr float spacing = 40.0f;
+                        const float spacing = Spark::Ui::Px(40.0f);
+                        const ImU32 gridLine = Spark::Ui::Col(Spark::Ui::Role::BorderStrong, 0.12f);
                         for (float x = gridMin.x; x < gridMax.x; x += spacing)
-                            drawList->AddLine({x, gridMin.y}, {x, gridMax.y}, IM_COL32(130, 140, 155, 24));
+                            drawList->AddLine({x, gridMin.y}, {x, gridMax.y}, gridLine);
                         for (float y = gridMin.y; y < gridMax.y; y += spacing)
-                            drawList->AddLine({gridMin.x, y}, {gridMax.x, y}, IM_COL32(130, 140, 155, 24));
+                            drawList->AddLine({gridMin.x, y}, {gridMax.x, y}, gridLine);
                     }
 
 #ifdef _WIN32
@@ -117,12 +119,17 @@ namespace SparkEditor
                             diagnostic = "No visible MeshRenderer entities";
                         else
                             diagnostic = "Mesh candidates found, but no geometry was drawable";
+                        // Status is glyph + text, never colour alone.
+                        diagnostic.insert(0, std::string(Spark::Ui::StatusGlyph(Spark::Ui::Status::Warning)) + "  ");
                         const ImVec2 textSize = ImGui::CalcTextSize(diagnostic.c_str());
-                        const ImVec2 textPos{gridMin.x + (viewportSize.x - textSize.x) * 0.5f, gridMin.y + 18.0f};
-                        drawList->AddRectFilled({textPos.x - 8, textPos.y - 4},
-                                                {textPos.x + textSize.x + 8, textPos.y + textSize.y + 4},
-                                                IM_COL32(15, 18, 24, 210), 4.0f);
-                        drawList->AddText(textPos, IM_COL32(245, 190, 80, 255), diagnostic.c_str());
+                        const ImVec2 pad = Spark::Ui::Px2(8.0f, 4.0f);
+                        const ImVec2 textPos{gridMin.x + (viewportSize.x - textSize.x) * 0.5f,
+                                             gridMin.y + Spark::Ui::Px(18.0f)};
+                        drawList->AddRectFilled({textPos.x - pad.x, textPos.y - pad.y},
+                                                {textPos.x + textSize.x + pad.x, textPos.y + textSize.y + pad.y},
+                                                Spark::Ui::Col(Spark::Ui::Role::SurfaceOverlay, 0.85f),
+                                                Spark::Ui::Px(3.0f));
+                        drawList->AddText(textPos, Spark::Ui::Col(Spark::Ui::Role::WarningText), diagnostic.c_str());
                     }
 #endif
                 }
@@ -133,55 +140,59 @@ namespace SparkEditor
                     ImVec2 pos = ImGui::GetCursorScreenPos();
                     ImVec2 maxPos(pos.x + viewportSize.x, pos.y + viewportSize.y);
 
-                    // Dark background
-                    drawList->AddRectFilled(pos, maxPos, IM_COL32(40, 42, 48, 255));
+                    // Sunken background with a minor/major grid in the border roles.
+                    drawList->AddRectFilled(pos, maxPos, Spark::Ui::Col(Spark::Ui::Role::SurfaceSunken));
+                    const ImU32 minorLine = Spark::Ui::Col(Spark::Ui::Role::BorderSubtle);
+                    const ImU32 majorLine = Spark::Ui::Col(Spark::Ui::Role::BorderStrong, 0.6f);
 
                     // Grid configuration
-                    constexpr float gridSpacingSmall = 32.0f;
-                    constexpr float gridSpacingLarge = gridSpacingSmall * 4.0f;
+                    const float gridSpacingSmall = Spark::Ui::Px(32.0f);
+                    const float gridSpacingLarge = gridSpacingSmall * 4.0f;
                     float cx = pos.x + viewportSize.x * 0.5f;
                     float cy = pos.y + viewportSize.y * 0.5f;
 
                     // Minor grid lines
                     for (float x = fmodf(cx, gridSpacingSmall); x < viewportSize.x; x += gridSpacingSmall)
                     {
-                        drawList->AddLine(ImVec2(pos.x + x, pos.y), ImVec2(pos.x + x, maxPos.y),
-                                          IM_COL32(55, 58, 65, 255));
+                        drawList->AddLine(ImVec2(pos.x + x, pos.y), ImVec2(pos.x + x, maxPos.y), minorLine);
                     }
                     for (float y = fmodf(cy, gridSpacingSmall); y < viewportSize.y; y += gridSpacingSmall)
                     {
-                        drawList->AddLine(ImVec2(pos.x, pos.y + y), ImVec2(maxPos.x, pos.y + y),
-                                          IM_COL32(55, 58, 65, 255));
+                        drawList->AddLine(ImVec2(pos.x, pos.y + y), ImVec2(maxPos.x, pos.y + y), minorLine);
                     }
 
                     // Major grid lines
                     for (float x = fmodf(cx, gridSpacingLarge); x < viewportSize.x; x += gridSpacingLarge)
                     {
-                        drawList->AddLine(ImVec2(pos.x + x, pos.y), ImVec2(pos.x + x, maxPos.y),
-                                          IM_COL32(70, 75, 85, 255));
+                        drawList->AddLine(ImVec2(pos.x + x, pos.y), ImVec2(pos.x + x, maxPos.y), majorLine);
                     }
                     for (float y = fmodf(cy, gridSpacingLarge); y < viewportSize.y; y += gridSpacingLarge)
                     {
-                        drawList->AddLine(ImVec2(pos.x, pos.y + y), ImVec2(maxPos.x, pos.y + y),
-                                          IM_COL32(70, 75, 85, 255));
+                        drawList->AddLine(ImVec2(pos.x, pos.y + y), ImVec2(maxPos.x, pos.y + y), majorLine);
                     }
 
-                    // Origin axes
-                    drawList->AddLine(ImVec2(cx, pos.y), ImVec2(cx, maxPos.y), IM_COL32(80, 180, 80, 120), 1.5f);
-                    drawList->AddLine(ImVec2(pos.x, cy), ImVec2(maxPos.x, cy), IM_COL32(180, 80, 80, 120), 1.5f);
+                    // Origin axes: the vertical line is the Y axis, the horizontal one the X axis.
+                    const float axisThickness = 1.5f * Spark::Ui::Scale();
+                    drawList->AddLine(ImVec2(cx, pos.y), ImVec2(cx, maxPos.y),
+                                      Spark::Ui::Col(Spark::Ui::Role::AxisY, 0.5f), axisThickness);
+                    drawList->AddLine(ImVec2(pos.x, cy), ImVec2(maxPos.x, cy),
+                                      Spark::Ui::Col(Spark::Ui::Role::AxisX, 0.5f), axisThickness);
 
                     // Origin crosshair
-                    drawList->AddCircle(ImVec2(cx, cy), 6.0f, IM_COL32(200, 200, 200, 100), 12);
+                    drawList->AddCircle(ImVec2(cx, cy), Spark::Ui::Px(6.0f),
+                                        Spark::Ui::Col(Spark::Ui::Role::TextSecondary, 0.4f), 12);
 
                     // "No render target" label
                     const char* label = "Scene View — No Render Target";
                     ImVec2 textSize = ImGui::CalcTextSize(label);
                     ImVec2 textPos(pos.x + (viewportSize.x - textSize.x) * 0.5f,
                                    pos.y + (viewportSize.y - textSize.y) * 0.5f);
-                    drawList->AddRectFilled(ImVec2(textPos.x - 8, textPos.y - 4),
-                                            ImVec2(textPos.x + textSize.x + 8, textPos.y + textSize.y + 4),
-                                            IM_COL32(30, 30, 30, 180), 4.0f);
-                    drawList->AddText(textPos, IM_COL32(180, 180, 180, 255), label);
+                    const ImVec2 labelPad = Spark::Ui::Px2(8.0f, 4.0f);
+                    drawList->AddRectFilled(
+                        ImVec2(textPos.x - labelPad.x, textPos.y - labelPad.y),
+                        ImVec2(textPos.x + textSize.x + labelPad.x, textPos.y + textSize.y + labelPad.y),
+                        Spark::Ui::Col(Spark::Ui::Role::SurfaceOverlay, 0.85f), Spark::Ui::Px(3.0f));
+                    drawList->AddText(textPos, Spark::Ui::Col(Spark::Ui::Role::TextSecondary), label);
 
                     // Use InvisibleButton so the area registers as an interactive item
                     // for hover detection and input handling
@@ -234,7 +245,7 @@ namespace SparkEditor
         PeerID localId = m_collabSession->GetLocalPeerID();
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         ImVec2 windowPos = ImGui::GetWindowPos();
-        float yOffset = 40.0f; // Below toolbar
+        float yOffset = Spark::Ui::Px(40.0f); // Below toolbar
 
         for (const auto& peer : peers)
         {
@@ -252,18 +263,19 @@ namespace SparkEditor
             }
 
             ImVec2 textSize = ImGui::CalcTextSize(label.c_str());
-            float padding = 4.0f;
+            const float padding = Spark::Ui::Px(4.0f);
             float tagX = windowPos.x + ImGui::GetWindowWidth() - textSize.x - padding * 3.0f;
             float tagY = windowPos.y + yOffset;
 
             // Background pill
             drawList->AddRectFilled(ImVec2(tagX - padding, tagY - padding),
                                     ImVec2(tagX + textSize.x + padding, tagY + textSize.y + padding),
-                                    IM_COL32(0, 0, 0, 150), 4.0f);
+                                    Spark::Ui::Col(Spark::Ui::Role::SurfaceOverlay, 0.85f), Spark::Ui::Px(3.0f));
 
             // Colored left border
             drawList->AddRectFilled(ImVec2(tagX - padding, tagY - padding),
-                                    ImVec2(tagX - padding + 3.0f, tagY + textSize.y + padding), color, 2.0f);
+                                    ImVec2(tagX - padding + Spark::Ui::Px(3.0f), tagY + textSize.y + padding), color,
+                                    Spark::Ui::Px(2.0f));
 
             // Text
             drawList->AddText(ImVec2(tagX, tagY), color, label.c_str());
@@ -306,17 +318,13 @@ namespace SparkEditor
 
     void SceneViewPanel::RenderToolbar()
     {
-        const ImVec4 selectedButton = ImGui::GetStyleColorVec4(ImGuiCol_HeaderActive);
-        float btnSize = 24.0f;
-        ImVec2 btnDim(btnSize, btnSize);
+        if (!Spark::Ui::BeginPanelToolbar("##SceneViewToolbar"))
+            return;
 
         // Transform tool buttons with icons
-        auto GizmoButton = [&](const char* icon, GizmoMode mode, const char* tooltip)
+        auto GizmoButton = [&](const char* id, const char* icon, GizmoMode mode, const char* tooltip)
         {
-            bool active = (m_gizmoMode == mode);
-            if (active)
-                ImGui::PushStyleColor(ImGuiCol_Button, selectedButton);
-            if (ImGui::Button(icon, btnDim))
+            if (Spark::Ui::IconButton(id, icon, tooltip, m_gizmoMode == mode))
             {
                 // EditorUI owns the tool selection (main toolbar, W/E/R, command
                 // palette); publish through it so every surface stays in sync.
@@ -340,23 +348,18 @@ namespace SparkEditor
                     SetGizmoMode(mode);
                 }
             }
-            if (active)
-                ImGui::PopStyleColor();
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("%s", tooltip);
             ImGui::SameLine();
         };
 
-        GizmoButton(ICON_FA_ARROWS_ALT, GizmoMode::Move, "Move (W)");
-        GizmoButton(ICON_FA_SYNC_ALT, GizmoMode::Rotate, "Rotate (E)");
-        GizmoButton(ICON_FA_EXPAND, GizmoMode::Scale, "Scale (R)");
+        GizmoButton("Move", ICON_FA_ARROWS_ALT, GizmoMode::Move, "Move (W)");
+        GizmoButton("Rotate", ICON_FA_SYNC_ALT, GizmoMode::Rotate, "Rotate (E)");
+        GizmoButton("Scale", ICON_FA_EXPAND, GizmoMode::Scale, "Scale (R)");
+        Spark::Ui::ToolbarSeparator();
 
-        ImGui::Text("|");
-        ImGui::SameLine();
-
-        // Render mode dropdown
+        // Render mode dropdown, sized to its longest entry.
         const char* renderModeNames[] = {"Shaded", "Wireframe", "Unlit", "Normals", "Depth"};
-        ImGui::SetNextItemWidth(90);
+        ImGui::SetNextItemWidth(ImGui::CalcTextSize("Wireframe").x + ImGui::GetFrameHeight() +
+                                ImGui::GetStyle().FramePadding.x * 2.0f);
         if (ImGui::BeginCombo("##RenderMode", renderModeNames[(int)m_renderMode]))
         {
             for (int i = 0; i < 5; i++)
@@ -371,31 +374,20 @@ namespace SparkEditor
         }
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Render Mode");
+        Spark::Ui::ToolbarSeparator();
 
+        // Overlay toggles
+        if (Spark::Ui::IconButton("Grid", ICON_FA_GRID, "Show grid", m_showGrid))
+            m_showGrid = !m_showGrid;
         ImGui::SameLine();
-        ImGui::Text("|");
-        ImGui::SameLine();
-
-        // Toggles
-        ImGui::Checkbox(ICON_FA_GRID " Grid", &m_showGrid);
-        ImGui::SameLine();
-        ImGui::Checkbox(ICON_FA_CUBE " Gizmos", &m_showGizmos);
-
-        ImGui::SameLine();
-        ImGui::Text("|");
-        ImGui::SameLine();
+        if (Spark::Ui::IconButton("Gizmos", ICON_FA_CUBE, "Show gizmos", m_showGizmos))
+            m_showGizmos = !m_showGizmos;
+        Spark::Ui::ToolbarSeparator();
 
         // Grid snap toggle + size — applied to gizmo translation drags (W9).
         {
-            const bool snapActive = m_snapEnabled;
-            if (snapActive)
-                ImGui::PushStyleColor(ImGuiCol_Button, selectedButton);
-            if (ImGui::Button(ICON_FA_MAGNET, btnDim))
+            if (Spark::Ui::IconButton("Snap", ICON_FA_MAGNET, "Grid Snap (gizmo translation)", m_snapEnabled))
                 m_snapEnabled = !m_snapEnabled;
-            if (snapActive)
-                ImGui::PopStyleColor();
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Grid Snap (gizmo translation)");
             ImGui::SameLine();
 
             constexpr float kSnapSizes[] = {0.25f, 0.5f, 1.0f, 2.0f};
@@ -406,7 +398,7 @@ namespace SparkEditor
                 if (m_snapSize == kSnapSizes[i])
                     snapIndex = i;
             }
-            ImGui::SetNextItemWidth(52);
+            ImGui::SetNextItemWidth(Spark::Ui::Em(3.5f));
             if (ImGui::BeginCombo("##SnapSize", kSnapLabels[snapIndex]))
             {
                 for (int i = 0; i < 4; i++)
@@ -422,40 +414,26 @@ namespace SparkEditor
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("Snap Size (m)");
         }
-
-        ImGui::SameLine();
-        ImGui::Text("|");
-        ImGui::SameLine();
+        Spark::Ui::ToolbarSeparator();
 
         // Scene-edit actions on the current World selection (W9).
         {
             const bool hasSelection = GetSelectedWorldEntity() != entt::null;
-            if (!hasSelection)
-                ImGui::BeginDisabled();
-            if (ImGui::Button(ICON_FA_COPY, btnDim))
+            if (Spark::Ui::IconButton("Duplicate", ICON_FA_COPY, "Duplicate (Ctrl+D)", false, hasSelection))
                 DuplicateSelectedEntity();
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Duplicate (Ctrl+D)");
             ImGui::SameLine();
-            if (ImGui::Button(ICON_FA_ARROW_DOWN, btnDim))
+            if (Spark::Ui::IconButton("AlignGround", ICON_FA_ARROW_DOWN, "Align to Ground (End)", false, hasSelection))
                 AlignSelectedEntityToGround();
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Align to Ground (End)");
-            if (!hasSelection)
-                ImGui::EndDisabled();
         }
-
-        ImGui::SameLine();
-        ImGui::Text("|");
-        ImGui::SameLine();
+        Spark::Ui::ToolbarSeparator();
 
         // Camera speed
-        ImGui::SetNextItemWidth(80);
+        ImGui::SetNextItemWidth(Spark::Ui::Em(5.5f));
         ImGui::DragFloat("##CamSpeed", &m_cameraSpeed, 0.1f, 0.1f, 50.0f, ICON_FA_CAMERA " %.1f");
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Camera Speed");
 
-        ImGui::Separator();
+        Spark::Ui::EndPanelToolbar();
     }
 
     void SceneViewPanel::RenderSceneContent()
@@ -992,12 +970,12 @@ namespace SparkEditor
             return; // behind the camera — nothing sensible to draw
         }
 
-        constexpr float kAxisPixels = 70.0f; // on-screen axis length
-        constexpr float kArrowPixels = 9.0f; // arrowhead size
-        constexpr float kHitPixels = 8.0f;   // hover pick threshold
+        const float kAxisPixels = Spark::Ui::Px(70.0f); // on-screen axis length
+        const float kArrowPixels = Spark::Ui::Px(9.0f); // arrowhead size
+        const float kHitPixels = Spark::Ui::Px(8.0f);   // hover pick threshold
         const XMFLOAT3 kAxisDirs[3] = {{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}};
-        const ImU32 kAxisColors[3] = {IM_COL32(230, 80, 80, 255), IM_COL32(80, 220, 80, 255),
-                                      IM_COL32(90, 110, 255, 255)};
+        const ImU32 kAxisColors[3] = {Spark::Ui::Col(Spark::Ui::Role::AxisX), Spark::Ui::Col(Spark::Ui::Role::AxisY),
+                                      Spark::Ui::Col(Spark::Ui::Role::AxisZ)};
 
         ImVec2 ends[3];
         ImVec2 screenDirs[3];
@@ -1049,9 +1027,9 @@ namespace SparkEditor
             }
             const bool active = m_gizmoDragging && m_gizmoDragAxis == i;
             const bool hovered = !m_gizmoDragging && m_gizmoHoverAxis == i;
-            const ImU32 color =
-                active ? IM_COL32(255, 230, 60, 255) : (hovered ? IM_COL32(255, 255, 255, 255) : kAxisColors[i]);
-            drawList->AddLine(center, ends[i], color, 2.5f);
+            const ImU32 color = active ? Spark::Ui::Col(Spark::Ui::Role::WarningText)
+                                       : (hovered ? Spark::Ui::Col(Spark::Ui::Role::TextPrimary) : kAxisColors[i]);
+            drawList->AddLine(center, ends[i], color, 2.5f * Spark::Ui::Scale());
             const float nx = screenDirs[i].x;
             const float ny = screenDirs[i].y;
             const ImVec2 arrowA(ends[i].x - nx * kArrowPixels + ny * kArrowPixels * 0.5f,
@@ -1060,7 +1038,8 @@ namespace SparkEditor
                                 ends[i].y - ny * kArrowPixels + nx * kArrowPixels * 0.5f);
             drawList->AddTriangleFilled(ends[i], arrowA, arrowB, color);
         }
-        drawList->AddCircleFilled(center, 3.5f, IM_COL32(255, 255, 255, 200));
+        drawList->AddCircleFilled(center, 3.5f * Spark::Ui::Scale(),
+                                  Spark::Ui::Col(Spark::Ui::Role::TextPrimary, .78f));
 
         // Begin drag on left-press over a hovered axis.
         if (!m_gizmoDragging && viewportHovered && m_gizmoHoverAxis >= 0 &&
@@ -1121,41 +1100,8 @@ namespace SparkEditor
         {
             // Release — commit the whole drag as one undoable command,
             // capturing the entity id (never a component pointer).
-            const XMFLOAT3 endPos = transform->position;
-            const bool moved = endPos.x != m_dragStartLocalPos.x || endPos.y != m_dragStartLocalPos.y ||
-                               endPos.z != m_dragStartLocalPos.z;
-            if (moved)
-            {
-                ::World* worldPtr = m_world; // safe: SwapWorld clears the history before freeing the World
-                const ::EntityID id = m_gizmoDragEntity;
-                const XMFLOAT3 oldPos = m_dragStartLocalPos;
-                Spark::Editor::CommandHistory::GetInstance().Execute(std::make_unique<Spark::Editor::LambdaCommand>(
-                    [worldPtr, id, endPos]()
-                    {
-                        entt::registry& reg = worldPtr->GetRegistry();
-                        if (!reg.valid(id))
-                        {
-                            return;
-                        }
-                        if (::Transform* t = reg.try_get<::Transform>(id))
-                        {
-                            t->position = endPos;
-                        }
-                    },
-                    [worldPtr, id, oldPos]()
-                    {
-                        entt::registry& reg = worldPtr->GetRegistry();
-                        if (!reg.valid(id))
-                        {
-                            return;
-                        }
-                        if (::Transform* t = reg.try_get<::Transform>(id))
-                        {
-                            t->position = oldPos;
-                        }
-                    },
-                    "Move Entity"));
-            }
+            // No-op drags record nothing.
+            SceneEditTools::CommitEntityPosition(*m_world, m_gizmoDragEntity, m_dragStartLocalPos, transform->position);
             m_gizmoDragging = false;
             m_gizmoDragAxis = -1;
             m_gizmoDragEntity = entt::null;
@@ -1225,11 +1171,11 @@ namespace SparkEditor
         }
 
         constexpr int kRingSegments = 48;
-        constexpr float kRingRadiusPixels = 76.0f;
-        constexpr float kHitPixels = 7.0f;
+        const float kRingRadiusPixels = Spark::Ui::Px(76.0f);
+        const float kHitPixels = Spark::Ui::Px(7.0f);
         constexpr float kRotationSnapDegrees = 15.0f;
-        const ImU32 kAxisColors[3] = {IM_COL32(230, 80, 80, 255), IM_COL32(80, 220, 80, 255),
-                                      IM_COL32(90, 110, 255, 255)};
+        const ImU32 kAxisColors[3] = {Spark::Ui::Col(Spark::Ui::Role::AxisX), Spark::Ui::Col(Spark::Ui::Role::AxisY),
+                                      Spark::Ui::Col(Spark::Ui::Role::AxisZ)};
         const float ringRadius = kRingRadiusPixels / basis.pixelsPerMeter;
 
         ImVec2 ringPoints[3][kRingSegments + 1];
@@ -1295,11 +1241,12 @@ namespace SparkEditor
             }
             const bool active = m_gizmoDragging && m_gizmoDragAxis == axis;
             const bool hovered = !m_gizmoDragging && m_gizmoHoverAxis == axis;
-            const ImU32 color =
-                active ? IM_COL32(255, 230, 60, 255) : (hovered ? IM_COL32(255, 255, 255, 255) : kAxisColors[axis]);
-            drawList->AddPolyline(ringPoints[axis], kRingSegments + 1, color, 2.5f);
+            const ImU32 color = active ? Spark::Ui::Col(Spark::Ui::Role::WarningText)
+                                       : (hovered ? Spark::Ui::Col(Spark::Ui::Role::TextPrimary) : kAxisColors[axis]);
+            drawList->AddPolyline(ringPoints[axis], kRingSegments + 1, color, 2.5f * Spark::Ui::Scale());
         }
-        drawList->AddCircleFilled(basis.center, 3.5f, IM_COL32(255, 255, 255, 200));
+        drawList->AddCircleFilled(basis.center, 3.5f * Spark::Ui::Scale(),
+                                  Spark::Ui::Col(Spark::Ui::Role::TextPrimary, .78f));
 
         if (!m_gizmoDragging && viewportHovered && m_gizmoHoverAxis >= 0 &&
             ImGui::IsMouseClicked(ImGuiMouseButton_Left))
@@ -1390,15 +1337,15 @@ namespace SparkEditor
             return;
         }
 
-        constexpr float kAxisPixels = 70.0f;
-        constexpr float kHandlePixels = 5.0f;
-        constexpr float kHitPixels = 8.0f;
-        constexpr float kPixelsPerDoubling = 120.0f; ///< Drag distance that doubles the axis scale.
+        const float kAxisPixels = Spark::Ui::Px(70.0f);
+        const float kHandlePixels = Spark::Ui::Px(5.0f);
+        const float kHitPixels = Spark::Ui::Px(8.0f);
+        const float kPixelsPerDoubling = Spark::Ui::Px(120.0f); ///< Drag distance that doubles the axis scale.
         constexpr float kMinScale = 0.001f;
         constexpr float kScaleSnap = 0.1f;
         const XMFLOAT3 kAxisDirs[3] = {{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}};
-        const ImU32 kAxisColors[3] = {IM_COL32(230, 80, 80, 255), IM_COL32(80, 220, 80, 255),
-                                      IM_COL32(90, 110, 255, 255)};
+        const ImU32 kAxisColors[3] = {Spark::Ui::Col(Spark::Ui::Role::AxisX), Spark::Ui::Col(Spark::Ui::Role::AxisY),
+                                      Spark::Ui::Col(Spark::Ui::Role::AxisZ)};
 
         ImVec2 ends[3];
         ImVec2 screenDirs[3];
@@ -1447,14 +1394,15 @@ namespace SparkEditor
             }
             const bool active = m_gizmoDragging && m_gizmoDragAxis == i;
             const bool hovered = !m_gizmoDragging && m_gizmoHoverAxis == i;
-            const ImU32 color =
-                active ? IM_COL32(255, 230, 60, 255) : (hovered ? IM_COL32(255, 255, 255, 255) : kAxisColors[i]);
-            drawList->AddLine(basis.center, ends[i], color, 2.5f);
+            const ImU32 color = active ? Spark::Ui::Col(Spark::Ui::Role::WarningText)
+                                       : (hovered ? Spark::Ui::Col(Spark::Ui::Role::TextPrimary) : kAxisColors[i]);
+            drawList->AddLine(basis.center, ends[i], color, 2.5f * Spark::Ui::Scale());
             // Box handle marks scale (as opposed to the translate gizmo's arrowhead).
             drawList->AddRectFilled(ImVec2(ends[i].x - kHandlePixels, ends[i].y - kHandlePixels),
                                     ImVec2(ends[i].x + kHandlePixels, ends[i].y + kHandlePixels), color);
         }
-        drawList->AddCircleFilled(basis.center, 3.5f, IM_COL32(255, 255, 255, 200));
+        drawList->AddCircleFilled(basis.center, 3.5f * Spark::Ui::Scale(),
+                                  Spark::Ui::Col(Spark::Ui::Role::TextPrimary, .78f));
 
         if (!m_gizmoDragging && viewportHovered && m_gizmoHoverAxis >= 0 &&
             ImGui::IsMouseClicked(ImGuiMouseButton_Left))

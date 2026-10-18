@@ -31,11 +31,6 @@
 #include <mutex>
 #include <chrono>
 
-namespace Spark
-{
-    class LocalFileCache;
-}
-
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
 
@@ -131,7 +126,7 @@ struct MaterialTexture
     XMFLOAT2 offset = {0.0f, 0.0f};           ///< UV offset
     float intensity = 1.0f;                   ///< Texture intensity/strength
     bool enabled = false;                     ///< Whether this texture slot is active
-    std::string filePath;                     ///< Original file path for hot-reloading
+    std::string filePath;                     ///< Source path recorded by the caller that created the texture
 };
 
 /**
@@ -244,8 +239,8 @@ class Material
     void SetRenderState(const MaterialRenderState& state) { m_renderState = state; }
     void SetTexture(MaterialTextureType type, const MaterialTexture& texture);
 
-    // Texture management
-    bool LoadTexture(MaterialTextureType type, const std::string& filePath, ID3D11Device* device);
+    // Texture management. Materials never read texture files themselves: the caller creates the
+    // shader resource view through the asset pipeline and hands it over with SetTexture().
     void UnloadTexture(MaterialTextureType type);
     bool HasTexture(MaterialTextureType type) const;
 
@@ -261,24 +256,14 @@ class Material
     // Material instancing (clone with overridable properties)
     std::shared_ptr<Material> CreateInstance(const std::string& instanceName) const;
 
-    // Hot-reload: reload textures from disk and recompile pipeline state
-    bool ReloadMaterial(ID3D11Device* device);
-
     // Material variants
     void CreateVariant(const std::string& variantName, const std::vector<std::string>& defines);
     void SetActiveVariant(const std::string& variantName);
-
-    // Serialization
-    bool SaveToFile(const std::string& filePath) const;
-    bool LoadFromFile(const std::string& filePath, ID3D11Device* device);
-
-    void SetFileCache(Spark::LocalFileCache* cache) { m_fileCache = cache; }
 
     // Console integration
     std::string GetDetailedInfo() const;
     void Console_SetProperty(const std::string& property, float value);
     void Console_SetColor(const std::string& property, float r, float g, float b);
-    void Console_ReloadTextures(ID3D11Device* device);
 
     friend class MaterialSystem;
 
@@ -297,7 +282,6 @@ class Material
     ComPtr<ID3D11RasterizerState> m_rasterizerState;
     ComPtr<ID3D11Buffer> m_constantBuffer;
     bool m_compiled = false;
-    Spark::LocalFileCache* m_fileCache = nullptr;
 };
 
 /**
@@ -312,13 +296,10 @@ class MaterialSystem
     struct MaterialMetrics
     {
         int loadedMaterials;   ///< Number of loaded materials
-        int textureCount;      ///< Total number of loaded textures
-        size_t textureMemory;  ///< Texture memory usage in bytes
         int materialSwitches;  ///< Material switches per frame
         int textureBinds;      ///< Texture binds per frame
         float averageLoadTime; ///< Average material load time
         int failedLoads;       ///< Number of failed material loads
-        bool hotReloadEnabled; ///< Hot reload status
         int variantCount;      ///< Number of material variants
     };
 
@@ -344,7 +325,6 @@ class MaterialSystem
      * @param name  Non-empty unique name for the material.
      */
     std::shared_ptr<Material> CreateMaterial(const std::string& name);
-    std::shared_ptr<Material> LoadMaterial(const std::string& filePath);
     std::shared_ptr<Material> GetMaterial(const std::string& name) const;
     void UnloadMaterial(const std::string& name);
     void UnloadAllMaterials();
@@ -358,9 +338,6 @@ class MaterialSystem
 
     // Get shader permutation defines for a material
     std::vector<std::string> GetShaderPermutation(const std::string& name) const;
-
-    // Reload a material from disk (textures + recompile pipeline state)
-    bool ReloadMaterial(const std::string& name);
 
     // Get material system metrics
     MaterialMetrics GetMetrics() const;
@@ -394,16 +371,8 @@ class MaterialSystem
     Spark::Graphics::PersistentMaterialCBManager& GetPersistentMaterialCB() { return m_persistentCB; }
     const Spark::Graphics::PersistentMaterialCBManager& GetPersistentMaterialCB() const { return m_persistentCB; }
 
-    // Texture management
-    ComPtr<ID3D11ShaderResourceView> LoadTexture(const std::string& filePath);
-    void UnloadTexture(const std::string& filePath);
+    // Sampler cache
     ComPtr<ID3D11SamplerState> GetSampler(const TextureSampling& sampling);
-
-    // Hot reloading
-    void EnableHotReload(bool enabled) { m_hotReloadEnabled = enabled; }
-    void EnableHotReloading(bool enabled);
-    void UpdateHotReload();
-    int ReloadAllMaterials();
 
     // Frame management
     void BeginFrame();
@@ -429,16 +398,6 @@ class MaterialSystem
     std::string Console_GetMaterialInfo(const std::string& materialName) const;
 
     /**
-     * @brief Reload specific material
-     */
-    bool Console_ReloadMaterial(const std::string& materialName);
-
-    /**
-     * @brief Reload all materials
-     */
-    int Console_ReloadAllMaterials();
-
-    /**
      * @brief Create material variant
      */
     bool Console_CreateVariant(const std::string& materialName, const std::string& variantName,
@@ -454,11 +413,6 @@ class MaterialSystem
      */
     void Console_SetMaterialColor(const std::string& materialName, const std::string& property, float r, float g,
                                   float b);
-
-    /**
-     * @brief Enable/disable hot reload
-     */
-    void Console_SetHotReload(bool enabled);
 
     /**
      * @brief Clear material cache
@@ -491,25 +445,9 @@ class MaterialSystem
     std::string Console_DumpMaterialDetails(const std::string& materialName) const;
 
     /**
-     * @brief Export material to file
-     */
-    bool Console_ExportMaterial(const std::string& materialName, const std::string& filePath);
-
-    /**
-     * @brief Import material from file
-     */
-    bool Console_ImportMaterial(const std::string& filePath);
-
-    /**
      * @brief List all available texture types
      */
     std::string Console_ListTextureTypes() const;
-
-    /**
-     * @brief Load texture to specific material slot
-     */
-    bool Console_LoadTextureToSlot(const std::string& materialName, const std::string& textureType,
-                                   const std::string& texturePath);
 
     /**
      * @brief Unload texture from material slot
@@ -531,18 +469,11 @@ class MaterialSystem
     std::unordered_map<std::string, std::shared_ptr<Material>, Spark::TransparentStringHash,
                        Spark::TransparentStringEqual>
         m_materials;
-    std::unordered_map<std::string, ComPtr<ID3D11ShaderResourceView>, Spark::TransparentStringHash,
-                       Spark::TransparentStringEqual>
-        m_textureCache;
     std::unordered_map<size_t, ComPtr<ID3D11SamplerState>> m_samplerCache;
 
     // Default materials
     std::shared_ptr<Material> m_defaultMaterial;
     std::shared_ptr<Material> m_errorMaterial;
-
-    // Hot reloading
-    bool m_hotReloadEnabled;
-    std::unordered_map<std::string, uint64_t> m_fileTimestamps;
 
     // Performance tracking
     mutable std::mutex m_metricsMutex;
@@ -560,8 +491,6 @@ class MaterialSystem
     HRESULT CreateDefaultMaterials();
     HRESULT CreateSampler(const TextureSampling& sampling, ID3D11SamplerState** sampler);
     size_t HashSampling(const TextureSampling& sampling) const;
-    uint64_t GetFileTimestamp(const std::string& filePath) const;
-    ComPtr<ID3D11ShaderResourceView> LoadTextureFromFile(const std::string& filePath);
     void UpdateMetrics();
     void PerformPeriodicMaintenance();
     std::string TextureTypeToString(MaterialTextureType type) const;

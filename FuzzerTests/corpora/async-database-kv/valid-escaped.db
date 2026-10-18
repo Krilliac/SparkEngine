@@ -1,0 +1,4 @@
+#!spark-kv-v2
+character_1	Alice|1|7|120|3|1.5|0|2.25|0|100|100|50|50|12.5|40
+guild_3	1|Night Watch|NW|1|250|50|line one\nline two\ttabbed
+path	C:\\temp\\saves

@@ -237,9 +237,28 @@ XML
     plain-sanitizer-prose)
         write_clean "ThreadSanitizer instrumentation enabled"
         ;;
+    prose-aborted)
+        # Lower-case "aborted:" matches the verifier's case-insensitive \bAborted\b;
+        # the runner witness must agree rather than turn prose into a verification failure.
+        write_clean "Hot-reload aborted: recompilation failed"
+        ;;
     report-signature)
         write_clean
         printf 'ERROR: AddressSanitizer: report-only heap-buffer-overflow\n' >> "$report"
+        ;;
+    partial-report)
+        write_clean
+        "$TEST_PYTHON" - "$report" <<'PY'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+lines = path.read_text(encoding="utf-8").splitlines()
+path.write_text(
+    "\n".join(line for line in lines if not line.startswith("Assertions:")) + "\n",
+    encoding="utf-8",
+)
+PY
         ;;
     duplicate-seed)
         write_clean "Shuffle seed: 999"
@@ -878,6 +897,11 @@ expect_contains "$CASE_DIR/metadata.json" '"classification": "incomplete-run"' \
     "a suite that died mid-run is not reported as a completed sanitizer finding"
 run_case plain-sanitizer-prose
 expect_status 0 "$CASE_STATUS" "plain sanitizer prose is not a finding"
+run_case prose-aborted
+[[ "$CASE_STATUS" -ne 70 ]] && pass "prose-aborted is not a verification failure" \
+    || fail "prose-aborted is not a verification failure (runner and verifier crash scanners disagree)"
+expect_contains "$CASE_DIR/metadata.json" '"crash": true' "prose-aborted crash text is recorded"
+expect_contains "$CASE_DIR/metadata.json" '"crash": 0' "prose-aborted crash scanner agrees with the verifier"
 run_case runtime
 expect_status 1 "$CASE_STATUS" "parseable private ASan runtime log overrides exit zero"
 expect_contains "$CASE_DIR/metadata.json" '"runtimeEvidence": true' "runtime evidence recorded"
@@ -933,6 +957,10 @@ expect_status 70 "$CASE_STATUS" "terminal Results arithmetic cannot spoof JUnit 
 run_case report-signature
 expect_status 1 "$CASE_STATUS" "report-only sanitizer signature fails the lane"
 expect_contains "$CASE_DIR/metadata.json" '"classification": "sanitizer-finding"' "console and report are scanned as a union"
+run_case partial-report
+expect_status 70 "$CASE_STATUS" "partial report without assertion summary fails the lane"
+expect_contains "$CASE_DIR/metadata.json" "report: expected exactly one Assertions summary marker" \
+    "partial report rejection identifies the missing assertion summary"
 run_case arbitrary-entry
 expect_status 70 "$CASE_STATUS" "arbitrary evidence-directory entries are rejected"
 run_case late-entry
@@ -1299,14 +1327,16 @@ done
 [[ "$(grep -Fc 'bash .github/scripts/run-sanitizer-tests.sh' "$WORKFLOW")" -eq 3 ]] && \
     pass "exactly three sanitizer runner invocations" || fail "sanitizer runner invocation count"
 grep -Fq -- '--warn-is-error --shuffle 123' "$WORKFLOW" && pass "workflow hardens flaky warnings and shuffle seed" || fail "workflow warn/shuffle contract"
-for sanitizer in asan tsan; do
+# TSan needs ~2,400-2,700 s on the 4-vCPU hosted runner (owner decision 2026-10-01).
+for bounds in asan:90:1800 tsan:120:3000; do
+    IFS=: read -r sanitizer minutes seconds <<< "$bounds"
     section="$(awk -v job="build-linux-${sanitizer}" '
         $0 == "  " job ":" { found = 1 }
         found && $0 ~ /^  [A-Za-z0-9_-]+:$/ && $0 != "  " job ":" { exit }
         found { print }
     ' "$WORKFLOW")"
-    [[ "$section" == *"timeout-minutes: 90"* && "$section" == *"--timeout-seconds 900"* ]] && \
-        pass "${sanitizer} uses the required 90-minute/900-second bounds" || \
+    [[ "$section" == *"timeout-minutes: ${minutes}"* && "$section" == *"--timeout-seconds ${seconds}"* ]] && \
+        pass "${sanitizer} uses the required ${minutes}-minute/${seconds}-second bounds" || \
         fail "${sanitizer} timeout policy"
 done
 msan_section="$(awk '

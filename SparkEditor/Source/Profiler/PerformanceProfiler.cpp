@@ -6,6 +6,9 @@
  */
 
 #include "../Profiler/PerformanceProfiler.h"
+#include "../Core/EditorIcons.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 #include <imgui.h>
@@ -140,28 +143,30 @@ namespace SparkEditor
         if (BeginPanel())
         {
             // Toolbar
-            if (m_isProfiling)
+            if (Spark::Ui::BeginPanelToolbar("ProfilerToolbar"))
             {
-                if (ImGui::Button("Stop Profiling"))
+                if (m_isProfiling)
                 {
-                    StopProfiling();
+                    if (Spark::Ui::SecondaryButton(ICON_FA_STOP " Stop Profiling"))
+                    {
+                        StopProfiling();
+                    }
                 }
-            }
-            else
-            {
-                if (ImGui::Button("Start Profiling"))
+                else
                 {
-                    StartProfiling();
+                    if (Spark::Ui::PrimaryButton(ICON_FA_PLAY " Start Profiling"))
+                    {
+                        StartProfiling();
+                    }
                 }
-            }
 
-            ImGui::SameLine();
-            if (ImGui::Button("Clear Data"))
-            {
-                ClearProfilingData();
+                ImGui::SameLine();
+                if (Spark::Ui::SecondaryButton(ICON_FA_TRASH " Clear Data"))
+                {
+                    ClearProfilingData();
+                }
+                Spark::Ui::EndPanelToolbar();
             }
-
-            ImGui::Separator();
 
             // Tab bar for different views
             if (ImGui::BeginTabBar("ProfilerTabs"))
@@ -792,35 +797,53 @@ namespace SparkEditor
 
     void PerformanceProfiler::RenderOverviewPanel()
     {
-        ImGui::Text("Performance Overview");
-        ImGui::Separator();
+        Spark::Ui::SubHeader("Performance Overview");
 
         if (m_currentFrame && m_hasFrameSample)
         {
-            ImGui::Text("Frame: %d", m_currentFrame->frameNumber);
-            ImGui::Text("Frame Time: %.2f ms", m_currentFrame->frameTime);
-            ImGui::Text("FPS: %.1f", m_currentFrame->fps);
-            ImGui::Text("Average: %.2f ms (%.1f FPS)", m_avgFrameTime, m_avgFps);
-            ImGui::Text("Min/Max: %.2f ms / %.2f ms", m_minFrameTime, m_maxFrameTime);
-            ImGui::Text("p50/p95/p99: %.2f / %.2f / %.2f ms", m_p50FrameTime, m_p95FrameTime, m_p99FrameTime);
-            ImGui::Separator();
-            ImGui::Text("CPU/GPU: %.2f ms / %.2f ms", m_currentFrame->cpuTime, m_currentFrame->gpuTime);
-            ImGui::Text("Draw Calls: %d", m_currentFrame->drawCalls);
-            ImGui::TextDisabled("CPU/GPU time and draw calls are only populated by an imported capture.");
-            ImGui::Text("GPU Backend: %s", m_currentFrame->gpuProfilerBackend.c_str());
-            ImGui::TextWrapped("%s", m_currentFrame->gpuProfilerStatus.c_str());
+            if (Spark::Ui::BeginPropertyGrid("ProfilerFrameStats"))
+            {
+                Spark::Ui::PropertyLabel("Frame");
+                Spark::Ui::MonoText("%d", m_currentFrame->frameNumber);
+                Spark::Ui::PropertyLabel("Frame Time");
+                Spark::Ui::MonoText("%.2f ms", m_currentFrame->frameTime);
+                Spark::Ui::PropertyLabel("FPS");
+                Spark::Ui::MonoText("%.1f", m_currentFrame->fps);
+                Spark::Ui::PropertyLabel("Average");
+                Spark::Ui::MonoText("%.2f ms (%.1f FPS)", m_avgFrameTime, m_avgFps);
+                Spark::Ui::PropertyLabel("Min/Max");
+                Spark::Ui::MonoText("%.2f ms / %.2f ms", m_minFrameTime, m_maxFrameTime);
+                Spark::Ui::PropertyLabel("p50/p95/p99");
+                Spark::Ui::MonoText("%.2f / %.2f / %.2f ms", m_p50FrameTime, m_p95FrameTime, m_p99FrameTime);
+                Spark::Ui::EndPropertyGrid();
+            }
+
+            Spark::Ui::SubHeader("Capture");
+            if (Spark::Ui::BeginPropertyGrid("ProfilerCaptureStats"))
+            {
+                Spark::Ui::PropertyLabel("CPU/GPU");
+                Spark::Ui::MonoText("%.2f ms / %.2f ms", m_currentFrame->cpuTime, m_currentFrame->gpuTime);
+                Spark::Ui::PropertyLabel("Draw Calls");
+                Spark::Ui::MonoText("%d", m_currentFrame->drawCalls);
+                Spark::Ui::PropertyLabel("GPU Backend");
+                ImGui::TextUnformatted(m_currentFrame->gpuProfilerBackend.c_str());
+                Spark::Ui::EndPropertyGrid();
+            }
+            ImGui::PushTextWrapPos(0.0f);
+            Spark::Ui::SecondaryText("CPU/GPU time and draw calls are only populated by an imported capture.");
+            Spark::Ui::SecondaryText("%s", m_currentFrame->gpuProfilerStatus.c_str());
+            ImGui::PopTextWrapPos();
         }
         else
         {
-            ImGui::Text("No profiling data available");
-            ImGui::TextWrapped("The profiler has not received a frame with a non-zero delta yet.");
+            Spark::Ui::EmptyState(ICON_FA_TACHOMETER_ALT, "No profiling data available",
+                                  "The profiler has not received a frame with a non-zero delta yet.");
         }
     }
 
     void PerformanceProfiler::RenderCPUProfilerPanel()
     {
-        ImGui::Text("CPU Profiler");
-        ImGui::Separator();
+        Spark::Ui::SubHeader("CPU Profiler");
 
         if (m_currentFrame && !m_currentFrame->cpuSamples.empty())
         {
@@ -831,22 +854,23 @@ namespace SparkEditor
         }
         else
         {
-            ImGui::Text("No CPU samples available");
+            Spark::Ui::EmptyState(ICON_FA_CHART_BAR, "No CPU samples available");
         }
     }
 
     void PerformanceProfiler::RenderGPUProfilerPanel()
     {
-        ImGui::Text("GPU Profiler");
-        ImGui::Separator();
-        ImGui::Text("Backend: %s", m_gpuBackendName.c_str());
-        ImGui::TextWrapped("%s", m_gpuSupportStatus.c_str());
-        if (ImGui::Button("Trigger GPU Capture"))
+        Spark::Ui::SubHeader("GPU Profiler");
+        Spark::Ui::KeyValue("Backend:", "%s", m_gpuBackendName.c_str());
+        ImGui::PushTextWrapPos(0.0f);
+        Spark::Ui::SecondaryText("%s", m_gpuSupportStatus.c_str());
+        ImGui::PopTextWrapPos();
+        if (Spark::Ui::SecondaryButton(ICON_FA_CAMERA " Trigger GPU Capture"))
         {
             TriggerExternalGPUCapture();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Refresh Capture Support"))
+        if (Spark::Ui::SecondaryButton(ICON_FA_SYNC_ALT " Refresh Capture Support"))
         {
             RefreshCaptureAvailability();
         }
@@ -855,44 +879,69 @@ namespace SparkEditor
 
         if (m_currentFrame && !m_currentFrame->gpuSamples.empty())
         {
-            ImGui::Text("GPU Time: %.2f ms", m_currentFrame->gpuTime);
-            ImGui::Text("CPU Time: %.2f ms", m_currentFrame->cpuTime);
-            ImGui::Text("Frame Time: %.2f ms", m_currentFrame->frameTime);
-            ImGui::Separator();
+            if (Spark::Ui::BeginPropertyGrid("ProfilerGpuTimes"))
+            {
+                Spark::Ui::PropertyLabel("GPU Time");
+                Spark::Ui::MonoText("%.2f ms", m_currentFrame->gpuTime);
+                Spark::Ui::PropertyLabel("CPU Time");
+                Spark::Ui::MonoText("%.2f ms", m_currentFrame->cpuTime);
+                Spark::Ui::PropertyLabel("Frame Time");
+                Spark::Ui::MonoText("%.2f ms", m_currentFrame->frameTime);
+                Spark::Ui::EndPropertyGrid();
+            }
 
             if (m_currentFrame->gpuPipelineStatsSupported)
             {
-                ImGui::Text("Pipeline Statistics");
-                ImGui::BulletText("IA Vertices: %llu",
-                                  static_cast<unsigned long long>(m_currentFrame->pipelineIAVertices));
-                ImGui::BulletText("IA Primitives: %llu",
-                                  static_cast<unsigned long long>(m_currentFrame->pipelineIAPrimitives));
-                ImGui::BulletText("VS Invocations: %llu",
-                                  static_cast<unsigned long long>(m_currentFrame->pipelineVSInvocations));
-                ImGui::BulletText("PS Invocations: %llu",
-                                  static_cast<unsigned long long>(m_currentFrame->pipelinePSInvocations));
-                ImGui::BulletText("CS Invocations: %llu",
-                                  static_cast<unsigned long long>(m_currentFrame->pipelineCSInvocations));
-                ImGui::Separator();
+                Spark::Ui::SubHeader("Pipeline Statistics");
+                if (Spark::Ui::BeginPropertyGrid("ProfilerPipelineStats"))
+                {
+                    Spark::Ui::PropertyLabel("IA Vertices");
+                    Spark::Ui::MonoText("%llu", static_cast<unsigned long long>(m_currentFrame->pipelineIAVertices));
+                    Spark::Ui::PropertyLabel("IA Primitives");
+                    Spark::Ui::MonoText("%llu", static_cast<unsigned long long>(m_currentFrame->pipelineIAPrimitives));
+                    Spark::Ui::PropertyLabel("VS Invocations");
+                    Spark::Ui::MonoText("%llu", static_cast<unsigned long long>(m_currentFrame->pipelineVSInvocations));
+                    Spark::Ui::PropertyLabel("PS Invocations");
+                    Spark::Ui::MonoText("%llu", static_cast<unsigned long long>(m_currentFrame->pipelinePSInvocations));
+                    Spark::Ui::PropertyLabel("CS Invocations");
+                    Spark::Ui::MonoText("%llu", static_cast<unsigned long long>(m_currentFrame->pipelineCSInvocations));
+                    Spark::Ui::EndPropertyGrid();
+                }
             }
 
-            ImGui::Text("GPU Timeline (per pass)");
-            for (const auto& sample : m_currentFrame->gpuSamples)
+            Spark::Ui::SubHeader("GPU Timeline (per pass)");
+            if (Spark::Ui::BeginDataTable("GpuTimeline", 3))
             {
-                std::string indent(sample.depth * 2, ' ');
-                ImGui::Text("%s%s: %.2f ms (%d draw calls)", indent.c_str(), sample.name.c_str(), sample.duration,
-                            sample.drawCalls);
+                ImGui::TableSetupScrollFreeze(0, 1);
+                ImGui::TableSetupColumn("Pass");
+                ImGui::TableSetupColumn("Time (ms)");
+                ImGui::TableSetupColumn("Draw Calls");
+                ImGui::TableHeadersRow();
+                for (const auto& sample : m_currentFrame->gpuSamples)
+                {
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn();
+                    // Nested passes are indented by depth so the timeline still reads as a hierarchy.
+                    const std::string label = std::string(sample.depth * 2, ' ') + sample.name;
+                    ImGui::TextUnformatted(label.c_str());
+                    ImGui::TableNextColumn();
+                    Spark::Ui::TableNumber("%.2f", sample.duration);
+                    ImGui::TableNextColumn();
+                    Spark::Ui::TableNumber("%d", sample.drawCalls);
+                }
+                ImGui::EndTable();
             }
         }
         else
         {
             if (m_timestampSupported)
             {
-                ImGui::Text("No GPU samples available");
+                Spark::Ui::EmptyState(ICON_FA_CHART_BAR, "No GPU samples available");
             }
             else
             {
-                ImGui::TextWrapped("GPU timestamp timeline is unavailable on this backend/build.");
+                Spark::Ui::UnavailableFeature("GPU timestamp timeline",
+                                              "Timestamps are not supported on this backend/build.");
             }
         }
     }
@@ -1002,29 +1051,44 @@ namespace SparkEditor
 
     void PerformanceProfiler::RenderMemoryProfilerPanel()
     {
-        ImGui::Text("Memory Profiler");
-        ImGui::Separator();
+        Spark::Ui::SubHeader("Memory Profiler");
 
         std::lock_guard<std::mutex> lock(m_memoryMutex);
-        for (const auto& [category, sample] : m_memoryCategories)
-        {
-            float mb = static_cast<float>(sample.allocatedBytes) / (1024.0f * 1024.0f);
-            ImGui::Text("%s: %.2f MB (%d allocs)", category.c_str(), mb, sample.allocationCount);
-        }
-
         if (m_memoryCategories.empty())
         {
-            ImGui::Text("No memory data available");
+            Spark::Ui::EmptyState(ICON_FA_MEMORY, "No memory data available");
+            return;
+        }
+
+        if (Spark::Ui::BeginDataTable("MemoryCategories", 3))
+        {
+            ImGui::TableSetupScrollFreeze(0, 1);
+            ImGui::TableSetupColumn("Category");
+            ImGui::TableSetupColumn("Allocated (MB)");
+            ImGui::TableSetupColumn("Allocations");
+            ImGui::TableHeadersRow();
+            for (const auto& [category, sample] : m_memoryCategories)
+            {
+                float mb = static_cast<float>(sample.allocatedBytes) / (1024.0f * 1024.0f);
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(category.c_str());
+                ImGui::TableNextColumn();
+                Spark::Ui::TableNumber("%.2f", mb);
+                ImGui::TableNextColumn();
+                Spark::Ui::TableNumber("%d", sample.allocationCount);
+            }
+            ImGui::EndTable();
         }
     }
 
     void PerformanceProfiler::RenderPerformanceCountersPanel()
     {
-        ImGui::Text("Performance Counters");
-        ImGui::Separator();
+        Spark::Ui::SubHeader("Performance Counters");
 
-        if (ImGui::BeginTable("CountersTable", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
+        if (Spark::Ui::BeginDataTable("CountersTable", 5))
         {
+            ImGui::TableSetupScrollFreeze(0, 1);
             ImGui::TableSetupColumn("Name");
             ImGui::TableSetupColumn("Current");
             ImGui::TableSetupColumn("Average");
@@ -1038,15 +1102,15 @@ namespace SparkEditor
                     continue;
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
-                ImGui::Text("%s", counter.name.c_str());
+                ImGui::TextUnformatted(counter.name.c_str());
                 ImGui::TableSetColumnIndex(1);
-                ImGui::Text("%.2f", counter.currentValue);
+                Spark::Ui::TableNumber("%.2f", counter.currentValue);
                 ImGui::TableSetColumnIndex(2);
-                ImGui::Text("%.2f", counter.averageValue);
+                Spark::Ui::TableNumber("%.2f", counter.averageValue);
                 ImGui::TableSetColumnIndex(3);
-                ImGui::Text("%.2f / %.2f", counter.minValue, counter.maxValue);
+                Spark::Ui::TableNumber("%.2f / %.2f", counter.minValue, counter.maxValue);
                 ImGui::TableSetColumnIndex(4);
-                ImGui::Text("%s", counter.unit.c_str());
+                Spark::Ui::SecondaryText("%s", counter.unit.c_str());
             }
 
             ImGui::EndTable();
@@ -1055,26 +1119,44 @@ namespace SparkEditor
 
     void PerformanceProfiler::RenderOptimizationPanel()
     {
-        ImGui::Text("Optimization Suggestions");
-        ImGui::Separator();
+        Spark::Ui::SubHeader("Optimization Suggestions");
 
         if (m_optimizationSuggestions.empty())
         {
-            ImGui::Text("No optimization suggestions");
+            Spark::Ui::EmptyState(ICON_FA_CHECK_CIRCLE, "No optimization suggestions");
             return;
         }
 
         for (int i = 0; i < static_cast<int>(m_optimizationSuggestions.size()); ++i)
         {
             const auto& suggestion = m_optimizationSuggestions[i];
-            ImGui::Text("[%s] %s",
-                        suggestion.priority == OptimizationSuggestion::CRITICAL ? "CRITICAL"
-                        : suggestion.priority == OptimizationSuggestion::HIGH   ? "HIGH"
-                        : suggestion.priority == OptimizationSuggestion::MEDIUM ? "MEDIUM"
-                                                                                : "LOW",
-                        suggestion.title.c_str());
-            ImGui::Text("  %s", suggestion.description.c_str());
-            if (suggestion.isAutomatable && ImGui::Button(("Apply##" + std::to_string(i)).c_str()))
+            // Priority is spelled out in the text; the status glyph and colour reinforce it.
+            const char* priority = "LOW";
+            Spark::Ui::Status status = Spark::Ui::Status::Neutral;
+            switch (suggestion.priority)
+            {
+            case OptimizationSuggestion::CRITICAL:
+                priority = "CRITICAL";
+                status = Spark::Ui::Status::Error;
+                break;
+            case OptimizationSuggestion::HIGH:
+                priority = "HIGH";
+                status = Spark::Ui::Status::Warning;
+                break;
+            case OptimizationSuggestion::MEDIUM:
+                priority = "MEDIUM";
+                status = Spark::Ui::Status::Info;
+                break;
+            default:
+                break;
+            }
+            Spark::Ui::StatusText(status, "[%s] %s", priority, suggestion.title.c_str());
+            ImGui::Indent();
+            ImGui::PushTextWrapPos(0.0f);
+            Spark::Ui::SecondaryText("%s", suggestion.description.c_str());
+            ImGui::PopTextWrapPos();
+            ImGui::Unindent();
+            if (suggestion.isAutomatable && Spark::Ui::SecondaryButton(("Apply##" + std::to_string(i)).c_str()))
             {
                 ApplyOptimization(i);
             }
@@ -1084,8 +1166,7 @@ namespace SparkEditor
 
     void PerformanceProfiler::RenderConfigurationPanel()
     {
-        ImGui::Text("Profiler Configuration");
-        ImGui::Separator();
+        Spark::Ui::SubHeader("Profiler Configuration");
 
         ImGui::Checkbox("CPU Profiling", &m_config.enableCPUProfiling);
         ImGui::Checkbox("GPU Profiling", &m_config.enableGPUProfiling);
@@ -1583,9 +1664,10 @@ namespace SparkEditor
         if (!sample)
             return;
 
+        // Monospace keeps the depth indent and the timings column-aligned.
         std::string indent(depth * 2, ' ');
-        ImGui::Text("%s%s: %.3f ms (self: %.3f ms)", indent.c_str(), sample->name.c_str(), sample->GetTotalTime(),
-                    sample->GetSelfTime());
+        Spark::Ui::MonoText("%s%s: %.3f ms (self: %.3f ms)", indent.c_str(), sample->name.c_str(),
+                            sample->GetTotalTime(), sample->GetSelfTime());
 
         for (const auto& child : sample->children)
         {

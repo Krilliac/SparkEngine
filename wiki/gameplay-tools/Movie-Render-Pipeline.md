@@ -1,16 +1,16 @@
 # Movie Render Pipeline
 
-Offline cinematic rendering pipeline for high-quality frame output with deterministic time stepping and temporal accumulation.
+Prototype job-state API for offline cinematic rendering. It does not currently produce image frames.
 
 **Source:** `SparkEngine/Source/Engine/Rendering/MovieRenderPipeline.h`
 
 ## Overview
 
-The Movie Render Pipeline renders cinematic sequences offline at arbitrary resolution and quality settings. Unlike real-time rendering, it steps the simulation deterministically at a fixed timestep, accumulates multiple sub-frames for anti-aliasing and motion blur, and writes each completed frame to disk.
+`MovieRenderPipeline` tracks render-job settings, warm-up and sub-frame counters, progress, and callbacks. Its `CaptureFrame()` currently constructs a planned filename and adds it to `outputFiles`; it does not read pixels, accumulate sub-frames, or write a file. A completed job therefore does **not** mean that images were rendered. Do not use this API as a production frame-output workflow.
 
-The pipeline supports quality presets ranging from fast Preview (1x AA, no motion blur) to Cinematic (32x AA, 16 motion blur sub-frames). A `DeterministicTimeController` overrides the engine's delta time during rendering to ensure frame-perfect reproducibility. Optional warm-up frames allow particle systems, physics, and other time-dependent effects to settle before recording begins.
+Quality presets configure counters from Preview (1x AA, no motion blur) to Cinematic (32x AA, 16 motion blur sub-frames). `DeterministicTimeController` advances an internal fixed-time clock; it does not drive the engine world or rendering loop. Warm-up frames likewise advance only that internal state.
 
-Output formats include PNG (8-bit RGBA), EXR (32-bit HDR), and TGA (uncompressed). Console variable overrides let you force maximum quality settings during the render without changing the game's runtime configuration.
+Settings expose PNG, EXR, and TGA choices and console-variable override values, but no encoder or override application is wired into this prototype. The engine does not initialize, update, or shut down this optional API automatically; an explicit caller owns its lifecycle.
 
 ## Architecture
 
@@ -19,8 +19,8 @@ MovieRenderPipeline (singleton)
   +-- MovieRenderJob (active job state)
   |     +-- MovieRenderSettings (resolution, frame range, quality)
   |     +-- progress, timing, output file list
-  +-- DeterministicTimeController (fixed dt override)
-  +-- accumulation buffer (sub-frame blending)
+  +-- DeterministicTimeController (internal fixed-time counter)
+  +-- accumulation buffer placeholder (no pixel blending)
   +-- callbacks (per-frame, completion)
   +-- completed jobs history
 ```
@@ -28,12 +28,12 @@ MovieRenderPipeline (singleton)
 ### Render Loop
 
 ```
-StartRender() --> [WarmUp frames] --> [Render frames]
+StartRender() --> [Warm-up counts] --> [Job-frame counts]
                                         |
                   For each frame:       |
                     For each sub-frame: |
                       Step(fixedDt)     |
-                    CaptureFrame()      |
+                    Record planned path |
                   --> Complete/Finalize
 ```
 
@@ -41,12 +41,14 @@ StartRender() --> [WarmUp frames] --> [Render frames]
 
 | Class | Description |
 |-------|-------------|
-| `MovieRenderPipeline` | Singleton managing offline render jobs |
-| `MovieRenderSettings` | Configuration for a render job (resolution, quality, frame range) |
-| `MovieRenderJob` | Active or completed job with state, progress, and output files |
-| `DeterministicTimeController` | Overrides engine time with fixed delta for reproducible simulation |
+| `MovieRenderPipeline` | Singleton tracking prototype job state; no pixel output |
+| `MovieRenderSettings` | Stored job settings (resolution, quality, frame range) |
+| `MovieRenderJob` | Job state, progress, and planned output paths |
+| `DeterministicTimeController` | Advances an internal fixed-time counter |
 
-## Usage
+## Explicit API use (state tracking only)
+
+This example advances prototype job state, not the scene simulation or a real renderer. It will not create image files.
 
 ```cpp
 auto& pipeline = Spark::Rendering::MovieRenderPipeline::GetInstance();
@@ -64,7 +66,7 @@ settings.warmUpFrames = 30;
 settings.outputDirectory = "Renders/Scene01";
 
 pipeline.SetFrameCapturedCallback([](int32_t frame, const std::string& path) {
-    // Per-frame notification
+    // Planned path only; no file has been written
 });
 
 pipeline.StartRender(std::move(settings));
@@ -72,6 +74,7 @@ pipeline.StartRender(std::move(settings));
 // In the main loop:
 pipeline.Update(deltaTime);  // Uses fixed dt internally
 float progress = pipeline.GetProgress();  // 0.0 to 1.0
+pipeline.Shutdown();
 ```
 
 ## API Reference
@@ -81,33 +84,35 @@ float progress = pipeline.GetProgress();  // 0.0 to 1.0
 | Method | Description |
 |--------|-------------|
 | `Initialize() / Shutdown()` | Lifecycle management |
-| `StartRender(settings)` | Begin an offline render job |
+| `StartRender(settings)` | Begin a prototype job-state sequence |
 | `CancelRender()` | Cancel the active render |
-| `Update(float dt)` | Per-frame update (call every frame) |
-| `IsRendering()` | True if a render is in progress |
+| `Update(float dt)` | Advance internal job counters (explicit caller must invoke it) |
+| `IsRendering()` | True while the internal job sequence is active |
 | `GetProgress()` | Current progress [0, 1] |
 | `GetCurrentJob()` | Access the active job state |
-| `GetCompletedJobs()` | History of completed jobs |
-| `SetFrameCapturedCallback()` | Callback per captured frame |
+| `GetCompletedJobs()` | History of completed state sequences, not verified image files |
+| `SetFrameCapturedCallback()` | Callback per planned output path; no pixels are captured |
 | `SetRenderCompleteCallback()` | Callback on job completion |
 
 ### MovieRenderSettings
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `width / height` | 1920x1080 | Output resolution |
+| `width / height` | 1920x1080 | Intended output resolution; not applied to a renderer |
 | `frameRate` | 30.0 | Target FPS |
 | `startFrame / endFrame` | 0 / 300 | Frame range (inclusive) |
-| `qualityPreset` | Standard | Preview, Standard, High, Cinematic, Custom |
-| `outputFormat` | PNG | PNG, EXR, TGA |
-| `aaSamples` | 1 | Temporal AA samples (1, 4, 8, 16, 32) |
-| `motionBlurSubFrames` | 1 | Motion blur sub-frames (1-16) |
-| `warmUpFrames` | 0 | Simulation warm-up before recording |
-| `cvarOverrides` | empty | CVar key-value pairs to override during render |
+| `qualityPreset` | Standard | Preset for internal sub-frame counts |
+| `outputFormat` | PNG | Intended format choice; not encoded |
+| `aaSamples` | 1 | Internal sub-frame count; no temporal AA applied |
+| `motionBlurSubFrames` | 1 | Internal sub-frame count; no motion blur applied |
+| `warmUpFrames` | 0 | Internal warm-up step count; no scene simulation |
+| `cvarOverrides` | empty | Stored CVar pairs; no overrides applied |
 
 ## Configuration
 
 ### Quality Presets
+
+These values control the number of internal job-state steps only; they do not produce anti-aliasing or motion blur.
 
 | Preset | AA Samples | Motion Blur Sub-frames |
 |--------|-----------|----------------------|
@@ -120,5 +125,4 @@ float progress = pipeline.GetProgress();  // 0.0 to 1.0
 ## Related Systems
 
 - [Cinematic System](Cinematic-Sequencer.md) -- Sequencer for driving camera and actors
-- [Graphics Engine](../subsystems/Rendering-and-Graphics.md) -- RHI and rendering pipeline
-- [Screen Capture](Movie-Render-Pipeline.md) -- Pixel readback for frame output
+- [Rendering and Graphics](../subsystems/Rendering-and-Graphics.md) -- the engine's actual rendering path

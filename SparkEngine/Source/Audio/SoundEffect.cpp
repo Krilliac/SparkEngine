@@ -6,10 +6,14 @@
 #include "../Utils/Validate.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <random>
+#include <utility>
+#include <vector>
 
 //------------------------------------------------------------------------------
 //  SoundEffect implementation
@@ -105,8 +109,93 @@ float SoundEffect::GetDuration() const
 // ---------------------------------------------------------------------------
 //  Private helpers
 // ---------------------------------------------------------------------------
+namespace
+{
+    // XAudio2's accepted source-voice sample-rate range (XAUDIO2_MIN/MAX_SAMPLE_RATE).
+    constexpr DWORD kMinWavSampleRate = 1000;
+    constexpr DWORD kMaxWavSampleRate = 200000;
+    // 7.1 is the widest layout the engine's voices and mixer are built for.
+    constexpr WORD kMaxWavChannels = 8;
+    // WAVEFORMAT (tag, channels, rate, byte rate, block align) + wBitsPerSample.
+    constexpr DWORD kMinFmtChunkBytes = 16;
+
+    /**
+     * @brief Check a file-supplied fmt chunk before it reaches XAudio2.
+     *
+     * The loader stores a bare 18-byte WAVEFORMATEX, and XAudio2 reads
+     * 18 + cbSize bytes interpreted by wFormatTag. Only the plain PCM and
+     * IEEE-float layouts fit that storage, so every other tag (EXTENSIBLE,
+     * ADPCM, ...) is rejected and the caller forces cbSize to 0. The derived
+     * fields must agree with each other so no consumer (XAudio2, GetDuration,
+     * buffer submission) sees a block size that does not divide the data.
+     */
+    bool IsSupportedWavFormat(const WAVEFORMATEX& format, DWORD fmtChunkSize, DWORD dataSize)
+    {
+        if (fmtChunkSize < kMinFmtChunkBytes)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Audio, "SoundEffect: WAV 'fmt ' chunk too small (%lu bytes)",
+                            static_cast<unsigned long>(fmtChunkSize));
+            return false;
+        }
+
+        const bool isPcm = format.wFormatTag == WAVE_FORMAT_PCM;
+        const bool isFloat = format.wFormatTag == WAVE_FORMAT_IEEE_FLOAT;
+        if (!isPcm && !isFloat)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Audio,
+                            "SoundEffect: unsupported WAV format tag 0x%04X (only PCM and IEEE float are accepted)",
+                            static_cast<unsigned>(format.wFormatTag));
+            return false;
+        }
+
+        const WORD bits = format.wBitsPerSample;
+        const bool bitsOk = isPcm ? (bits == 8 || bits == 16 || bits == 24 || bits == 32) : (bits == 32);
+        if (!bitsOk || format.nChannels == 0 || format.nChannels > kMaxWavChannels)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Audio, "SoundEffect: unsupported WAV layout (%u channels, %u bits)",
+                            static_cast<unsigned>(format.nChannels), static_cast<unsigned>(bits));
+            return false;
+        }
+
+        if (format.nSamplesPerSec < kMinWavSampleRate || format.nSamplesPerSec > kMaxWavSampleRate)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Audio, "SoundEffect: WAV sample rate %lu Hz out of range",
+                            static_cast<unsigned long>(format.nSamplesPerSec));
+            return false;
+        }
+
+        // Bounded above: 8 channels * 32 bits / 8 = 32 bytes per block, and
+        // 200000 Hz * 32 bytes fits a DWORD, so neither product can overflow.
+        const DWORD expectedBlockAlign = static_cast<DWORD>(format.nChannels) * bits / 8u;
+        const DWORD expectedByteRate = format.nSamplesPerSec * expectedBlockAlign;
+        if (format.nBlockAlign != expectedBlockAlign || format.nAvgBytesPerSec != expectedByteRate)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Audio,
+                            "SoundEffect: inconsistent WAV header (blockAlign=%u expected %lu, byteRate=%lu "
+                            "expected %lu)",
+                            static_cast<unsigned>(format.nBlockAlign), static_cast<unsigned long>(expectedBlockAlign),
+                            static_cast<unsigned long>(format.nAvgBytesPerSec),
+                            static_cast<unsigned long>(expectedByteRate));
+            return false;
+        }
+
+        if (dataSize % expectedBlockAlign != 0)
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Audio,
+                            "SoundEffect: WAV 'data' size %lu is not a whole number of %lu-byte frames",
+                            static_cast<unsigned long>(dataSize), static_cast<unsigned long>(expectedBlockAlign));
+            return false;
+        }
+        return true;
+    }
+} // namespace
+
 HRESULT SoundEffect::ParseWAVFile(const BYTE* data, DWORD size)
 {
+    // Parse into locals and commit only on success, so a rejected file leaves
+    // this object unloaded instead of half-updated with an unvalidated format.
+    Unload();
+
     if (!data || size < 44)
     {
         SPARK_LOG_ERROR(Spark::LogCategory::Audio, "SoundEffect: WAV data too small (%lu bytes)",
@@ -121,12 +210,12 @@ HRESULT SoundEffect::ParseWAVFile(const BYTE* data, DWORD size)
         return E_FAIL;
     }
 
-    // The fmt chunk must fit inside our WAVEFORMATEX buffer — a corrupted file
-    // could claim an enormous fmt size and corrupt the stack/heap otherwise.
-    const DWORD maxFmtCopy = static_cast<DWORD>(sizeof(m_format));
-    const DWORD fmtCopy = std::min(fmtSize, maxFmtCopy);
-    ZeroMemory(&m_format, sizeof(m_format));
-    if (FAILED(ReadChunkData(data, size, fmtPos, &m_format, fmtCopy)))
+    // Copy at most the 18-byte WAVEFORMATEX; any extension bytes in the file
+    // are ignored, because only formats without an extension are accepted.
+    WAVEFORMATEX format;
+    ZeroMemory(&format, sizeof(format));
+    const DWORD fmtCopy = std::min(fmtSize, static_cast<DWORD>(sizeof(format)));
+    if (FAILED(ReadChunkData(data, size, fmtPos, &format, fmtCopy)))
         return E_FAIL;
 
     DWORD dataSize = 0, dataPos = 0;
@@ -146,10 +235,20 @@ HRESULT SoundEffect::ParseWAVFile(const BYTE* data, DWORD size)
         return E_FAIL;
     }
 
-    m_audioData.resize(dataSize);
-    if (FAILED(ReadChunkData(data, size, dataPos, m_audioData.data(), dataSize)))
+    if (!IsSupportedWavFormat(format, fmtSize, dataSize))
         return E_FAIL;
+    // PCM and IEEE float carry no extension: XAudio2 must read exactly the
+    // 18 bytes this object stores, whatever the file wrote into cbSize.
+    format.cbSize = 0;
 
+    std::vector<BYTE> audio(dataSize);
+    if (FAILED(ReadChunkData(data, size, dataPos, audio.data(), dataSize)))
+    {
+        return E_FAIL;
+    }
+
+    m_format = format;
+    m_audioData = std::move(audio);
     m_audioDataSize = dataSize;
     SPARK_LOG_INFO(Spark::LogCategory::Audio, "SoundEffect: WAV loaded successfully, data size: %lu bytes",
                    static_cast<unsigned long>(dataSize));
@@ -165,10 +264,18 @@ HRESULT SoundEffect::FindChunk(const BYTE* data, DWORD dataSize, DWORD fourCC, D
     }
     DWORD offset = 12; // skip RIFF + WAVE ids
 
-    while (offset + 8 <= dataSize)
+    // offset can end one past dataSize (a final odd chunk without its pad
+    // byte), so compare by subtraction instead of letting offset + 8 wrap.
+    while (offset < dataSize && dataSize - offset >= 8)
     {
-        DWORD type = *reinterpret_cast<const DWORD*>(data + offset);
-        DWORD size = *reinterpret_cast<const DWORD*>(data + offset + 4);
+        // RIFF chunk ids and sizes are 32-bit little-endian fields at 2-byte
+        // aligned offsets. Read them as std::uint32_t through memcpy: DWORD is
+        // 8 bytes on LP64 (Core/PlatformTypes.h), and a typed load would also
+        // be misaligned.
+        std::uint32_t type = 0;
+        std::uint32_t size = 0;
+        std::memcpy(&type, data + offset, sizeof(type));
+        std::memcpy(&size, data + offset + 4, sizeof(size));
 
         // Validate that the chunk body fits entirely in the buffer. Without
         // this check a corrupted size field would let us read past the end

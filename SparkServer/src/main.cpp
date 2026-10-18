@@ -4,6 +4,10 @@
  */
 
 #include "ServerApplication.h"
+#include "Utils/MultiISA.h"
+
+// Regenerated on every build by SparkServer/cmake/SparkServerBuildIdentity.cmake.
+#include "SparkServerBuildIdentity.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -13,6 +17,7 @@
 
 #include <atomic>
 #include <iostream>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -54,6 +59,16 @@ namespace
 
 int main(int argc, char** argv)
 {
+    // BLD-100 / OD-04: refuse an x86-64 CPU below the SSE4.2 + POPCNT floor
+    // before any server subsystem starts, so an operator gets a clear message
+    // instead of an illegal-instruction crash.
+    if (const std::string cpuFloorFailure = Spark::DescribeStableCpuFloorFailure(Spark::DetectCpuFeatures());
+        !cpuFloorFailure.empty())
+    {
+        std::cerr << "SparkServer: " << cpuFloorFailure << '\n';
+        return 1;
+    }
+
     std::vector<std::string_view> arguments;
     arguments.reserve(static_cast<size_t>(argc > 0 ? argc - 1 : 0));
     for (int index = 1; index < argc; ++index)
@@ -68,6 +83,13 @@ int main(int argc, char** argv)
     if (parsed.options->showHelp)
     {
         std::cout << Spark::Server::ServerHelpText();
+        return 0;
+    }
+    parsed.options->build = {SPARK_SERVER_BUILD_VERSION, SPARK_SERVER_BUILD_COMMIT, SPARK_SERVER_BUILD_TREE_STATE};
+    if (parsed.options->showVersion)
+    {
+        std::cout << "SparkServer " << parsed.options->build.version << ' ' << parsed.options->build.commit << " ("
+                  << parsed.options->build.treeState << ")\n";
         return 0;
     }
 

@@ -136,6 +136,14 @@ void AssetPipeline::BindMaterial(std::string_view materialPath)
         return;
     }
 
+    // Empty selects the public default-material contract. The Windows draw
+    // list restores its default SRV separately.
+    if (materialPath.empty())
+    {
+        m_boundTextureAsset = nullptr;
+        return;
+    }
+
     std::lock_guard<std::mutex> lock(m_assetsMutex);
 
     auto it = m_assets.find(materialPath);
@@ -179,16 +187,44 @@ void AssetPipeline::BindMaterial(std::string_view materialPath)
     if (!cmd)
         return;
 
+    // Keep slot 0 deterministic across draw commands.  In particular, an
+    // empty material must restore white instead of inheriting the previous
+    // explicit texture.  Create lazily for tests or callers that stand up the
+    // bridge without GraphicsEngine::Initialize.
+    if (!rhi.defaultTexture)
+    {
+        constexpr uint32_t whitePixel = 0xFFFFFFFF;
+        rhi.defaultTexture = rhi.bridge.CreateTexture2D(1, 1, Spark::RHI::PixelFormat::R8G8B8A8_UNORM,
+                                                        Spark::RHI::RHITextureUsage::ShaderResource, &whitePixel);
+    }
+    auto bindDefault = [&]()
+    {
+        if (rhi.defaultTexture)
+            cmd->SetShaderResource(Spark::RHI::RHIShaderStage::Pixel, 0, rhi.defaultTexture.get());
+    };
+
+    if (materialPath.empty())
+    {
+        bindDefault();
+        return;
+    }
+
     TextureAsset* textureAsset = nullptr;
     {
         std::lock_guard<std::mutex> lock(m_assetsMutex);
         auto it = m_assets.find(materialPath);
         if (it == m_assets.end() || !it->second || !it->second->IsLoaded())
+        {
+            bindDefault();
             return;
+        }
         textureAsset = dynamic_cast<TextureAsset*>(it->second.get());
     }
     if (!textureAsset)
+    {
+        bindDefault();
         return;
+    }
 
     Spark::RHI::IRHITexture* rhiTex = textureAsset->GetRHITexture();
     if (rhiTex)
@@ -199,10 +235,13 @@ void AssetPipeline::BindMaterial(std::string_view materialPath)
         // material-asset refactor and is out of scope here.
         cmd->SetShaderResource(Spark::RHI::RHIShaderStage::Pixel, /*slot=*/0, rhiTex);
     }
-    // Even when no RHI texture exists (e.g. the bridge came up after this
-    // TextureAsset loaded), record the bound pointer — a later retry / hot-
-    // reload can upload the texture and re-bind without another lookup.
-    m_boundTextureAsset = textureAsset;
+    else
+    {
+        // Never leave a prior material bound while this asset is still CPU-
+        // only.  A later retry can replace the fallback once upload finishes.
+        bindDefault();
+    }
+    m_boundTextureAsset = rhiTex ? textureAsset : nullptr;
 #endif
 }
 

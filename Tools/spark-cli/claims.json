@@ -1,0 +1,323 @@
+{
+  "schema": 1,
+  "description": "ASSET-220: every behaviour the spark-cli README and the Game Packaging wiki page advertise, with the commands and options it concerns and the tests that prove it. Python tests are unittest ids under Tools/spark-cli/tests; names without a dot are SparkTests TEST names. Checked by Tools/spark-cli/tests/test_spark_cli_claims.py (CTest CLI_ClaimsMatchBehavior).",
+  "claims": [
+    {
+      "id": "new-from-template",
+      "source": "Tools/spark-cli/README.md",
+      "claim": "new copies a template into <output>/<name> and rewrites the template name in file contents and file names.",
+      "commands": ["new"],
+      "flags": ["--template", "--output"],
+      "tests": [
+        "test_spark_cli.SparkNewTests.test_new_rewrites_project_descriptor_identity_before_renaming",
+        "test_spark_cli.SparkNewFromInstalledPrefixTests.test_new_from_installed_prefix_uses_share_templates"
+      ]
+    },
+    {
+      "id": "new-from-installed-prefix",
+      "source": "Tools/spark-cli/README.md",
+      "claim": "From an install prefix the CLI finds the prefix itself, takes templates from share/SparkEngine/templates or the sdk examples, and prints the real SparkEngine_DIR.",
+      "commands": ["new"],
+      "flags": [],
+      "tests": [
+        "test_spark_cli.SparkNewFromInstalledPrefixTests.test_new_from_installed_prefix_uses_share_templates",
+        "test_spark_cli.SparkNewFromInstalledPrefixTests.test_new_from_sdk_only_install_uses_the_sdk_example",
+        "test_spark_cli.SparkNewFromInstalledPrefixTests.test_new_from_install_without_templates_fails_cleanly"
+      ]
+    },
+    {
+      "id": "templates-list",
+      "source": "Tools/spark-cli/README.md",
+      "claim": "templates lists the templates the resolved engine root provides.",
+      "commands": ["templates"],
+      "flags": [],
+      "tests": ["test_spark_cli.SparkNewTests.test_templates_lists_every_template_directory"]
+    },
+    {
+      "id": "info-engine-root",
+      "source": "Tools/spark-cli/README.md",
+      "claim": "info reports the engine root the CLI resolved and its templates.",
+      "commands": ["info"],
+      "flags": [],
+      "tests": ["test_spark_cli.SparkNewTests.test_info_reports_the_resolved_engine_root_and_templates"]
+    },
+    {
+      "id": "build-config",
+      "source": "Tools/spark-cli/README.md",
+      "claim": "build reuses an already configured build/<config> or build tree and builds the selected configuration.",
+      "commands": ["build"],
+      "flags": ["--config"],
+      "tests": ["test_spark_cli.SparkRunTests.test_build_uses_editor_configuration_tree"]
+    },
+    {
+      "id": "run-builds-and-launches",
+      "source": "Tools/spark-cli/README.md",
+      "claim": "run builds the selected configuration and launches the built modules with a matching host (-game for one module, -manifest for several on Windows).",
+      "commands": ["run"],
+      "flags": ["--config"],
+      "tests": [
+        "test_spark_cli.SparkRunTests.test_run_falls_back_to_engine_host_and_built_module",
+        "test_spark_cli.SparkRunTests.test_run_uses_explicit_manifest_for_all_windows_modules"
+      ]
+    },
+    {
+      "id": "run-no-build-package",
+      "source": "Tools/spark-cli/README.md",
+      "claim": "--no-build and --package launch an existing validated package without compiling and forward arguments after --.",
+      "commands": ["run"],
+      "flags": ["--no-build", "--package"],
+      "tests": [
+        "test_spark_cli.SparkRunTests.test_run_launches_editor_assembled_package_and_forwards_arguments",
+        "test_spark_cli.SparkRunTests.test_run_rejects_manifest_path_that_escapes_explicit_package"
+      ]
+    },
+    {
+      "id": "run-untrusted-manifests",
+      "source": "Tools/spark-cli/README.md",
+      "claim": "Package manifests are untrusted: escaping module paths, extra path keys and ambiguous descriptors fail instead of launching.",
+      "commands": ["run"],
+      "flags": [],
+      "tests": [
+        "test_spark_cli.SparkRunTests.test_run_rejects_extra_nested_path_metadata",
+        "test_spark_cli.SparkRunTests.test_run_rejects_manifest_path_that_escapes_explicit_package",
+        "test_spark_cli.SparkRunTests.test_run_reports_ambiguous_project_descriptors"
+      ]
+    },
+    {
+      "id": "package-layout",
+      "source": "Tools/spark-cli/README.md",
+      "claim": "package builds and assembles dist/<project>-<platform>-<config> with the host, modules, sidecars, rewritten spark.modules.json, runtime and project content, startup scene and launchers.",
+      "commands": ["package"],
+      "flags": ["--config", "--output"],
+      "tests": [
+        "test_spark_cli.SparkPackageTests.test_package_assembles_complete_runnable_contract",
+        "test_spark_cli.SparkPackageTests.test_package_preserves_multi_module_manifest_metadata",
+        "test_spark_cli.SparkPackageTests.test_default_scene_accepts_windows_separators",
+        "test_spark_cli.SparkShippedTemplatePackageTests.test_every_shipped_template_assembles_and_launches_as_a_package"
+      ]
+    },
+    {
+      "id": "package-strip-compress",
+      "source": "Tools/spark-cli/README.md",
+      "claim": "--strip omits external PDBs without touching module bytes and --compress is recorded as requested but keeps assets raw.",
+      "commands": ["package"],
+      "flags": ["--strip", "--compress"],
+      "tests": ["test_spark_cli.SparkPackageTests.test_package_assembles_complete_runnable_contract"]
+    },
+    {
+      "id": "package-platform-host-only",
+      "source": "Tools/spark-cli/README.md",
+      "claim": "--platform other than the host fails before anything is built.",
+      "commands": ["package"],
+      "flags": ["--platform"],
+      "tests": ["test_spark_cli.SparkPackageTests.test_package_rejects_cross_platform_request_before_build"]
+    },
+    {
+      "id": "package-output-rejections",
+      "source": "Tools/spark-cli/README.md",
+      "claim": "Packaging rejects ambiguous modules, linked content and output overlapping the project, content, build tree or runtime host.",
+      "commands": ["package"],
+      "flags": [],
+      "tests": [
+        "test_spark_cli.SparkPackageTests.test_package_rejects_ambiguous_built_modules",
+        "test_spark_cli.SparkPackageTests.test_package_rejects_output_inside_project_content_before_build",
+        "test_spark_cli.SparkPackageTests.test_package_rejects_output_inside_project_data_before_build",
+        "test_spark_cli.SparkPackageTests.test_package_rejects_output_inside_active_build_tree_before_build",
+        "test_spark_cli.SparkPackageTests.test_package_rejects_output_inside_runtime_source_before_build",
+        "test_spark_cli.SparkPackageTests.test_package_rejects_output_whose_final_directory_contains_project",
+        "test_spark_cli.SparkPackageTests.test_copy_tree_rejects_link_like_descendant",
+        "test_spark_cli.SparkPackageTests.test_copy_tree_rejects_link_like_source_root",
+        "test_spark_cli.SparkPackageTests.test_package_rejects_nested_manifest_path_metadata_before_build"
+      ]
+    },
+    {
+      "id": "package-force",
+      "source": "Tools/spark-cli/README.md",
+      "claim": "An owned package is replaced normally; an unknown directory needs --force, which never replaces a link.",
+      "commands": ["package"],
+      "flags": ["--force"],
+      "tests": [
+        "test_spark_cli.SparkPackageTests.test_package_replaces_owned_prior_package_without_force",
+        "test_spark_cli.SparkPackageTests.test_package_rejects_unknown_existing_target_without_force",
+        "test_spark_cli.SparkPackageTests.test_package_force_replaces_unknown_non_linked_target",
+        "test_spark_cli.SparkPackageTests.test_package_never_replaces_link_target_even_with_force",
+        "test_spark_cli.SparkPackageTests.test_package_rejects_link_like_target_before_resolution"
+      ]
+    },
+    {
+      "id": "package-transaction",
+      "source": "Tools/spark-cli/README.md",
+      "claim": "Publishing is transactional: failures restore or preserve the previous package and ambiguous, stale or foreign recovery data is left alone.",
+      "commands": ["package"],
+      "flags": [],
+      "tests": [
+        "test_spark_cli.SparkPackageTests.test_package_failure_preserves_previous_package",
+        "test_spark_cli.SparkPackageTests.test_package_publish_failure_restores_previous_package",
+        "test_spark_cli.SparkPackageTests.test_package_preserves_recovery_data_when_restore_fails",
+        "test_spark_cli.SparkPackageTests.test_package_recovers_exactly_one_validated_owned_backup",
+        "test_spark_cli.SparkPackageTests.test_package_preserves_ambiguous_recovery_directories",
+        "test_spark_cli.SparkPackageTests.test_package_preserves_stale_recovery_directory",
+        "test_spark_cli.SparkPackageTests.test_package_preserves_unrelated_predictable_transient_directories",
+        "test_spark_cli.SparkPackageTests.test_package_refreshes_configured_source_tree_runtime_host",
+        "test_spark_cli.SparkPackageTests.test_package_stops_when_runtime_host_refresh_fails",
+        "test_spark_cli.SparkPackageTests.test_posix_runtime_host_accepts_executable",
+        "test_spark_cli.SparkPackageTests.test_posix_runtime_host_must_be_executable"
+      ]
+    },
+    {
+      "id": "validate-references",
+      "source": "Tools/spark-cli/README.md",
+      "claim": "validate checks every parsed scene/material reference against the project root and fails when nothing was inspected; --format json emits the report.",
+      "commands": ["validate"],
+      "flags": ["--format"],
+      "tests": [
+        "test_spark_cli_asset220.ValidateAsset220Tests.test_valid_scene_passes_and_counts_only_inspected_files",
+        "test_spark_cli_asset220.ValidateAsset220Tests.test_missing_sparkscene_mesh_path_fails",
+        "test_spark_cli_asset220.ValidateAsset220Tests.test_missing_sparkscene_material_path_fails",
+        "test_spark_cli_asset220.ValidateAsset220Tests.test_absolute_reference_fails",
+        "test_spark_cli_asset220.ValidateAsset220Tests.test_reference_escaping_project_fails_even_if_file_exists",
+        "test_spark_cli_asset220.ValidateAsset220Tests.test_primitive_prefix_only_exempts_meshes",
+        "test_spark_cli_asset220.ValidateAsset220Tests.test_nothing_inspected_fails",
+        "test_spark_cli_asset220.ValidateAsset220Tests.test_subdirectory_resolves_against_project_root",
+        "test_spark_cli_asset220.ValidateAsset220Tests.test_unparseable_material_fails",
+        "test_spark_cli_asset220.ValidateAsset220Tests.test_legacy_scene_missing_mesh_is_an_error",
+        "test_spark_cli_asset220.ValidateAsset220Tests.test_shipped_templates_validate_clean",
+        "test_spark_cli.SparkValidateTests.test_validate_rejects_malformed_sparkscene"
+      ]
+    },
+    {
+      "id": "validate-strict-noop",
+      "source": "Tools/spark-cli/README.md",
+      "claim": "Every validate finding is an error, so --strict is accepted for compatibility and changes nothing.",
+      "commands": ["validate"],
+      "flags": ["--strict"],
+      "tests": ["test_spark_cli.SparkValidateTests.test_strict_changes_nothing_because_every_finding_is_an_error"]
+    },
+    {
+      "id": "migrate-read-only-audit",
+      "source": "Tools/spark-cli/README.md",
+      "claim": "migrate is a read-only AssetFileHeader audit; outdated, newer, truncated or over-claiming headers exit 1; --dry-run and --backup change nothing.",
+      "commands": ["migrate"],
+      "flags": ["--dry-run", "--backup"],
+      "tests": [
+        "test_spark_cli_asset220.MigrateAsset220Tests.test_current_version_passes_read_only",
+        "test_spark_cli_asset220.MigrateAsset220Tests.test_old_version_fails_without_claiming_or_writing",
+        "test_spark_cli_asset220.MigrateAsset220Tests.test_future_version_fails",
+        "test_spark_cli_asset220.MigrateAsset220Tests.test_truncated_header_fails",
+        "test_spark_cli_asset220.MigrateAsset220Tests.test_over_claiming_data_size_fails",
+        "test_spark_cli_asset220.MigrateAsset220Tests.test_header_size_past_end_fails",
+        "test_spark_cli_asset220.MigrateAsset220Tests.test_header_magic_on_disk_is_krps",
+        "test_spark_cli_asset220.MigrateAsset220Tests.test_dry_run_is_also_read_only_and_fails_on_old_version"
+      ]
+    },
+    {
+      "id": "tools-inventory",
+      "source": "Tools/spark-cli/README.md",
+      "claim": "tools reports the discovered path and availability of every companion executable, deterministically.",
+      "commands": ["tools"],
+      "flags": ["--config", "--format"],
+      "tests": ["test_spark_cli.SparkExternalToolTests.test_tools_json_inventory_is_deterministic"]
+    },
+    {
+      "id": "external-tool-routing",
+      "source": "Tools/spark-cli/README.md",
+      "claim": "The companion commands (cook is the cooker alias) resolve the selected configuration within bounded roots and forward arguments after -- without a shell.",
+      "commands": ["server", "gateway", "daemon", "orchestrator", "collab", "cooker", "cook", "worker", "automation"],
+      "flags": ["--config"],
+      "tests": [
+        "test_spark_cli.SparkExternalToolTests.test_external_tool_resolves_build_output_and_forwards_arguments",
+        "test_spark_cli.SparkExternalToolTests.test_external_tool_reports_bounded_resolution_failure",
+        "test_spark_cli.SparkExternalToolTests.test_cook_alias_routes_to_the_cooker"
+      ]
+    },
+    {
+      "id": "external-tool-executable",
+      "source": "Tools/spark-cli/README.md",
+      "claim": "--executable runs an operator-selected binary without an engine root.",
+      "commands": ["server", "gateway", "daemon", "orchestrator", "collab", "cooker", "cook", "worker", "automation"],
+      "flags": ["--executable"],
+      "tests": ["test_spark_cli.SparkExternalToolTests.test_external_tool_accepts_explicit_executable_without_engine_root"]
+    },
+    {
+      "id": "external-tool-dry-run",
+      "source": "Tools/spark-cli/README.md",
+      "claim": "--dry-run prints the exact resolved invocation and starts nothing.",
+      "commands": ["server", "gateway", "daemon", "orchestrator", "collab", "cooker", "cook", "worker", "automation"],
+      "flags": ["--dry-run"],
+      "tests": ["test_spark_cli.SparkExternalToolTests.test_external_tool_dry_run_prints_invocation_without_starting"]
+    },
+    {
+      "id": "pak-read-only",
+      "source": "Tools/spark-cli/README.md",
+      "claim": "pak inspect/list/verify/diff are read-only, validate bounded archive contracts, hash stored and deflate entries, and fail explicitly on zstd without a provider.",
+      "commands": ["pak inspect", "pak list", "pak verify", "pak diff"],
+      "flags": ["--format"],
+      "tests": [
+        "test_spark_pak.SparkPakCliTests.test_list_and_inspect_are_deterministic",
+        "test_spark_pak.SparkPakCliTests.test_verify_hashes_decompressed_content",
+        "test_spark_pak.SparkPakCliTests.test_diff_reports_content_changes_with_stable_exit_code",
+        "test_spark_pak.SparkPakCliTests.test_zstd_verify_fails_explicitly_without_writing",
+        "test_spark_pak.SparkPakCliTests.test_rejects_traversal_hash_mismatch_and_overlaps",
+        "test_spark_pak.SparkPakCliTests.test_rejects_hostile_entry_count_before_metadata_allocation",
+        "test_spark_pak.SparkPakCliTests.test_rejects_trailing_toc_and_unknown_compression",
+        "test_spark_pak.SparkPakCliTests.test_rejects_aliased_paths_and_toc_expansion_beyond_declared_size",
+        "test_spark_pak.SparkPakCliTests.test_rejects_link_input_when_supported"
+      ]
+    },
+    {
+      "id": "packager-files-copied",
+      "source": "wiki/gameplay-tools/Game-Packaging.md",
+      "claim": "PackageResult::filesCopied counts copied payload files and excludes the generated manifest.",
+      "commands": [],
+      "flags": [],
+      "tests": ["GamePackager_Package_Success", "GamePackager_ASSET220_CleanPackageStillSucceeds"]
+    },
+    {
+      "id": "packager-copy-failure",
+      "source": "wiki/gameplay-tools/Game-Packaging.md",
+      "claim": "A copy failure fails the package: it reports the files copied before the failure, an empty output path and no manifest.",
+      "commands": [],
+      "flags": [],
+      "tests": [
+        "GamePackager_ASSET220_CopyFailureFailsPackage",
+        "GamePackager_ASSET220_EveryCopyFailureIsReported",
+        "GamePackager_ASSET220_LegacyAssetCopyFailureFailsPackage",
+        "GamePackager_LegacyCopyFailuresAggregateAndPreserveCounts"
+      ]
+    },
+    {
+      "id": "packager-validate-config",
+      "source": "wiki/gameplay-tools/Game-Packaging.md",
+      "claim": "Validation catches an empty output directory, an empty or invalid project name, and an uninitialized packager.",
+      "commands": [],
+      "flags": [],
+      "tests": [
+        "GamePackager_ValidateConfig_EmptyName",
+        "GamePackager_Package_RejectsPathTraversalName",
+        "GamePackager_Package_UninitializedReportsAllConfigurationErrors"
+      ]
+    },
+    {
+      "id": "packager-strip-and-facade",
+      "source": "wiki/gameplay-tools/Game-Packaging.md",
+      "claim": "Release packages with stripDebugSymbols remove .pdb files, Debug packages keep them, and the legacy Core facade produces the canonical package.",
+      "commands": [],
+      "flags": [],
+      "tests": ["GamePackager_LegacyCoreFacadeMatchesCanonicalOutput"]
+    },
+    {
+      "id": "packager-extensions-and-status",
+      "source": "wiki/gameplay-tools/Game-Packaging.md",
+      "claim": "Binary extensions follow the target platform and Console_GetStatus reports initialization and the last result.",
+      "commands": [],
+      "flags": [],
+      "tests": [
+        "GamePackager_ModuleExtension_Windows",
+        "GamePackager_ModuleExtension_Linux",
+        "GamePackager_ModuleExtension_MacOS",
+        "GamePackager_ExecutableExtension",
+        "GamePackager_ConsoleGetStatus"
+      ]
+    }
+  ]
+}

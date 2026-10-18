@@ -199,3 +199,25 @@ TEST(StackTrace_EmptyTraceCompactString)
     // Should not crash on empty trace
     EXPECT_EQ(compact.size(), static_cast<size_t>(0));
 }
+
+#ifdef SPARK_PLATFORM_WINDOWS
+TEST(StackTrace_SymbolLockLeaseRejectsSameThreadReentry)
+{
+    {
+        Spark::StackTrace::SymbolLockLease outer;
+        ASSERT_TRUE(outer.owns_lock());
+        Spark::StackTrace::SymbolLockLease nested(true);
+        EXPECT_FALSE(nested.owns_lock());
+
+        // A trace captured while this thread owns DbgHelp must retain raw
+        // addresses without attempting to lock or call DbgHelp recursively.
+        const auto trace = Spark::StackTrace::Capture();
+        EXPECT_GT(trace.GetFrameCount(), 0);
+        for (const auto& frame : trace.GetFrames())
+            EXPECT_NE(frame.address, static_cast<uintptr_t>(0));
+    }
+
+    Spark::StackTrace::SymbolLockLease fresh(true);
+    EXPECT_TRUE(fresh.owns_lock());
+}
+#endif

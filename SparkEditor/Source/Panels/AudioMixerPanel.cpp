@@ -9,6 +9,8 @@
 #include <imgui.h>
 #include <iostream>
 #include <cstdio>
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
@@ -100,7 +102,8 @@ namespace SparkEditor
         ImGui::SliderFloat("Ambient", &m_ambientVolume, 0.0f, 1.0f, "%.2f");
 
         ImGui::Separator();
-        ImGui::Text("Active Sources: %d | Loaded Sounds: %d", m_activeSoundCount, m_loadedSoundCount);
+        Spark::Ui::KeyValue("Active Sources", "%d", m_activeSoundCount);
+        Spark::Ui::KeyValue("Loaded Sounds", "%d", m_loadedSoundCount);
 
         // Listener position
         ImGui::Separator();
@@ -114,12 +117,12 @@ namespace SparkEditor
         if (ImGui::BeginTable("MixBusTable", 6,
                               ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))
         {
-            ImGui::TableSetupColumn("Bus", ImGuiTableColumnFlags_WidthFixed, 80);
+            ImGui::TableSetupColumn("Bus", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(80));
             ImGui::TableSetupColumn("Volume");
-            ImGui::TableSetupColumn("Level", ImGuiTableColumnFlags_WidthFixed, 80);
-            ImGui::TableSetupColumn("Mute", ImGuiTableColumnFlags_WidthFixed, 40);
-            ImGui::TableSetupColumn("Solo", ImGuiTableColumnFlags_WidthFixed, 40);
-            ImGui::TableSetupColumn("Route", ImGuiTableColumnFlags_WidthFixed, 70);
+            ImGui::TableSetupColumn("Level", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(80));
+            ImGui::TableSetupColumn("Mute", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(40));
+            ImGui::TableSetupColumn("Solo", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(40));
+            ImGui::TableSetupColumn("Route", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(70));
             ImGui::TableHeadersRow();
 
             for (int i = 0; i < static_cast<int>(m_buses.size()); ++i)
@@ -139,9 +142,9 @@ namespace SparkEditor
 
                 // VU meter
                 ImGui::TableNextColumn();
-                ImVec4 meterColor = bus.peakLevel > 0.9f   ? ImVec4(1.0f, 0.2f, 0.2f, 1.0f)
-                                    : bus.peakLevel > 0.7f ? ImVec4(1.0f, 0.8f, 0.0f, 1.0f)
-                                                           : ImVec4(0.2f, 0.8f, 0.2f, 1.0f);
+                ImVec4 meterColor = bus.peakLevel > 0.9f   ? Spark::Ui::ColV(Spark::Ui::Role::ErrorText)
+                                    : bus.peakLevel > 0.7f ? Spark::Ui::ColV(Spark::Ui::Role::WarningText)
+                                                           : Spark::Ui::ColV(Spark::Ui::Role::SuccessText);
                 ImGui::PushStyleColor(ImGuiCol_PlotHistogram, meterColor);
                 ImGui::ProgressBar(bus.peakLevel, ImVec2(-1, 0));
                 ImGui::PopStyleColor();
@@ -154,9 +157,9 @@ namespace SparkEditor
 
                 ImGui::TableNextColumn();
                 if (bus.parentBus >= 0 && bus.parentBus < static_cast<int>(m_buses.size()))
-                    ImGui::TextDisabled("-> %s", m_buses[bus.parentBus].name);
+                    Spark::Ui::SecondaryText("-> %s", m_buses[bus.parentBus].name);
                 else
-                    ImGui::TextDisabled("(root)");
+                    Spark::Ui::SecondaryText("(root)");
 
                 ImGui::PopID();
             }
@@ -186,7 +189,8 @@ namespace SparkEditor
 
         if (m_activeSounds.empty())
         {
-            ImGui::TextDisabled("No active sounds (enter Play mode to monitor)");
+            ImGui::TextDisabled("No active editor sounds. State preview does not run game audio.");
+            ImGui::TextDisabled("Use Play Control > Launch Game to test game audio.");
             return;
         }
 
@@ -194,9 +198,9 @@ namespace SparkEditor
                               ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY))
         {
             ImGui::TableSetupColumn("Sound");
-            ImGui::TableSetupColumn("Volume", ImGuiTableColumnFlags_WidthFixed, 60);
-            ImGui::TableSetupColumn("3D", ImGuiTableColumnFlags_WidthFixed, 30);
-            ImGui::TableSetupColumn("Loop", ImGuiTableColumnFlags_WidthFixed, 30);
+            ImGui::TableSetupColumn("Volume", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(60));
+            ImGui::TableSetupColumn("3D", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(30));
+            ImGui::TableSetupColumn("Loop", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(30));
             ImGui::TableSetupColumn("Position");
             ImGui::TableHeadersRow();
 
@@ -206,16 +210,16 @@ namespace SparkEditor
                 ImGui::TableNextColumn();
                 ImGui::TextUnformatted(sound.name);
                 ImGui::TableNextColumn();
-                ImGui::Text("%.2f", sound.volume);
+                Spark::Ui::TableNumber("%.2f", sound.volume);
                 ImGui::TableNextColumn();
                 ImGui::TextUnformatted(sound.is3D ? ICON_FA_CHECK : "-");
                 ImGui::TableNextColumn();
                 ImGui::TextUnformatted(sound.looping ? ICON_FA_CHECK : "-");
                 ImGui::TableNextColumn();
                 if (sound.is3D)
-                    ImGui::Text("(%.1f, %.1f, %.1f)", sound.position[0], sound.position[1], sound.position[2]);
+                    Spark::Ui::MonoText("(%.1f, %.1f, %.1f)", sound.position[0], sound.position[1], sound.position[2]);
                 else
-                    ImGui::TextDisabled("-");
+                    Spark::Ui::SecondaryText("-");
             }
 
             ImGui::EndTable();
@@ -229,8 +233,8 @@ namespace SparkEditor
 
         if (m_soundBanks.empty())
         {
-            ImGui::TextDisabled("No sound banks loaded.");
-            ImGui::TextDisabled("Sound banks are loaded automatically from the project's Audio/ directory.");
+            Spark::Ui::EmptyState(ICON_FA_VOLUME_UP, "No sound banks loaded",
+                                  "Sound banks are loaded automatically from the project's Audio/ directory.");
             return;
         }
 
@@ -238,9 +242,9 @@ namespace SparkEditor
                               ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))
         {
             ImGui::TableSetupColumn("Bank Name");
-            ImGui::TableSetupColumn("Sounds", ImGuiTableColumnFlags_WidthFixed, 60);
-            ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed, 80);
-            ImGui::TableSetupColumn("Loaded", ImGuiTableColumnFlags_WidthFixed, 50);
+            ImGui::TableSetupColumn("Sounds", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(60));
+            ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(80));
+            ImGui::TableSetupColumn("Loaded", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(50));
             ImGui::TableHeadersRow();
 
             for (const auto& bank : m_soundBanks)
@@ -249,11 +253,12 @@ namespace SparkEditor
                 ImGui::TableNextColumn();
                 ImGui::TextUnformatted(bank.name);
                 ImGui::TableNextColumn();
-                ImGui::Text("%d", bank.soundCount);
+                Spark::Ui::TableNumber("%d", bank.soundCount);
                 ImGui::TableNextColumn();
-                ImGui::Text("%.1f KB", bank.sizeKB);
+                Spark::Ui::TableNumber("%.1f KB", bank.sizeKB);
                 ImGui::TableNextColumn();
-                ImGui::TextColored(bank.loaded ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f) : ImVec4(0.5f, 0.5f, 0.5f, 1.0f),
+                ImGui::TextColored(bank.loaded ? Spark::Ui::ColV(Spark::Ui::Role::SuccessText)
+                                               : Spark::Ui::ColV(Spark::Ui::Role::TextDisabled),
                                    bank.loaded ? ICON_FA_CHECK : ICON_FA_TIMES);
             }
             ImGui::EndTable();
@@ -265,14 +270,14 @@ namespace SparkEditor
         ImGui::Checkbox("Show Reverb Zones in Viewport", &m_showReverbZones);
         ImGui::Separator();
 
-        ImGui::TextDisabled("Reverb zones are configured per-scene.");
-        ImGui::TextDisabled("Use the Inspector to edit zone properties on selected entities.");
+        Spark::Ui::SecondaryText("Reverb zones are configured per-scene.");
+        Spark::Ui::SecondaryText("Use the Inspector to edit zone properties on selected entities.");
 
         if (ImGui::Button(ICON_FA_PLUS " Add Reverb Zone Entity"))
         {
             SPARK_LOG_INFO(Spark::LogCategory::Editor, "AudioMixerPanel: user requested add reverb zone entity");
-            ImGui::TextDisabled("Creates a new entity with a ReverbZone component");
         }
+        ImGui::SetItemTooltip("Creates a new entity with a ReverbZone component");
     }
 
 } // namespace SparkEditor

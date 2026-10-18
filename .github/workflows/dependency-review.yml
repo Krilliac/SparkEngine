@@ -1,0 +1,33 @@
+name: Dependency review
+
+# On a pull request, compares the dependency graph (the GitHub Actions the workflows use) with the base branch and lists the new
+# dependencies, their known vulnerabilities and licences. A new dependency with a high or critical advisory fails the check.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write # the summary comment
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          # A fork PR's token cannot comment; the check result and the job summary still carry the findings.
+          comment-summary-in-pr: on-failure
+          warn-on-openssf-scorecard-level: 3

@@ -1,7 +1,10 @@
 #include "GitRunner.h"
 
+#include "InstallState.h"
+#include "PathUtf8.h"
 #include "ProcessRunner.h"
 
+#include <array>
 #include <cstdio>
 
 namespace SparkInstaller
@@ -10,21 +13,29 @@ namespace SparkInstaller
     {
         // Whitelist-validate a git ref (branch or tag). Rejects any input
         // outside [A-Za-z0-9._/+-], which is a conservative subset of what
-        // git itself allows and blocks every shell metacharacter.
+        // git itself allows and blocks every shell metacharacter. Being
+        // ASCII-only, an accepted ref is identical in UTF-8 and in the process
+        // code page, so it needs no ProcessArgFromUtf8 conversion.
         bool IsSafeRef(const std::string& ref)
         {
             if (ref.empty() || ref.size() > 255)
+            {
                 return false;
+            }
             for (char c : ref)
             {
                 bool ok = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.' ||
                           c == '_' || c == '/' || c == '-' || c == '+';
                 if (!ok)
+                {
                     return false;
+                }
             }
             // Git also disallows "..", leading "-", and consecutive slashes.
             if (ref.front() == '-' || ref.front() == '.' || ref.find("..") != std::string::npos)
+            {
                 return false;
+            }
             return true;
         }
 
@@ -39,11 +50,15 @@ namespace SparkInstaller
         bool IsSafeRepoUrl(const std::string& url)
         {
             if (url.empty() || url.size() > 1024 || url.front() == '-')
+            {
                 return false;
+            }
             for (const unsigned char character : url)
             {
                 if (character < 32 || character == 127)
+                {
                     return false;
+                }
             }
 
             const bool networkUrl = StartsWith(url, "https://") || StartsWith(url, "http://") ||
@@ -56,20 +71,73 @@ namespace SparkInstaller
                                    ((url[0] >= 'A' && url[0] <= 'Z') || (url[0] >= 'a' && url[0] <= 'z')) &&
                                    url[1] == ':' && (url[2] == '/' || url[2] == '\\');
             if ((networkUrl || scpUrl) && url.find(' ') != std::string::npos)
+            {
                 return false;
+            }
             return networkUrl || scpUrl || posixPath || uncPath || drivePath;
+        }
+
+        // Untracked files the installer itself writes into the engine checkout.
+        // They are not in the engine's .gitignore (and an older ref being
+        // updated from would not carry a new ignore rule), so the update
+        // cleanliness check must recognize them explicitly.
+        // The ".tmp" sibling is InstallState::Save's atomic-replace staging file;
+        // the pending and repair-required markers record an unfinished fresh
+        // install and a rollback that could not rebuild the previous commit.
+        std::array<std::string, 4> InstallerOwnedPaths()
+        {
+            return {InstallState::FileName(), InstallState::FileName() + ".tmp", InstallState::PendingFileName(),
+                    InstallState::RepairRequiredFileName()};
+        }
+
+        bool IsInstallerOwnedUntrackedLine(std::string_view line)
+        {
+            constexpr std::string_view kUntrackedPrefix = "?? ";
+            if (!StartsWith(line, kUntrackedPrefix))
+            {
+                return false;
+            }
+            const std::string_view path = line.substr(kUntrackedPrefix.size());
+            for (const std::string& owned : InstallerOwnedPaths())
+            {
+                if (path == owned)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         bool IsSafeCloneDestination(const std::string& destination)
         {
             if (destination.empty() || destination.size() > 32767 || destination.front() == '-')
+            {
                 return false;
+            }
             for (const unsigned char character : destination)
             {
                 if (character < 32 || character == 127)
+                {
                     return false;
+                }
             }
             return true;
+        }
+
+        // Paths and URLs reach GitRunner as UTF-8; ProcessRunner needs the OS
+        // narrow encoding. A value the code page cannot hold is refused, never
+        // mangled. @p what names the value in the error.
+        bool ToProcessArg(const std::string& utf8, std::string& narrow, const char* what, const LogSink& log)
+        {
+            if (ProcessArgFromUtf8(utf8, narrow))
+            {
+                return true;
+            }
+            if (log)
+            {
+                log(std::string("error: ") + what + " cannot be passed to git in this system's code page: " + utf8);
+            }
+            return false;
         }
     } // namespace
 
@@ -81,24 +149,36 @@ namespace SparkInstaller
         for (const char character : argument)
         {
             if (character == '\\' || character == '"')
+            {
                 encoded.push_back('\\');
+            }
             encoded.push_back(character);
         }
         encoded.push_back('"');
         return encoded;
     }
 
-    int GitRunner::Run(const std::string& args, const std::string& cwd, const LogSink& log) const
+    int GitRunner::Run(const std::string& args, const std::string& cwd, const LogSink& log,
+                       std::string_view displayArgs) const
     {
+        std::string processCwd;
+        if (!ToProcessArg(cwd, processCwd, "working directory", log))
+        {
+            return -1;
+        }
         SparkBuild::ProcessRunner runner;
         std::string cmd = EncodeProcessRunnerArgument(m_gitExe) + " " + args;
         if (log)
-            log("$ git " + args);
+        {
+            log("$ git " + (displayArgs.empty() ? args : std::string(displayArgs)));
+        }
 
         std::string output;
-        int exitCode = runner.RunSync(cmd, cwd, output);
+        int exitCode = runner.RunSync(cmd, processCwd, output);
         if (log && !output.empty())
+        {
             log(output);
+        }
         return exitCode;
     }
 
@@ -108,27 +188,45 @@ namespace SparkInstaller
         if (!IsSafeRepoUrl(repoUrl))
         {
             if (log)
+            {
                 log("error: repository URL contains unsafe characters: " + repoUrl);
+            }
             return false;
         }
         if (!ref.empty() && !IsSafeRef(ref))
         {
             if (log)
-                log("error: git ref contains unsafe characters: " + ref);
+            {
+                log("error: git ref must use only ASCII letters, digits and . _ / + -: " + ref);
+            }
             return false;
         }
         if (!IsSafeCloneDestination(destination))
         {
             if (log)
+            {
                 log("error: clone destination is empty, option-shaped, or contains control characters: " + destination);
+            }
             return false;
         }
 
-        std::string args = "clone --recurse-submodules --progress";
+        std::string processRepoUrl;
+        std::string processDestination;
+        if (!ToProcessArg(repoUrl, processRepoUrl, "repository URL", log) ||
+            !ToProcessArg(destination, processDestination, "clone destination", log))
+        {
+            return false;
+        }
+        std::string options = "clone --recurse-submodules --progress";
         if (!ref.empty())
-            args += " --branch " + EncodeProcessRunnerArgument(ref);
-        args += " -- " + EncodeProcessRunnerArgument(repoUrl) + " " + EncodeProcessRunnerArgument(destination);
-        return Run(args, {}, log) == 0;
+        {
+            options += " --branch " + EncodeProcessRunnerArgument(ref);
+        }
+        const std::string args = options + " -- " + EncodeProcessRunnerArgument(processRepoUrl) + " " +
+                                 EncodeProcessRunnerArgument(processDestination);
+        const std::string displayArgs =
+            options + " -- " + EncodeProcessRunnerArgument(repoUrl) + " " + EncodeProcessRunnerArgument(destination);
+        return Run(args, {}, log, displayArgs) == 0;
     }
 
     bool GitRunner::Fetch(const std::string& destination, const LogSink& log) const
@@ -136,16 +234,124 @@ namespace SparkInstaller
         return Run("fetch --all --tags --prune", destination, log) == 0;
     }
 
+    bool GitRunner::WorkingTreeClean(const std::string& destination, const LogSink& log) const
+    {
+        const std::string args = "status --porcelain --untracked-files=all";
+        std::string processDestination;
+        if (!ToProcessArg(destination, processDestination, "install path", log))
+        {
+            return false;
+        }
+        SparkBuild::ProcessRunner runner;
+        std::string command = EncodeProcessRunnerArgument(m_gitExe) + " " + args;
+        if (log)
+        {
+            log("$ git " + args);
+        }
+
+        std::string output;
+        if (runner.RunSync(command, processDestination, output) != 0)
+        {
+            if (log)
+            {
+                log("error: could not inspect the existing install working tree");
+            }
+            return false;
+        }
+
+        // Only an exact untracked entry for an installer-owned file is
+        // tolerated. A modified or staged entry for the same name, or any
+        // other line (including merged stderr warnings), keeps the tree dirty.
+        bool clean = true;
+        std::string_view remaining = output;
+        while (!remaining.empty())
+        {
+            const size_t newline = remaining.find('\n');
+            std::string_view line = remaining.substr(0, newline);
+            remaining = newline == std::string_view::npos ? std::string_view{} : remaining.substr(newline + 1);
+            if (!line.empty() && line.back() == '\r')
+            {
+                line.remove_suffix(1);
+            }
+            if (line.empty())
+            {
+                continue;
+            }
+            if (IsInstallerOwnedUntrackedLine(line))
+            {
+                if (log)
+                {
+                    log("ignoring installer-owned untracked file: " + std::string(line.substr(3)));
+                }
+                continue;
+            }
+            clean = false;
+        }
+        if (!clean)
+        {
+            if (log)
+            {
+                log("error: existing install has local changes");
+            }
+            return false;
+        }
+        return true;
+    }
+
+    bool GitRunner::IgnoredFiles(const std::string& destination, std::vector<std::string>& paths,
+                                 const LogSink& log) const
+    {
+        std::string processDestination;
+        if (!ToProcessArg(destination, processDestination, "install path", log))
+        {
+            return false;
+        }
+        SparkBuild::ProcessRunner runner;
+        std::string output;
+        const std::string command =
+            EncodeProcessRunnerArgument(m_gitExe) + " ls-files --others --ignored --exclude-standard -z";
+        if (runner.RunSync(command, processDestination, output) != 0)
+        {
+            if (log)
+            {
+                log("error: could not inventory ignored user files");
+            }
+            return false;
+        }
+        std::vector<std::string> parsed;
+        std::size_t start = 0;
+        while (start < output.size())
+        {
+            const std::size_t end = output.find('\0', start);
+            if (end == std::string::npos || end == start)
+            {
+                if (log)
+                {
+                    log("error: malformed ignored-file inventory");
+                }
+                return false;
+            }
+            parsed.emplace_back(output.substr(start, end - start));
+            start = end + 1;
+        }
+        paths = std::move(parsed);
+        return true;
+    }
+
     bool GitRunner::CheckoutRef(const std::string& ref, const std::string& destination, const LogSink& log) const
     {
         if (!IsSafeRef(ref))
         {
             if (log)
-                log("error: git ref contains unsafe characters: " + ref);
+            {
+                log("error: git ref must use only ASCII letters, digits and . _ / + -: " + ref);
+            }
             return false;
         }
         if (Run("checkout " + EncodeProcessRunnerArgument(ref), destination, log) != 0)
+        {
             return false;
+        }
 
         // A detached tag/commit is already exact after fetch + checkout. If a
         // matching origin branch exists, require its explicit fast-forward even
@@ -153,8 +359,23 @@ namespace SparkInstaller
         // installer could build stale local source while reporting success.
         const std::string remoteRef = "refs/remotes/origin/" + ref;
         if (Run("show-ref --verify --quiet " + EncodeProcessRunnerArgument(remoteRef), destination, log) != 0)
+        {
             return true;
+        }
         return Run("pull --ff-only origin " + EncodeProcessRunnerArgument(ref), destination, log) == 0;
+    }
+
+    bool GitRunner::CheckoutCommit(const std::string& commit, const std::string& destination, const LogSink& log) const
+    {
+        if (!IsSafeRef(commit))
+        {
+            if (log)
+            {
+                log("error: git commit must use only ASCII letters, digits and . _ / + -: " + commit);
+            }
+            return false;
+        }
+        return Run("checkout --detach " + EncodeProcessRunnerArgument(commit), destination, log) == 0;
     }
 
     bool GitRunner::UpdateSubmodules(const std::string& destination, const LogSink& log) const
@@ -164,13 +385,22 @@ namespace SparkInstaller
 
     std::string GitRunner::HeadCommit(const std::string& destination) const
     {
+        std::string processDestination;
+        if (!ToProcessArg(destination, processDestination, "install path", {}))
+        {
+            return {};
+        }
         SparkBuild::ProcessRunner runner;
         std::string cmd = EncodeProcessRunnerArgument(m_gitExe) + " rev-parse HEAD";
         std::string output;
-        if (runner.RunSync(cmd, destination, output) != 0)
+        if (runner.RunSync(cmd, processDestination, output) != 0)
+        {
             return {};
+        }
         while (!output.empty() && (output.back() == '\n' || output.back() == '\r' || output.back() == ' '))
+        {
             output.pop_back();
+        }
         return output;
     }
 } // namespace SparkInstaller

@@ -5,6 +5,9 @@
 
 #include "TestFramework.h"
 #include "Graphics/GPUProfiler.h"
+#ifdef SPARK_PLATFORM_WINDOWS
+#include "Graphics/GPUTimestampQuery.h"
+#endif
 
 using namespace Spark::Graphics;
 
@@ -136,3 +139,31 @@ TEST(GPUProfiler_EmptyFrameHistory)
 
     profiler.Shutdown();
 }
+
+#ifdef SPARK_PLATFORM_WINDOWS
+TEST(GPUTimestampQuery_CollectsSlotBeforeReuse)
+{
+    using Query = Spark::Graphics::GPUTimestampQuery;
+    EXPECT_EQ(Query::FrameSlot(0), 0u);
+    EXPECT_EQ(Query::FrameSlot(1), 1u);
+    EXPECT_EQ(Query::FrameSlot(2), 0u);
+    EXPECT_EQ(Query::FrameSlot(3), 1u);
+}
+
+TEST(GPUTimestampQuery_ResetPassHistoryClearsCompletedSamples)
+{
+    Spark::Graphics::GPUTimestampQuery query;
+    query.ResetPassHistory("gfx_benchmark_frame");
+    const auto firstGeneration = query.GetPassGeneration("gfx_benchmark_frame");
+    EXPECT_EQ(firstGeneration, 1ull);
+    EXPECT_NEAR(query.GetAveragePassTimeMs("gfx_benchmark_frame"), 0.0f, 0.001f);
+    EXPECT_NEAR(query.GetPassTimeMs("gfx_benchmark_frame"), 0.0f, 0.001f);
+    EXPECT_EQ(query.GetPassSampleCount("gfx_benchmark_frame"), 0u);
+
+    query.ResetPassHistory("gfx_benchmark_frame");
+    const auto secondGeneration = query.GetPassGeneration("gfx_benchmark_frame");
+    EXPECT_EQ(secondGeneration, firstGeneration + 1);
+    EXPECT_FALSE(Spark::Graphics::GPUTimestampQuery::IsCurrentPassGeneration(firstGeneration, secondGeneration));
+    EXPECT_TRUE(Spark::Graphics::GPUTimestampQuery::IsCurrentPassGeneration(secondGeneration, secondGeneration));
+}
+#endif

@@ -131,19 +131,53 @@ namespace SparkEditor
          */
         const SerializedComponent* GetComponent(const std::string& typeName) const;
 
+        /// Newest `SPARKPREFAB <version>` this build reads, and the only one it writes.
+        static constexpr int kPrefabFormatVersion = 2;
+        /// Oldest version TryLoad reads (N-1, the same window as saves); it is migrated in memory only.
+        static constexpr int kOldestSupportedPrefabVersion = kPrefabFormatVersion - 1;
+        /// Largest `.sparkprefab` TryLoad reads and Save writes. Project prefabs come from shared or
+        /// downloaded projects and the parser bounds counts but not bytes, so the size is checked
+        /// before any byte is read.
+        static constexpr std::uintmax_t kMaxPrefabFileBytes = std::uintmax_t{4} * 1024u * 1024u;
+
         /**
          * @brief Save the prefab to a file
-         * @param path File path to save to (.sparkprefab)
+         *
+         * Always writes kPrefabFormatVersion, so a prefab loaded from a version 1 file is migrated
+         * on disk by its next save and never before. Every name must be non-empty, and the rendered
+         * text must fit kMaxPrefabFileBytes so the file can be loaded again.
+         *
+         * The text is written through SaveFileDurability::WriteFileAtomically: the previous file
+         * is kept as `<path>.bak`, and a failed or interrupted save leaves @p path unchanged.
+         * When this prefab was recovered from the `.bak` of @p path, the rejected primary is not
+         * copied over it: the `.bak` keeps the good copy until a save to @p path succeeds.
+         *
+         * @param path UTF-8 file path to save to (.sparkprefab)
          * @return true if save succeeded
          */
         bool Save(const std::string& path);
 
         /**
-         * @brief Load a prefab from a file
-         * @param path File path to load from
-         * @return Loaded prefab asset, or empty prefab on failure
+         * @brief Load a prefab from a file, falling back to its retained `<path>.bak`
+         *
+         * The header must be exactly `SPARKPREFAB <version>` with a version from
+         * kOldestSupportedPrefabVersion to kPrefabFormatVersion; an older version is converted in
+         * memory and the file is never rewritten by a load. Counts are bounded, every property type
+         * must be known, and the file must end after the declared components (version 2: after its
+         * closing `end` line). The file must be a regular file of at most kMaxPrefabFileBytes, not
+         * a symbolic link, and its size is checked before it is read. A primary that fails any of those checks is replaced by the
+         * retained backup when that loads; a primary written by a newer format version fails
+         * closed without consulting the backup, because loading an older copy and saving over
+         * the newer file would discard its data.
+         *
+         * @param path  UTF-8 path of the .sparkprefab file
+         * @param out   Receives the prefab only on success; untouched on failure
+         * @param error On failure, an actionable reason naming the file and location (both
+         *              reasons when the backup was tried too). On a recovery from the backup,
+         *              why the primary was rejected. Cleared on a clean load.
+         * @return true if @p out now holds a complete prefab
          */
-        static PrefabAsset Load(const std::string& path);
+        static bool TryLoad(const std::string& path, PrefabAsset& out, std::string& error);
 
         /**
          * @brief Check if this prefab has been modified since last save
@@ -169,6 +203,8 @@ namespace SparkEditor
         std::vector<SerializedComponent> m_components;
         uint64_t m_id = 0;
         bool m_isModified = false;
+        /// TryLoad rejected the file at m_filePath and loaded its `.bak`; cleared by a successful Save.
+        bool m_recoveredFromBackup = false;
 
         static uint64_t s_nextId;
     };

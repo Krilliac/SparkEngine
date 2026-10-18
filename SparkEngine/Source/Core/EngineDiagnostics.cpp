@@ -31,6 +31,7 @@
 #include "Utils/SparkConsole.h"
 
 #include "Utils/LogMacros.h"
+#include "Utils/ScopeGuard.h"
 
 #include <cmath>
 #include <filesystem>
@@ -432,7 +433,21 @@ namespace Spark
         auto status = net.Console_GetStatus();
         report.Add(sub, "Console status", !status.empty(), status.substr(0, 80));
 
-        // Start a server on a high port, verify state, then stop
+        // Start a server on a high port, verify state, then stop. The probe server never
+        // talks to a client, so it signs with an ephemeral in-memory identity instead of
+        // creating the persistent one; the caller's configuration is restored afterwards.
+        const Spark::Net::NetworkSecurityConfig savedSecurity = net.GetSecurityConfig();
+        if (!savedSecurity.identity)
+        {
+            Spark::Net::NetworkSecurityConfig probeSecurity = savedSecurity;
+            if (auto ephemeral = Spark::Net::GenerateServerIdentity())
+            {
+                probeSecurity.identity = std::move(*ephemeral);
+            }
+            net.SetSecurityConfig(std::move(probeSecurity));
+        }
+        const auto restoreSecurity =
+            Spark::MakeScopeExit([&net, &savedSecurity] { net.SetSecurityConfig(savedSecurity); });
         bool started = net.StartServer(59999, 4);
         if (started)
         {

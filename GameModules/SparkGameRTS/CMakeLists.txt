@@ -78,8 +78,8 @@ file(GLOB_RECURSE SPARK_GAME_RTS_SOURCES
     "Source/*.h"
     "Source/*.hpp"
 )
-list(FILTER SPARK_GAME_RTS_SOURCES EXCLUDE REGEX ".*[Tt]est.*")
-list(FILTER SPARK_GAME_RTS_SOURCES EXCLUDE REGEX ".*[Ee]xample.*")
+spark_exclude_sources_matching(SPARK_GAME_RTS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}" ".*[Tt]est.*")
+spark_exclude_sources_matching(SPARK_GAME_RTS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}" ".*[Ee]xample.*")
 
 # ---------------------------------------------------------------------
 # Create the game as a SHARED library (DLL)
@@ -92,6 +92,12 @@ endif()
 spark_configure_module_abi(SparkGameRTS)
 
 target_compile_definitions(SparkGameRTS PRIVATE SPARK_GAME_DLL SPARK_MODULE_DLL)
+
+# The skirmish simulation must be bit-identical across runs and platforms: forbid the compiler from fusing
+# multiply-add pairs into FMA instructions (GCC defaults to -ffp-contract=fast, Clang on ARM64 to "on").
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(SparkGameRTS PRIVATE -ffp-contract=off)
+endif()
 
 # ---------------------------------------------------------------------
 # Link against SparkEngineLib
@@ -198,13 +204,9 @@ if(FEATURE_DEFINITIONS)
 endif()
 
 # ---------------------------------------------------------------------
-# Post-build: Asset directories
+# Post-build: runtime content, staged where the engine executable runs
 # ---------------------------------------------------------------------
-add_custom_command(TARGET SparkGameRTS POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkGameRTS>/Shaders"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkGameRTS>/Assets"
-    COMMENT "Creating SparkGameRTS asset directory structure"
-)
+spark_stage_game_module_content(SparkGameRTS DIRECTORIES Shaders Assets)
 
 # Copy shaders from engine. In-tree builds stage them once through the shared
 # SparkRuntimeShaders target: every module copying the same files into the
@@ -221,15 +223,7 @@ else()
     endif()
     if(EXISTS "${SHADER_SOURCE_DIR}")
         file(GLOB_RECURSE SHADER_FILES "${SHADER_SOURCE_DIR}/*.hlsl")
-        foreach(SHADER_FILE ${SHADER_FILES})
-            get_filename_component(SHADER_NAME ${SHADER_FILE} NAME)
-            add_custom_command(TARGET SparkGameRTS POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    ${SHADER_FILE}
-                    "$<TARGET_FILE_DIR:SparkGameRTS>/Shaders/${SHADER_NAME}"
-                COMMENT "Copying shader ${SHADER_NAME}"
-            )
-        endforeach()
+        spark_stage_game_module_content(SparkGameRTS COPY_FILES Shaders ${SHADER_FILES})
     endif()
 endif()
 

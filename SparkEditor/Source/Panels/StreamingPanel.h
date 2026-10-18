@@ -6,8 +6,7 @@
 #pragma once
 
 #include "../Core/EditorPanel.h"
-#include <imgui.h>
-#include <string>
+#include "SparkUI/Enums.h"
 #include <vector>
 
 namespace SparkEditor
@@ -64,7 +63,8 @@ namespace SparkEditor
         void RenderEventLog();
 
         static const char* GetStatusName(AreaStatus status);
-        static ImVec4 GetStatusColor(AreaStatus status);
+        /// @brief Semantic status of an area state; drawn as glyph + word + colour, never colour alone.
+        static Spark::Ui::Status GetStatusKind(AreaStatus status);
 
         std::vector<AreaInfo> m_areas;
         std::vector<StreamEventLog> m_streamEvents;

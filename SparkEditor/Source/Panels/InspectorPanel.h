@@ -16,9 +16,12 @@
 // full header is required (mirrors EditorUI.h, which includes this for the
 // same reason).
 #include "Engine/ECS/Components.h"
+#include "InspectorPendingWorldEdit.h"
+#include <functional>
 #include <string>
 #include <memory>
 #include <unordered_map>
+#include <vector>
 
 namespace SparkEditor
 {
@@ -149,11 +152,17 @@ namespace SparkEditor
          * one's fields generically through RenderReflectedFields (fed by
          * Spark::TypeRegistry), plus an Add-Component button/popup.
          *
-         * Undo/redo for these edits is DEFERRED — RenderReflectedFields
-         * writes directly to the live component memory, unlike the legacy
-         * SceneFile path which routes every mutation through
-         * CommandHistory. A follow-up unit should wrap ECS field edits in
-         * CommandHistory commands.
+         * RenderReflectedFields writes directly to live component memory, so
+         * each edit gesture is recorded afterwards as one CommandHistory
+         * entry (EditorUI::RecordAppliedDocumentMutation) from a pre-edit
+         * document snapshot. InspectorPendingWorldEdit decides when the
+         * gesture ends (EDT-210): its widget is no longer active, selection
+         * moved, the panel stopped rendering this entity, or an immediate
+         * Add/Remove command is about to run.
+         *
+         * Asset-path fields (see InspectorWorldAssetDrop.h) are also drop
+         * targets for Asset Browser drags; an accepted drop flushes the open
+         * gesture and records one "Assign ... Asset" entry of its own.
          *
          * @param world  The live ECS World (owned by EditorUI).
          * @param entity The currently selected entity (already validated
@@ -165,6 +174,12 @@ namespace SparkEditor
         /// Spark::ComponentFactory's registered type names and adds the
         /// picked type to the entity via Spark::ComponentFactory::AddComponent.
         void RenderWorldAddComponentMenu(::World* world, ::EntityID entity);
+
+        /// Once per frame: record or drop the pending World-backed field edit.
+        void SettlePendingWorldEdit();
+        /// Record the pending field edit now, ahead of an immediate command.
+        void FlushPendingWorldEdit();
+        InspectorPendingWorldEdit::CommitFn WorldEditCommitter();
 
         /// Helper: check if the inspected object has a specific component type
         bool HasComponent(ComponentType type) const;
@@ -185,10 +200,15 @@ namespace SparkEditor
          * Supports Bool, Int, Float, String (char[N] buffers), Vector3, Vector4.
          * Fields with hasRange use sliders; others use drag controls.
          *
-         * @param data    Pointer to the start of the data struct.
-         * @param fields  Vector of field descriptors (from TypeRegistry or inline).
+         * @param data       Pointer to the start of the data struct.
+         * @param fields     Vector of field descriptors (from TypeRegistry or inline).
+         * @param afterField Optional hook called right after each visible field's
+         *                   widget, while it is still ImGui's last item (the
+         *                   World-backed path attaches asset drop targets here).
+         *                   It must not write through @p data.
          */
-        static bool RenderReflectedFields(void* data, const std::vector<Spark::FieldInfo>& fields);
+        static bool RenderReflectedFields(void* data, const std::vector<Spark::FieldInfo>& fields,
+                                          const std::function<void(const Spark::FieldInfo&)>& afterField = {});
 
       private:
         SceneFile* m_scene = nullptr;                     ///< Non-owning pointer to the active scene.
@@ -202,9 +222,9 @@ namespace SparkEditor
         // selected entity, Render() takes the ECS branch instead of the
         // legacy SceneFile path above.
         EditorUI* m_editorUI = nullptr;
-        bool m_showWorldAddComponentMenu = false; ///< Whether the World-backed Add-Component popup is open.
-        std::unordered_map<std::string, std::string> m_worldEditBaselines;
-        ::EntityID m_worldEditEntity = entt::null;
+        bool m_showWorldAddComponentMenu = false;      ///< Whether the World-backed Add-Component popup is open.
+        InspectorPendingWorldEdit m_pendingWorldEdit;  ///< Open field-edit gesture, if any (EDT-210).
+        ::EntityID m_worldRenderedEntity = entt::null; ///< Entity the World path rendered this frame.
     };
 
 } // namespace SparkEditor

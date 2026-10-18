@@ -21,6 +21,8 @@
  */
 #include "World/TFTravelSystem.h"
 
+#include <cmath>
+
 #include "Data/TFDataTables.h"
 #include "Game/TFPlayerSystem.h"
 #include "Game/TFRedeployRules.h"   // ui-map-keys seam: SetExtraRule (sanctioned extension point)
@@ -206,6 +208,14 @@ namespace Terrafront
             ContinentMeta meta;
             meta.mapId = mapId;
             meta.key = o.HasKey("key") ? o["key"].AsString("") : std::string();
+            if (o["gatewayAreaId"].IsNumber())
+            {
+                const double area = o["gatewayAreaId"].AsNumber();
+                if (std::isfinite(area) && area >= 1.0 && area <= 4294967295.0 && std::floor(area) == area)
+                {
+                    meta.gatewayAreaId = static_cast<uint32_t>(area);
+                }
+            }
             meta.name = name;
             meta.blurb = o.HasKey("blurb") ? o["blurb"].AsString("") : std::string();
             meta.active = !activeScene.empty() && o.HasKey("scene") && o["scene"].AsString("") == activeScene;

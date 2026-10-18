@@ -8,6 +8,8 @@
 #include "Physics3DPanel.h"
 #include "../Core/EditorIcons.h"
 #include "../Core/EditorFonts.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #include "Utils/LogMacros.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
 #include <imgui.h>
@@ -78,7 +80,7 @@ namespace SparkEditor
 
     void Physics3DPanel::RenderWorldSettings()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_GLOBE " World Settings", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("World Settings", ICON_FA_GLOBE, true))
         {
             ImGui::DragFloat3("Gravity", m_gravity, 0.1f, -100.0f, 100.0f);
 
@@ -127,7 +129,7 @@ namespace SparkEditor
 
     void Physics3DPanel::RenderDebugVisualization()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_EYE " Debug Visualization"))
+        if (Spark::Ui::SectionHeader("Debug Visualization", ICON_FA_EYE, false))
         {
             ImGui::Checkbox("Wireframe Shapes", &m_showWireframes);
             ImGui::Checkbox("AABBs", &m_showAABBs);
@@ -156,12 +158,12 @@ namespace SparkEditor
 
     void Physics3DPanel::RenderPhysicsStats()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_CHART_BAR " Statistics"))
+        if (Spark::Ui::SectionHeader("Statistics", ICON_FA_CHART_BAR, false))
         {
-            ImGui::Text("Total Bodies:   %u", m_totalBodies);
-            ImGui::Text("Active Bodies:  %u", m_activeBodies);
-            ImGui::Text("Constraints:    %u", m_constraintCount);
-            ImGui::Text("Sim Time:       %.2f ms", m_simTime);
+            Spark::Ui::KeyValue("Total Bodies:", "%u", m_totalBodies);
+            Spark::Ui::KeyValue("Active Bodies:", "%u", m_activeBodies);
+            Spark::Ui::KeyValue("Constraints:", "%u", m_constraintCount);
+            Spark::Ui::KeyValue("Sim Time:", "%.2f ms", m_simTime);
 
             // Activity bar
             float ratio = m_totalBodies > 0 ? static_cast<float>(m_activeBodies) / m_totalBodies : 0.0f;
@@ -175,7 +177,7 @@ namespace SparkEditor
 
     void Physics3DPanel::RenderQuickAddPrimitives()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_CUBE " Quick Add Physics Object", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Quick Add Physics Object", ICON_FA_CUBE, true))
         {
             const char* shapes[] = {"Box", "Sphere", "Capsule", "Cylinder"};
             ImGui::Combo("Shape", &m_quickAddShape, shapes, 4);
@@ -206,7 +208,7 @@ namespace SparkEditor
                 break;
             }
 
-            if (ImGui::Button(ICON_FA_PLUS " Add to Scene", ImVec2(-1, 30)))
+            if (Spark::Ui::SecondaryButton(ICON_FA_PLUS " Add to Scene", ImVec2(-1, Spark::Ui::Px(30))))
             {
                 // This will create an entity with Transform + RigidBody + Collider components
                 // via the scene system when wired to the engine. For now, stores the intent.
@@ -215,7 +217,7 @@ namespace SparkEditor
             }
 
             ImGui::Separator();
-            ImGui::TextDisabled("Drag from here into Scene View to place objects.");
+            Spark::Ui::SecondaryText("Drag from here into Scene View to place objects.");
         }
     }
 
@@ -225,7 +227,7 @@ namespace SparkEditor
 
     void Physics3DPanel::RenderCollisionLayers()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_LAYER_GROUP " Collision Layers"))
+        if (Spark::Ui::SectionHeader("Collision Layers", ICON_FA_LAYER_GROUP, false))
         {
             // Layer names
             for (int i = 0; i < 8; ++i)
@@ -235,7 +237,7 @@ namespace SparkEditor
                 char buf[64];
                 strncpy(buf, m_layerNames[i].c_str(), sizeof(buf) - 1);
                 buf[sizeof(buf) - 1] = '\0';
-                ImGui::PushItemWidth(120);
+                ImGui::PushItemWidth(Spark::Ui::Px(120));
                 if (ImGui::InputText(label, buf, sizeof(buf)))
                 {
                     m_layerNames[i] = buf;
@@ -243,8 +245,7 @@ namespace SparkEditor
                 ImGui::PopItemWidth();
             }
 
-            ImGui::Separator();
-            ImGui::Text("Collision Matrix:");
+            Spark::Ui::SubHeader("Collision Matrix");
 
             // Header row
             ImGui::Text("        ");
@@ -253,7 +254,7 @@ namespace SparkEditor
                 ImGui::SameLine();
                 ImGui::Text("%d", j);
                 if (j < 7)
-                    ImGui::SameLine(0, 12);
+                    ImGui::SameLine(0, Spark::Ui::Px(12));
             }
 
             // Matrix checkboxes (lower triangle only — symmetric)
@@ -280,7 +281,7 @@ namespace SparkEditor
 
     void Physics3DPanel::RenderMaterialPresets()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_PALETTE " Material Presets"))
+        if (Spark::Ui::SectionHeader("Material Presets", ICON_FA_PALETTE, false))
         {
             for (int i = 0; i < MAX_PRESETS; ++i)
             {
@@ -302,7 +303,7 @@ namespace SparkEditor
 
     void Physics3DPanel::RenderRaycastTool()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_CROSSHAIRS " Raycast Test"))
+        if (Spark::Ui::SectionHeader("Raycast Test", ICON_FA_CROSSHAIRS, false))
         {
             ImGui::DragFloat3("Origin", m_rayOrigin, 0.1f);
             ImGui::DragFloat3("Direction", m_rayDirection, 0.01f, -1.0f, 1.0f);
@@ -318,12 +319,12 @@ namespace SparkEditor
 
             if (m_rayHit)
             {
-                ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), "Hit at (%.2f, %.2f, %.2f) dist=%.2f",
-                                   m_rayHitPoint[0], m_rayHitPoint[1], m_rayHitPoint[2], m_rayHitDistance);
+                Spark::Ui::StatusText(Spark::Ui::Status::Success, "Hit at (%.2f, %.2f, %.2f) dist=%.2f",
+                                      m_rayHitPoint[0], m_rayHitPoint[1], m_rayHitPoint[2], m_rayHitDistance);
             }
             else
             {
-                ImGui::TextDisabled("No hit");
+                Spark::Ui::SecondaryText("No hit");
             }
         }
     }

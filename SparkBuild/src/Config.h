@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Platform.h"
+#include <cstddef>
+#include <istream>
 #include <string>
 #include <vector>
 #include <map>
@@ -23,8 +25,8 @@ namespace SparkBuild
 
     struct BuildOption
     {
-        std::string cmakeVar;    // e.g. "ENABLE_GRAPHICS"
-        std::string displayName; // e.g. "Graphics Engine"
+        std::string cmakeVar;    // e.g. "ENABLE_RECAST"
+        std::string displayName; // e.g. "Recast Navigation"
         std::string description; // Description text
         bool defaultValue;
         bool currentValue;
@@ -89,9 +91,18 @@ namespace SparkBuild
         // Initialize default build options based on SparkEngine's CMakeLists.txt
         void InitDefaults();
 
-        // Load/save user preferences to INI file
+        // Largest sparkbuild.ini Load accepts. A saved file is a few KiB; the bound
+        // keeps a wrong path (a log, a device, a pipe) from being read into memory.
+        static constexpr size_t kMaxConfigBytes = 64 * 1024;
+
+        // Load/save user preferences to INI file. Load refuses a file larger than
+        // kMaxConfigBytes, then parses it with LoadFromStream.
         bool Load(const std::string& iniPath);
         bool Save(const std::string& iniPath) const;
+
+        // Parse sparkbuild.ini text. Transactional: an unknown section, key or value,
+        // or a repeated key, returns false and leaves config unchanged.
+        bool LoadFromStream(std::istream& input);
 
         // Apply a preset to all options
         void ApplyPresetAllOn();

@@ -11,7 +11,7 @@
 #include "WorldBoss/MMOWorldBossSystem.h"
 #include "Utils/SparkConsole.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -262,6 +262,8 @@ namespace MMO
         const auto* dungeon = m_dungeonSystem ? m_dungeonSystem->GetDungeon(dungeonId) : nullptr;
         if (!dungeon)
             return "Unknown dungeon ID " + std::to_string(dungeonId);
+        if (!dungeon->IsEnterable())
+            return dungeon->name + " is not enterable: its scene has not been authored";
 
         const uint32_t instanceId =
             m_dungeonSystem->CreateInstance(dungeonId, DungeonDifficulty::Normal, {m_characterId});
@@ -467,7 +469,7 @@ namespace MMO
 
     void MMOGameplaySession::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("MMO Playable Session", ImGuiTreeNodeFlags_DefaultOpen))
             return;
 

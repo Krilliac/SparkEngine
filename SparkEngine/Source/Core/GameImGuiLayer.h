@@ -15,6 +15,14 @@
  * injection. Without the injection the module's ImGui calls would hit a null
  * DLL-private GImGui and crash.
  *
+ * Theme contract: Init installs the Spark UI Runtime tokens (Ember, HUD metrics; high contrast,
+ * reduce motion and scale from EngineSettings), loads the Spark font faces and publishes a
+ * Spark::Ui::Sdk::SparkUiRuntimeBlock through ImGuiIO::UserData BEFORE the context is handed to
+ * modules, so modules read it with Spark/UiTheme.h. The executable stays DPI-unaware.
+ *
+ * Thread affinity: every function runs on the main/render thread that owns the ImGui context.
+ * Ownership: this layer owns the context, the backends and the published block.
+ *
  * Compiled only into the SparkEngine executable when SPARK_HAS_IMGUI is
  * defined (see SPARK_ENGINE_ENTRY_POINTS in the root CMakeLists).
  */

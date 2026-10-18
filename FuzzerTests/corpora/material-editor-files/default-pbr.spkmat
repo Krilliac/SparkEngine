@@ -1,0 +1,35 @@
+# SparkEngine Material
+name: PR616_FinalMaterial
+shader: Shaders/PR616_QA.hlsl
+
+# Parameters
+param albedoColor color 0.8 0.8 0.8 1
+param metallic float 0
+param roughness float 0.248
+param opacity float 1
+param normalStrength float 1
+param emissionColor color 0 0 0 1
+param emissionIntensity float 0
+param aoStrength float 1
+param detailTiling float2 1 1
+param useDetailMap bool false
+
+# Texture Slots
+texture_slot Albedo 0 none 1 1 0 0
+texture_slot Normal 1 none 1 1 0 0
+texture_slot Metallic 2 none 1 1 0 0
+texture_slot Roughness 3 none 1 1 0 0
+texture_slot Ambient Occlusion 4 none 1 1 0 0
+texture_slot Emission 5 none 1 1 0 0
+texture_slot Height 6 none 1 1 0 0
+texture_slot Detail 7 none 1 1 0 0
+
+# Render State
+blend_mode 0
+cull_mode 0
+depth_write true
+depth_test true
+cast_shadows true
+receive_shadows true
+alpha_clip 0.5
+render_queue 2000

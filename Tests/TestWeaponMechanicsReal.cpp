@@ -1,22 +1,23 @@
 /**
  * @file TestWeaponMechanicsReal.cpp
- * @brief Production-source companion for TestWeaponMechanics.cpp
+ * @brief Production-source tests for the shipped FPS weapon model and WeaponSystem
  *
- * TestWeaponMechanics.cpp is a standalone reimplementation of the weapon model;
- * it cannot detect a regression in the shipped code. This file includes the real
- * header and exercises Spark::Gameplay's shipped types: WeaponDefinition,
- * WeaponInstance, WeaponInventoryComponent and WeaponRegistry
- * (Engine/Gameplay/WeaponManager.cpp, already part of SparkEngineLib).
- *
- * WeaponSystem::Update walks the ECS world from EngineContext, so its per-entity
- * state machine is covered by the engine-level integration tests rather than
- * here; what this file pins down is the shipped data model and registry lookup.
+ * Exercises Spark::Gameplay's shipped types (Engine/Gameplay/WeaponManager.cpp,
+ * part of SparkEngineLib): the WeaponDefinition / WeaponInstance data model, the
+ * WeaponInventoryComponent, WeaponRegistry lookup, and WeaponSystem::Update's
+ * fire / cooldown / reload / recoil / spread / ADS / switching state machine,
+ * driven through a real World published by an injected EngineContext.
+ * (RDY-010 retired the standalone TestWeaponMechanics.cpp mirror these replaced.)
  */
 
 #include "TestFramework.h"
+#include "Core/EngineContext.h"
+#include "Engine/ECS/Components.h"
 #include "Engine/Gameplay/WeaponManager.h"
 
+#include <cstddef>
 #include <string>
+#include <vector>
 
 using namespace Spark::Gameplay;
 
@@ -35,6 +36,38 @@ namespace
         def.magazineSize = 30;
         return def;
     }
+
+    /// One armed entity in a real World that WeaponSystem::Update reaches through EngineContext.
+    struct WeaponRig
+    {
+        EngineContext context;
+        World world;
+        WeaponSystem system;
+        WeaponInventoryComponent* inventory = nullptr;
+        std::vector<WeaponFireEvent> fired;
+
+        explicit WeaponRig(const WeaponDefinition& definition, int currentAmmo = 30, int reserveAmmo = 90)
+        {
+            context.SetWorld(&world);
+            EngineContext::SetInjected(&context);
+            const EntityID entity = world.CreateEntity("WeaponMechanicsReal_Shooter");
+            inventory = &world.AddComponent<WeaponInventoryComponent>(entity);
+            WeaponInstance& weapon = inventory->weapons[static_cast<std::size_t>(definition.slot)];
+            weapon.definitionID = WeaponRegistry::GetInstance().RegisterWeapon(definition);
+            weapon.currentAmmo = currentAmmo;
+            weapon.reserveAmmo = reserveAmmo;
+            inventory->activeSlot = definition.slot;
+            inventory->pendingSlot = definition.slot;
+            system.OnFire([this](const WeaponFireEvent& event) { fired.push_back(event); });
+        }
+
+        ~WeaponRig() { EngineContext::SetInjected(nullptr); }
+
+        WeaponRig(const WeaponRig&) = delete;
+        WeaponRig& operator=(const WeaponRig&) = delete;
+
+        WeaponInstance& Active() { return inventory->GetActiveWeapon(); }
+    };
 } // namespace
 
 TEST(WeaponMechanicsReal_ShotIntervalFromFireRate)
@@ -172,4 +205,203 @@ TEST(WeaponMechanicsReal_FireCallbackRegistrationYieldsDistinctHandles)
     EXPECT_NE(first, static_cast<HandlerID>(0));
     EXPECT_NE(second, static_cast<HandlerID>(0));
     EXPECT_NE(first, second);
+}
+
+TEST(WeaponMechanicsReal_FireConsumesAmmoAndEmitsEvent)
+{
+    WeaponDefinition def = MakeDefinition("WeaponMechanicsReal_FireEvent");
+    def.isHitscan = false;
+    def.muzzleVelocity = 450.0f;
+    WeaponRig rig(def);
+    rig.inventory->inputFire = true;
+
+    rig.system.Update(0.0f);
+
+    EXPECT_EQ(rig.Active().currentAmmo, 29);
+    EXPECT_TRUE(rig.Active().state == WeaponState::Firing);
+    EXPECT_NEAR(rig.Active().fireCooldown, 0.1f, 0.0001f);
+    ASSERT_EQ(rig.fired.size(), static_cast<std::size_t>(1));
+    EXPECT_EQ(rig.fired[0].weaponDefID, rig.Active().definitionID);
+    EXPECT_NEAR(rig.fired[0].damage, 20.0f, 0.0001f);
+    EXPECT_FALSE(rig.fired[0].isHitscan);
+    EXPECT_NEAR(rig.fired[0].muzzleVelocity, 450.0f, 0.0001f);
+}
+
+TEST(WeaponMechanicsReal_FireCooldownHoldsUntilShotIntervalElapses)
+{
+    WeaponRig rig(MakeDefinition("WeaponMechanicsReal_Cooldown"));
+    rig.inventory->inputFire = true; // full-auto: the trigger stays held
+
+    rig.system.Update(0.0f);
+    rig.system.Update(0.05f); // half of the 0.1s interval
+    EXPECT_EQ(rig.Active().currentAmmo, 29);
+    EXPECT_EQ(rig.fired.size(), static_cast<std::size_t>(1));
+
+    rig.system.Update(0.06f); // interval elapsed: back to Idle, and it fires again this frame
+    EXPECT_EQ(rig.Active().currentAmmo, 28);
+    EXPECT_EQ(rig.fired.size(), static_cast<std::size_t>(2));
+}
+
+TEST(WeaponMechanicsReal_EmptyMagazineAutoReloadsWithFullReloadTime)
+{
+    WeaponRig rig(MakeDefinition("WeaponMechanicsReal_EmptyReload"), 0, 60);
+    rig.inventory->inputFire = true;
+
+    rig.system.Update(0.0f);
+    EXPECT_TRUE(rig.Active().state == WeaponState::Empty);
+    EXPECT_TRUE(rig.fired.empty());
+
+    rig.inventory->inputFire = false;
+    rig.system.Update(0.0f);
+    EXPECT_TRUE(rig.Active().state == WeaponState::Reloading);
+    EXPECT_NEAR(rig.Active().stateTimer, 2.5f, 0.0001f); // reloadTime: nothing chambered
+
+    rig.system.Update(2.4f);
+    EXPECT_TRUE(rig.Active().state == WeaponState::Reloading);
+    rig.system.Update(0.2f);
+    EXPECT_TRUE(rig.Active().state == WeaponState::Idle);
+    EXPECT_EQ(rig.Active().currentAmmo, 30);
+    EXPECT_EQ(rig.Active().reserveAmmo, 30);
+}
+
+TEST(WeaponMechanicsReal_ManualReloadIsTacticalAndDrawsOnlyWhatReserveHolds)
+{
+    WeaponRig rig(MakeDefinition("WeaponMechanicsReal_TacticalReload"), 20, 5);
+    rig.inventory->inputReload = true;
+
+    rig.system.Update(0.0f);
+    EXPECT_TRUE(rig.Active().state == WeaponState::Reloading);
+    EXPECT_NEAR(rig.Active().stateTimer, 2.0f, 0.0001f); // tacticalReloadTime: a round is chambered
+    EXPECT_FALSE(rig.inventory->inputReload);
+
+    rig.system.Update(2.1f);
+    EXPECT_EQ(rig.Active().currentAmmo, 25);
+    EXPECT_EQ(rig.Active().reserveAmmo, 0);
+}
+
+TEST(WeaponMechanicsReal_NoShotWhileReloadingOrDisabled)
+{
+    WeaponRig rig(MakeDefinition("WeaponMechanicsReal_Blocked"), 15, 60);
+    rig.inventory->inputFire = true;
+
+    rig.Active().state = WeaponState::Disabled;
+    rig.system.Update(0.0f);
+    EXPECT_EQ(rig.Active().currentAmmo, 15);
+
+    rig.Active().state = WeaponState::Reloading;
+    rig.Active().stateTimer = 1.0f;
+    rig.system.Update(0.5f);
+    EXPECT_EQ(rig.Active().currentAmmo, 15);
+    EXPECT_TRUE(rig.fired.empty());
+}
+
+TEST(WeaponMechanicsReal_RecoilFirstShotMultiplierClampAndRecovery)
+{
+    WeaponDefinition def = MakeDefinition("WeaponMechanicsReal_Recoil");
+    def.recoil.verticalPerShot = 1.0f;
+    def.recoil.firstShotMultiplier = 1.5f;
+    def.recoil.maxVertical = 2.0f;
+    def.recoil.recoverySpeed = 2.5f;
+    WeaponRig rig(def);
+    rig.inventory->inputFire = true;
+
+    rig.system.Update(0.0f);
+    EXPECT_NEAR(rig.Active().accumulatedVerticalRecoil, 1.5f, 0.0001f); // the first shot kicks 1.5x
+
+    rig.Active().fireCooldown = 0.0f;
+    rig.Active().state = WeaponState::Idle;
+    rig.system.Update(0.0f);
+    EXPECT_NEAR(rig.Active().accumulatedVerticalRecoil, 2.0f, 0.0001f); // 2.5 clamped to maxVertical
+
+    rig.inventory->inputFire = false;
+    rig.system.Update(0.4f); // recovers at 2.5 degrees per second
+    EXPECT_NEAR(rig.Active().accumulatedVerticalRecoil, 1.0f, 0.0001f);
+    rig.system.Update(10.0f);
+    EXPECT_NEAR(rig.Active().accumulatedVerticalRecoil, 0.0f, 0.0001f); // floors at zero
+}
+
+TEST(WeaponMechanicsReal_FireEventSpreadAppliesADSRecoilAndCap)
+{
+    WeaponDefinition def = MakeDefinition("WeaponMechanicsReal_Spread");
+    def.spread.baseSpread = 2.0f;
+    def.spread.adsReduction = 0.5f;
+    def.spread.maxSpread = 10.0f;
+    def.recoil.verticalPerShot = 1.0f;
+    def.recoil.firstShotMultiplier = 1.0f;
+    {
+        WeaponRig rig(def);
+        rig.inventory->inputFire = true;
+        rig.system.Update(0.0f);
+        ASSERT_EQ(rig.fired.size(), static_cast<std::size_t>(1));
+        EXPECT_NEAR(rig.fired[0].spreadAngle, 2.2f, 0.0001f); // base + 0.2 * accumulated recoil
+    }
+    {
+        WeaponDefinition aimed = def;
+        aimed.name = "WeaponMechanicsReal_SpreadADS";
+        WeaponRig rig(aimed);
+        rig.Active().isADS = true;
+        rig.inventory->inputADS = true;
+        rig.inventory->inputFire = true;
+        rig.system.Update(0.0f);
+        ASSERT_EQ(rig.fired.size(), static_cast<std::size_t>(1));
+        EXPECT_NEAR(rig.fired[0].spreadAngle, 1.2f, 0.0001f); // 2.0 * 0.5 + 0.2
+    }
+    {
+        WeaponDefinition capped = def;
+        capped.name = "WeaponMechanicsReal_SpreadCap";
+        capped.spread.maxSpread = 1.5f;
+        WeaponRig rig(capped);
+        rig.inventory->inputFire = true;
+        rig.system.Update(0.0f);
+        ASSERT_EQ(rig.fired.size(), static_cast<std::size_t>(1));
+        EXPECT_NEAR(rig.fired[0].spreadAngle, 1.5f, 0.0001f);
+    }
+}
+
+TEST(WeaponMechanicsReal_ADSBlendFollowsAdsTime)
+{
+    WeaponDefinition def = MakeDefinition("WeaponMechanicsReal_ADS");
+    def.adsTime = 0.2f;
+    WeaponRig rig(def);
+
+    rig.inventory->inputADS = true;
+    rig.system.Update(0.1f);
+    EXPECT_NEAR(rig.Active().adsBlend, 0.5f, 0.0001f);
+    EXPECT_FALSE(rig.Active().isADS);
+    rig.system.Update(0.15f);
+    EXPECT_NEAR(rig.Active().adsBlend, 1.0f, 0.0001f);
+    EXPECT_TRUE(rig.Active().isADS);
+
+    rig.inventory->inputADS = false;
+    rig.system.Update(0.3f);
+    EXPECT_NEAR(rig.Active().adsBlend, 0.0f, 0.0001f);
+    EXPECT_FALSE(rig.Active().isADS);
+}
+
+TEST(WeaponMechanicsReal_SwitchHolstersThenEquipsTheTargetSlot)
+{
+    WeaponDefinition primary = MakeDefinition("WeaponMechanicsReal_SwitchPrimary");
+    primary.holsterTime = 0.3f;
+    WeaponRig rig(primary);
+    WeaponDefinition secondary = MakeDefinition("WeaponMechanicsReal_SwitchSecondary");
+    secondary.slot = WeaponSlot::Secondary;
+    secondary.equipTime = 0.5f;
+    WeaponInstance& sidearm = rig.inventory->weapons[static_cast<std::size_t>(WeaponSlot::Secondary)];
+    sidearm.definitionID = WeaponRegistry::GetInstance().RegisterWeapon(secondary);
+    sidearm.currentAmmo = 12;
+
+    rig.inventory->inputSwitchSlot = static_cast<int>(WeaponSlot::Secondary);
+    rig.system.Update(0.0f);
+    EXPECT_TRUE(rig.Active().state == WeaponState::Switching);
+    EXPECT_NEAR(rig.Active().stateTimer, 0.3f, 0.0001f);
+    EXPECT_EQ(rig.inventory->inputSwitchSlot, -1);
+
+    rig.system.Update(0.3f); // holster done: the secondary starts equipping
+    EXPECT_TRUE(rig.inventory->activeSlot == WeaponSlot::Secondary);
+    EXPECT_TRUE(rig.Active().state == WeaponState::Switching);
+    EXPECT_NEAR(rig.Active().stateTimer, 0.5f, 0.0001f);
+
+    rig.system.Update(0.5f);
+    EXPECT_TRUE(rig.Active().state == WeaponState::Idle);
+    EXPECT_EQ(rig.Active().currentAmmo, 12);
 }

@@ -97,7 +97,7 @@ namespace Spark
         std::string mapName;
         std::string gameMode;
         float duration = 0.0f;
-        uint32_t version = 1;
+        uint32_t version = 1; ///< Written by SaveToFile; LoadFromFile accepts only kReplayVersion.
         std::vector<ReplayFrame> frames;
         std::vector<ReplayEvent> events;
     };
@@ -107,6 +107,8 @@ namespace Spark
     // ============================================================================
 
     constexpr uint32_t kReplayMagic = 0x52504C59; // "RPLY"
+    /// The only on-disk layout this reader decodes (the one SaveToFile writes).
+    constexpr uint32_t kReplayVersion = 1;
     constexpr uint32_t kMaxStringLength = 4096;
     constexpr uint32_t kMaxFrameCount = 1'000'000;
     constexpr uint32_t kMaxEntityCount = 100'000;
@@ -182,6 +184,19 @@ namespace Spark
 
         // --- File I/O ---
         bool SaveToFile(const std::string& filePath) const;
+
+        /**
+         * @brief Replace the held replay with the one in `filePath` (an untrusted, shareable file).
+         *
+         * Every declared count is bounded by the bytes left in the file before it is allocated.
+         * The file is rejected unless its version is kReplayVersion, its duration is finite and
+         * non-negative, its frame timestamps are finite, non-decreasing and within the duration,
+         * and every entity and event value is finite, so playback, seeking and the kill cam only
+         * ever see a sorted, bounded timeline. On any failure the previously held replay and
+         * playback state are left untouched.
+         *
+         * @return true when the file was decoded and committed.
+         */
         bool LoadFromFile(const std::string& filePath);
 
         // --- Console ---

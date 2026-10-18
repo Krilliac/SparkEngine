@@ -14,6 +14,8 @@
 #include "../Core/ProjectManager.h"
 #include "../Core/EditorIcons.h"
 #include "../../../SparkEngine/Source/Utils/Validate.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
@@ -88,22 +90,22 @@ namespace SparkEditor
             RenderPlatformSelector();
             ImGui::Separator();
 
-            if (ImGui::CollapsingHeader(ICON_FA_COG " Build Options", ImGuiTreeNodeFlags_DefaultOpen))
+            if (Spark::Ui::SectionHeader("Build Options", ICON_FA_COG))
             {
                 RenderBuildOptions();
             }
 
-            if (ImGui::CollapsingHeader(ICON_FA_TRASH " Stripping Options"))
+            if (Spark::Ui::SectionHeader("Stripping Options", ICON_FA_TRASH, false))
             {
                 RenderStrippingOptions();
             }
 
-            if (ImGui::CollapsingHeader(ICON_FA_COGS " Asset Cooking"))
+            if (Spark::Ui::SectionHeader("Asset Cooking", ICON_FA_COGS, false))
             {
                 RenderAssetCooking();
             }
 
-            if (ImGui::CollapsingHeader(ICON_FA_DOWNLOAD " Packaging"))
+            if (Spark::Ui::SectionHeader("Packaging", ICON_FA_DOWNLOAD, false))
             {
                 RenderPackagingOptions();
             }
@@ -132,203 +134,139 @@ namespace SparkEditor
 
     void BuildCookPanel::RenderProfileSelector()
     {
-        ImGui::Text(ICON_FA_HAMMER " Build Profile");
-        ImGui::Spacing();
+        Spark::Ui::SubHeader(ICON_FA_HAMMER " Build Profile");
 
-        float btnWidth = (ImGui::GetContentRegionAvail().x - 12.0f) / 4.0f;
-        ImVec2 btnSize(btnWidth, 32.0f);
-
-        auto ProfileButton = [&](const char* label, BuildProfile profile, const ImVec4& color)
+        // Segment order matches the BuildProfile enumerators.
+        static constexpr const char* kProfileLabels[] = {ICON_FA_BUG " Debug", ICON_FA_CODE " Dev",
+                                                         ICON_FA_CHECK " Release", ICON_FA_ROCKET " Ship"};
+        int profileIndex = static_cast<int>(m_settings.profile);
+        if (Spark::Ui::SegmentedControl("##BuildProfile", kProfileLabels, 4, &profileIndex))
         {
-            bool active = (m_settings.profile == profile);
-            if (active)
-            {
-                ImGui::PushStyleColor(ImGuiCol_Button, color);
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                                      ImVec4(color.x + 0.1f, color.y + 0.1f, color.z + 0.1f, 1.0f));
-            }
-            if (ImGui::Button(label, btnSize))
-            {
-                m_settings.profile = profile;
-                ApplyProfileDefaults(profile);
-            }
-            if (active)
-                ImGui::PopStyleColor(2);
-            if (ImGui::IsItemHovered())
-            {
-                const char* desc = "";
-                switch (profile)
-                {
-                case BuildProfile::Debug:
-                    desc = "Full debug symbols, assertions, console, no optimizations.\n"
-                           "Best for development and debugging.";
-                    break;
-                case BuildProfile::Development:
-                    desc = "Debug symbols, console, profiler, moderate optimizations.\n"
-                           "Good balance of debuggability and performance.";
-                    break;
-                case BuildProfile::Release:
-                    desc = "Optional debug symbols, full optimizations.\n"
-                           "Console and profiler optional. Good for QA testing.";
-                    break;
-                case BuildProfile::Shipping:
-                    desc = "No debug symbols, no console, no profiler.\n"
-                           "Maximum optimization. For end-user distribution.";
-                    break;
-                }
-                ImGui::SetTooltip("%s", desc);
-            }
-            ImGui::SameLine();
-        };
+            m_settings.profile = static_cast<BuildProfile>(profileIndex);
+            ApplyProfileDefaults(m_settings.profile);
+        }
+        // SegmentedControl reports only a change of profile, so re-clicking the active profile no
+        // longer resets hand-edited settings; this button does that explicitly.
+        ImGui::SameLine();
+        if (ImGui::SmallButton(ICON_FA_UNDO " Reset to profile defaults"))
+        {
+            ApplyProfileDefaults(m_settings.profile);
+        }
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("Discard the edited settings below and restore the %s profile defaults.",
+                              GetProfileName(m_settings.profile));
+        }
 
-        ProfileButton(ICON_FA_BUG " Debug", BuildProfile::Debug, ImVec4(0.7f, 0.3f, 0.3f, 1.0f));
-        ProfileButton(ICON_FA_CODE " Dev", BuildProfile::Development, ImVec4(0.3f, 0.5f, 0.7f, 1.0f));
-        ProfileButton(ICON_FA_CHECK " Release", BuildProfile::Release, ImVec4(0.3f, 0.65f, 0.3f, 1.0f));
-        ProfileButton(ICON_FA_ROCKET " Ship", BuildProfile::Shipping, ImVec4(0.8f, 0.55f, 0.1f, 1.0f));
-        ImGui::NewLine();
+        const char* description = "";
+        switch (m_settings.profile)
+        {
+        case BuildProfile::Debug:
+            description = "Full debug symbols, assertions, console, no optimizations. "
+                          "Best for development and debugging.";
+            break;
+        case BuildProfile::Development:
+            description = "Debug symbols, console, profiler, moderate optimizations. "
+                          "Good balance of debuggability and performance.";
+            break;
+        case BuildProfile::Release:
+            description = "Optional debug symbols, full optimizations. "
+                          "Console and profiler optional. Good for QA testing.";
+            break;
+        case BuildProfile::Shipping:
+            description = "No debug symbols, no console, no profiler. "
+                          "Maximum optimization. For end-user distribution.";
+            break;
+        }
+        ImGui::PushTextWrapPos(0.0f);
+        Spark::Ui::SecondaryText("%s", description);
+        ImGui::PopTextWrapPos();
 
-        // Profile summary
-        ImVec4 summaryColor(0.6f, 0.6f, 0.6f, 1.0f);
-        ImGui::TextColored(summaryColor, "Profile: %s | Platform: %s", GetProfileName(m_settings.profile),
-                           GetPlatformName(m_settings.platform));
+        Spark::Ui::SecondaryText("Profile: %s | Platform: %s", GetProfileName(m_settings.profile),
+                                 GetPlatformName(m_settings.platform));
     }
 
     void BuildCookPanel::RenderPlatformSelector()
     {
-        ImGui::Text(ICON_FA_GLOBE " Target Platform");
+        Spark::Ui::SubHeader(ICON_FA_GLOBE " Target Platform");
         m_settings.platform = BuildPipeline::NativeTargetPlatform();
         ImGui::Text("%s (native)", GetPlatformName(m_settings.platform));
-        ImGui::TextDisabled("This editor produces complete native packages only. Cross-compilation requires an "
-                            "external toolchain and matching runtime host.");
+        ImGui::PushTextWrapPos(0.0f);
+        Spark::Ui::SecondaryText("This editor produces complete native packages only. Cross-compilation requires an "
+                                 "external toolchain and matching runtime host.");
+        ImGui::PopTextWrapPos();
     }
 
     void BuildCookPanel::RenderBuildOptions()
     {
-        ImGui::Indent(8.0f);
-        ImGui::TextWrapped("The selected profile controls module optimization and debug information. "
-                           "Engine features are fixed by the installed SparkEngine SDK/runtime.");
+        ImGui::PushTextWrapPos(0.0f);
+        Spark::Ui::SecondaryText("The selected profile controls module optimization and debug information. "
+                                 "Engine features are fixed by the installed SparkEngine SDK/runtime.");
+        ImGui::PopTextWrapPos();
         ImGui::Checkbox("Package available debug symbols", &m_settings.includeDebugSymbols);
         ImGui::Checkbox("Link-Time Optimization (LTO)", &m_settings.enableLTO);
-        ImGui::Unindent(8.0f);
     }
 
     void BuildCookPanel::RenderStrippingOptions()
     {
-        ImGui::Indent(8.0f);
-
-        ImGui::TextDisabled("Unavailable: runtime feature stripping is not implemented for standalone modules.");
-        ImGui::BeginDisabled();
-
-        ImGui::TextColored(ImVec4(0.9f, 0.6f, 0.2f, 1.0f),
-                           ICON_FA_EXCLAMATION " Stripping removes features from the build.");
-        ImGui::TextColored(ImVec4(0.9f, 0.6f, 0.2f, 1.0f), "  Use for Shipping builds distributed to end users.");
+        Spark::Ui::UnavailableFeature("Runtime feature stripping",
+                                      "Standalone modules cannot strip runtime features yet. The choices below show "
+                                      "what the selected profile requests.");
         ImGui::Spacing();
 
-        ImGui::Text("Strip from build:");
+        const Spark::Ui::ScopedDisabled disabled(true);
+        Spark::Ui::SubHeader("Strip from build");
+
         ImGui::Checkbox("Debug Symbols", &m_settings.stripDebugSymbols);
-        if (ImGui::IsItemHovered())
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
             ImGui::SetTooltip("Remove .pdb files and debug info.\nReduces build size significantly.");
 
         ImGui::Checkbox("Console (SparkConsole.exe)", &m_settings.stripConsole);
-        if (ImGui::IsItemHovered())
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
             ImGui::SetTooltip("Remove SparkConsole executable.\nEnd users won't have access to the debug console.");
 
         ImGui::Checkbox("Profiler", &m_settings.stripProfiler);
-        if (ImGui::IsItemHovered())
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
             ImGui::SetTooltip("Remove performance profiling instrumentation.\nSlightly reduces binary size.");
 
         ImGui::Checkbox("Developer Commands", &m_settings.stripDevCommands);
-        if (ImGui::IsItemHovered())
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
             ImGui::SetTooltip(
                 "Remove dev/cheat commands (god, noclip, teleport, etc.).\nPrevents end users from using cheats.");
 
         ImGui::Checkbox("Log Files", &m_settings.stripLogFiles);
-        if (ImGui::IsItemHovered())
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
             ImGui::SetTooltip("Disable file-based logging.\nReduces disk I/O in shipping builds.");
 
         ImGui::Checkbox("Editor Assets", &m_settings.stripEditorAssets);
-        if (ImGui::IsItemHovered())
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
             ImGui::SetTooltip("Remove editor-only assets (fonts, icons, themes).\nNot needed in standalone game.");
 
         ImGui::Checkbox("Unused Assets", &m_settings.stripUnusedAssets);
-        if (ImGui::IsItemHovered())
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
             ImGui::SetTooltip("Analyze asset references and remove unreferenced assets.\nReduces package size.");
 
         ImGui::Checkbox("Test Content", &m_settings.stripTestContent);
-        if (ImGui::IsItemHovered())
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
             ImGui::SetTooltip("Remove test scenes, debug levels, and test-only content.");
-
-        // Show asset summary for stripping decisions
-        ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Text(ICON_FA_LIST " Assets to strip:");
-
-        struct AssetCategory
-        {
-            const char* icon;
-            const char* name;
-            int count;
-            bool stripped;
-        };
-
-        AssetCategory categories[] = {
-            {ICON_FA_IMAGE, "Editor Textures", 24, m_settings.stripEditorAssets},
-            {ICON_FA_FONT, "Editor Fonts", 6, m_settings.stripEditorAssets},
-            {ICON_FA_CUBE, "Test Scenes", 8, m_settings.stripTestContent},
-            {ICON_FA_BUG, "Debug Meshes", 12, m_settings.stripTestContent},
-            {ICON_FA_TERMINAL, "Console Scripts", 3, m_settings.stripConsole},
-            {ICON_FA_CHART_BAR, "Profiler Data", 5, m_settings.stripProfiler},
-        };
-
-        if (ImGui::BeginTable("##StripAssets", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH))
-        {
-            ImGui::TableSetupColumn("Asset", ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableSetupColumn("Count", ImGuiTableColumnFlags_WidthFixed, 50.0f);
-            ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 70.0f);
-
-            for (const auto& cat : categories)
-            {
-                ImGui::TableNextRow();
-                ImGui::TableNextColumn();
-                ImGui::Text("%s %s", cat.icon, cat.name);
-                ImGui::TableNextColumn();
-                ImGui::Text("%d", cat.count);
-                ImGui::TableNextColumn();
-                if (cat.stripped)
-                {
-                    ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), "Strip");
-                }
-                else
-                {
-                    ImGui::TextColored(ImVec4(0.5f, 0.8f, 0.5f, 1.0f), "Keep");
-                }
-            }
-
-            ImGui::EndTable();
-        }
-
-        ImGui::EndDisabled();
-        ImGui::Unindent(8.0f);
     }
 
     void BuildCookPanel::RenderAssetCooking()
     {
-        ImGui::Indent(8.0f);
-
         ImGui::Checkbox("Include Assets directory", &m_settings.cookAssets);
         if (!m_settings.cookAssets)
         {
-            ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.3f, 1.0f), "Assets will be omitted from the package.");
-            ImGui::Unindent(8.0f);
+            Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Assets will be omitted from the package.");
             return;
         }
 
-        ImGui::TextWrapped("Content packaging currently copies source assets unchanged. Platform texture, audio, "
-                           "mesh, mip, and LOD transforms are not implemented yet.");
-        ImGui::BeginDisabled();
+        Spark::Ui::UnavailableFeature("Platform asset transforms",
+                                      "Content packaging currently copies source assets unchanged. Platform texture, "
+                                      "audio, mesh, mip, and LOD transforms are not implemented yet.");
 
-        ImGui::Separator();
-        ImGui::Text(ICON_FA_IMAGE " Textures:");
+        const Spark::Ui::ScopedDisabled disabled(true);
+
+        Spark::Ui::SubHeader(ICON_FA_IMAGE " Textures");
         ImGui::Checkbox("Compress Textures", &m_settings.compressTextures);
         if (m_settings.compressTextures)
         {
@@ -350,49 +288,44 @@ namespace SparkEditor
         }
         ImGui::Checkbox("Generate Mipmaps", &m_settings.generateMipmaps);
 
-        ImGui::Separator();
-        ImGui::Text(ICON_FA_VOLUME_UP " Audio:");
+        Spark::Ui::SubHeader(ICON_FA_VOLUME_UP " Audio");
         ImGui::Checkbox("Compress Audio", &m_settings.compressAudio);
         if (m_settings.compressAudio)
         {
             ImGui::SliderInt("Audio Quality", &m_settings.audioQuality, 0, 100, "%d%%");
         }
 
-        ImGui::Separator();
-        ImGui::Text(ICON_FA_CUBE " Meshes:");
+        Spark::Ui::SubHeader(ICON_FA_CUBE " Meshes");
         ImGui::Checkbox("Compress Meshes", &m_settings.compressMeshes);
         ImGui::Checkbox("Generate LODs", &m_settings.generateLODs);
         if (m_settings.generateLODs)
         {
             ImGui::SliderInt("LOD Levels", &m_settings.lodLevels, 1, 6);
         }
-
-        ImGui::EndDisabled();
-        ImGui::Unindent(8.0f);
     }
 
     void BuildCookPanel::RenderPackagingOptions()
     {
-        ImGui::Indent(8.0f);
-
-        ImGui::Text("Output directory:");
-        char outputDir[512];
-        strncpy(outputDir, m_settings.outputDirectory.c_str(), sizeof(outputDir) - 1);
-        outputDir[sizeof(outputDir) - 1] = '\0';
-        ImGui::SetNextItemWidth(-1);
-        if (ImGui::InputText("##OutputDir", outputDir, sizeof(outputDir)))
+        if (Spark::Ui::BeginPropertyGrid("BuildPackaging"))
         {
-            m_settings.outputDirectory = outputDir;
-        }
+            Spark::Ui::PropertyLabel("Output directory");
+            char outputDir[512];
+            strncpy(outputDir, m_settings.outputDirectory.c_str(), sizeof(outputDir) - 1);
+            outputDir[sizeof(outputDir) - 1] = '\0';
+            if (ImGui::InputText("##OutputDir", outputDir, sizeof(outputDir)))
+            {
+                m_settings.outputDirectory = outputDir;
+            }
 
-        ImGui::Text("Executable name:");
-        char exeName[256];
-        strncpy(exeName, m_settings.executableName.c_str(), sizeof(exeName) - 1);
-        exeName[sizeof(exeName) - 1] = '\0';
-        ImGui::SetNextItemWidth(-1);
-        if (ImGui::InputText("##ExeName", exeName, sizeof(exeName)))
-        {
-            m_settings.executableName = exeName;
+            Spark::Ui::PropertyLabel("Executable name");
+            char exeName[256];
+            strncpy(exeName, m_settings.executableName.c_str(), sizeof(exeName) - 1);
+            exeName[sizeof(exeName) - 1] = '\0';
+            if (ImGui::InputText("##ExeName", exeName, sizeof(exeName)))
+            {
+                m_settings.executableName = exeName;
+            }
+            Spark::Ui::EndPropertyGrid();
         }
 
         ImGui::Separator();
@@ -400,145 +333,132 @@ namespace SparkEditor
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Launch the package through SparkAutomation with a frame limit, timeout, log, JSON, "
                               "and JUnit reports.");
-        if (m_settings.runAutomationAfterBuild)
+        if (m_settings.runAutomationAfterBuild && Spark::Ui::BeginPropertyGrid("BuildAutomation"))
         {
-            ImGui::Indent();
-            ImGui::SliderInt("Automation Frames", &m_settings.automationFrames, 1, 3600);
-            ImGui::SliderInt("Automation Timeout (seconds)", &m_settings.automationTimeoutSeconds, 1, 300);
-            ImGui::Unindent();
+            Spark::Ui::PropertyLabel("Automation Frames");
+            ImGui::SliderInt("##AutomationFrames", &m_settings.automationFrames, 1, 3600);
+            Spark::Ui::PropertyLabel("Automation Timeout (seconds)");
+            ImGui::SliderInt("##AutomationTimeout", &m_settings.automationTimeoutSeconds, 1, 300);
+            Spark::Ui::EndPropertyGrid();
         }
 
         ImGui::Separator();
+        // No archive, installer or signing backend exists, so the settings can never be requested.
         m_settings.compressPackage = false;
         m_settings.createInstaller = false;
         m_settings.signExecutable = false;
-        ImGui::TextDisabled("Unavailable: archives, installers, and code signing are not implemented.");
-        ImGui::BeginDisabled();
-        ImGui::Checkbox("Compress Package", &m_settings.compressPackage);
-        ImGui::Checkbox("Create Installer", &m_settings.createInstaller);
-        ImGui::Checkbox("Sign Executable", &m_settings.signExecutable);
-        ImGui::EndDisabled();
-
-        ImGui::Unindent(8.0f);
+        Spark::Ui::UnavailableFeature("Archives, installers and code signing",
+                                      "Packages are written as plain folders; no archive, installer or signing step "
+                                      "is implemented.");
     }
 
     void BuildCookPanel::RenderBuildActions()
     {
-        ImGui::Text(ICON_FA_HAMMER " Actions");
-        ImGui::Spacing();
+        Spark::Ui::SubHeader(ICON_FA_HAMMER " Actions");
 
         const std::string projectRoot = ProjectManager::GetActiveProjectPath();
         const bool hasOpenProject = !projectRoot.empty();
         if (!hasOpenProject)
         {
-            ImGui::TextColored(ImVec4(0.9f, 0.6f, 0.2f, 1.0f),
-                               ICON_FA_EXCLAMATION " Open a project before building or cooking.");
+            Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Open a project before building or cooking.");
             ImGui::Spacing();
         }
         else
         {
-            ImGui::TextDisabled("Project: %s", projectRoot.c_str());
+            Spark::Ui::SecondaryText("Project:");
+            ImGui::SameLine();
+            Spark::Ui::MonoText("%s", projectRoot.c_str());
         }
 
-        float halfWidth = (ImGui::GetContentRegionAvail().x - 4.0f) / 2.0f;
-        ImVec2 btnSize(halfWidth, 36.0f);
+        const float halfWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) / 2.0f;
+        const ImVec2 btnSize(halfWidth, Spark::Ui::Px(36.0f));
+        const bool canBuild = !m_isBuildRunning && hasOpenProject;
+        const char* disabledReason = hasOpenProject ? "A build is already running." : "Open a project first.";
 
-        // Build button
-        ImVec4 buildColor(0.2f, 0.55f, 0.2f, 1.0f);
-        ImGui::PushStyleColor(ImGuiCol_Button, buildColor);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.65f, 0.3f, 1.0f));
-        bool canBuild = !m_isBuildRunning && hasOpenProject;
-        if (!canBuild)
-            ImGui::BeginDisabled();
-        if (ImGui::Button(ICON_FA_HAMMER " Build", btnSize))
         {
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "Build started");
-            m_buildLog.clear();
-            m_buildLog.push_back({"Starting " + std::string(GetProfileName(m_settings.profile)) + " build for " +
-                                      GetPlatformName(m_settings.platform) + "...",
-                                  "info"});
-            // Launch async build via BuildPipeline
-            if (m_pipeline->StartBuild(m_settings, projectRoot))
+            const Spark::Ui::ScopedDisabled disabled(!canBuild, disabledReason);
+            if (Spark::Ui::PrimaryButton(ICON_FA_HAMMER " Build", btnSize))
             {
-                m_isBuildRunning = true;
-                m_buildProgress = 0.0f;
-                m_buildStatus = "Starting...";
-            }
-            else
-            {
-                for (auto& line : m_pipeline->DrainLogLines())
-                    m_buildLog.push_back(
-                        {std::move(line.text), line.level == BuildLogLine::Level::Error ? "error" : "info"});
-                m_buildStatus = m_pipeline->GetStatusText();
-                if (m_buildLog.empty())
-                    m_buildLog.push_back({"Failed to start build — another build may be running", "error"});
+                SPARK_LOG_INFO(Spark::LogCategory::Editor, "Build started");
+                m_buildLog.clear();
+                m_buildLog.push_back({"Starting " + std::string(GetProfileName(m_settings.profile)) + " build for " +
+                                          GetPlatformName(m_settings.platform) + "...",
+                                      "info"});
+                // Launch async build via BuildPipeline
+                if (m_pipeline->StartBuild(m_settings, projectRoot))
+                {
+                    m_isBuildRunning = true;
+                    m_buildProgress = 0.0f;
+                    m_buildStatus = "Starting...";
+                }
+                else
+                {
+                    for (auto& line : m_pipeline->DrainLogLines())
+                        m_buildLog.push_back(
+                            {std::move(line.text), line.level == BuildLogLine::Level::Error ? "error" : "info"});
+                    m_buildStatus = m_pipeline->GetStatusText();
+                    if (m_buildLog.empty())
+                        m_buildLog.push_back({"Failed to start build — another build may be running", "error"});
+                }
             }
         }
-        if (!canBuild)
-            ImGui::EndDisabled();
-        ImGui::PopStyleColor(2);
 
         ImGui::SameLine();
 
-        // Cook Only button
-        if (!canBuild)
-            ImGui::BeginDisabled();
-        if (ImGui::Button(ICON_FA_FIRE " Cook Only", btnSize))
         {
-            m_buildLog.clear();
-            m_buildLog.push_back(
-                {"Cooking assets for " + std::string(GetPlatformName(m_settings.platform)) + "...", "info"});
-            if (m_pipeline->StartCookOnly(m_settings, projectRoot))
+            const Spark::Ui::ScopedDisabled disabled(!canBuild, disabledReason);
+            if (Spark::Ui::SecondaryButton(ICON_FA_FIRE " Cook Only", btnSize))
             {
-                m_isBuildRunning = true;
-                m_buildProgress = 0.0f;
-                m_buildStatus = "Cooking assets...";
+                m_buildLog.clear();
+                m_buildLog.push_back(
+                    {"Cooking assets for " + std::string(GetPlatformName(m_settings.platform)) + "...", "info"});
+                if (m_pipeline->StartCookOnly(m_settings, projectRoot))
+                {
+                    m_isBuildRunning = true;
+                    m_buildProgress = 0.0f;
+                    m_buildStatus = "Cooking assets...";
+                }
             }
         }
-        if (!canBuild)
-            ImGui::EndDisabled();
 
         // Progress bar
         if (m_isBuildRunning || m_buildProgress > 0.0f)
         {
             ImGui::Spacing();
-            ImGui::ProgressBar(m_buildProgress, ImVec2(-1, 20));
-            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", m_buildStatus.c_str());
+            ImGui::ProgressBar(m_buildProgress, ImVec2(-1.0f, Spark::Ui::Px(20.0f)));
+            Spark::Ui::SecondaryText("%s", m_buildStatus.c_str());
 
             // Cancel button — only visible during an active build
             if (m_pipeline->IsRunning())
             {
                 ImGui::SameLine();
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.2f, 0.2f, 1.0f));
-                if (ImGui::Button(ICON_FA_TIMES " Cancel"))
+                if (Spark::Ui::DangerButton(ICON_FA_TIMES " Cancel"))
                 {
                     m_pipeline->Cancel();
                 }
-                ImGui::PopStyleColor();
             }
         }
     }
 
     void BuildCookPanel::RenderBuildLog()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_TERMINAL " Build Log", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Build Log", ICON_FA_TERMINAL))
         {
-            ImGui::BeginChild("##BuildLog", ImVec2(0, 120), true);
+            ImGui::BeginChild("##BuildLog", Spark::Ui::Px2(0, 120), true);
             for (const auto& entry : m_buildLog)
             {
-                ImVec4 color(0.8f, 0.8f, 0.8f, 1.0f);
-                const char* prefix = ICON_FA_INFO_CIRCLE;
                 if (entry.level == "warning")
                 {
-                    color = ImVec4(0.9f, 0.7f, 0.2f, 1.0f);
-                    prefix = ICON_FA_EXCLAMATION;
+                    Spark::Ui::StatusText(Spark::Ui::Status::Warning, "%s", entry.message.c_str());
                 }
                 else if (entry.level == "error")
                 {
-                    color = ImVec4(0.9f, 0.3f, 0.3f, 1.0f);
-                    prefix = ICON_FA_TIMES;
+                    Spark::Ui::StatusText(Spark::Ui::Status::Error, "%s", entry.message.c_str());
                 }
-                ImGui::TextColored(color, "%s %s", prefix, entry.message.c_str());
+                else
+                {
+                    Spark::Ui::MonoText("%s", entry.message.c_str());
+                }
             }
             if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
                 ImGui::SetScrollHereY(1.0f);

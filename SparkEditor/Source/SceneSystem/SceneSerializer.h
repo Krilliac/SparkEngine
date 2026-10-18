@@ -262,23 +262,6 @@ namespace SparkEditor
         bool JSONToComponent(void* json, Component& component);
 
         /**
-     * @brief Validate scene data integrity
-     * @param scene Scene to validate
-     * @param result Result to append warnings/errors to
-     * @return true if scene is valid
-     */
-        bool ValidateScene(const SceneFile& scene, SerializationResult& result);
-
-        /**
-     * @brief Handle version compatibility
-     * @param fileVersion Version of loaded file
-     * @param scene Scene data to potentially upgrade
-     * @param result Result to append warnings to
-     * @return true if compatibility was handled successfully
-     */
-        bool HandleVersionCompatibility(uint32_t fileVersion, SceneFile& scene, SerializationResult& result);
-
-        /**
      * @brief Create backup of scene file before overwriting
      * @param filePath File to backup
      * @return true if backup was created successfully

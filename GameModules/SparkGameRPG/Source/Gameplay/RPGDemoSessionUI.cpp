@@ -8,7 +8,7 @@
 #include "NPC/RPGNPCSystem.h"
 #include "World/RPGWorldSetup.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -16,7 +16,7 @@ namespace RPG
 {
     void RPGDemoSession::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Oakhollow Adventure", ImGuiTreeNodeFlags_DefaultOpen))
         {
             return;

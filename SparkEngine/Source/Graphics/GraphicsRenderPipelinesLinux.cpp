@@ -4,18 +4,27 @@
  *
  * Routes pipeline rendering through the RHI bridge.
  * Windows counterpart lives in GraphicsRenderPipelinesWindows.cpp.
+ *
+ * Statistics contract: these passes never increment
+ * RenderStatistics::drawCalls themselves. Draws are counted by the active RHI
+ * backend as they are recorded and folded in by EndFrame, so a pass that
+ * records nothing reports nothing. None of these passes issues a draw or dispatch
+ * without a pipeline bound for it.
  */
 #include "../Core/Platform.h"
 #ifndef SPARK_PLATFORM_WINDOWS
 
 #include "GraphicsEngine.h"
 #include "GraphicsEngineRHI.h"
+#include "D3D11FrustumCulling.h"
 #include "PostProcessingPipeline.h"
 #include "TemporalEffects.h"
 #include "../Game/GameObject.h"
+#include "../Utils/LogMacros.h"
 
 #include <chrono>
 #include <cmath>
+#include <utility>
 #include <vector>
 
 using namespace DirectX;
@@ -44,7 +53,6 @@ void GraphicsEngine::RenderForward(const XMMATRIX& viewMatrix, const XMMATRIX& p
         if (!obj || !obj->IsActive() || !obj->IsVisible())
             continue;
         obj->Render(viewMatrix, projMatrix);
-        m_statistics.drawCalls++;
     }
 
     cmd->EndEvent();
@@ -95,34 +103,15 @@ void GraphicsEngine::RenderForwardPlus(const XMMATRIX& viewMatrix, const XMMATRI
 
     cmd->BeginEvent("ForwardPlusPass");
 
-    // Depth pre-pass
-    cmd->BeginEvent("DepthPrepass");
-    for (auto* obj : objects)
-    {
-        if (!obj || !obj->IsActive() || !obj->IsVisible())
-            continue;
-        // Depth-only render handled by pipeline state
-        m_statistics.drawCalls++;
-    }
-    cmd->EndEvent();
-
-    // Light culling (compute shader)
-    cmd->BeginEvent("LightCulling");
-    // Dispatch light culling compute shader
-    constexpr uint32_t TILE_SIZE = 16;
-    uint32_t tilesX = (m_width + TILE_SIZE - 1) / TILE_SIZE;
-    uint32_t tilesY = (m_height + TILE_SIZE - 1) / TILE_SIZE;
-    cmd->Dispatch(tilesX, tilesY, 1);
-    cmd->EndEvent();
-
-    // Shading pass with per-tile light lists
+    // The Linux path has no depth-prepass or tiled light-culling compute
+    // pipeline yet, so neither is recorded: an unbound Dispatch is not a
+    // light-culling pass. Objects shade through their own Render path.
     cmd->BeginEvent("Shading");
     for (auto* obj : objects)
     {
         if (!obj || !obj->IsActive() || !obj->IsVisible())
             continue;
         obj->Render(viewMatrix, projMatrix);
-        m_statistics.drawCalls++;
     }
     cmd->EndEvent();
 
@@ -147,7 +136,6 @@ void GraphicsEngine::FillGBuffer(const std::vector<GameObject*>& objects, const 
         if (!obj || !obj->IsActive() || !obj->IsVisible())
             continue;
         obj->Render(viewMatrix, projMatrix);
-        m_statistics.drawCalls++;
     }
 
     cmd->EndEvent();
@@ -155,23 +143,10 @@ void GraphicsEngine::FillGBuffer(const std::vector<GameObject*>& objects, const 
 
 void GraphicsEngine::LightingPass(const XMMATRIX& /*viewMatrix*/, const XMMATRIX& /*projMatrix*/)
 {
-    auto& rhi = GetRHI();
-    if (!rhi.initialized)
-        return;
-
-    Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
-    if (!cmd)
-        return;
-
-    cmd->BeginEvent("LightingPass");
-
-    // Full-screen quad to resolve G-Buffer with lighting
-    // Bind G-Buffer textures as shader resources and draw a full-screen triangle
-    cmd->SetPrimitiveTopology(Spark::RHI::RHIPrimitiveTopology::TriangleList);
-    cmd->Draw(3, 0); // Full-screen triangle
-    m_statistics.drawCalls++;
-
-    cmd->EndEvent();
+    // The Linux RHI path has no G-buffer lighting-resolve pipeline (shader,
+    // G-buffer SRVs, HDR target) yet. A full-screen Draw(3, 0) with nothing
+    // bound is not a lighting pass, so nothing is recorded and nothing is
+    // counted until a real resolve pipeline is bound here.
 }
 
 void GraphicsEngine::CullObjects(const std::vector<GameObject*>& objects, const XMMATRIX& viewMatrix,
@@ -191,57 +166,9 @@ void GraphicsEngine::CullObjects(const std::vector<GameObject*>& objects, const 
     }
     else
     {
-        // Frustum culling via view-projection matrix
-        XMMATRIX viewProj = XMMatrixMultiply(viewMatrix, projMatrix);
-        XMFLOAT4X4 vp;
-        XMStoreFloat4x4(&vp, viewProj);
-
-        // Extract 6 frustum planes from VP matrix (Griggs-Hartmann method)
-        float planes[6][4];
-        // Left:   row3 + row0
-        planes[0][0] = vp.m[0][3] + vp.m[0][0];
-        planes[0][1] = vp.m[1][3] + vp.m[1][0];
-        planes[0][2] = vp.m[2][3] + vp.m[2][0];
-        planes[0][3] = vp.m[3][3] + vp.m[3][0];
-        // Right:  row3 - row0
-        planes[1][0] = vp.m[0][3] - vp.m[0][0];
-        planes[1][1] = vp.m[1][3] - vp.m[1][0];
-        planes[1][2] = vp.m[2][3] - vp.m[2][0];
-        planes[1][3] = vp.m[3][3] - vp.m[3][0];
-        // Bottom: row3 + row1
-        planes[2][0] = vp.m[0][3] + vp.m[0][1];
-        planes[2][1] = vp.m[1][3] + vp.m[1][1];
-        planes[2][2] = vp.m[2][3] + vp.m[2][1];
-        planes[2][3] = vp.m[3][3] + vp.m[3][1];
-        // Top:    row3 - row1
-        planes[3][0] = vp.m[0][3] - vp.m[0][1];
-        planes[3][1] = vp.m[1][3] - vp.m[1][1];
-        planes[3][2] = vp.m[2][3] - vp.m[2][1];
-        planes[3][3] = vp.m[3][3] - vp.m[3][1];
-        // Near:   row2
-        planes[4][0] = vp.m[0][2];
-        planes[4][1] = vp.m[1][2];
-        planes[4][2] = vp.m[2][2];
-        planes[4][3] = vp.m[3][2];
-        // Far:    row3 - row2
-        planes[5][0] = vp.m[0][3] - vp.m[0][2];
-        planes[5][1] = vp.m[1][3] - vp.m[1][2];
-        planes[5][2] = vp.m[2][3] - vp.m[2][2];
-        planes[5][3] = vp.m[3][3] - vp.m[3][2];
-
-        // Normalize planes
-        for (auto& p : planes)
-        {
-            float len = std::sqrt(p[0] * p[0] + p[1] * p[1] + p[2] * p[2]);
-            if (len > 0.0f)
-            {
-                float inv = 1.0f / len;
-                p[0] *= inv;
-                p[1] *= inv;
-                p[2] *= inv;
-                p[3] *= inv;
-            }
-        }
+        // DirectXMath uses row vectors, so extraction uses view-projection columns.
+        const XMMATRIX viewProj = XMMatrixMultiply(viewMatrix, projMatrix);
+        const auto planes = Spark::Graphics::D3D11RenderMath::ExtractFrustumPlanes(viewProj);
 
         for (auto* obj : objects)
         {
@@ -251,16 +178,7 @@ void GraphicsEngine::CullObjects(const std::vector<GameObject*>& objects, const 
             // Sphere-based frustum test
             XMFLOAT3 pos = obj->GetPosition();
             constexpr float boundingRadius = 5.0f;
-            bool visible = true;
-            for (int i = 0; i < 6; ++i)
-            {
-                float dist = planes[i][0] * pos.x + planes[i][1] * pos.y + planes[i][2] * pos.z + planes[i][3];
-                if (dist < -boundingRadius)
-                {
-                    visible = false;
-                    break;
-                }
-            }
+            const bool visible = Spark::Graphics::D3D11RenderMath::SphereIntersects(planes, pos, boundingRadius);
             if (visible)
                 visibleObjects.push_back(obj);
         }
@@ -273,106 +191,116 @@ void GraphicsEngine::CullObjects(const std::vector<GameObject*>& objects, const 
     m_statistics.culledObjects = m_statistics.totalObjects - m_statistics.visibleObjects;
 }
 
-void GraphicsEngine::RenderGeometryPass()
+// ============================================================================
+// Tone-mapping post pass — Linux/RHI
+// ============================================================================
+
+bool Spark::Graphics::Detail::CreateTonemapPass(LinuxRHIState& rhi, const Spark::RHI::RHIPipelineStateDesc& forwardDesc,
+                                                Spark::RHI::IRHIShader* forwardVs, Spark::RHI::IRHIShader* forwardPs,
+                                                bool headless)
 {
-    auto& rhi = GetRHI();
-    if (!rhi.initialized)
-        return;
+    using Spark::RHI::PixelFormat;
+    using Spark::RHI::RHIShaderStage;
 
-    Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
-    if (!cmd)
-        return;
-
-    m_geometryStartTime = std::chrono::high_resolution_clock::now();
-    cmd->BeginEvent("GeometryPass");
-
-    // Process the ECS draw list for geometry rendering
-    for (const auto& drawCmd : m_drawList)
+    Spark::RHI::IRHIDevice* device = rhi.bridge.GetDevice();
+    Spark::RHI::IRHITexture* backBuffer = rhi.bridge.GetBackBuffer();
+    if (!device || !rhi.hdrLighting)
     {
-        // Each draw command is handled by the asset pipeline binding
-        m_statistics.drawCalls++;
+        return false;
     }
 
-    cmd->EndEvent();
-}
+    // The Linux RHI backends read GLSL (OpenGL) or its SPIR-V (Vulkan); there is no HLSL
+    // version of these two stages, and no D3D backend on this path.
+    rhi.bridge.RegisterShader("fullscreen_vs", RHIShaderStage::Vertex, "", "Shaders/GLSL/FullscreenQuad.glsl",
+                              "Shaders/SPIRV/FullscreenQuad.vert.spv", "main");
+    rhi.bridge.RegisterShader("post_tonemap_ps", RHIShaderStage::Pixel, "", "Shaders/GLSL/PostProcess.glsl",
+                              "Shaders/SPIRV/PostProcess.frag.spv", "main");
+    Spark::RHI::IRHIShader* vs = headless ? nullptr : rhi.bridge.GetShader("fullscreen_vs");
+    Spark::RHI::IRHIShader* ps = headless ? nullptr : rhi.bridge.GetShader("post_tonemap_ps");
+    if (!headless && (!vs || !ps))
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to load the tone-mapping shaders via RHI");
+        return false;
+    }
 
-void GraphicsEngine::RenderLightingPass()
-{
-    auto& rhi = GetRHI();
-    if (!rhi.initialized)
-        return;
+    Spark::RHI::RHIPipelineStateDesc hdrDesc = forwardDesc;
+    hdrDesc.renderTargetFormats[0] = rhi.hdrLighting->GetFormat();
+    hdrDesc.debugName = "BasicForwardPassHDR";
+    auto hdrPipeline = device->CreatePipelineState(hdrDesc, forwardVs, forwardPs);
 
-    Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
-    if (!cmd)
-        return;
+    // Full-screen triangle from the vertex index: no vertex input, no depth.
+    Spark::RHI::RHIPipelineStateDesc desc;
+    desc.numRenderTargets = 1;
+    desc.renderTargetFormats[0] = backBuffer ? backBuffer->GetFormat() : PixelFormat::R8G8B8A8_UNORM;
+    desc.depthStencilFormat = PixelFormat::Unknown;
+    desc.depthStencil.depthEnable = false;
+    desc.depthStencil.depthWrite = false;
+    desc.rasterizer.cullMode = Spark::RHI::RHICullMode::None;
+    desc.debugName = "TonemapPass";
+    auto pipeline = device->CreatePipelineState(desc, vs, ps);
 
-    m_lightingStartTime = std::chrono::high_resolution_clock::now();
-    cmd->BeginEvent("LightingResolve");
+    auto constants = rhi.bridge.CreateConstantBuffer(sizeof(PostProcessConstants));
+    auto sampler = rhi.bridge.CreateSamplerLinearClamp();
+    if (!hdrPipeline || !pipeline || !constants || !sampler)
+    {
+        SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "Failed to create the tone-mapping post pass resources");
+        return false;
+    }
 
-    // Resolve lighting using a full-screen pass
-    cmd->SetPrimitiveTopology(Spark::RHI::RHIPrimitiveTopology::TriangleList);
-    cmd->Draw(3, 0); // Full-screen triangle
-    m_statistics.drawCalls++;
-
-    auto endTime = std::chrono::high_resolution_clock::now();
-    m_statistics.lightCullingTime = std::chrono::duration<float, std::milli>(endTime - m_lightingStartTime).count();
-
-    cmd->EndEvent();
+    rhi.basicForward.hdrPipeline = std::move(hdrPipeline);
+    rhi.tonemap.pipeline = std::move(pipeline);
+    rhi.tonemap.constants = std::move(constants);
+    rhi.tonemap.sampler = std::move(sampler);
+    return true;
 }
 
 void GraphicsEngine::RenderPostProcessing()
 {
     m_postProcessStartTime = std::chrono::high_resolution_clock::now();
 
-    // Delegate to the actual PostProcessingPipeline system
-    if (m_postProcessing)
-    {
-        float deltaTime = m_statistics.frameTime / 1000.0f; // ms -> seconds
-        m_postProcessing->Process(deltaTime);
-        m_postProcessing->Render();
-    }
-
-    // Also dispatch through RHI path for cross-platform passes
+    // The PostProcessingPipeline's CPU state advances once per frame in EndFrame; its effect
+    // shaders are D3D11-only, so on this path it executes no pass itself. The one post pass
+    // the Linux RHI path records is tone mapping (PostProcessPass::Tonemapping), and only for a
+    // frame BeginFrame routed into the HDR scene target. The engine-level Bloom/SSAO settings
+    // have no Linux RHI pipeline and add no passes of their own.
+    uint32_t executedPasses = 0;
     auto& rhi = GetRHI();
-    if (rhi.initialized)
+    Spark::RHI::IRHICommandList* cmd = rhi.initialized ? rhi.bridge.GetCommandList() : nullptr;
+    Spark::RHI::IRHIDevice* device = rhi.initialized ? rhi.bridge.GetDevice() : nullptr;
+    Spark::RHI::IRHITexture* backBuffer = rhi.initialized ? rhi.bridge.GetBackBuffer() : nullptr;
+    Spark::RHI::IRHITexture* hdrScene = rhi.hdrLighting.get();
+    if (cmd && device && backBuffer && m_postProcessing && hdrScene && rhi.sceneTarget == hdrScene &&
+        rhi.tonemap.pipeline)
     {
-        Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
-        if (cmd)
-        {
-            uint32_t passCount = 0;
-            cmd->BeginEvent("PostProcessing_RHI");
+        const auto& settings = m_postProcessing->GetTonemappingSettings();
+        PostProcessConstants constants{};
+        constants.screenSize =
+            XMFLOAT2(static_cast<float>(backBuffer->GetWidth()), static_cast<float>(backBuffer->GetHeight()));
+        constants.invScreenSize = XMFLOAT2(1.0f / constants.screenSize.x, 1.0f / constants.screenSize.y);
+        constants.exposure = settings.exposure;
+        // The D3D11 tonemap pass writes the operator's output without a gamma curve.
+        constants.gamma = 1.0f;
+        constants.vignetteRadius = 0.75f;
+        constants.saturation = settings.saturation;
+        device->UpdateBuffer(rhi.tonemap.constants.get(), &constants, sizeof(constants));
 
-            // Bloom pass (engine-level, not in PostProcessingPipeline)
-            if (m_settings.bloom)
-            {
-                cmd->BeginEvent("Bloom");
-                cmd->Draw(3, 0);
-                passCount++;
-                cmd->EndEvent();
-            }
+        cmd->BeginEvent("Tonemapping");
+        // Bind the input first: a sampled-image layout change cannot be recorded while the
+        // back buffer is open for rendering (Vulkan dynamic rendering).
+        cmd->SetShaderResource(Spark::RHI::RHIShaderStage::Pixel, 0, hdrScene);
+        cmd->SetSampler(Spark::RHI::RHIShaderStage::Pixel, 0, rhi.tonemap.sampler.get());
+        cmd->SetRenderTargets(&backBuffer, 1, nullptr);
+        cmd->SetPipelineState(rhi.tonemap.pipeline.get());
+        cmd->SetConstantBuffer(Spark::RHI::RHIShaderStage::Pixel, 1, rhi.tonemap.constants.get());
+        cmd->Draw(3, 0);
+        cmd->EndEvent();
 
-            // SSAO pass
-            if (m_settings.ssao)
-            {
-                cmd->BeginEvent("SSAO");
-                cmd->Draw(3, 0);
-                passCount++;
-                cmd->EndEvent();
-            }
-
-            // Tone mapping (always active when HDR is enabled)
-            if (m_hdrEnabled)
-            {
-                cmd->BeginEvent("ToneMapping");
-                cmd->Draw(3, 0);
-                passCount++;
-                cmd->EndEvent();
-            }
-
-            m_statistics.postProcessPasses = passCount + m_postProcessing->GetActivePassCount();
-            cmd->EndEvent();
-        }
+        // Anything drawn after post-processing (debug overlays, UI) lands on the back buffer.
+        cmd->SetRenderTargets(&backBuffer, 1, rhi.bridge.GetDepthBuffer());
+        rhi.sceneTarget = backBuffer;
+        executedPasses = 1;
     }
+    m_statistics.postProcessPasses = executedPasses;
 
     auto endTime = std::chrono::high_resolution_clock::now();
     m_statistics.postProcessTime = std::chrono::duration<float, std::milli>(endTime - m_postProcessStartTime).count();
@@ -380,44 +308,16 @@ void GraphicsEngine::RenderPostProcessing()
 
 void GraphicsEngine::RenderTemporalEffects()
 {
-    // Delegate to the actual TemporalEffects system
+    // Keep TemporalEffects' CPU state (jitter, history) in step with the
+    // settings. Its Linux Render() records no GPU work — TAA resolve and
+    // motion blur exist only on the D3D11 path — so no pass is counted and
+    // no RHI draw is issued for them here.
     if (m_temporalEffects)
     {
         m_temporalEffects->SetTAAEnabled(m_settings.taa);
         m_temporalEffects->SetMotionBlurEnabled(m_settings.motionBlur);
-
         m_temporalEffects->Render();
-
-        if (m_settings.taa)
-            m_statistics.postProcessPasses++;
-        if (m_settings.motionBlur)
-            m_statistics.postProcessPasses++;
-    }
-
-    // Also dispatch through RHI path for cross-platform tracking
-    auto& rhi = GetRHI();
-    if (rhi.initialized)
-    {
-        Spark::RHI::IRHICommandList* cmd = rhi.bridge.GetCommandList();
-        if (cmd)
-        {
-            cmd->BeginEvent("TemporalEffects_RHI");
-            if (m_settings.taa)
-            {
-                cmd->BeginEvent("TAA");
-                cmd->Draw(3, 0);
-                cmd->EndEvent();
-            }
-            if (m_settings.motionBlur)
-            {
-                cmd->BeginEvent("MotionBlur");
-                cmd->Draw(3, 0);
-                cmd->EndEvent();
-            }
-            cmd->EndEvent();
-        }
     }
 }
-
 
 #endif // !SPARK_PLATFORM_WINDOWS

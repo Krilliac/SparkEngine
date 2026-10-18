@@ -14,7 +14,10 @@
 #include "Core/EditorLayoutManager.h"
 
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
+#include <system_error>
 #include <unordered_map>
 #include <vector>
 
@@ -449,6 +452,158 @@ TEST(EditorLayoutMgr_LoadIgnoresUnregisteredPanels)
     reader.Shutdown();
 }
 
+TEST(EditorLayoutMgr_MalformedLayoutLeavesPanelsUntouchedAndReportsError)
+{
+    const std::string dir = MakeLayoutDir("malformed");
+    {
+        SparkEditor::EditorLayoutManager writer;
+        writer.Initialize(dir);
+        writer.RegisterPanel(MakePanel("Hierarchy", 0, 0, 999, 999));
+        writer.RegisterPanel(MakePanel("Inspector", 800, 0, 999, 999));
+        ASSERT_TRUE(writer.SaveCurrentLayout("Cut"));
+    }
+    // Cut the file inside the second panel, as an interrupted external copy would.
+    const std::filesystem::path file = std::filesystem::path(dir) / "Cut.json";
+    std::string text;
+    {
+        std::ifstream input(file, std::ios::binary);
+        text.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+    }
+    const size_t second = text.find("\"name\": \"Inspector\"");
+    ASSERT_TRUE(second != std::string::npos);
+    {
+        std::ofstream output(file, std::ios::binary | std::ios::trunc);
+        output << text.substr(0, second + 10);
+    }
+
+    SparkEditor::EditorLayoutManager reader;
+    reader.Initialize(dir);
+    reader.RegisterPanel(MakePanel("Hierarchy", 0, 0, 300, 600));
+    reader.RegisterPanel(MakePanel("Inspector", 800, 0, 250, 600));
+
+    // The first panel parsed fine, but nothing may be applied from a damaged file.
+    EXPECT_FALSE(reader.LoadLayout("Cut"));
+    EXPECT_NEAR(reader.GetPanelConfig("Hierarchy")->sizeX, 300.0f, 1e-3f);
+    EXPECT_NEAR(reader.GetPanelConfig("Inspector")->sizeX, 250.0f, 1e-3f);
+    EXPECT_EQ(reader.GetCurrentLayoutName(), std::string("Default"));
+    EXPECT_STR_CONTAINS(reader.GetLastError(), "Cut.json");
+    EXPECT_STR_CONTAINS(reader.GetLastError(), "malformed or truncated panel 2; no panel was changed");
+
+    // A file cut right after its panels array is rejected too.
+    {
+        std::ofstream output(file, std::ios::binary | std::ios::trunc);
+        output << text.substr(0, text.rfind(']') + 1);
+    }
+    EXPECT_FALSE(reader.LoadLayout("Cut"));
+    EXPECT_NEAR(reader.GetPanelConfig("Hierarchy")->sizeX, 300.0f, 1e-3f);
+    EXPECT_STR_CONTAINS(reader.GetLastError(), "is truncated or has content after its panels array");
+
+    // The intact file still loads and clears the error.
+    {
+        std::ofstream output(file, std::ios::binary | std::ios::trunc);
+        output << text;
+    }
+    EXPECT_TRUE(reader.LoadLayout("Cut"));
+    EXPECT_NEAR(reader.GetPanelConfig("Hierarchy")->sizeX, 999.0f, 1e-3f);
+    EXPECT_TRUE(reader.GetLastError().empty());
+}
+
+TEST(EditorLayoutMgr_FailedSaveKeepsPreviousLayoutFile)
+{
+    const std::string dir = MakeLayoutDir("failedsave");
+    SparkEditor::EditorLayoutManager mgr;
+    mgr.Initialize(dir);
+    mgr.RegisterPanel(MakePanel("Hierarchy", 0, 0, 300, 600));
+    ASSERT_TRUE(mgr.SaveCurrentLayout("Keep", "first"));
+
+    const std::filesystem::path file = std::filesystem::path(dir) / "Keep.json";
+    std::string before;
+    {
+        std::ifstream input(file, std::ios::binary);
+        before.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+    }
+
+    // Occupy the staging name with a non-empty directory so the staged write fails.
+    const std::filesystem::path staging = std::filesystem::path(dir) / "Keep.json.tmp";
+    std::filesystem::create_directories(staging);
+    {
+        std::ofstream occupant(staging / "occupant");
+        occupant << "x";
+    }
+
+    mgr.SetPanelSize("Hierarchy", 1.0f, 1.0f);
+    EXPECT_FALSE(mgr.SaveCurrentLayout("Keep", "second"));
+    EXPECT_STR_CONTAINS(mgr.GetLastError(), "Keep.json");
+    EXPECT_STR_CONTAINS(mgr.GetLastError(), "The previous file is unchanged");
+
+    std::string after;
+    {
+        std::ifstream input(file, std::ios::binary);
+        after.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+    }
+    EXPECT_TRUE(after == before);
+
+    // The staging leftover is not listed as a layout, and the kept file still loads.
+    const auto layouts = mgr.GetSavedLayouts();
+    ASSERT_EQ(layouts.size(), static_cast<size_t>(1));
+    EXPECT_EQ(layouts[0].name, std::string("Keep"));
+    EXPECT_TRUE(mgr.LoadLayout("Keep"));
+    EXPECT_NEAR(mgr.GetPanelConfig("Hierarchy")->sizeX, 300.0f, 1e-3f);
+
+    std::error_code ec;
+    std::filesystem::remove_all(dir, ec);
+}
+
+TEST(EditorLayoutMgr_ValuesNamedLikeKeysDoNotShadowKeys)
+{
+    // A layout named "version" with the description "panels", and a panel named "sizeX", write those
+    // words as string values ahead of the real keys. The reader must match keys, not values.
+    const std::string dir = MakeLayoutDir("keynames");
+    {
+        SparkEditor::EditorLayoutManager writer;
+        writer.Initialize(dir);
+        writer.RegisterPanel(MakePanel("Hierarchy", 0, 0, 111, 600));
+        writer.RegisterPanel(MakePanel("sizeX", 800, 0, 321, 600));
+        ASSERT_TRUE(writer.SaveCurrentLayout("version", "panels"));
+    }
+
+    SparkEditor::EditorLayoutManager reader;
+    reader.Initialize(dir);
+    reader.RegisterPanel(MakePanel("Hierarchy", 0, 0, 300, 600));
+    reader.RegisterPanel(MakePanel("sizeX", 800, 0, 250, 600));
+    EXPECT_TRUE(reader.LoadLayout("version"));
+    EXPECT_TRUE(reader.GetLastError().empty());
+    EXPECT_NEAR(reader.GetPanelConfig("Hierarchy")->sizeX, 111.0f, 1e-3f);
+    EXPECT_NEAR(reader.GetPanelConfig("sizeX")->sizeX, 321.0f, 1e-3f);
+
+    const auto layouts = reader.GetSavedLayouts();
+    ASSERT_EQ(layouts.size(), static_cast<size_t>(1));
+    EXPECT_EQ(layouts[0].description, std::string("panels"));
+
+    // The same file declaring a newer format still fails closed, without applying any panel.
+    const std::filesystem::path file = std::filesystem::path(dir) / "version.json";
+    std::string text;
+    {
+        std::ifstream input(file, std::ios::binary);
+        text.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+    }
+    const std::string declared = "\"version\": 1,";
+    const size_t at = text.find(declared);
+    ASSERT_TRUE(at != std::string::npos);
+    text.replace(at, declared.size(), "\"version\": 2,");
+    {
+        std::ofstream output(file, std::ios::binary | std::ios::trunc);
+        output << text;
+    }
+    reader.SetPanelSize("Hierarchy", 5.0f, 5.0f);
+    EXPECT_FALSE(reader.LoadLayout("version"));
+    EXPECT_STR_CONTAINS(reader.GetLastError(), "is layout format version 2");
+    EXPECT_NEAR(reader.GetPanelConfig("Hierarchy")->sizeX, 5.0f, 1e-3f);
+
+    std::error_code ec;
+    std::filesystem::remove_all(dir, ec);
+}
+
 TEST(EditorLayoutMgr_ConsoleStatusContainsName)
 {
     SparkEditor::EditorLayoutManager mgr;
@@ -458,4 +613,145 @@ TEST(EditorLayoutMgr_ConsoleStatusContainsName)
     EXPECT_TRUE(s.find("EditorLayoutManager") != std::string::npos);
     EXPECT_TRUE(s.find("panels=1") != std::string::npos);
     mgr.Shutdown();
+}
+
+// ============================================================================
+// Save Layout As / Delete (toolbar Layout dropdown)
+// ============================================================================
+
+namespace
+{
+    void WriteCompanion(const std::filesystem::path& path)
+    {
+        std::ofstream out(path, std::ios::binary);
+        out << "[Docking][Data]\n";
+    }
+} // namespace
+
+TEST(EditorLayoutManager_SaveAsCreatesNamedLayoutAndListsIt)
+{
+    const std::string dir = MakeLayoutDir("save_as");
+    SparkEditor::EditorLayoutManager mgr;
+    ASSERT_TRUE(mgr.Initialize(dir));
+    mgr.RegisterPanel(MakePanel("Hierarchy", 0, 0, 250, 600));
+
+    EXPECT_FALSE(mgr.HasLayout("Level Design"));
+    ASSERT_TRUE(mgr.SaveCurrentLayout("Level Design", "wide viewport"));
+    EXPECT_TRUE(mgr.HasLayout("Level Design"));
+    EXPECT_EQ(mgr.GetCurrentLayoutName(), std::string("Level Design"));
+    EXPECT_TRUE(mgr.GetLastError().empty());
+
+    const auto layouts = mgr.GetSavedLayouts();
+    ASSERT_EQ(layouts.size(), static_cast<size_t>(1));
+    EXPECT_EQ(layouts[0].name, std::string("Level Design"));
+    EXPECT_EQ(layouts[0].description, std::string("wide viewport"));
+
+    mgr.Shutdown();
+    std::error_code ec;
+    std::filesystem::remove_all(dir, ec);
+}
+
+TEST(EditorLayoutManager_SaveAsRejectsInvalidNamesWithReason)
+{
+    const std::string dir = MakeLayoutDir("save_as_invalid");
+    SparkEditor::EditorLayoutManager mgr;
+    ASSERT_TRUE(mgr.Initialize(dir));
+    mgr.RegisterPanel(MakePanel("Hierarchy", 0, 0, 250, 600));
+
+    const std::vector<std::string> invalid = {
+        "",
+        ".",
+        "..",
+        "a/b",
+        "a\b",
+        "c:",
+        "what?",
+        "star*",
+        "pipe|",
+        "<tag>",
+        "quote\"",
+        "trailing.",
+        "trailing ",
+        " lead",
+        "CON",
+        "com1.json",
+        std::string(SparkEditor::EditorLayoutManager::kMaxLayoutNameLength + 1, 'x')};
+    for (const std::string& name : invalid)
+    {
+        EXPECT_FALSE(SparkEditor::EditorLayoutManager::IsValidLayoutName(name));
+        EXPECT_FALSE(mgr.SaveCurrentLayout(name));
+        EXPECT_FALSE(mgr.GetLastError().empty());
+    }
+
+    EXPECT_TRUE(SparkEditor::EditorLayoutManager::IsValidLayoutName("Level Design"));
+    EXPECT_TRUE(SparkEditor::EditorLayoutManager::IsValidLayoutName("v2-layout.wide"));
+    EXPECT_TRUE(SparkEditor::EditorLayoutManager::IsValidLayoutName("Console"));
+    EXPECT_TRUE(mgr.GetSavedLayouts().empty());
+
+    mgr.Shutdown();
+    std::error_code ec;
+    std::filesystem::remove_all(dir, ec);
+}
+
+TEST(EditorLayoutManager_DeleteRemovesDockTreeCompanions)
+{
+    const std::string dir = MakeLayoutDir("delete_companions");
+    SparkEditor::EditorLayoutManager mgr;
+    ASSERT_TRUE(mgr.Initialize(dir));
+    mgr.RegisterPanel(MakePanel("Hierarchy", 0, 0, 250, 600));
+
+    ASSERT_TRUE(mgr.SaveCurrentLayout("Gone"));
+    ASSERT_TRUE(mgr.SaveCurrentLayout("Kept"));
+    const std::filesystem::path root(dir);
+    WriteCompanion(root / "Gone.ini");
+    WriteCompanion(root / "Gone.ini.meta");
+    WriteCompanion(root / "Kept.ini");
+
+    EXPECT_TRUE(mgr.DeleteLayout("Gone"));
+    EXPECT_TRUE(mgr.GetLastError().empty());
+    EXPECT_FALSE(std::filesystem::exists(root / "Gone.json"));
+    EXPECT_FALSE(std::filesystem::exists(root / "Gone.ini"));
+    EXPECT_FALSE(std::filesystem::exists(root / "Gone.ini.meta"));
+    EXPECT_FALSE(mgr.HasLayout("Gone"));
+
+    // The other layout and its dock tree are untouched.
+    EXPECT_TRUE(mgr.HasLayout("Kept"));
+    EXPECT_TRUE(std::filesystem::exists(root / "Kept.ini"));
+
+    // A second delete fails and says why.
+    EXPECT_FALSE(mgr.DeleteLayout("Gone"));
+    EXPECT_STR_CONTAINS(mgr.GetLastError(), "does not exist");
+
+    // An unsafe name never reaches the file system.
+    EXPECT_FALSE(mgr.DeleteLayout("../Kept"));
+    EXPECT_FALSE(mgr.GetLastError().empty());
+    EXPECT_TRUE(mgr.HasLayout("Kept"));
+
+    mgr.Shutdown();
+    std::error_code ec;
+    std::filesystem::remove_all(dir, ec);
+}
+
+TEST(EditorLayoutManager_DeleteCurrentLayoutResetsCurrentName)
+{
+    const std::string dir = MakeLayoutDir("delete_current");
+    SparkEditor::EditorLayoutManager mgr;
+    ASSERT_TRUE(mgr.Initialize(dir));
+    mgr.RegisterPanel(MakePanel("Hierarchy", 0, 0, 250, 600));
+
+    ASSERT_TRUE(mgr.SaveCurrentLayout("Other"));
+    ASSERT_TRUE(mgr.SaveCurrentLayout("Active"));
+    EXPECT_EQ(mgr.GetCurrentLayoutName(), std::string("Active"));
+
+    // Deleting a layout that is not current leaves the current name alone.
+    EXPECT_TRUE(mgr.DeleteLayout("Other"));
+    EXPECT_EQ(mgr.GetCurrentLayoutName(), std::string("Active"));
+
+    EXPECT_TRUE(mgr.DeleteLayout("Active"));
+    EXPECT_EQ(mgr.GetCurrentLayoutName(), std::string("Default"));
+    EXPECT_TRUE(mgr.GetSavedLayouts().empty());
+
+    mgr.Shutdown();
+    std::error_code ec;
+    std::filesystem::remove_all(dir, ec);
 }

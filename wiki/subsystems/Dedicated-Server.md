@@ -57,7 +57,7 @@ input services, while the Linux headless entry initializes no graphics/audio pat
 
 ### Separate SparkServer Process
 
-The `SparkServer` approach builds a separate executable linked against the full `SparkEngineLib`. At runtime it constructs a headless `EngineContext` with graphics and input set to `nullptr`, initializes selected headless asset services, and dynamically loads the requested game module or manifest. The current target does not prove compile-time removal of graphics, audio, or input code.
+The `SparkServer` approach builds a separate executable linked against the full `SparkEngineLib`. At runtime it constructs a headless `EngineContext` with graphics and input set to `nullptr`, initializes selected headless asset services, and dynamically loads the requested game module or manifest. `ServerApplication::Start()` initializes `Spark::Logger` with a stderr-only sink when the host has not configured one, because the process never runs the gameplay lifecycle that installs the engine sinks; stdout stays reserved for the health JSON. The current target does not prove compile-time removal of graphics, audio, or input code.
 
 ```
 ┌─────────────────────────────────┐
@@ -138,8 +138,6 @@ The `Spark::Net::ServerConfig` struct controls all aspects of the dedicated serv
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `rconPassword` | `string` | `""` | Reserved compatibility field; currently ignored |
-| `rconPort` | `uint16_t` | `0` | Reserved compatibility field; currently ignored |
 | `enableLogging` | `bool` | `true` | Write server log file |
 | `logFilePath` | `string` | `"server.log"` | Path to the log file |
 
@@ -201,9 +199,64 @@ enum class GameModeType : uint8_t
 // 7. Preflight module shutdown, stop services, unload modules, and reset the context.
 ```
 
+### Operator Health Snapshot
+
+`SparkServer` prints one compact JSON object per line to stdout at startup,
+every `--status-interval-ms`, and on each lifecycle transition, and atomically
+replaces `--health-file` with the same object when one is given
+(`SparkServer/src/ServerHealth.{h,cpp}`).
+
+| Field | Meaning |
+|-------|---------|
+| `schema` | Always `spark-server-health/1`, the first field; bumped whenever the key set changes |
+| `live` / `ready` | Process lifecycle started / accepting work (server bound, Game module initialized, gateway control ready when configured) |
+| `draining` | A stop was requested (signal, `--stop-file`, `--run-for-ms`). Published with `ready=false` **before** teardown, and the loop keeps ticking while a module vetoes shutdown, so a supervisor can route traffic away |
+| `stopping` | Teardown in progress |
+| `port`, `players`, `ticks`, `loadedModules`, `gameModule`, `map`, `error` | Listener and module status |
+| `version` | `SPARK_ENGINE_VERSION` |
+| `commit` | Full commit hash of the compiled checkout, stamped into the `SparkServer` executable on every build by `SparkServer/cmake/SparkServerBuildIdentity.cmake` (only `main.cpp` consumes it, so libraries and tests do not relink when HEAD moves); `unknown` without git metadata unless the `SPARK_BUILD_COMMIT` cache variable supplies it (that variable is only a fallback: when git can report HEAD, git wins and a differing override produces a build-time warning). `SparkServer --version` prints the same identity |
+| `treeState` | `clean`, `dirty` (tracked files differ from `commit`), or `unknown` |
+| `tickSamples`, `tickP50Us`, `tickP95Us`, `tickP99Us`, `tickMaxUs` | Tick work time (excluding the frame-budget sleep) since `Start()`, from a bounded 16-bucket histogram. Percentiles are the containing bucket's upper bound clamped to the observed max, so they never under-report |
+| `rssBytes` | Process resident set (`/proc/self/statm`, `GetProcessMemoryInfo`, or Mach `task_info`); `null` if the platform query fails |
+| `netQueueIn`, `netQueueOut`, `netQueueInPeak`, `netQueueOutPeak` | `NetworkManager` message-queue depths after the last tick, and their high-water marks since the network runtime initialized (`NetworkStats`) |
+
+The key set is exact and versioned by `schema`. The field-by-field contract
+(types and units) is in the [Server Operations Runbook](../advanced/Server-Operations-Runbook.md#health-snapshot-contract),
+and `tools/ops/validate_server_health.py` is the reference parser. `ctest -L observability` runs the
+`SparkServerVersion` stamp check and the `Server_Health_*` tests, including
+the draining-before-stopping ordering.
+
+### Server soak harness (`OPS-110`)
+
+`tools/ops/server_soak.py` launches the real `SparkServer` with one game module
+and a health file, then samples the health file and `/proc/<pid>/status` for
+`--duration` seconds after the first ready snapshot. It fails when the RSS slope
+or in-window RSS growth is over its ceiling, `tickP95Us`/`tickP99Us` is over
+budget, `ticks` goes backwards, stalls, or runs below half the requested tick
+rate, a `netQueueIn`/`netQueueOut` depth grows faster than its provisional
+ceiling, or a queue peak reaches the 4096 Unreliable cap. After the soak it sends SIGTERM. The stdout health stream must then show a
+live `draining` snapshot with `ready=false` before any `stopping` snapshot and
+end on `live=false`. The process must exit 0, and no process may be left in the
+server's session. `--summary` writes a `spark-server-soak-summary/1` JSON
+document. `--expected-sha` labels that document, and the server must report
+exactly that `commit` from a `clean` tree. The harness never infers the SHA.
+
+| CTest | Label | What it runs |
+|-------|-------|--------------|
+| `Server_Soak` | `server-soak` | Real `SparkServer` + `SparkGame` for 60 s (Linux); summary at `build/<preset>/server-soak-summary.json` |
+| `ServerSoak_Harness` | `ops` | Every failure mode against a stand-in server: leak, stall, backwards ticks, slow p99, crash, never ready, missing drain snapshot, non-zero exit, ignored SIGTERM, leaked child, and commit mismatch |
+
+The 30-minute release smoke is `python3 tools/ops/server_soak.py --server <SparkServer>
+--module <libSparkGame.so> --duration 1800 --expected-sha <sha> --summary <out.json>`.
+Every budget is provisional: 64 MiB/h RSS slope, 32 MiB growth, and p95 8 ms / p99 16 ms at
+60 Hz. They are harness guards with headroom for shared runners, not SLOs. A passing run is
+local precursor evidence, not certification. The health surface carries no queue metrics, so
+the soak checks memory but not queue depth. SLOs, alerts, load and chaos runs, a hosted
+`server-soak` job, and a runbook remain open under `OPS-110`.
+
 ### Using DedicatedServer Class
 
-The `DedicatedServer` class provides a higher-level API with tick loop management, map rotation, trusted local administration commands, and LAN discovery. It does **not** currently expose a remote RCON transport:
+The `DedicatedServer` class provides a higher-level API with tick loop management, map rotation, trusted local administration commands, and LAN discovery. Remote RCON is **permanently unavailable in stable-v1** (OD-05); there is no remote administration transport:
 
 ```cpp
 #include "Engine/Networking/DedicatedServer.h"
@@ -297,15 +350,38 @@ server.Stop();
 
 ### Local Administration Commands (legacy RCON API names)
 
-`ExecuteRcon` is an in-process command dispatcher. Network chat is not an
-administration transport, and `rconPassword`/`rconPort` do not enable one.
-Remote callers require a separate authenticated transport before invoking it.
+`ExecuteRcon` is an in-process command dispatcher for trusted host code.
+Remote administration is permanently unavailable in stable-v1 (owner decision
+OD-05): network chat is not an administration transport, and `ServerConfig` has
+no RCON password or port field, so no configuration or command-line switch can
+enable one. The stable-v1 Windows Shipping product builds with
+`ENABLE_NETWORKING=OFF`, which compiles `DedicatedServer` out entirely.
+`Tests/TestSEC100RemoteAdminUnavailableReal.cpp` fails the build if the
+`ServerConfig` fields `rconPassword`, `rconPort`, `enableRcon` or
+`enableRemoteAdministration` return (the check is by field name).
+`Tests/Fixtures/NetworkingDisabledCompileContract.cpp` fails to compile if
+`DedicatedServer` or `ServerConfig` is declared in a networking-off
+configuration; it is a local compile contract, and no hosted CI lane builds it
+yet.
 
 | Method | Description |
 |--------|-------------|
 | `void RegisterRconCommand(name, description, handler)` | Register a local admin command |
 | `string ExecuteRcon(const string& commandLine)` | Dispatch a command from trusted host code |
-| `const vector<RconCommand>& GetRconCommands() const` | List registered commands |
+| `vector<RconCommand> GetRconCommands() const` | Snapshot of registered commands, copied under the registry lock |
+
+**Audit record.** Every `ExecuteRcon` call writes exactly one server-log line
+(also delivered to `ServerCallbacks::onLogMessage`):
+
+```text
+RCON: command=<name|<redacted>|<unknown>> disposition=<dispatched|failed|unknown_command>
+```
+
+`<name>` is written only when it is 1-64 characters of `[A-Za-z0-9_.-]`;
+otherwise it is `<redacted>`. Arguments, response bodies and exception text are
+never logged. A handler that throws yields `disposition=failed` and the caller
+receives `Command failed: <name>`; the audit line is written before
+`onRconCommand` runs, so a throwing host callback cannot erase it.
 
 ### LAN Discovery
 
@@ -470,6 +546,58 @@ Both approaches can run without a display, but they differ in how they achieve i
 | **Networking** | Available when `ENABLE_NETWORKING=ON` | Target exists only when `ENABLE_NETWORKING=ON` |
 | **ECS** | Active | Active |
 
+### Shutdown and restart-recovery tests (`HEAD-220`)
+
+`Tests/PackageSmoke/run_headless_shutdown_recovery.py` drives the shared headless host
+(`-headless -game <SparkGameFPS> -require-game`, `SPARK_RHI_BACKEND=null`) with private user
+directories and a working directory outside the source tree. Each run must pass the strict
+`cmake/RunSparkHeadlessNullRHILifecycle.cmake` record parser:
+
+| CTest | Scenario |
+|-------|----------|
+| `HeadlessShutdown_Graceful` | SIGTERM once the loop is ticking; the host must pass the `CanShutdownEngine` checkpoint, exit 0 and report `unloaded=1 faults=0` |
+| `HeadlessShutdown_ForcedRecovery` | SIGKILL mid-loop, a torn `fps_quicksave` slot plus an orphaned `.tmp` in the save directory, then a clean bounded reboot that reports the slot as not found |
+| `HeadlessShutdown_BootInterrupted` | Kill on a seeded boot-log marker before the loop starts, then a clean bounded reboot |
+| `HeadlessShutdown_HarnessContract` | Self-test of the harness's audit and shutdown checks |
+
+Every wait has a wall-clock bound, and each run prints its seed (replay it with `--seed`). The
+tests run on the experimental Linux host only. Windows is not covered: `SparkEngine` is a GUI-subsystem executable
+that skips `AllocConsole` when its output is redirected, so it has no console and a
+`CTRL_BREAK_EVENT` graceful stop cannot reach it. No run kills a real FPS save
+mid-write. This is source-tree evidence only, not packaged Windows certification.
+
+### Save/reload test (`HEAD-220`)
+
+`HeadlessSaveReload_FPSNullRHI` (`cmake/RunSparkHeadlessFPSSaveReload.cmake`) runs on the Windows and
+Linux hosts. It starts two fresh `-headless` NullRHI processes that share an isolated user root
+(`LOCALAPPDATA` on Windows, `HOME`/`XDG_*` on Linux):
+
+1. The writer runs `level`, `xp 37`, `level` and `quicksave`.
+2. The reader runs `level`, `quickload` and `level`. It must start at 0 XP and restore 37 XP.
+
+Each process must pass the strict NullRHI lifecycle parser. Its `-exec-audit` trail must pass the
+writer/reader validator of `Tests/PackageSmoke/RunInstalledFPSSaveReload.cmake`, which the packaged
+WARP run also uses. The reader must leave `fps_quicksave.spark_save` byte-identical. The test does not
+cover a Windows sanitizer run or a soak.
+
+`FPSHeadlessPackage_NullRHISaveReload` is the packaged counterpart. It runs only in a
+`SPARK_GAME_MODULES=SparkGameFPS` Windows build. It calls `Tests/PackageSmoke/RunInstalledFPSPackage.cmake` with
+`-DSPARK_FPS_PACKAGE_MODE=headless-save-reload`, which stages the MinSizeRel runtime and applies the same asset and
+runtime-layout validation as `FPSPackage_InstalledRuntime`. It then runs the writer/reader test above against the
+staged `bin/SparkEngine.exe` and `bin/SparkGameFPS.dll`, with the working directory set to `<package>/bin`. It
+skips the playtester launcher and the D3D11/WARP phases. Local runs still happen on a host that has a GPU and a
+display. A clean no-GPU host is hosted-CI evidence.
+
+### Shutdown-time budget (`LIFE-200`)
+
+After teardown, the Windows and Linux headless hosts both print
+`SPARK_HEADLESS_SHUTDOWN ms=<N>`. `N` is the wall time of the engine teardown, rounded up to whole
+milliseconds. The strict parser accepts at most one such record, and it must come after
+`SPARK_HEADLESS_LIFECYCLE`. `HeadlessBootLoop_FPSNullRHI` (`Tests/PackageSmoke/run_headless_boot_loop.py`)
+requires the record on every boot. Each boot fails if `N` exceeds the `nullrhi.headless.shutdown_time`
+ceiling in `perf-budgets/v1/budget.json`, which is a provisional 5000 ms. The metric's status is `suspended`,
+so the PERF-100 comparator does not treat the ceiling as a certified-hardware budget.
+
 ## Build Configuration
 
 ### Game Module Build
@@ -496,7 +624,7 @@ cmake --build build --config Release --target SparkServer
 
 `SparkServer` requires either `--manifest <path>` or `--module <game-library>`
 so that it can select the server game module explicitly.
-`ENABLE_GRAPHICS=OFF` is not used here because that option is currently inert;
+There is no compile-time graphics switch;
 `SparkServer` still links the full engine library and relies on runtime headless wiring.
 
 ## Thread Safety

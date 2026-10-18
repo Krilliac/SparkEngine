@@ -4,6 +4,7 @@
  */
 #pragma once
 
+#include "Data/TFDataTables.h"
 #include "Persistence/TFJsonStrict.h"
 #include "Persistence/TFSavePaths.h"
 #include "Utils/JsonUtils.h"
@@ -13,9 +14,12 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <span>
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 namespace Terrafront::WorldSave
 {
@@ -99,6 +103,107 @@ namespace Terrafront::WorldSave
         return true;
     }
 
+    /// Territory file schema (terrafront_territory.<continent-key>.json). v0 is the pre-versioned layout.
+    inline constexpr uint32_t kTerritorySchemaVersion = 1;
+
+    enum class TerritoryDecodeResult
+    {
+        Loaded,      ///< current schema, every field valid; adopt `out` as is
+        Migrate,     ///< valid v0 or legacy-location document; adopt `out`, then rewrite as the current schema
+        NewerSchema, ///< written by a newer build; must not be loaded or rewritten (rollback guard)
+        Invalid,     ///< malformed or inconsistent; `detail` says which field
+    };
+
+    struct TerritoryDecode
+    {
+        std::vector<FactionId> owners; ///< one validated owner per region, skyanchors at their home faction
+        DominionState dominion;
+        uint32_t sourceVersion = 0;
+    };
+
+    /**
+     * Pure decode of a territory document that ReadJson already matched to the continent.
+     *
+     * Reads schema N (kTerritorySchemaVersion) and N-1 (v0, no "version"), refuses a newer schema, and
+     * validates the region lattice against `regions`: the owner count, each owner id, and that a skyanchor
+     * is held by its home faction. A v0 or legacy-location (`legacySource`) document may carry a skyanchor
+     * owner or omit "dominion"; the owner is coerced to the home faction and the dominion defaults to
+     * inactive. `out` is written only on Loaded or Migrate. Game thread only (no I/O, no allocation beyond
+     * `out` and `detail`).
+     */
+    inline TerritoryDecodeResult DecodeTerritory(const Spark::Json::Value& root, std::span<const RegionDef> regions,
+                                                 bool legacySource, TerritoryDecode& out, std::string& detail)
+    {
+        detail.clear();
+        uint32_t version = 0;
+        if (root.HasKey("version") && !ReadUint32(root["version"], version))
+        {
+            detail = "invalid schema version";
+            return TerritoryDecodeResult::Invalid;
+        }
+        if (version > kTerritorySchemaVersion)
+        {
+            detail = "schema version " + std::to_string(version) + " is newer than supported " +
+                     std::to_string(kTerritorySchemaVersion);
+            return TerritoryDecodeResult::NewerSchema;
+        }
+        // v0 is the sole older schema: it has the fields validated below and is rewritten only after all of
+        // them pass. No other downgrade is inferred.
+        const bool olderSchema = version == 0;
+
+        const size_t count = regions.size();
+        const Spark::Json::Value& owners = root["owners"];
+        uint32_t persistedCount = 0;
+        if (!ReadUint32(root["regionCount"], persistedCount) || persistedCount != count || !owners.IsArray() ||
+            owners.Size() != count)
+        {
+            detail = "invalid region lattice";
+            return TerritoryDecodeResult::Invalid;
+        }
+
+        TerritoryDecode decoded;
+        decoded.sourceVersion = version;
+        decoded.owners.resize(count);
+        for (size_t i = 0; i < count; ++i)
+        {
+            uint32_t raw = 0;
+            if (!ReadUint32(owners[i], raw) || raw >= static_cast<uint32_t>(FactionId::COUNT))
+            {
+                detail = "owner " + std::to_string(i) + " is malformed";
+                return TerritoryDecodeResult::Invalid;
+            }
+            FactionId owner = static_cast<FactionId>(raw);
+            if (regions[i].tier == "skyanchor")
+            {
+                if (owner != regions[i].homeFaction && !legacySource && !olderSchema)
+                {
+                    detail = "skyanchor owner " + std::to_string(i) + " conflicts with its home faction";
+                    return TerritoryDecodeResult::Invalid;
+                }
+                owner = regions[i].homeFaction;
+            }
+            decoded.owners[i] = owner;
+        }
+
+        if (!root.HasKey("dominion"))
+        {
+            if (!olderSchema)
+            {
+                detail = "missing dominion";
+                return TerritoryDecodeResult::Invalid;
+            }
+        }
+        else if (!ReadDominionState(root["dominion"], !olderSchema, static_cast<uint32_t>(FactionId::COUNT),
+                                    decoded.dominion))
+        {
+            detail = "invalid dominion";
+            return TerritoryDecodeResult::Invalid;
+        }
+
+        out = std::move(decoded);
+        return legacySource || olderSchema ? TerritoryDecodeResult::Migrate : TerritoryDecodeResult::Loaded;
+    }
+
     inline ReadStatus ReadJson(const std::filesystem::path& path, std::string_view expectedKey,
                                std::string_view expectedLegacyName, bool allowLegacyName, Spark::Json::Value& out,
                                std::string& detail)
@@ -179,12 +284,26 @@ namespace Terrafront::WorldSave
         return ReadStatus::Loaded;
     }
 
-    inline bool WriteJson(const std::filesystem::path& path, const Spark::Json::Value& root, std::string& detail)
+    /**
+     * Durably replace one per-continent world file (territory, progression state).
+     *
+     * `writerLease` is the caller's lifetime ExclusiveFileLock on exactly `path`: the world files are
+     * single-writer stores, so a write without the lease, or with a lease on another file, is refused
+     * before any I/O (detail "world file writer lease not held") and the file is left untouched. There is
+     * deliberately no leaseless overload.
+     */
+    inline bool WriteJson(const SavePaths::ExclusiveFileLock& writerLease, const std::filesystem::path& path,
+                          const Spark::Json::Value& root, std::string& detail)
     {
         detail.clear();
         if (path.empty())
         {
             detail = "empty destination";
+            return false;
+        }
+        if (!writerLease.IsLocked() || writerLease.LockedTarget() != path)
+        {
+            detail = "world file writer lease not held";
             return false;
         }
 
@@ -200,30 +319,9 @@ namespace Terrafront::WorldSave
             }
         }
 
-        std::filesystem::path temporary = path;
-        temporary += ".tmp";
-        {
-            std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
-            if (!output.is_open())
-            {
-                detail = "temporary open failed";
-                return false;
-            }
-            output << Spark::Json::StringifyPretty(root);
-            if (!output.good())
-            {
-                detail = "temporary write failed";
-                output.close();
-                std::filesystem::remove(temporary, ec);
-                return false;
-            }
-        }
-
-        if (!SavePaths::AtomicReplace(temporary, path, ec))
+        if (!SavePaths::WriteDurableReplace(path, Spark::Json::StringifyPretty(root), ec))
         {
             detail = ec.message();
-            std::error_code removeEc;
-            std::filesystem::remove(temporary, removeEc);
             return false;
         }
         return true;

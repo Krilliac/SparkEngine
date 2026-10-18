@@ -9,6 +9,7 @@
 
 #include "Account/TFAccountSystem.h"   // W5 onboarding (Task 4)
 #include "Account/TFCharacterSystem.h" // W5 onboarding (Task 4)
+#include "Net/TFClientMsgRouting.h"    // the routed client TFMsg id lists
 #include "Net/TFClientNet.h"           // W5 onboarding (Task 7): local-player reply loopback
 #include "Net/TFNetworkLifecycle.h"
 #include "Net/TFNetProtocol.h"
@@ -45,73 +46,33 @@ namespace Terrafront
         auto route = [&nm](TFMsg id, auto&& fn)
         { nm.RegisterHandler(static_cast<MessageType>(static_cast<uint16_t>(id)), std::forward<decltype(fn)>(fn)); };
 
-        // W5 T6 (T4-review #1 security fix): gameplay ids are now routed through
-        // RouteClientMessage — the SAME single choke point the onboarding ids use
-        // below and the listen-host/standalone loopback path uses
-        // (TFClientNet::RouteLoopback) — so the enter-world gate added there
-        // applies uniformly to every client-originated gameplay message,
-        // regardless of transport.
-        // final-review #3 (gate defense-in-depth): VehicleEnter/VehicleExit/
-        // AegisDeploy/SquadMsg used to be direct routes straight into their
-        // handlers below, bypassing the RouteClientMessage enter-world gate
-        // entirely -- an unauthenticated/pre-enter-world client could seat a
-        // vehicle, toggle Aegis, or spam squad ops. They now go through the same
-        // choke point as the other gameplay ids.
-        for (TFMsg id :
-             {TFMsg::ClientInput, TFMsg::SpawnRequest, TFMsg::FireEvent, TFMsg::FactionSelect, TFMsg::VehicleEnter,
-              TFMsg::VehicleExit, TFMsg::AegisDeploy, TFMsg::SquadMsg, TFMsg::RedeployRequest})
+        // W5 T6 (T4-review #1 security fix): every client-originated id is routed
+        // through RouteClientMessage -- the SAME single choke point the listen-host/
+        // standalone loopback path uses (TFClientNet::RouteLoopback) -- so the
+        // enter-world gate there applies uniformly regardless of transport.
+        // The id lists live in Net/TFClientMsgRouting.h, which RouteClientMessage's
+        // gate also reads: an id cannot be gated/handled yet left unregistered
+        // (TFMsg::LoadoutExtChange used to be dropped as an unknown type on the
+        // socket path because it was missing from a hand-written list here).
+        const auto routeToChokePoint = [&route, this](TFMsg id)
         {
             route(id, [this, id](const NetworkMessage& m)
                   { RouteClientMessage(m.senderID, id, m.payload.data(), m.payload.size()); });
-        }
-
-        // W6 progression: loadout persistence + unlock-tree purchases now route
-        // through the same enter-world-gated choke point as the gameplay ids.
-        for (TFMsg id : {TFMsg::LoadoutChange, TFMsg::UnlockRequest})
+        };
+        for (const TFMsg id : kTFEnteredWorldGatedMsgs)
+            routeToChokePoint(id);
+        for (const TFMsg id : kTFOnboardingMsgs)
         {
-            route(id, [this, id](const NetworkMessage& m)
-                  { RouteClientMessage(m.senderID, id, m.payload.data(), m.payload.size()); });
+            routeToChokePoint(id);
         }
 
-        // Outfits lane: enter-world-gated like the other gameplay ids.
-        route(TFMsg::OutfitRequest, [this](const NetworkMessage& m)
-              { RouteClientMessage(m.senderID, TFMsg::OutfitRequest, m.payload.data(), m.payload.size()); });
-
-        // class-abilities lane (W9): enter-world-gated like the other gameplay ids.
-        route(TFMsg::AbilityRequest, [this](const NetworkMessage& m)
-              { RouteClientMessage(m.senderID, TFMsg::AbilityRequest, m.payload.data(), m.payload.size()); });
-
-        // grenades lane (W10): enter-world-gated like the other gameplay ids.
-        route(TFMsg::GrenadeThrow, [this](const NetworkMessage& m)
-              { RouteClientMessage(m.senderID, TFMsg::GrenadeThrow, m.payload.data(), m.payload.size()); });
-
-        // ping-system lane (W11): enter-world-gated like the other gameplay ids.
-        route(TFMsg::PingPlace, [this](const NetworkMessage& m)
-              { RouteClientMessage(m.senderID, TFMsg::PingPlace, m.payload.data(), m.payload.size()); });
-
-        route(TFMsg::ChatMsg, [this](const NetworkMessage& m)
-              { RouteClientMessage(m.senderID, TFMsg::ChatMsg, m.payload.data(), m.payload.size()); });
-
-        // W5 onboarding (Task 4): login -> char-select/create/delete -> enter-world.
-        // Routed through RouteClientMessage so the socket path and the listen-host/
-        // standalone loopback path (TFClientNet::RouteLoopback) share one dispatch.
-        for (TFMsg id : {TFMsg::LoginRequest, TFMsg::RegisterRequest})
+        // W5 onboarding (Task 4): credential-bearing ids use the sensitive path.
+        for (const TFMsg id : kTFCredentialMsgs)
         {
             nm.RegisterSensitiveHandler(static_cast<MessageType>(static_cast<uint16_t>(id)),
                                         [this, id](const NetworkMessage& m)
                                         { RouteClientMessage(m.senderID, id, m.payload.data(), m.payload.size()); });
         }
-        for (TFMsg id : {TFMsg::CharListRequest, TFMsg::CharCreateReq, TFMsg::CharDeleteReq, TFMsg::EnterWorldReq})
-        {
-            route(id, [this, id](const NetworkMessage& m)
-                  { RouteClientMessage(m.senderID, id, m.payload.data(), m.payload.size()); });
-        }
-
-        // W13 multimap server-authoritative continent-hop (docs/TERRAFRONT_
-        // MULTIMAP.md §2.2): enter-world-gated like the other post-onboarding
-        // gameplay ids (only sent from the sanctuary terminal).
-        route(TFMsg::ContinentHopRequest, [this](const NetworkMessage& m)
-              { RouteClientMessage(m.senderID, TFMsg::ContinentHopRequest, m.payload.data(), m.payload.size()); });
 
         m_handlersRegistered = true;
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] server TFMsg handlers registered");
@@ -119,20 +80,26 @@ namespace Terrafront
 
     void TFServerSim::UnregisterNetHandlers()
     {
-        // NetworkManager has no per-type removal; replace our handlers with no-ops
-        // so no dangling `this` survives module shutdown.
+        // Remove (never replace) every observer RegisterNetHandlers installed (removal also drops the
+        // credential ids' sensitive classification). An empty placeholder lambda is itself code in this
+        // module image: it outlived unload, and during hot reload it overwrote the replacement module's
+        // handler. Inside the module's teardown scope NetworkManager leaves a slot the replacement already
+        // owns untouched.
         using Spark::Net::MessageType;
         auto& nm = Spark::Net::NetworkManager::GetInstance();
-        for (TFMsg id :
-             {TFMsg::ClientInput,     TFMsg::SpawnRequest,    TFMsg::FireEvent,          TFMsg::FactionSelect,
-              TFMsg::LoadoutChange,   TFMsg::UnlockRequest,   TFMsg::SquadMsg,           TFMsg::ChatMsg,
-              TFMsg::VehicleEnter,    TFMsg::VehicleExit,     TFMsg::AegisDeploy,        TFMsg::LoginRequest,
-              TFMsg::RegisterRequest, TFMsg::CharListRequest, TFMsg::CharCreateReq,      TFMsg::CharDeleteReq,
-              TFMsg::EnterWorldReq,   TFMsg::RedeployRequest, TFMsg::OutfitRequest,      TFMsg::AbilityRequest,
-              TFMsg::GrenadeThrow,    TFMsg::PingPlace,       TFMsg::ContinentHopRequest})
+        const auto unregister = [&nm](TFMsg id)
+        { nm.UnregisterHandler(static_cast<MessageType>(static_cast<uint16_t>(id))); };
+        for (const TFMsg id : kTFEnteredWorldGatedMsgs)
         {
-            nm.RegisterHandler(static_cast<MessageType>(static_cast<uint16_t>(id)),
-                               [](const Spark::Net::NetworkMessage&) {});
+            unregister(id);
+        }
+        for (const TFMsg id : kTFOnboardingMsgs)
+        {
+            unregister(id);
+        }
+        for (const TFMsg id : kTFCredentialMsgs)
+        {
+            unregister(id);
         }
         m_handlersRegistered = false;
     }
@@ -241,16 +208,29 @@ namespace Terrafront
         // handling": "On disconnect, flush the active character's
         // progress") — the periodic TFProgressionSystem::SaveNow debounce
         // could otherwise miss a few seconds of the final session.
+        uint64_t leavingCharacter = 0;
+        bool progressDurable = false;
         if (auto cIt = m_activeCharacter.find(id); cIt != m_activeCharacter.end())
         {
+            leavingCharacter = cIt->second;
             if (m_ctx->characters && m_ctx->progression)
             {
-                const bool persisted =
-                    m_ctx->characters->PersistProgress(cIt->second, m_ctx->progression->XPOf(id),
-                                                       m_ctx->progression->RankOf(id), m_ctx->progression->FluxOf(id));
-                if (!persisted && !m_ctx->progression->SaveNow())
+                const uint32_t xp = m_ctx->progression->XPOf(id);
+                const uint16_t rank = m_ctx->progression->RankOf(id);
+                const uint32_t flux = m_ctx->progression->FluxOf(id);
+                // A failed direct flush gets one retry through the full sweep. Durability is then judged on this
+                // character's committed row alone: the sweep's result covers every player (another player's
+                // stale row fails it) and says nothing about whether this row landed.
+                if (!m_ctx->characters->PersistProgress(leavingCharacter, xp, rank, flux))
+                {
+                    (void)m_ctx->progression->SaveNow();
+                }
+                progressDurable = m_ctx->characters->IsProgressCommitted(leavingCharacter, xp, rank, flux);
+                if (!progressDurable)
+                {
                     SPARK_LOG_ERROR(Spark::LogCategory::Game,
                                     "[TF] final progression persistence failed for disconnected player %u", id);
+                }
             }
             m_activeCharacter.erase(cIt);
         }
@@ -258,9 +238,21 @@ namespace Terrafront
         // this PlayerId AFTER the final flush-to-character above. Without
         // this, a recycled PlayerId (a new client reusing a freed slot)
         // would inherit the prior occupant's xp/rank/flux and leak them
-        // onto a different account's character.
+        // onto a different account's character. It also flushes (or parks)
+        // the character's meta.
         if (m_ctx->progression)
-            m_ctx->progression->ClearPlayer(id);
+            m_ctx->progression->ClearPlayer(id, progressDurable);
+        // TF-120: release the character's residency only once its final progress and meta are durable, so the
+        // next continent starts from them. Otherwise it stays resident here: a parked meta row is released by
+        // the progression sweep that resolves it (only if the progress was durable), and a lost progress flush
+        // keeps the character on this continent (where it can still re-enter) until the next bind clears it.
+        if (leavingCharacter != 0 && m_ctx->characters && m_ctx->progression && progressDurable &&
+            !m_ctx->progression->HasParkedMeta(leavingCharacter) && !m_ctx->characters->LeaveWorld(leavingCharacter))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Game,
+                            "[TF] character %llu of disconnected player %u stays resident: releasing it failed",
+                            static_cast<unsigned long long>(leavingCharacter), id);
+        }
         // W6 directives: same recycled-PlayerId hygiene for directive progress.
         if (m_ctx->directives)
             m_ctx->directives->ClearPlayer(id);

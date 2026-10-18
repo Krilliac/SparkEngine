@@ -8,3 +8,27 @@
 # Jolt Physics internal job system (benign races in job scheduling)
 race:JPH::JobSystemThreadPool
 race:JPH::JobSystem
+
+# Khronos Vulkan validation layer: its submit thread still unlocks a rwlock the
+# layer itself frees during vkFreeCommandBuffers, after the engine has waited on
+# the command list's fence (VulkanCommandList::~VulkanCommandList). Both racing
+# frames are inside the layer (VulkanValidation_DeferredListDestroyedAfterExecuteClean).
+# race_top cannot work: frame #0 of both stacks is a libtsan interceptor (operator
+# delete, pthread_rwlock_unlock), so the layer is frame #1. Accepted exposure: a
+# race in engine code reached through the layer (VulkanDebugCallback, which logs)
+# is hidden too; the Logger's own races are covered by the non-Vulkan tests.
+race:libVkLayer_khronos_validation.so
+
+# Mesa llvmpipe (libgallium): a driver-allocated mutex and condvar are destroyed
+# on the GL thread (pthread_mutex_destroy / pthread_cond_destroy) after an
+# llvmpipe-N worker last locked the mutex. Every racing access is inside the
+# driver; the only engine frame is the draw that triggered the teardown
+# (LinuxForwardPass_OpenGLCubeRenders, AssetPipeline::DrawBoundMesh). Frame #0 is
+# the libtsan interceptor, so the library must be matched at any frame.
+# Accepted exposure: TSan drops a report when either access happens inside
+# libgallium, so the driver touching engine memory while another engine thread
+# does is hidden too: client-memory uploads (glBufferData / glTexImage* from an
+# engine pointer) and the synchronous GL debug callback registered in
+# OpenGLDevice.cpp (GL_DEBUG_OUTPUT_SYNCHRONOUS, which logs). Neither is covered
+# by the non-OpenGL tests.
+race:libgallium

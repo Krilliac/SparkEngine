@@ -18,7 +18,10 @@ What is *measured* rather than believed:
     ones, and no undeclared file may sit in the bundle (see bundle_verify)
   - the dependency closure is matched against the committed dependency
     authority derived from ThirdParty/dependencies.lock, so a fabricated but
-    well-formed list fails (see dependency_authority)
+    well-formed list fails (see dependency_authority), and it is re-checked
+    against the attested PE import graph of the staged package, so a closure
+    that omits a measured import or names one nothing imports fails
+    (see pe_imports)
   - document structure comes from the committed JSON Schemas, enforced by a
     validator that refuses any keyword it does not implement, so a schema
     rule can never be silently skipped (see schema_validator)
@@ -150,6 +153,81 @@ for _name, _left, _right in [
 ]:
     if _left != _right:
         raise RuntimeError(f"Schema enum mismatch: {_name}")
+
+# ── MSVC toolset families ──────────────────────────────────────────────────
+# cl.exe 19.MM ships in the VC tools directory 14.MM; the toolset name is a
+# function of MM alone. collect_evidence derives the toolset from this table
+# and the validator checks declared rows and measured hosts against it, so the
+# two cannot drift. (first MM, last MM, toolset).
+MSVC_TOOLSET_FAMILIES: tuple[tuple[int, int, str], ...] = (
+    (30, 49, "v143"),
+    (50, 59, "v145"),
+)
+_MSVC_CL_MAJOR = 19
+_MSVC_VCTOOLS_MAJOR = 14
+
+
+def _msvc_version_parts(version: str, major: int, what: str) -> tuple[int, ...]:
+    if re.fullmatch(r"[0-9]+(?:\.[0-9]+){1,3}", version) is None:
+        raise ValueError(f"{what} {version!r} is not a dotted version")
+    parts = tuple(int(part) for part in version.split("."))
+    if parts[0] != major:
+        raise ValueError(f"{what} {version!r} must have major version {major}")
+    return parts
+
+
+def _msvc_family(minor: int) -> str | None:
+    for first, last, toolset in MSVC_TOOLSET_FAMILIES:
+        if first <= minor <= last:
+            return toolset
+    return None
+
+
+def msvc_toolset_for_compiler(cl_version: str) -> str:
+    """Return the toolset a cl.exe banner version belongs to, or raise ValueError."""
+    minor = _msvc_version_parts(cl_version, _MSVC_CL_MAJOR, "cl version")[1]
+    toolset = _msvc_family(minor)
+    if toolset is None:
+        raise ValueError(f"cl version {cl_version!r} belongs to no known MSVC toolset family")
+    return toolset
+
+
+def derive_msvc_toolset(cl_version: str, vctools_version: str) -> str:
+    """Derive the toolset from the cl banner and VCToolsVersion, which must agree.
+
+    ``cl`` 19.MM must run from VC tools 14.MM: a VCToolsVersion naming another
+    minor means the environment does not describe the compiler that was invoked.
+    """
+    toolset = msvc_toolset_for_compiler(cl_version)
+    cl_minor = _msvc_version_parts(cl_version, _MSVC_CL_MAJOR, "cl version")[1]
+    tools_minor = _msvc_version_parts(vctools_version, _MSVC_VCTOOLS_MAJOR, "VCToolsVersion")[1]
+    if _msvc_family(tools_minor) != toolset:
+        raise ValueError(
+            f"cl {cl_version} ({toolset}) and VCToolsVersion {vctools_version} belong to "
+            "different MSVC toolset families"
+        )
+    if tools_minor != cl_minor:
+        raise ValueError(
+            f"cl {cl_version} does not ship with VCToolsVersion {vctools_version}: "
+            f"expected VC tools 14.{cl_minor}"
+        )
+    return toolset
+
+
+def msvc_toolset_consistency(compiler: Any, context: str) -> list[str]:
+    """An msvc compiler section must declare the toolset its version belongs to."""
+    if not isinstance(compiler, dict) or compiler.get("id") != "msvc":
+        return []
+    version = str(compiler.get("version", ""))
+    try:
+        derived = msvc_toolset_for_compiler(version)
+    except ValueError as exc:
+        return [f"{context}: {exc}"]
+    declared = compiler.get("toolset")
+    if declared != derived:
+        return [f"{context}: compiler {version} is toolset {derived}, but {declared!r} is declared"]
+    return []
+
 
 # ── Canonical profiles ─────────────────────────────────────────────────────
 # What stable-v1 *means*, independent of any matrix file.  Hardware-specific
@@ -396,12 +474,17 @@ class TrustedContext:
 
 
 class ValidationResult:
-    """Accumulates pass/fail verdicts per row."""
+    """Accumulates pass/fail verdicts per row.
 
-    def __init__(self) -> None:
+    A result without trusted context is useful for inspection only and cannot
+    claim certification.
+    """
+
+    def __init__(self, *, trusted_context: TrustedContext | None = None) -> None:
         self.errors: list[str] = []
         self.warnings: list[str] = []
         self.structural_errors: list[str] = []
+        self.trusted_context = trusted_context
         self.rows_checked = 0
         self.rows_certified = 0
         self.rows_failed = 0
@@ -418,8 +501,13 @@ class ValidationResult:
 
     @property
     def fully_certified(self) -> bool:
-        """True only when every certifiable row actually certified."""
-        return self.ok and self.rows_certified > 0 and self.rows_failed == 0
+        """True only when every certifiable row passed with trusted context."""
+        return (
+            self.trusted_context is not None
+            and self.ok
+            and self.rows_certified > 0
+            and self.rows_failed == 0
+        )
 
     def summary(self) -> str:
         lines: list[str] = []
@@ -610,6 +698,7 @@ def validate_matrix(
             for key in spec:
                 if not str(row[field].get(key, "")).strip():
                     errors.append(f"row[{row_id}]: {field}.{key} must be non-empty")
+        errors.extend(msvc_toolset_consistency(row["compiler"], f"row[{row_id}]"))
 
     errors.extend(
         _check_canonical_profile(
@@ -755,7 +844,7 @@ def validate_evidence(
         )
 
     if trusted is not None:
-        errors.extend(_bind_to_trusted(evidence, trusted))
+        errors.extend(_validate_provenance_binding(evidence, trusted))
     return errors
 
 
@@ -897,8 +986,8 @@ def _validate_probe(
     return errors
 
 
-def _bind_to_trusted(evidence: dict[str, Any], trusted: TrustedContext) -> list[str]:
-    """Refuse a record whose identity is not the one we were told to expect."""
+def _validate_provenance_binding(evidence: dict[str, Any], trusted: TrustedContext) -> list[str]:
+    """Return mismatch diagnostics without disclosing free-form provenance."""
     errors: list[str] = []
     collector = evidence["collector"]
     provenance = collector["provenance"]
@@ -930,9 +1019,10 @@ def _bind_to_trusted(evidence: dict[str, Any], trusted: TrustedContext) -> list[
         ("jobId", trusted.job_id, "jobId"),
     ):
         if provenance[field] != expected:
+            # These strings can contain accidentally supplied credentials.
+            # The field identifies the mismatch without echoing either value.
             errors.append(
-                f"collector.provenance.{label} {provenance[field]!r} is not the "
-                f"expected {expected!r}"
+                f"collector.provenance.{label} is not the expected value"
             )
     if provenance["runAttempt"] != trusted.run_attempt:
         errors.append(
@@ -955,9 +1045,9 @@ def cross_validate(
     authority: da.Authority | None = None,
     trusted: TrustedContext | None = None,
 ) -> ValidationResult:
-    """Cross-validate matrix rows against evidence records."""
+    """Cross-validate rows; without trust, the result is inspection-only."""
     bound_age = validate_max_age_hours(max_age_hours)
-    result = ValidationResult()
+    result = ValidationResult(trusted_context=trusted)
     now = now or datetime.now(timezone.utc)
 
     if trusted is not None and matrix.get("commitSha") != trusted.commit_sha:
@@ -1087,6 +1177,15 @@ def _cross_validate_row(
                     row_id, evidence.get("dependencyClosure"), authority
                 )
             )
+            if artifact_root is not None and measured_digest is not None:
+                errors.extend(
+                    bundle_verify.check_measured_closure(
+                        evidence,
+                        artifact_root=artifact_root,
+                        row_id=row_id,
+                        authority=authority,
+                    )
+                )
     return errors
 
 
@@ -1113,6 +1212,7 @@ def _cross_validate_host(row: dict[str, Any], evidence: dict[str, Any]) -> list[
             actual = host_compiler.get(field)
             if expected and actual != expected:
                 errors.append(f"Compiler {field} mismatch: row={expected!r} host={actual!r}")
+        errors.extend(msvc_toolset_consistency(host_compiler, "Evidence host"))
 
     for field in ("api", "device", "vendor", "driverVersion", "featureLevel"):
         expected = row.get("gpu", {}).get(field)
@@ -1196,15 +1296,26 @@ def load_and_validate(
     now: datetime | None = None,
     allow_unknown_profile: bool = False,
 ) -> ValidationResult:
-    """Load matrix plus evidence records and run the full validation."""
+    """Load matrix plus evidence records and run trusted full validation."""
     bound_age = validate_max_age_hours(max_age_hours)
     now = now or datetime.now(timezone.utc)
-    result = ValidationResult()
+    result = ValidationResult(trusted_context=trusted)
+
+    if trusted is None:
+        message = (
+            "trusted context is required for full validation: supply the exact "
+            "commit SHA and collector provenance from a trusted channel"
+        )
+        result.error(message)
+        result.structural_errors.append(message)
+        return result
 
     matrix = load_strict_json(matrix_path)
-    matrix_errors = validate_matrix(
-        matrix, now=now, allow_unknown_profile=allow_unknown_profile
-    )
+    # Unknown profiles may be inspected through the matrix-only diagnostic
+    # mode, but they must never reach evidence cross-validation.  Otherwise a
+    # caller could opt out of the canonical row contract and still obtain a
+    # fully certified result from a complete-looking bundle.
+    matrix_errors = validate_matrix(matrix, now=now, allow_unknown_profile=False)
     if matrix_errors:
         for message in matrix_errors:
             result.error(f"[matrix] {message}")

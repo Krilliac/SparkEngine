@@ -7,7 +7,7 @@
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -311,7 +311,7 @@ namespace MMO
 
     void MMOInventorySystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (ImGui::TreeNode("MMO Inventory System"))
         {
             ImGui::Text("Registered Items: %zu", m_items.size());

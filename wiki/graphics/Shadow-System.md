@@ -4,7 +4,7 @@ SparkEngine's shadow rendering pipeline combines a priority-based shadow atlas, 
 
 **Source:** `SparkEngine/Source/Graphics/ShadowAtlas.h`, `CachedShadowAtlas.h`, `PCSSshadows.h`
 **Namespace:** `Spark::Graphics`
-**Tests:** `Tests/TestShadowAtlas.cpp` (7 test cases)
+**Tests:** `Tests/TestShadowAtlas.cpp`
 
 ---
 
@@ -370,7 +370,7 @@ Logger::Info("{}", shadows.GetDynamicAtlas().Console_GetStatus());
 | `SparkEngine/Source/Graphics/ShadowAtlas.h` | `ShadowAtlas`, `ShadowTile`, `ShadowAtlasMetrics` |
 | `SparkEngine/Source/Graphics/CachedShadowAtlas.h` | `CachedShadowAtlas`, `ShadowCacheEntry`, `ShadowUpdateRequest` |
 | `SparkEngine/Source/Graphics/PCSSshadows.h` | `PCSSShadowEvaluator`, `PCSSSettings`, `PCSSSamplePattern` |
-| `Tests/TestShadowAtlas.cpp` | Unit tests for `ShadowAtlas` (7 test cases) |
+| `Tests/TestShadowAtlas.cpp` | Unit tests for `ShadowAtlas` |
 
 ---
 

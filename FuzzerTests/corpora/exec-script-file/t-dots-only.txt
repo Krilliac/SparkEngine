@@ -1,0 +1,4 @@
+t1.. dotted
+t1. one_dot
+t.5 no_leading_digit
+t5

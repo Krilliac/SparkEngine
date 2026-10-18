@@ -37,8 +37,10 @@
 
 #include "LogMacros.h"
 
+#include <cmath>
 #include <cstdint>
 #include <exception>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -73,6 +75,8 @@ namespace Spark::Json
         uint32_t maxDepth = 128u;
         /// Maximum number of JSON values the document may produce.
         size_t maxNodes = 4000000u;
+        /// Reject an object that repeats a key instead of keeping the last value.
+        bool rejectDuplicateKeys = false;
     };
 
     /**
@@ -169,13 +173,45 @@ namespace Spark::Json
             return fallback;
         }
 
+        /**
+         * @brief Number truncated toward zero, or @p fallback.
+         *
+         * Returns @p fallback (and logs) for a non-number and for a number whose
+         * truncation does not fit in int: converting such a double with
+         * static_cast is undefined behaviour, and the parser stores any finite
+         * number (2147483648, 1e300). Fractions keep their historical truncation;
+         * use TryAsInt where a document field must be an exact integer.
+         */
         [[nodiscard]] int AsInt(int fallback = 0) const
         {
             if (auto* val = std::get_if<double>(&m_data))
-                return static_cast<int>(*val);
+            {
+                // Truncation lands in int exactly when the value is strictly
+                // inside (INT_MIN - 1, INT_MAX + 1); both bounds are exact doubles.
+                if (std::isfinite(*val) && *val > -2147483649.0 && *val < 2147483648.0)
+                {
+                    return static_cast<int>(*val);
+                }
+                SPARK_LOG_WARN(Spark::LogCategory::Core, "Json::Value::AsInt: %g does not fit in int", *val);
+                return fallback;
+            }
             SPARK_LOG_WARN(Spark::LogCategory::Core, "Json::Value::AsInt called on non-number (type=%d)",
                            static_cast<int>(GetType()));
             return fallback;
+        }
+
+        /**
+         * @brief The number as an int when it is an exact integer in int range.
+         * @return std::nullopt for a non-number, a fraction, or a value outside int.
+         */
+        [[nodiscard]] std::optional<int> TryAsInt() const noexcept
+        {
+            const auto* val = std::get_if<double>(&m_data);
+            if (!val || !std::isfinite(*val) || *val != std::trunc(*val) || *val < -2147483648.0 || *val > 2147483647.0)
+            {
+                return std::nullopt;
+            }
+            return static_cast<int>(*val);
         }
 
         [[nodiscard]] const std::string& AsString() const
@@ -675,12 +711,21 @@ namespace Spark::Json
                             result += ParseUnicodeEscape();
                             break;
                         default:
+                            // RFC 8259 allows only the escapes above. The lenient
+                            // path keeps its historical "drop the backslash"
+                            // result; the strict path reports the recorded error.
+                            RecordError("invalid escape character in string");
                             result += esc;
                             break;
                         }
                     }
                     else
                     {
+                        // Raw bytes below 0x20 must be escaped inside a string.
+                        if (static_cast<unsigned char>(c) < 0x20)
+                        {
+                            RecordError("unescaped control character in string");
+                        }
                         result += c;
                     }
                 }
@@ -847,6 +892,8 @@ namespace Spark::Json
                         return Fail("expected ':' after object key");
 
                     SkipWhitespace();
+                    if (m_limits.rejectDuplicateKeys && obj.HasKey(keyVal.AsString()))
+                        return Fail("duplicate object key");
                     obj[keyVal.AsString()] = ParseValue();
                     SkipWhitespace();
 
@@ -1055,9 +1102,8 @@ namespace Spark::Json
     /**
      * @brief Strictly parse a JSON string into a Value. Returns false on ANY malformed input.
      *
-     * Parse() above is deliberately lenient — it yields Null (or, depending on the
-     * active backend, a PARTIAL value: the vendored nlohmann stub returns a
-     * '{'-prefixed truncated/garbage document as a valid-looking object) and gives
+     * Parse() above is deliberately lenient — it yields Null on malformed input
+     * (or, on the built-in fallback backend, possibly a PARTIAL value) and gives
      * the caller no way to distinguish "corrupt file" from "legitimately empty".
      * Persistence stores that quarantine-and-refuse on corrupt files (TFDatabase,
      * TFOutfitStore, TFSocialSystem's store, ...) must use this entry point instead,
@@ -1069,7 +1115,8 @@ namespace Spark::Json
      *  - non-JSON prefixes and malformed constructs anywhere in the document,
      *  - unterminated strings, arrays, and objects (truncated files),
      *  - trailing content after the root value (torn/partially overwritten files),
-     *  - numbers that overflow double, invalid \u escapes.
+     *  - numbers that overflow double, invalid \u escapes,
+     *  - escapes RFC 8259 does not define (`\q`) and raw bytes below 0x20 inside strings.
      *
      * Always uses the built-in recursive-descent parser — never the nlohmann
      * backend — so acceptance is deterministic across build configurations.

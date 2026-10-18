@@ -46,6 +46,7 @@ namespace SparkEditor
         void RenderPrefabList();
         void RenderPrefabInspector();
         void RenderComponentEditor(SerializedComponent& component);
+        /// @brief One property row; call between Spark::Ui::BeginPropertyGrid and EndPropertyGrid.
         void RenderPropertyEditor(const std::string& name, PrefabPropertyValue& value);
 
         PrefabManager* m_prefabManager = nullptr;

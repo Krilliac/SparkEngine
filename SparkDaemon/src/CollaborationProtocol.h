@@ -277,11 +277,18 @@ namespace Spark::Daemon
                                uint32_t maximumPeers = 1024, uint32_t maximumLocks = 65'536,
                                uint32_t maximumEdits = 65'536)
     {
+        // Smallest wire encoding of each record (every string empty). A count the
+        // unread bytes cannot hold is rejected before anything is reserved.
+        constexpr size_t kMinimumPeerBytes = sizeof(uint32_t) + 2 * sizeof(uint32_t);
+        constexpr size_t kMinimumLockBytes = sizeof(uint32_t) + sizeof(uint32_t);
+        constexpr size_t kMinimumEditBytes = sizeof(uint64_t) + sizeof(uint32_t) + 2 * sizeof(uint32_t);
+
         Wire::Reader reader(bytes);
         CollaborationSnapshot decoded;
         uint32_t count = 0;
         if (!Wire::ReadVersion(reader) || !reader.ReadString(decoded.sessionId, kMaximumSessionIdLength) ||
-            !reader.Read(decoded.nextSequence) || !reader.Read(count) || count > maximumPeers)
+            !reader.Read(decoded.nextSequence) || !reader.Read(count) || count > maximumPeers ||
+            !reader.CanHold(count, kMinimumPeerBytes))
             return false;
 
         decoded.peers.reserve(count);
@@ -294,7 +301,7 @@ namespace Spark::Daemon
             decoded.peers.push_back(std::move(peer));
         }
 
-        if (!reader.Read(count) || count > maximumLocks)
+        if (!reader.Read(count) || count > maximumLocks || !reader.CanHold(count, kMinimumLockBytes))
             return false;
         decoded.locks.reserve(count);
         for (uint32_t i = 0; i < count; ++i)
@@ -305,7 +312,7 @@ namespace Spark::Daemon
             decoded.locks.push_back(std::move(lock));
         }
 
-        if (!reader.Read(count) || count > maximumEdits)
+        if (!reader.Read(count) || count > maximumEdits || !reader.CanHold(count, kMinimumEditBytes))
             return false;
         decoded.edits.reserve(count);
         for (uint32_t i = 0; i < count; ++i)

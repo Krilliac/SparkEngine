@@ -8,8 +8,12 @@
 #include "Core/Reflection.h"
 #include "Core/ReflectionSerializer.h"
 
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
+#include <string>
 #include <utility>
+#include <vector>
 
 namespace
 {
@@ -35,6 +39,7 @@ namespace
         bool active = true;
         int mode = 0;
         std::string name = "default";
+        int customBlob[2] = {5, 6}; // Registered as FieldType::Custom by the BinaryHardening fixture
     };
 
     enum class ReflAttrMetadataFixture
@@ -42,7 +47,8 @@ namespace
         Properties,
         SerializedFilter,
         Binary,
-        HealthOnly
+        HealthOnly,
+        BinaryHardening
     };
 
     Spark::TypeInfo& RebuildReflAttrTestMetadata(ReflAttrMetadataFixture fixture)
@@ -83,9 +89,33 @@ namespace
         case ReflAttrMetadataFixture::HealthOnly:
             addField("health", Spark::FieldType::Float, offsetof(ReflAttr_TestStruct, health), sizeof(float));
             break;
+        case ReflAttrMetadataFixture::BinaryHardening:
+            // Indices: 0 health, 1 mode, 2 active, 3 name, 4 customBlob (Custom), 5 maxHealth (not serialized)
+            addField("health", Spark::FieldType::Float, offsetof(ReflAttr_TestStruct, health), sizeof(float));
+            addField("mode", Spark::FieldType::Int, offsetof(ReflAttr_TestStruct, mode), sizeof(int));
+            addField("active", Spark::FieldType::Bool, offsetof(ReflAttr_TestStruct, active), sizeof(bool));
+            addField("name", Spark::FieldType::String, offsetof(ReflAttr_TestStruct, name), sizeof(std::string));
+            addField("customBlob", Spark::FieldType::Custom, offsetof(ReflAttr_TestStruct, customBlob),
+                     sizeof(ReflAttr_TestStruct::customBlob));
+            addField("maxHealth", Spark::FieldType::Float, offsetof(ReflAttr_TestStruct, maxHealth), sizeof(float),
+                     false);
+            break;
         }
 
         return info;
+    }
+
+    // Appends one fixed-size wire record: [index:u16][tag:u8][size:u16][payload].
+    void AppendFixedRecord(std::vector<uint8_t>& out, uint16_t index, Spark::FieldType tag,
+                           const std::vector<uint8_t>& payload)
+    {
+        const auto size = static_cast<uint16_t>(payload.size());
+        out.push_back(static_cast<uint8_t>(index & 0xFF));
+        out.push_back(static_cast<uint8_t>(index >> 8));
+        out.push_back(static_cast<uint8_t>(tag));
+        out.push_back(static_cast<uint8_t>(size & 0xFF));
+        out.push_back(static_cast<uint8_t>(size >> 8));
+        out.insert(out.end(), payload.begin(), payload.end());
     }
 
     // Test struct for Vector2 tests
@@ -465,4 +495,121 @@ TEST(ReflectionSerializer_SerializeByName)
     // Unknown type returns empty
     auto empty = Spark::SerializeByName(&s, "NonExistent");
     EXPECT_TRUE(empty.empty());
+}
+
+// ============================================================================
+// SEC4: DeserializeFromBinary treats its buffer as untrusted input
+// ============================================================================
+
+TEST(SEC4Reflection_BinaryTagMismatchOnStringFieldIgnored)
+{
+    const auto& info = RebuildReflAttrTestMetadata(ReflAttrMetadataFixture::BinaryHardening);
+
+    // An Int-tagged record sized like a std::string that targets the String field
+    // must not be raw-copied over the string object. All-zero bytes keep the
+    // pre-fix failure observable on release standard libraries without planting a
+    // freeable pointer: the name just reads empty.
+    std::vector<uint8_t> buffer;
+    AppendFixedRecord(buffer, 3, Spark::FieldType::Int, std::vector<uint8_t>(sizeof(std::string), 0));
+
+    ReflAttr_TestStruct restored;
+    const size_t consumed = Spark::DeserializeFromBinary(&restored, info, buffer.data(), buffer.size());
+    EXPECT_EQ(consumed, buffer.size());
+    EXPECT_EQ(restored.name, std::string("default"));
+}
+
+TEST(SEC4Reflection_BinaryTagMismatchOnPlainFieldIgnored)
+{
+    const auto& info = RebuildReflAttrTestMetadata(ReflAttrMetadataFixture::BinaryHardening);
+
+    // A Float-tagged record for the Int field has the right size but the wrong type.
+    const float wireValue = 1.5f;
+    std::vector<uint8_t> payload(sizeof(float));
+    std::memcpy(payload.data(), &wireValue, sizeof(float));
+    std::vector<uint8_t> buffer;
+    AppendFixedRecord(buffer, 1, Spark::FieldType::Float, payload);
+
+    ReflAttr_TestStruct restored;
+    restored.mode = 3;
+    const size_t consumed = Spark::DeserializeFromBinary(&restored, info, buffer.data(), buffer.size());
+    EXPECT_EQ(consumed, buffer.size());
+    EXPECT_EQ(restored.mode, 3);
+}
+
+TEST(SEC4Reflection_BinaryCustomAndUnserializedFieldsNeverWritten)
+{
+    const auto& info = RebuildReflAttrTestMetadata(ReflAttrMetadataFixture::BinaryHardening);
+
+    std::vector<uint8_t> buffer;
+    AppendFixedRecord(buffer, 4, Spark::FieldType::Custom, std::vector<uint8_t>(sizeof(int) * 2, 0xEE));
+    const float wireHealth = 999.0f;
+    std::vector<uint8_t> healthPayload(sizeof(float));
+    std::memcpy(healthPayload.data(), &wireHealth, sizeof(float));
+    AppendFixedRecord(buffer, 5, Spark::FieldType::Float, healthPayload);
+
+    ReflAttr_TestStruct restored;
+    const size_t consumed = Spark::DeserializeFromBinary(&restored, info, buffer.data(), buffer.size());
+    EXPECT_EQ(consumed, buffer.size());
+    EXPECT_EQ(restored.customBlob[0], 5);
+    EXPECT_EQ(restored.customBlob[1], 6);
+    EXPECT_NEAR(restored.maxHealth, 100.0f, 0.001f);
+
+    // The encoder must not emit the opaque Custom field or the unserialized field either.
+    ReflAttr_TestStruct original;
+    std::vector<uint8_t> encoded;
+    Spark::SerializeToBinary(&original, info, encoded);
+    const size_t expectedSize =
+        (5 + sizeof(float)) + (5 + sizeof(int)) + (5 + sizeof(bool)) + (3 + 4 + original.name.size());
+    EXPECT_EQ(encoded.size(), expectedSize);
+
+    ReflAttr_TestStruct roundTrip;
+    roundTrip.health = 0.0f;
+    roundTrip.mode = -1;
+    roundTrip.active = false;
+    roundTrip.name.clear();
+    EXPECT_EQ(Spark::DeserializeFromBinary(&roundTrip, info, encoded.data(), encoded.size()), encoded.size());
+    EXPECT_NEAR(roundTrip.health, original.health, 0.001f);
+    EXPECT_EQ(roundTrip.mode, original.mode);
+    EXPECT_TRUE(roundTrip.active);
+    EXPECT_EQ(roundTrip.name, original.name);
+}
+
+TEST(SEC4Reflection_BinaryBoolNormalized)
+{
+    const auto& info = RebuildReflAttrTestMetadata(ReflAttrMetadataFixture::BinaryHardening);
+
+    std::vector<uint8_t> buffer;
+    AppendFixedRecord(buffer, 2, Spark::FieldType::Bool, std::vector<uint8_t>(sizeof(bool), 0x7F));
+
+    ReflAttr_TestStruct restored;
+    restored.active = false;
+    const size_t consumed = Spark::DeserializeFromBinary(&restored, info, buffer.data(), buffer.size());
+    EXPECT_EQ(consumed, buffer.size());
+
+    // Inspect the object representation: a raw copy would leave 0x7F in the bool.
+    unsigned char stored = 0;
+    std::memcpy(&stored, &restored.active, sizeof(stored));
+    EXPECT_EQ(static_cast<int>(stored), 1);
+}
+
+TEST(SEC4Reflection_BinaryTruncatedRecordReturnsZero)
+{
+    const auto& info = RebuildReflAttrTestMetadata(ReflAttrMetadataFixture::BinaryHardening);
+
+    ReflAttr_TestStruct original;
+    original.name = "truncated";
+    std::vector<uint8_t> encoded;
+    Spark::SerializeToBinary(&original, info, encoded);
+    EXPECT_TRUE(encoded.size() > 1);
+
+    // Dropping the last byte of the trailing string record is an error, not a partial read.
+    ReflAttr_TestStruct restored;
+    EXPECT_EQ(Spark::DeserializeFromBinary(&restored, info, encoded.data(), encoded.size() - 1), size_t{0});
+
+    // A string length that runs past the buffer is also an error and leaves the field alone.
+    const std::vector<uint8_t> hugeString = {3,    0,  static_cast<uint8_t>(Spark::FieldType::String), 0xFF, 0xFF, 0xFF,
+                                             0xFF, 'x'};
+    ReflAttr_TestStruct other;
+    EXPECT_EQ(Spark::DeserializeFromBinary(&other, info, hugeString.data(), hugeString.size()), size_t{0});
+    EXPECT_EQ(other.name, std::string("default"));
 }

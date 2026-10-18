@@ -26,9 +26,12 @@
 #pragma once
 
 #include "ECSystems.h"
+#include "../../../Core/FaultIsolation.h"
 #include <array>
+#include <exception>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace Spark::ECS
@@ -69,6 +72,14 @@ namespace Spark::ECS
      *
      * Extends SystemManager by organizing systems into named execution phases.
      * Also supports the legacy flat-list API for backward compatibility.
+     *
+     * ## Fault isolation
+     * Each system runs under its own SubsystemFaultIsolator key, "ECS:<GetName()>",
+     * captured when the system is added. A system that throws is charged and, after
+     * repeated faults, disabled on its own; the remaining systems still run that frame.
+     * One faulty system therefore cannot skip or disable the whole pipeline.
+     *
+     * Thread affinity: game thread. Allocation: only in AddSystem; UpdateAll does not allocate.
      */
     class PhaseSystemManager
     {
@@ -90,7 +101,7 @@ namespace Spark::ECS
         {
             auto system = std::make_unique<T>(std::forward<Args>(args)...);
             T* ptr = system.get();
-            m_phasedSystems[static_cast<size_t>(phase)].push_back(std::move(system));
+            m_phasedSystems[static_cast<size_t>(phase)].push_back(MakeEntry(std::move(system)));
             return ptr;
         }
 
@@ -103,7 +114,7 @@ namespace Spark::ECS
         {
             auto system = std::make_unique<T>(std::forward<Args>(args)...);
             T* ptr = system.get();
-            m_flatSystems.push_back(std::move(system));
+            m_flatSystems.push_back(MakeEntry(std::move(system)));
             return ptr;
         }
 
@@ -112,6 +123,9 @@ namespace Spark::ECS
          *
          * Systems execute serially in Phase enum order, then the unphased flat list in
          * insertion order. This ordering is the manager's core guarantee.
+         *
+         * A system that throws is reported under its own fault key and the loop moves on
+         * to the next system; see the class notes on fault isolation.
          *
          * @note An earlier parallel-execution path was removed: it dispatched every
          *       declaration through a single global ParallelSystemExecutor that batched
@@ -125,17 +139,15 @@ namespace Spark::ECS
             // Execute in phase order.
             for (size_t phase = 0; phase < static_cast<size_t>(Phase::_Count); ++phase)
             {
-                for (auto& system : m_phasedSystems[phase])
+                for (const auto& entry : m_phasedSystems[phase])
                 {
-                    if (system->IsEnabled())
-                        system->Update(world, deltaTime);
+                    UpdateIsolated(entry, world, deltaTime);
                 }
             }
 
-            for (auto& system : m_flatSystems)
+            for (const auto& entry : m_flatSystems)
             {
-                if (system->IsEnabled())
-                    system->Update(world, deltaTime);
+                UpdateIsolated(entry, world, deltaTime);
             }
         }
 
@@ -146,16 +158,16 @@ namespace Spark::ECS
         {
             for (size_t phase = 0; phase < static_cast<size_t>(Phase::_Count); ++phase)
             {
-                for (auto& system : m_phasedSystems[phase])
+                for (const auto& entry : m_phasedSystems[phase])
                 {
-                    if (name == system->GetName())
-                        return system.get();
+                    if (name == entry.system->GetName())
+                        return entry.system.get();
                 }
             }
-            for (auto& system : m_flatSystems)
+            for (const auto& entry : m_flatSystems)
             {
-                if (name == system->GetName())
-                    return system.get();
+                if (name == entry.system->GetName())
+                    return entry.system.get();
             }
             return nullptr;
         }
@@ -164,16 +176,16 @@ namespace Spark::ECS
         {
             for (size_t phase = 0; phase < static_cast<size_t>(Phase::_Count); ++phase)
             {
-                for (auto& system : m_phasedSystems[phase])
+                for (const auto& entry : m_phasedSystems[phase])
                 {
-                    if (name == system->GetName())
-                        return system.get();
+                    if (name == entry.system->GetName())
+                        return entry.system.get();
                 }
             }
-            for (const auto& system : m_flatSystems)
+            for (const auto& entry : m_flatSystems)
             {
-                if (name == system->GetName())
-                    return system.get();
+                if (name == entry.system->GetName())
+                    return entry.system.get();
             }
             return nullptr;
         }
@@ -202,24 +214,24 @@ namespace Spark::ECS
                 result += "--- ";
                 result += PhaseName(static_cast<Phase>(phase));
                 result += " ---\n";
-                for (const auto& sys : m_phasedSystems[phase])
+                for (const auto& entry : m_phasedSystems[phase])
                 {
                     result += "  ";
-                    result += sys->GetName();
+                    result += entry.system->GetName();
                     result += ": ";
-                    result += sys->IsEnabled() ? "enabled" : "disabled";
+                    result += entry.system->IsEnabled() ? "enabled" : "disabled";
                     result += "\n";
                 }
             }
             if (!m_flatSystems.empty())
             {
                 result += "--- Unphased ---\n";
-                for (const auto& sys : m_flatSystems)
+                for (const auto& entry : m_flatSystems)
                 {
                     result += "  ";
-                    result += sys->GetName();
+                    result += entry.system->GetName();
                     result += ": ";
-                    result += sys->IsEnabled() ? "enabled" : "disabled";
+                    result += entry.system->IsEnabled() ? "enabled" : "disabled";
                     result += "\n";
                 }
             }
@@ -227,8 +239,29 @@ namespace Spark::ECS
         }
 
       private:
-        std::array<std::vector<std::unique_ptr<ISystem>>, static_cast<size_t>(Phase::_Count)> m_phasedSystems;
-        std::vector<std::unique_ptr<ISystem>> m_flatSystems;
+        struct SystemEntry
+        {
+            std::unique_ptr<ISystem> system;
+            std::string faultKey; ///< Built once in AddSystem so UpdateAll never allocates.
+        };
+
+        static SystemEntry MakeEntry(std::unique_ptr<ISystem> system)
+        {
+            std::string faultKey = "ECS:";
+            faultKey += system->GetName();
+            return SystemEntry{std::move(system), std::move(faultKey)};
+        }
+
+        /// Run one system under its own fault key; a throw is reported, never propagated.
+        static void UpdateIsolated(const SystemEntry& entry, World& world, float deltaTime)
+        {
+            if (!entry.system->IsEnabled())
+                return;
+            SPARK_GUARDED_UPDATE(entry.faultKey.c_str(), "ECS", { entry.system->Update(world, deltaTime); });
+        }
+
+        std::array<std::vector<SystemEntry>, static_cast<size_t>(Phase::_Count)> m_phasedSystems;
+        std::vector<SystemEntry> m_flatSystems;
     };
 
 } // namespace Spark::ECS

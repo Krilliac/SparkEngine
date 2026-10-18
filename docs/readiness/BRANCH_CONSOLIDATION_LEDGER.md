@@ -41,7 +41,7 @@ The current remote heads are also direct ancestors: `Working` (`891e00c1c`), `cl
 | `claude/rdy010-opus46`, `claude/rdy010-adversarial-opus46` | Integrated and strengthened. | `6d4c22f34`, `f18cd4dc0`, `c7f126b1f`, `4a1fb4823`, `769f45064`, `eb3a96e8a`, `169fbb337`. |
 | `claude/rdy020-adversarial-opus46`, `claude/rdy020-asset-integrity-repair-opus46`, `codex/stable-v1-rdy020`, `codex/stable-v1-rdy020-next`, `rdy020-repair2-opus46` and detached asset-validation worktrees | Semantically superseded by the stronger canonical asset-integrity contract. | Canonical manifests, ownership evidence, hostile-path validation, and direct containment of the final repair heads. |
 | `claude/sec110-adversarial-opus46`, `claude/sec110-repair-opus46`, `sec110-repair2-opus46`, `worktree-sec110-supply-chain` | Integrated and strengthened. | Canonical dependency/provenance safeguards and generated evidence supersede the individual repair branches. |
-| `codex/sec120-repair`, `worktree-sec120-fuzz-policy` | Integrated. | The canonical SEC-120 policy/fuzz infrastructure is directly contained and remains structurally blocking until external evidence exists. |
+| `codex/sec120-repair`, `worktree-sec120-fuzz-policy` | Integrated. | The canonical SEC-120 policy/fuzz infrastructure is directly contained; two parsers are structurally bound, while incomplete inventory coverage and runtime evidence remain release-blocking. |
 | `plt200-repair2-opus46` and detached `D:\SparkEngine-plt200-opus46` | Integrated and strengthened. | `2e566e915`, `dcc59d842`, `9a1d28bf1`, `4cc4e122`. |
 | `codex/doc410-repair2`, `codex/docs-generator-fix`, `doc-410-postfix-opus46`, `worktree-doc-410-opus46` | Superseded by the current deterministic docs contract and regenerated outputs. | The current generators, currentness checker, and checked-in artifacts are the retained source of truth. |
 | `ci120-build-matrix-parity`, `ci120-repair2-opus46`, `claude/ci110-sanitizer-opus46`, `claude/ci-windows-compiler-cache`, `claude/codeql-evidence`, `worktree-spark-ci-provenance`, `worktree-release-acceptance-gate` | Integrated or superseded by stronger fail-closed canonical CI controls. | Current build-matrix, sanitizer, CodeQL, release-acceptance, provenance, and required-job contracts are retained; the package/required-job gate repair in this commit closes a further discovered omission. |
@@ -97,7 +97,7 @@ The Blender asset branch is retained in the canonical history; it is not discard
 - Signed, SBOM-attested, scanned, install/uninstall/rollback-tested shipping artifacts.
 - Platform certification evidence and publisher approval.
 - Certified performance baselines, soak measurements, and rendering golden images.
-- SEC-120 closure evidence and the three remaining structural policy blockers.
+- SEC-120 closure evidence and the two remaining blocker classes: 103 unimplemented parser targets and 151 deferred candidates.
 - CMake File API evidence for the installed SDK consumer, Windows Shipping, and Windows validation profiles; their absence remains intentionally blocking in the build-matrix report.
 
 No release tag or artifact publication is authorized by this ledger.

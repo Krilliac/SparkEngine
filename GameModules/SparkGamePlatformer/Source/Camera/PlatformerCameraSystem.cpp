@@ -4,10 +4,9 @@
  */
 
 #include "PlatformerCameraSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include "Spark/ModuleLog.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -28,11 +27,8 @@ namespace Platformer
 
         m_initialized = true;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer camera system initialized (%zu zones)",
-                       m_cameraZones.size());
-        console.LogInfo("[Platformer Camera] Camera system initialized (" + std::to_string(m_cameraZones.size()) +
-                        " camera zones)");
+        Spark::ModuleLog::Info(m_context, "[Platformer Camera] Camera system initialized ({} camera zones)",
+                               m_cameraZones.size());
         return true;
     }
 
@@ -206,7 +202,7 @@ namespace Platformer
 
     void PlatformerCameraSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Platformer Camera"))
             return;
 

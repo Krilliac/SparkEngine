@@ -15,17 +15,20 @@
 #include <string>
 #include <utility>
 
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
+
 namespace SparkEditor
 {
 
     void TerrainEditor::RenderTerrainProperties()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_COG " Terrain Properties"))
+        if (Spark::Ui::SectionHeader("Terrain Properties", ICON_FA_COG, false))
         {
             if (!m_currentTerrain)
                 return;
 
-            ImGui::Indent(8.0f);
+            ImGui::Indent(Spark::Ui::Px(8.0f));
 
             char nameBuffer[256] = {};
             std::strncpy(nameBuffer, m_currentTerrain->name.c_str(), sizeof(nameBuffer) - 1);
@@ -38,13 +41,11 @@ namespace SparkEditor
             ImGui::DragFloat("Size", &m_currentTerrain->size, 10.0f, 100.0f, 10000.0f, "%.0f m");
             ImGui::DragFloat3("Position", &m_currentTerrain->position.x, 1.0f);
 
-            ImGui::Separator();
-            ImGui::Text("LOD:");
+            Spark::Ui::SubHeader("LOD");
             ImGui::DragInt("LOD Levels", &m_currentTerrain->lodLevels, 0.1f, 1, 8);
             ImGui::DragFloat("LOD Bias", &m_currentTerrain->lodBias, 0.1f, 0.1f, 4.0f, "%.1f");
 
-            ImGui::Separator();
-            ImGui::Text("Physics:");
+            Spark::Ui::SubHeader("Physics");
             ImGui::Checkbox("Generate Collider", &m_currentTerrain->generateCollider);
 
             ImGui::Separator();
@@ -71,7 +72,7 @@ namespace SparkEditor
                 }
             };
 
-            if (ImGui::Button(ICON_FA_SAVE " Save Terrain", ImVec2(-1, 28)))
+            if (ImGui::Button(ICON_FA_SAVE " Save Terrain", ImVec2(-1, Spark::Ui::Px(28.0f))))
             {
                 std::error_code existsError;
                 if (std::filesystem::exists(m_savePathBuffer, existsError))
@@ -84,23 +85,23 @@ namespace SparkEditor
             {
                 ImGui::TextWrapped("%s already exists. Overwrite it?", m_savePathBuffer);
                 ImGui::Separator();
-                if (ImGui::Button("Overwrite", ImVec2(120, 0)))
+                if (ImGui::Button("Overwrite", Spark::Ui::Px2(120, 0)))
                 {
                     saveNow();
                     ImGui::CloseCurrentPopup();
                 }
                 ImGui::SameLine();
-                if (ImGui::Button("Cancel", ImVec2(120, 0)))
+                if (ImGui::Button("Cancel", Spark::Ui::Px2(120, 0)))
                     ImGui::CloseCurrentPopup();
                 ImGui::EndPopup();
             }
 
             if (!m_terrainIoMessage.empty())
             {
-                ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", m_terrainIoMessage.c_str());
+                Spark::Ui::StatusText(Spark::Ui::Status::Error, "%s", m_terrainIoMessage.c_str());
             }
 
-            ImGui::Unindent(8.0f);
+            ImGui::Unindent(Spark::Ui::Px(8.0f));
         }
     }
 
@@ -126,7 +127,7 @@ namespace SparkEditor
             }
         }
 
-        ImGui::BeginChild("##TextureLayers", ImVec2(0, 150), true);
+        ImGui::BeginChild("##TextureLayers", Spark::Ui::Px2(0, 150), true);
         int removeIdx = -1;
         for (int i = 0; i < static_cast<int>(m_currentTerrain->textureLayers.size()); ++i)
         {
@@ -220,7 +221,7 @@ namespace SparkEditor
             SetModified(true);
         }
 
-        ImGui::BeginChild("##DetailMeshes", ImVec2(0, 120), true);
+        ImGui::BeginChild("##DetailMeshes", Spark::Ui::Px2(0, 120), true);
         for (int i = 0; i < static_cast<int>(m_currentTerrain->detailMeshes.size()); ++i)
         {
             auto& detail = m_currentTerrain->detailMeshes[static_cast<size_t>(i)];
@@ -255,30 +256,29 @@ namespace SparkEditor
 
     void TerrainEditor::RenderGenerationTools()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_COGS " Procedural Generation", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Procedural Generation", ICON_FA_COGS))
         {
-            ImGui::Indent(8.0f);
+            ImGui::Indent(Spark::Ui::Px(8.0f));
 
-            ImGui::TextDisabled("Noise");
+            Spark::Ui::SubHeader("Noise");
             ImGui::DragInt("Octaves", &m_generationParams.noiseOctaves, 0.1f, 1, 12);
             ImGui::DragFloat("Frequency", &m_generationParams.noiseFrequency, 0.001f, 0.001f, 1.0f, "%.3f");
             ImGui::DragFloat("Amplitude", &m_generationParams.noiseAmplitude, 1.0f, 1.0f, 500.0f, "%.0f");
             ImGui::DragFloat("Lacunarity", &m_generationParams.noiseLacunarity, 0.1f, 1.0f, 4.0f, "%.1f");
             ImGui::DragFloat("Persistence", &m_generationParams.noisePersistence, 0.01f, 0.0f, 1.0f, "%.2f");
 
-            if (ImGui::Button(ICON_FA_BOLT " Generate Heightmap", ImVec2(-1, 28)))
+            if (ImGui::Button(ICON_FA_BOLT " Generate Heightmap", ImVec2(-1, Spark::Ui::Px(28.0f))))
             {
                 GenerateNoiseHeightmap(m_generationParams.noiseOctaves, m_generationParams.noiseFrequency,
                                        m_generationParams.noiseAmplitude, m_generationParams.noiseLacunarity,
                                        m_generationParams.noisePersistence);
             }
 
-            ImGui::Separator();
-            ImGui::TextDisabled("Post-Process");
+            Spark::Ui::SubHeader("Post-Process");
 
             ImGui::DragInt("Smooth Iterations", &m_generationParams.smoothIterations, 0.1f, 1, 20);
             ImGui::DragFloat("Smooth Strength", &m_generationParams.smoothStrength, 0.01f, 0.0f, 1.0f, "%.2f");
-            if (ImGui::Button(ICON_FA_MAGIC " Smooth", ImVec2(-1, 28)))
+            if (ImGui::Button(ICON_FA_MAGIC " Smooth", ImVec2(-1, Spark::Ui::Px(28.0f))))
             {
                 SmoothTerrain(m_generationParams.smoothIterations, m_generationParams.smoothStrength);
             }
@@ -286,13 +286,13 @@ namespace SparkEditor
             ImGui::Separator();
             ImGui::DragInt("Erosion Iterations", &m_generationParams.erosionIterations, 1.0f, 10, 10000);
             ImGui::DragFloat("Erosion Strength", &m_generationParams.erosionStrength, 0.01f, 0.0f, 1.0f, "%.2f");
-            if (ImGui::Button(ICON_FA_FIRE " Apply Erosion", ImVec2(-1, 28)))
+            if (ImGui::Button(ICON_FA_FIRE " Apply Erosion", ImVec2(-1, Spark::Ui::Px(28.0f))))
             {
                 ApplyErosion(m_generationParams.erosionIterations, m_generationParams.erosionStrength,
                              m_generationParams.evaporationRate, m_generationParams.depositionRate);
             }
 
-            ImGui::Unindent(8.0f);
+            ImGui::Unindent(Spark::Ui::Px(8.0f));
         }
     }
 

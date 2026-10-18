@@ -9,6 +9,9 @@
 #include <iostream>
 #include <cstdio>
 #include "Utils/LogMacros.h"
+#include "SparkUI/Fonts.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
@@ -82,7 +85,8 @@ namespace SparkEditor
         if (m_modules.empty())
         {
             ImGui::TextDisabled("No script modules loaded.");
-            ImGui::TextDisabled("Place .as files in Assets/Scripts/ and enter Play mode.");
+            ImGui::TextDisabled("State preview does not execute game scripts.");
+            ImGui::TextDisabled("Use Play Control > Launch Game to test runtime scripts.");
             return;
         }
 
@@ -91,8 +95,8 @@ namespace SparkEditor
         {
             ImGui::TableSetupColumn("Module");
             ImGui::TableSetupColumn("File");
-            ImGui::TableSetupColumn("Entities", ImGuiTableColumnFlags_WidthFixed, 60);
-            ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 60);
+            ImGui::TableSetupColumn("Entities", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(60));
+            ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(60));
             ImGui::TableHeadersRow();
 
             for (int i = 0; i < static_cast<int>(m_modules.size()); ++i)
@@ -106,12 +110,12 @@ namespace SparkEditor
                     m_selectedModule = i;
 
                 ImGui::TableNextColumn();
-                ImGui::TextUnformatted(mod.filePath);
+                Spark::Ui::MonoText("%s", mod.filePath);
                 ImGui::TableNextColumn();
-                ImGui::Text("%d", mod.entityCount);
+                Spark::Ui::TableNumber("%d", mod.entityCount);
                 ImGui::TableNextColumn();
-                ImGui::TextColored(mod.compiled ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f) : ImVec4(0.8f, 0.2f, 0.2f, 1.0f),
-                                   mod.compiled ? "OK" : "ERR");
+                Spark::Ui::StatusText(mod.compiled ? Spark::Ui::Status::Success : Spark::Ui::Status::Error, "%s",
+                                      mod.compiled ? "OK" : "ERR");
             }
             ImGui::EndTable();
         }
@@ -122,21 +126,21 @@ namespace SparkEditor
         ImGui::Checkbox("Enable Hot Reload", &m_hotReloadEnabled);
         ImGui::Separator();
 
-        ImGui::Text("Watched Files: %d", m_watchedFiles);
-        ImGui::Text("Recompile Count: %d", m_recompileCount);
-        ImGui::Text("Error Count: %d", m_errorCount);
+        Spark::Ui::KeyValue("Watched Files", "%d", m_watchedFiles);
+        Spark::Ui::KeyValue("Recompile Count", "%d", m_recompileCount);
+        Spark::Ui::KeyValue("Error Count", "%d", m_errorCount);
 
         ImGui::Separator();
-        ImGui::TextDisabled("Hot reload watches Assets/Scripts/ for .as file changes.");
-        ImGui::TextDisabled("Modified scripts are automatically recompiled and reattached.");
+        Spark::Ui::SecondaryText("Hot reload watches Assets/Scripts/ for .as file changes.");
+        Spark::Ui::SecondaryText("Modified scripts are automatically recompiled and reattached.");
     }
 
     void ScriptEditorPanel::RenderHookListeners()
     {
         if (m_hooks.empty())
         {
-            ImGui::TextDisabled("No script hooks registered.");
-            ImGui::TextDisabled("Scripts register hooks via ScriptHookManager (28 hook types).");
+            Spark::Ui::EmptyState(ICON_FA_CODE, "No script hooks registered",
+                                  "Scripts register hooks via ScriptHookManager (28 hook types).");
             return;
         }
 
@@ -145,7 +149,7 @@ namespace SparkEditor
         {
             ImGui::TableSetupColumn("Hook Type");
             ImGui::TableSetupColumn("Script");
-            ImGui::TableSetupColumn("Priority", ImGuiTableColumnFlags_WidthFixed, 60);
+            ImGui::TableSetupColumn("Priority", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(60));
             ImGui::TableHeadersRow();
 
             for (const auto& hook : m_hooks)
@@ -156,7 +160,7 @@ namespace SparkEditor
                 ImGui::TableNextColumn();
                 ImGui::TextUnformatted(hook.scriptName);
                 ImGui::TableNextColumn();
-                ImGui::Text("%d", hook.priority);
+                Spark::Ui::TableNumber("%d", hook.priority);
             }
             ImGui::EndTable();
         }
@@ -170,9 +174,12 @@ namespace SparkEditor
         ImGui::Separator();
 
         ImGui::BeginChild("ScriptOutput", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar);
-        for (const auto& line : m_compileLog)
         {
-            ImGui::TextUnformatted(line.c_str());
+            Spark::Ui::ScopedFont mono(Spark::Ui::FontRole::Mono);
+            for (const auto& line : m_compileLog)
+            {
+                ImGui::TextUnformatted(line.c_str());
+            }
         }
         if (!m_compileLog.empty())
             ImGui::SetScrollHereY(1.0f);

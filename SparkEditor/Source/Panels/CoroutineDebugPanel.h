@@ -6,7 +6,7 @@
 #pragma once
 
 #include "../Core/EditorPanel.h"
-#include <imgui.h>
+#include "SparkUI/Enums.h"
 #include <string>
 #include <vector>
 
@@ -53,7 +53,8 @@ namespace SparkEditor
         void RenderActiveCoroutines();
 
         static const char* GetStatusName(CoroutineStatus status);
-        static ImVec4 GetStatusColor(CoroutineStatus status);
+        /// @brief Semantic status of a coroutine state (rendered as glyph + word + colour).
+        static Spark::Ui::Status ToUiStatus(CoroutineStatus status);
 
         std::vector<CoroutineInfo> m_coroutines;
         int m_totalStarted = 0;

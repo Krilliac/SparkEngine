@@ -19,14 +19,44 @@ namespace
 } // namespace
 #endif
 
+#ifndef SPARK_CONSOLE_VERSION
+#error "SPARK_CONSOLE_VERSION must be supplied by the build system"
+#endif
+
 int main(int argc, char* argv[])
 {
     bool enginePipeRequested = false;
+    bool batchMode = false;
     for (int i = 1; i < argc; ++i)
     {
-        if (std::string_view(argv[i]) == "--engine-pipe")
+        const std::string_view argument(argv[i]);
+        if (argument == "--version" || argument == "-v")
+        {
+            std::cout << "SparkConsole " SPARK_CONSOLE_VERSION << '\n';
+            return 0;
+        }
+        if (argument == "--engine-pipe")
         {
             enginePipeRequested = true;
+        }
+        if (argument == "--batch")
+        {
+            batchMode = true;
+        }
+    }
+
+    if (batchMode)
+    {
+        try
+        {
+            ConsoleApp app(false, true);
+            app.RunBatch(std::cin);
+            return 0;
+        }
+        catch (const std::exception& e)
+        {
+            std::cerr << "Console batch error: " << e.what() << std::endl;
+            return 1;
         }
     }
 
@@ -55,7 +85,7 @@ int main(int argc, char* argv[])
         SetConsoleMode(hConsole, mode);
     }
 
-    ConsoleApp::WriteDisplay(L"Spark Engine Console v1.0.0\n"
+    ConsoleApp::WriteDisplay(L"Spark Engine Console v" SPARK_CONSOLE_VERSION_W "\n"
                              L"Waiting for engine connection...\n"
                              L"Type 'help' for available commands\n"
                              L"========================================\n");
@@ -66,7 +96,7 @@ int main(int argc, char* argv[])
     // byte- or wide-oriented, and every later insertion of the other width
     // silently writes nothing. Printing this banner through std::wcerr made the
     // whole narrow-std::cerr display path in ConsoleApp.cpp go dark.
-    std::cerr << "Spark Engine Console v1.0.0" << std::endl;
+    std::cerr << "Spark Engine Console v" SPARK_CONSOLE_VERSION << std::endl;
     std::cerr << "Waiting for engine connection..." << std::endl;
     std::cerr << "Type 'help' for available commands" << std::endl;
     std::cerr << "========================================" << std::endl;

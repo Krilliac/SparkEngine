@@ -43,8 +43,15 @@ namespace Spark::Core::Lifecycle
         virtual bool SupportsUpdate() const { return false; }
         virtual bool SupportsShutdown() const { return false; }
 
-        virtual void Initialize() {}
+        /// Bring the stage up. Returning false (or throwing) fails engine startup:
+        /// the composition root rolls back every stage already touched and the
+        /// process exits non-zero. Report a failure only when the engine cannot
+        /// run safely; optional subsystems degrade and return true.
+        /// @return true when the stage is ready.
+        virtual bool Initialize() { return true; }
         virtual void Update(float /*dt*/) {}
+        /// Tear the stage down. Also used to roll back a failed startup, so it
+        /// must tolerate a partially initialized stage.
         virtual void Shutdown() {}
     };
 } // namespace Spark::Core::Lifecycle

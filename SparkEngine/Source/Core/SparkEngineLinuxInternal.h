@@ -11,6 +11,7 @@
 #pragma once
 
 #include "Platform.h"
+#include "ExecScript.h"
 
 #include <atomic>
 #include <cstdint>
@@ -27,12 +28,13 @@ extern bool g_minimalInit;
 extern bool g_noJobSystem;
 extern int g_windowWidthOverride;
 extern int g_windowHeightOverride;
+extern Spark::ExecScriptPlayer g_execScript; ///< -exec / -exec-audit / -test-seconds playback
 extern void InitPhysics();
-extern void InitConsole();
+extern bool InitConsole();
 extern void ShutdownPhysics();
 extern bool CanShutdownEngine();
 extern void ShutdownEngine();
-extern void ShutdownEngineAfterPreflight();
+extern bool ShutdownEngineAfterPreflight();
 extern void SetupCrashHandler();
 
 /// Set by SignalHandler (SparkEngineLinux.cpp) on SIGINT/SIGTERM; polled by every main loop.
@@ -47,8 +49,31 @@ void InitLinuxCoreSubsystems(bool registerGameplay);
 /// @brief Load game modules, initialize hot-reload watcher, and register console commands.
 void InitLinuxModulesAndCommands(int argc, char* argv[], bool initAudio);
 
+/**
+ * @brief Load the reflected scene named by `-scene <path>` into the engine ECS world.
+ *
+ * Call after InitLinuxModulesAndCommands (or instead of it under -minimal-init).
+ * On success prints one `SPARK_SCENE_LOADED entities=N renderables=M` record to
+ * stdout. The caller must fail the launch when this returns false.
+ *
+ * @return true when no -scene was given or the scene loaded; false otherwise.
+ */
+bool LoadLinuxLaunchScene(int argc, char* argv[]);
+
+/// Process exit status when `-scene` names a scene that cannot be loaded.
+inline constexpr int kLinuxSceneLoadFailedExitCode = 4;
+
+/// @brief True when @p flag appears verbatim in argv[1..argc).
+bool HasLinuxCommandLineFlag(int argc, char* argv[], const char* flag);
+
+/// @brief Print the game module's post-teardown SPARK_MODULE_LIFECYCLE record to stdout.
+/// Call only after ShutdownLinuxAfterPreflight(); prints nothing when no single
+/// game-kind module was ever created.
+void EmitLinuxModuleLifecycleRecord();
+
 /// @brief Common shutdown sequence for all Linux startup paths.
-void ShutdownLinuxAfterPreflight();
+/// @return false when the engine lifecycle teardown was not clean (exit non-zero).
+bool ShutdownLinuxAfterPreflight();
 
 #ifdef SPARK_HEADLESS_SUPPORT
 /// @brief Run the engine in headless/dedicated server mode (Linux).

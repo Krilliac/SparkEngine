@@ -1,0 +1,30 @@
+S{
+ "version": 1,
+ "entities": [
+  {
+   "id": 0,
+   "name": "Mixed",
+   "components": [
+    {
+     "type": "NoSuchComponent",
+     "fields": {
+      "x": "1"
+     }
+    },
+    {
+     "type": "Camera",
+     "fields": {
+      "fov": 90,
+      "nearPlane": "bad"
+     }
+    },
+    {
+     "type": "Transform",
+     "fields": {
+      "position": "nan,0,0"
+     }
+    }
+   ]
+  }
+ ]
+}

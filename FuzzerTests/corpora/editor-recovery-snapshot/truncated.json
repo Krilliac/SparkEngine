@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "projectIdentity": "/projects/fuzz/Fuzz.sparkproject",
+  "projectRelativeScene": "Scenes/Arena.sparkscene",
+  "sceneDisplayName": "Arena",
+  "serializedWorld": "{\n \"version\": 1,\n \"entities\": [\n  {\n   \"id\": 0,\n   \"name\": \"Root\",\n   \"parent\": -1,\n   \"components\": [\n    {\n     \"type\": \"Transform\",\n     \"fields\": {\n      \"position\": \"1.000000,2.000000,3.000000\",\n      \"rotation\": \"0.000000,90.000000,0.000000\",\n      \"scale\": \"1.000000,1.000000,1.000000\"\n     }\n    }\n   ]\n  },\n  {\n   \"id\": 1,\n   \"name\": \"Camera\",\n   \"parent\": 0,\n   \"components\":

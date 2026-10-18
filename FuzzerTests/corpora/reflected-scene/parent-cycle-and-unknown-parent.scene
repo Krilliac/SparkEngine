@@ -1,0 +1,53 @@
+P{
+ "version": 1,
+ "entities": [
+  {
+   "id": 5,
+   "name": "A",
+   "parent": 6,
+   "components": [
+    {
+     "type": "Transform",
+     "fields": {
+      "position": "1.000000,2.000000,3.000000",
+      "rotation": "0.000000,90.000000,0.000000",
+      "scale": "1.000000,1.000000,1.000000"
+     }
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "name": "B",
+   "parent": 5,
+   "components": [
+    {
+     "type": "Transform",
+     "fields": {
+      "position": "1.000000,2.000000,3.000000",
+      "rotation": "0.000000,90.000000,0.000000",
+      "scale": "1.000000,1.000000,1.000000"
+     }
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "name": "Self",
+   "parent": 7,
+   "components": []
+  },
+  {
+   "id": 8,
+   "name": "Orphan",
+   "parent": 99,
+   "components": []
+  },
+  {
+   "id": 9,
+   "name": "Root",
+   "parent": -1,
+   "components": []
+  }
+ ]
+}

@@ -397,6 +397,41 @@ set(_spark_module_prefix "")
 set(_spark_module_suffix ".dll")
 set(_spark_runtime_modules "SparkGameFPS")
 get_filename_component(_spark_validator_directory "${SPARK_VALIDATOR}" DIRECTORY)
+
+# Runtime-layout fixtures use text stand-ins for PE files so this contract can
+# run on every validation host.  The native package smoke itself must therefore
+# stay in the runtime validator; a file-only fixture must not silently become
+# the only proof that the staged executable can load the staged FPS module.
+file(READ "${SPARK_VALIDATOR}" _spark_validator_source)
+string(REPLACE "\r\n" "\n" _spark_validator_source_normalized
+    "${_spark_validator_source}")
+foreach(_spark_required_runtime_smoke_token IN ITEMS
+        "SPARK_PACKAGE_LAYOUT STREQUAL \"runtime\""
+        "RunSparkFPSHeadlessArena.cmake"
+        "\${SPARK_PACKAGE_ROOT}/bin/Assets/Scenes/level1.scene"
+        "-DSPARK_ARENA_SCENE=\${_spark_arena_scene}"
+        "-DSPARK_WORKING_DIRECTORY=\${_spark_scratch_cwd}")
+    string(FIND "${_spark_validator_source_normalized}" "${_spark_required_runtime_smoke_token}"
+        _spark_runtime_smoke_token_position)
+    if(_spark_runtime_smoke_token_position EQUAL -1)
+        message(FATAL_ERROR
+            "Runtime layout validator is missing packaged NullRHI execution contract: "
+            "${_spark_required_runtime_smoke_token}")
+    endif()
+endforeach()
+string(FIND "${_spark_validator_source_normalized}"
+    "if(_spark_validate_modules_only)\n    message(STATUS\n        \"Validated sidecar schema"
+    _spark_modules_only_return_position)
+string(FIND "${_spark_validator_source_normalized}"
+    "if(SPARK_PACKAGE_LAYOUT STREQUAL \"runtime\" AND _spark_validate_modules_only)\n    _spark_run_staged_nullrhi_smoke()\nendif()"
+    _spark_runtime_smoke_position)
+if(_spark_modules_only_return_position EQUAL -1 OR
+   _spark_runtime_smoke_position EQUAL -1 OR
+   _spark_runtime_smoke_position GREATER _spark_modules_only_return_position)
+    message(FATAL_ERROR
+        "Runtime NullRHI smoke must execute before the modules-only validator return")
+endif()
+
 file(STRINGS "${_spark_validator_directory}/../SparkSDK/Include/Spark/Version.h"
     _spark_runtime_sdk_line REGEX "^#define SPARK_SDK_VERSION [0-9]+$")
 string(REGEX MATCH "[0-9]+$" _spark_runtime_sdk_version "${_spark_runtime_sdk_line}")
@@ -405,10 +440,20 @@ file(WRITE "${_spark_runtime_reference}"
 
 foreach(_spark_case IN ITEMS valid missing_first unlisted_module unlisted_sidecar unlisted_sample_source hash_mismatch sdk_mismatch
         missing_sidecar unknown_layout untrusted_inventory missing_reference wrong_profile
-        missing_executable missing_runtime full_valid full_smoke_failure)
-    # POSIX script stand-ins exercise orchestration only, not native PE execution.
-    # Windows runs the real executable smoke in the release workflow.
-    if(CMAKE_HOST_WIN32 AND _spark_case MATCHES "^full_")
+        missing_executable missing_runtime full_valid full_smoke_failure full_arena_mismatch)
+    # Module-only fixtures intentionally contain no staged executable. The
+    # runtime validator now executes the staged smoke before its module-only
+    # return, so these text-only sidecar cases cannot run on any host. The
+    # installed-package test supplies the real executable smoke; the source
+    # contract assertion above still proves this gate cannot return early
+    # before the smoke call.
+    if(NOT _spark_case STREQUAL "missing_runtime" AND
+       NOT _spark_case MATCHES "^full_")
+        continue()
+    endif()
+    # Full fixtures use shell-script stand-ins and are valid orchestration
+    # tests on POSIX, but cannot be executed as PE files on Windows.
+    if(CMAKE_HOST_WIN32)
         continue()
     endif()
     set(_spark_root "${_spark_resolved_test_root}/runtime_${_spark_case}")
@@ -479,17 +524,53 @@ foreach(_spark_case IN ITEMS valid missing_first unlisted_module unlisted_sideca
             foreach(_spark_executable IN ITEMS SparkEngine SparkConsole SparkEditor SparkLauncher SparkCooker
                     SparkAutomation SparkBuild SparkInstaller SparkShaderCompiler SparkCrashReporter)
                 set(_spark_tool "${_spark_root}/bin/${_spark_executable}.exe")
-                file(WRITE "${_spark_tool}"
-                    "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'SparkEngine 1.0.0'; fi\nexit 0\n")
+                if(_spark_executable STREQUAL "SparkEngine")
+                    file(WRITE "${_spark_tool}"
+                        "#!/bin/sh\n"
+                        "if [ \"$1\" = --version ]; then echo 'SparkEngine 1.0.0'; exit 0; fi\n"
+                        "if [ \"$1\" = -headless ]; then\n"
+                        "  echo 'SPARK_MODULE_READY count=1'\n"
+                        "  echo 'SPARK_FPS_HEADLESS_ARENA objects=2 spawns=1 bound=1 mode_spawns=1 ticks=8 match=1'\n"
+                        "  echo 'SPARK_HEADLESS_RHI backend=null initialized=1 frames=8 shutdown=1'\n"
+                        "  echo 'SPARK_HEADLESS_LIFECYCLE initialized=1 updated=8 fixed=7 rendered=0 unloaded=1 faults=0'\n"
+                        "fi\n"
+                        "exit 0\n")
+                else()
+                    file(WRITE "${_spark_tool}"
+                        "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'SparkEngine 1.0.0'; fi\nexit 0\n")
+                endif()
                 file(CHMOD "${_spark_tool}" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE)
             endforeach()
-            foreach(_spark_file IN ITEMS LICENSE.txt THIRD_PARTY_NOTICES.txt bin/Shaders/BasicVS.hlsl
+            # The full validator runs the GOV-400 notice-coverage gate, which
+            # parses the generated notice layout (cmake/SparkThirdPartyAudit.cmake).
+            file(WRITE "${_spark_root}/THIRD_PARTY_NOTICES.txt"
+                "SparkEngine Third-Party Notices\n================================\n\n"
+                "Dependency inventory\n--------------------\n\n"
+                "Fixture Library\n  Source: https://example.invalid/fixture\n  Version: 1.0\n"
+                "  License: MIT\n  Notice files: ThirdParty/Fixture/LICENSE\n  Files: fixture.h\n\n"
+                "Complete license and notice texts\n=================================\n\n"
+                "----- ThirdParty/Fixture/LICENSE -----\n\n"
+                "MIT License\n\nCopyright (c) 2026 Fixture Library Author\n\n"
+                "Permission is hereby granted, free of charge, to any person obtaining a copy\n"
+                "of this software and associated documentation files (the \"Software\"), to deal\n"
+                "in the Software without restriction.\n")
+            foreach(_spark_file IN ITEMS LICENSE.txt bin/Shaders/BasicVS.hlsl
                     bin/Shaders/ForwardPlus/DepthPrepass.hlsl bin/Shaders/HLSL/BasicVS.hlsl
-                    bin/Shaders/HLSL/Compute/GPUCull.hlsl bin/Assets/MMOFPS/Data/continents.json
+                    bin/Shaders/HLSL/Compute/GPUCull.hlsl bin/Assets/Scenes/level1.scene
                     bin/Assets/Engine/Branding/sparkengine_wordmark.svg
                     bin/Resources/Config/settings.ini bin/Resources/Config/controls.cfg)
                 file(WRITE "${_spark_root}/${_spark_file}" "fixture runtime content\n")
             endforeach()
+            # The staged NullRHI smoke checks the arena record against an
+            # independent parse of the STAGED scene: two nodes, one default spawn.
+            file(WRITE "${_spark_root}/bin/Assets/Scenes/level1.scene"
+                "[Object]\nname=Floor\n[SpawnPoint]\nname=A\ntag=default\n")
+            if(_spark_case STREQUAL "full_arena_mismatch")
+                file(APPEND "${_spark_root}/bin/Assets/Scenes/level1.scene"
+                    "[SpawnPoint]\nname=B\ntag=default\n")
+                # CMake re-wraps the nested runner's message, so match across wraps.
+                set(_spark_expected "authored[ \t\r\n]+scene[ \t\r\n]+has[ \t\r\n]+3")
+            endif()
             if(_spark_case STREQUAL "full_smoke_failure")
                 file(WRITE "${_spark_root}/bin/SparkCooker.exe" "#!/bin/sh\nexit 9\n")
                 set(_spark_expected "SparkCooker --help smoke failed")
@@ -509,6 +590,9 @@ foreach(_spark_case IN ITEMS valid missing_first unlisted_module unlisted_sideca
     if(_spark_case STREQUAL "valid" OR _spark_case STREQUAL "full_valid")
         if(NOT _spark_result EQUAL 0)
             message(FATAL_ERROR "Runtime layout rejected valid SDK-free package: ${_spark_log}")
+        endif()
+        if(_spark_case STREQUAL "full_valid" AND NOT _spark_log MATCHES "Validated notice coverage for")
+            message(FATAL_ERROR "Full runtime validation did not run the notice-coverage gate: ${_spark_log}")
         endif()
     elseif(_spark_result EQUAL 0 OR NOT _spark_log MATCHES "${_spark_expected}")
         message(FATAL_ERROR "Runtime ${_spark_case} did not fail for ${_spark_expected}: ${_spark_log}")

@@ -79,13 +79,3 @@ TEST(LoadingScreenReal_CancelStopsExecution)
     EXPECT_EQ(static_cast<int>(ls.GetState()), static_cast<int>(Spark::LoadingState::Cancelled));
     EXPECT_NEAR(ls.GetProgress(), 0.0f, 0.001f);
 }
-
-TEST(LoadingScreenReal_SetMinimumDisplayTime)
-{
-    Spark::LoadingScreen ls;
-    ls.SetMinimumDisplayTime(2.0f);
-    ls.SetMinimumDisplayTime(0.5f);
-    // LoadingScreen exposes no getter for the minimum display time, so the only
-    // thing this can honestly claim is that the setter path is safe.
-    EXPECT_NO_CRASH("SetMinimumDisplayTime has no observable accessor to assert on");
-}

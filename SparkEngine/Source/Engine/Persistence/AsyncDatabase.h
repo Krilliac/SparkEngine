@@ -139,14 +139,47 @@ namespace Spark::Persistence
  * @brief File-based key-value store implementing IDatabaseConnection.
  *
  * This is a fallback for when no real SQLite library is linked. It stores
- * data as a JSON key-value file on disk. The interface is identical so that
+ * data as a line-oriented key-value text file on disk. The interface is identical so that
  * a real SQLite (or MySQL) backend can be swapped in without changing callers.
+ *
+ * Durability and authority contract:
+ * - Single authority: Open() takes an exclusive OS lock on `<path>.lock` (flock on POSIX,
+ *   an unshared handle on Windows) and holds it until Close(). A second connection, pool
+ *   or process that opens the same path fails instead of keeping an independent snapshot
+ *   whose flushes would silently erase the first one's commits. The lock file persists.
+ * - Fail-closed load: a missing file starts an empty store; a store that exists but cannot
+ *   be read, exceeds kMaxStoreFileBytes, or holds a malformed, duplicate or truncated
+ *   record makes Open() fail and leaves the file untouched, so a partial load can never
+ *   be flushed over the original.
+ * - Every write publishes the whole store through SaveFileDurability::WriteFileAtomically
+ *   (exclusive no-follow staging, flush, atomic replace, POSIX directory sync). A plain
+ *   SET/DELETE whose publication fails is rolled back and reported as failed.
+ * - One size budget for writer and reader: a revision larger than the connection's store
+ *   budget (kMaxStoreFileBytes unless constructed lower) is never published. The write
+ *   that would produce it fails and is rolled back, so every acknowledged revision is one
+ *   the next Open() can load.
+ * - Thread affinity: not internally synchronized; AsyncDatabasePool serializes access.
  */
     class SQLiteConnection : public IDatabaseConnection
     {
       public:
+        /// Largest store file Open() accepts and a write may publish; a bigger file fails the
+        /// load instead of exhausting memory, and a bigger revision fails the write.
+        static constexpr std::uintmax_t kMaxStoreFileBytes = std::uintmax_t{1} << 30;
+
+        SQLiteConnection() = default;
+        /// @param maxStoreFileBytes store budget for both load and publish; values above
+        ///        kMaxStoreFileBytes are clamped to it (the budget can only be lowered).
+        explicit SQLiteConnection(std::uintmax_t maxStoreFileBytes) noexcept
+            : m_maxStoreFileBytes(maxStoreFileBytes < kMaxStoreFileBytes ? maxStoreFileBytes : kMaxStoreFileBytes)
+        {
+        }
+        SQLiteConnection(const SQLiteConnection&) = delete;
+        SQLiteConnection& operator=(const SQLiteConnection&) = delete;
         ~SQLiteConnection() override;
 
+        /// @return false when the directory cannot be created, another authority holds the
+        ///         store, or an existing store file cannot be loaded completely.
         bool Open(const std::string& connectionString) override;
         void Close() override;
         bool IsOpen() const override { return m_open; }
@@ -160,9 +193,17 @@ namespace Spark::Persistence
         bool RollbackTransaction() override;
 
       private:
-        void LoadFromDisk();
-        void FlushToDisk();
+        [[nodiscard]] bool LoadFromDisk();
+        [[nodiscard]] bool FlushToDisk();
+        [[nodiscard]] bool AcquireAuthorityLock();
+        void ReleaseAuthorityLock() noexcept;
 
+#ifdef _WIN32
+        void* m_lockHandle = nullptr; ///< HANDLE of `<path>.lock`, opened with no sharing.
+#else
+        int m_lockFd = -1; ///< flock()ed descriptor of `<path>.lock`.
+#endif
+        std::uintmax_t m_maxStoreFileBytes = kMaxStoreFileBytes; ///< Shared load/publish budget.
         bool m_open = false;
         bool m_inTransaction = false;
         std::string m_dbPath;

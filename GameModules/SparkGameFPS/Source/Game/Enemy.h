@@ -14,7 +14,7 @@
 
 #include "Spark/SparkExport.h"
 #include "Core/Platform.h"
-#include "Game/GameObject.h"
+#include <Spark/GameObject.h>
 #include "Engine/AI/BehaviorTree.h"
 
 #ifdef SPARK_PLATFORM_WINDOWS

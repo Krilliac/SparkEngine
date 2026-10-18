@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.25)
 # SparkGameFPS - Game Module DLL
 #
 # SparkGameFPS compiles as a shared library (DLL on Windows, .so on Linux)
-# that the SparkEngine executable loads at runtime via GameModuleLoader.
+# that the SparkEngine executable loads at runtime via ModuleManager.
 #
 # This CMakeLists.txt can be used in two ways:
 #   1. As a subdirectory of the main SparkEngine build (typical dev workflow)
@@ -84,8 +84,8 @@ file(GLOB_RECURSE SPARK_GAME_FPS_SOURCES
     "Source/*.h"
     "Source/*.hpp"
 )
-list(FILTER SPARK_GAME_FPS_SOURCES EXCLUDE REGEX ".*[Tt]est.*")
-list(FILTER SPARK_GAME_FPS_SOURCES EXCLUDE REGEX ".*[Ee]xample.*")
+spark_exclude_sources_matching(SPARK_GAME_FPS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}" ".*[Tt]est.*")
+spark_exclude_sources_matching(SPARK_GAME_FPS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}" ".*[Ee]xample.*")
 
 # ---------------------------------------------------------------------
 # Create the game as a SHARED library (DLL)
@@ -219,34 +219,20 @@ endif()
 # ---------------------------------------------------------------------
 # Asset Management
 # ---------------------------------------------------------------------
-add_custom_command(TARGET SparkGameFPS POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkGameFPS>/Shaders"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:SparkGameFPS>/Assets"
-    COMMENT "Creating asset directory structure"
-)
+spark_stage_game_module_content(SparkGameFPS DIRECTORIES Shaders Assets)
 
-# Copy model assets
+# Copy the shared model and scene assets the FPS module loads
 set(ASSET_ROOT "${CMAKE_SOURCE_DIR}")
 if(SPARK_GAME_FPS_STANDALONE)
     set(ASSET_ROOT "${SPARK_ENGINE_DIR}")
 endif()
 
 if(EXISTS "${ASSET_ROOT}/Assets/Models")
-    add_custom_command(TARGET SparkGameFPS POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${ASSET_ROOT}/Assets/Models"
-            "$<TARGET_FILE_DIR:SparkGameFPS>/Assets/Models"
-        COMMENT "Copying model assets"
-    )
+    spark_stage_game_module_content(SparkGameFPS COPY_DIRECTORIES "${ASSET_ROOT}/Assets/Models" Assets/Models)
 endif()
 
 if(EXISTS "${ASSET_ROOT}/Assets/Scenes")
-    add_custom_command(TARGET SparkGameFPS POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${ASSET_ROOT}/Assets/Scenes"
-            "$<TARGET_FILE_DIR:SparkGameFPS>/Assets/Scenes"
-        COMMENT "Copying scene assets"
-    )
+    spark_stage_game_module_content(SparkGameFPS COPY_DIRECTORIES "${ASSET_ROOT}/Assets/Scenes" Assets/Scenes)
 endif()
 
 # Copy shaders from engine. In-tree builds stage them once through the shared
@@ -261,15 +247,7 @@ else()
     endif()
     if(EXISTS "${SHADER_SOURCE_DIR}")
         file(GLOB_RECURSE SHADER_FILES "${SHADER_SOURCE_DIR}/*.hlsl")
-        foreach(SHADER_FILE ${SHADER_FILES})
-            get_filename_component(SHADER_NAME ${SHADER_FILE} NAME)
-            add_custom_command(TARGET SparkGameFPS POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    ${SHADER_FILE}
-                    "$<TARGET_FILE_DIR:SparkGameFPS>/Shaders/${SHADER_NAME}"
-                COMMENT "Copying shader ${SHADER_NAME}"
-            )
-        endforeach()
+        spark_stage_game_module_content(SparkGameFPS COPY_FILES Shaders ${SHADER_FILES})
     endif()
 endif()
 

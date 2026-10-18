@@ -5,6 +5,11 @@
 
 #include "FPSAssetPaths.h"
 
+#include <algorithm>
+#include <string>
+#include <string_view>
+#include <system_error>
+
 // Executable discovery needs the native API, not private engine platform types.
 #ifdef _WIN32
 #include <windows.h>
@@ -22,15 +27,67 @@ namespace Spark
                 wchar_t buffer[MAX_PATH] = {};
                 const DWORD length = ::GetModuleFileNameW(nullptr, buffer, static_cast<DWORD>(MAX_PATH));
                 if (length == 0 || length >= static_cast<DWORD>(MAX_PATH))
+                {
                     return {};
+                }
                 return std::filesystem::path(buffer, buffer + length).parent_path();
 #else
                 std::error_code error;
                 const std::filesystem::path exePath = std::filesystem::read_symlink("/proc/self/exe", error);
                 if (error)
+                {
                     return {};
+                }
                 return exePath.parent_path();
 #endif // _WIN32
+            }
+
+            // Link-resolved identity of an existing file or directory, for containment checks.
+            // canonical() asks for the DOS-volume final path (it already retries in NT form only on
+            // ERROR_PATH_NOT_FOUND). The packaged FPS run inside an AppContainer saw canonical() fail;
+            // the suspected cause is the DOS-volume query (mount manager), not yet confirmed. On any
+            // other failure this retries with the NT-volume final path, used only as an identity to
+            // compare (\Device\HarddiskVolumeN\...), never to open. The library's NT retry form
+            // (\\?\GLOBALROOT\Device\...) and this one never compare equal, so mixed results fail
+            // closed. If the fallback also fails, ec carries its Win32 error so the log names the cause.
+            std::filesystem::path ResolvedIdentity(const std::filesystem::path& path, std::error_code& ec)
+            {
+                std::filesystem::path resolved = std::filesystem::canonical(path, ec);
+#ifdef _WIN32
+                if (!ec)
+                {
+                    return resolved;
+                }
+                const HANDLE handle = ::CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES,
+                                                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                                                    OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+                if (handle == INVALID_HANDLE_VALUE)
+                {
+                    ec.assign(static_cast<int>(::GetLastError()), std::system_category());
+                    return {};
+                }
+                std::wstring buffer(MAX_PATH, L'\0');
+                DWORD length = ::GetFinalPathNameByHandleW(handle, buffer.data(), static_cast<DWORD>(buffer.size()),
+                                                           FILE_NAME_NORMALIZED | VOLUME_NAME_NT);
+                if (length >= buffer.size())
+                {
+                    // Too small: length is the required size including the terminator.
+                    buffer.resize(length);
+                    length = ::GetFinalPathNameByHandleW(handle, buffer.data(), static_cast<DWORD>(buffer.size()),
+                                                         FILE_NAME_NORMALIZED | VOLUME_NAME_NT);
+                }
+                const DWORD queryError = length == 0 ? ::GetLastError() : ERROR_INSUFFICIENT_BUFFER;
+                ::CloseHandle(handle);
+                if (length == 0 || length >= buffer.size())
+                {
+                    ec.assign(static_cast<int>(queryError), std::system_category());
+                    return {};
+                }
+                buffer.resize(length);
+                ec.clear();
+                resolved = std::filesystem::path(buffer);
+#endif // _WIN32
+                return resolved;
             }
         } // namespace
 
@@ -40,10 +97,14 @@ namespace Spark
             for (const auto& base : searchBases)
             {
                 if (base.empty())
+                {
                     continue;
+                }
                 const std::filesystem::path candidate = base / "Assets";
                 if (std::filesystem::is_directory(candidate / "Models", error))
+                {
                     return candidate;
+                }
             }
             return {};
         }
@@ -73,9 +134,19 @@ namespace Spark
         {
             static const std::filesystem::path resolved = []
             {
+                std::filesystem::path startup;
+                bool present = false;
+                std::string startupError;
+                ResolveStartupScene(startup, present, startupError);
+                if (present)
+                {
+                    return startup.parent_path() / "Assets";
+                }
                 std::filesystem::path found = FindAssetRoot(DefaultSearchBases());
                 if (!found.empty())
+                {
                     return found;
+                }
 
                 std::error_code error;
                 const std::filesystem::path workingDir = std::filesystem::current_path(error);
@@ -88,6 +159,48 @@ namespace Spark
         {
             std::error_code error;
             return std::filesystem::is_directory(Root(), error);
+        }
+
+        bool ResolveStartupScene(std::filesystem::path& resolved, bool& present, std::string& error)
+        {
+            present = false;
+            error.clear();
+            resolved.clear();
+            std::error_code ec;
+            const auto executable = ExecutableDirectory();
+            if (executable.empty())
+            {
+                error = "host executable directory is unavailable";
+                return false;
+            }
+            const auto root = ResolvedIdentity(executable, ec);
+            if (ec || root.empty())
+            {
+                error = "host executable directory cannot be resolved (" + ec.message() + ")";
+                return false;
+            }
+            resolved = executable / "Startup.sparkscene";
+            const auto status = std::filesystem::symlink_status(resolved, ec);
+            if (status.type() == std::filesystem::file_type::not_found &&
+                (!ec || ec == std::errc::no_such_file_or_directory))
+            {
+                return true;
+            }
+            present = true;
+            if (ec || !std::filesystem::is_regular_file(status) || std::filesystem::is_symlink(status))
+            {
+                error = "Startup.sparkscene must be a readable regular file beside the host";
+                return false;
+            }
+            // Compare identities resolved the same way, so a link anywhere on either path
+            // cannot place the scene outside the host directory.
+            const auto sceneIdentity = ResolvedIdentity(resolved, ec);
+            if (ec || sceneIdentity.empty() || sceneIdentity.parent_path() != root)
+            {
+                error = "Startup.sparkscene resolves outside the host directory";
+                return false;
+            }
+            return true;
         }
 
         std::wstring Resolve(const std::wstring& relativeToAssetRoot)
@@ -112,6 +225,90 @@ namespace Spark
 
             const std::u8string utf8 = full.u8string();
             return std::string(reinterpret_cast<const char*>(utf8.data()), utf8.size());
+        }
+
+        bool ResolveScenePath(const std::string& userPath, std::filesystem::path& resolved, std::string& error)
+        {
+            resolved.clear();
+            error.clear();
+            if (userPath.empty())
+            {
+                error = "scene path is empty";
+                return false;
+            }
+            if (userPath.size() > 4096 || userPath.find('\0') != std::string::npos)
+            {
+                error = "scene path is malformed or too long";
+                return false;
+            }
+
+            // Normalize separators before parsing. This also makes traversal
+            // checks identical on Windows and POSIX package smoke runners.
+            std::string normalized = userPath;
+            std::replace(normalized.begin(), normalized.end(), '\\', '/');
+            const std::u8string normalizedU8(reinterpret_cast<const char8_t*>(normalized.data()), normalized.size());
+            const std::filesystem::path supplied = std::filesystem::u8path(normalizedU8);
+            // POSIX path parsing treats C:/... as relative, but packaged scene
+            // names must reject Windows drive paths on every host.
+            const bool hasDrivePrefix =
+                normalized.size() >= 2 &&
+                ((normalized[0] >= 'A' && normalized[0] <= 'Z') || (normalized[0] >= 'a' && normalized[0] <= 'z')) &&
+                normalized[1] == ':';
+            if (supplied.is_absolute() || !supplied.root_name().empty() || normalized.front() == '/' || hasDrivePrefix)
+            {
+                error = "absolute scene paths are not permitted";
+                return false;
+            }
+
+            constexpr std::string_view kAssetsScenes = "Assets/Scenes/";
+            constexpr std::string_view kScenes = "Scenes/";
+            if (normalized.starts_with(kAssetsScenes))
+            {
+                normalized.erase(0, kAssetsScenes.size());
+            }
+            else if (normalized.starts_with(kScenes))
+            {
+                normalized.erase(0, kScenes.size());
+            }
+
+            const std::u8string relativeU8(reinterpret_cast<const char8_t*>(normalized.data()), normalized.size());
+            const std::filesystem::path relative = std::filesystem::u8path(relativeU8);
+            if (normalized.empty() || relative.has_root_path() || relative.extension() != ".scene")
+            {
+                error = "scene must be a relative .scene file";
+                return false;
+            }
+            for (const auto& component : relative)
+            {
+                if (component == ".." || component == "." || component.empty())
+                {
+                    error = "scene traversal or empty path component is not permitted";
+                    return false;
+                }
+            }
+
+            std::error_code ec;
+            const auto sceneRoot = std::filesystem::weakly_canonical(Root() / "Scenes", ec);
+            if (ec || !std::filesystem::is_directory(sceneRoot, ec))
+            {
+                error = "trusted scene directory is unavailable";
+                return false;
+            }
+            const auto candidate = std::filesystem::weakly_canonical(sceneRoot / relative, ec);
+            if (ec || !std::filesystem::is_regular_file(candidate, ec))
+            {
+                error = "scene file does not exist";
+                return false;
+            }
+            const auto relativeCandidate = candidate.lexically_relative(sceneRoot);
+            if (relativeCandidate.empty() || relativeCandidate.is_absolute() ||
+                relativeCandidate.begin()->string() == "..")
+            {
+                error = "scene resolves outside the trusted scene directory";
+                return false;
+            }
+            resolved = candidate;
+            return true;
         }
     } // namespace FPSAssets
 } // namespace Spark

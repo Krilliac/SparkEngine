@@ -1,0 +1,46 @@
+{
+  "sceneName": "Legacy",
+  "version": 1,
+  "objects": [
+    {
+      "id": 7,
+      "name": "Root",
+      "position": [
+        1.0,
+        2.0,
+        3.0
+      ],
+      "componentTypes": [
+        "Transform",
+        "MeshRenderer"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "Sprite",
+      "transform": {
+        "parentID": 0,
+        "childIDs": []
+      },
+      "componentTypes": [
+        "SpriteAnimator"
+      ]
+    }
+  ],
+  "components": [
+    {
+      "type": "Transform",
+      "objectID": 7
+    },
+    {
+      "type": "SpriteAnimator",
+      "objectID": 8,
+      "enabled": false
+    },
+    {
+      "type": "MeshRenderer",
+      "objectID": 7,
+      "data": "0a0b0c0d0e0f"
+    }
+  ]
+}

@@ -1,0 +1,346 @@
+{
+  "schema_version": 1,
+  "blender_version": "4.0.2",
+  "module": "SparkGameRacing",
+  "author_script": {
+    "path": "tools/blender/author_racing_kit.py",
+    "sha256": "fbee8fabf8ad358eafb07534580c06833188f8ab3c16b6ec82ecfc708be48a48"
+  },
+  "library": {
+    "path": "tools/blender/spark_kit.py",
+    "sha256": "f2635ad37db4874e568485beaef56654a67e25ee06294e3c7d4194d6cf8c856e"
+  },
+  "blend": {
+    "path": "Art/Blender/SparkGameRacing/racing_kit.blend",
+    "sha256": "a0b71e190d18537274c50355ce4998d6f920fa0d6122fd4205ff609b59cee367",
+    "scene_sha256": "820edae8f566346f44cb3c17292207d0d2c7225f3130a5299fe7e60d32a31275"
+  },
+  "license": {
+    "name": "Spark Open License 1.0",
+    "path": "LICENSE",
+    "sha256": "4d6e814541f2b8fbaef70c44d16a627b24d437e6983b58d90f1c2e00e6d89a45"
+  },
+  "export_convention": "meters, ground pivot, Y-up, forward_axis=Z (left-handed +Z-forward)",
+  "assets": [
+    {
+      "name": "barrier_segment",
+      "obj_path": "Assets/Models/Racing/Kit/barrier_segment.obj",
+      "mtl_path": "Assets/Models/Racing/Kit/barrier_segment.mtl",
+      "bounds": {
+        "min": [
+          -2.0,
+          0.0,
+          -0.3
+        ],
+        "max": [
+          2.0,
+          0.9,
+          0.3
+        ]
+      },
+      "triangle_count": 584,
+      "obj_sha256": "868f573aee3336556ead87dcb2fe788ad687856fdbf4c7b7756c7f3b26859870",
+      "mtl_sha256": "42448e4bc62d6e0681e80a167b4a97754ddc4e4ec515b4b1033a936460a9c59d",
+      "triangle_budget": 700,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/Racing/Kit/barrier_segment_lod1.obj",
+          "mtl_path": "Assets/Models/Racing/Kit/barrier_segment_lod1.mtl",
+          "bounds": {
+            "min": [
+              -2.000736,
+              0.008333,
+              -0.291667
+            ],
+            "max": [
+              2.000736,
+              0.902294,
+              0.291667
+            ]
+          },
+          "triangle_count": 210,
+          "obj_sha256": "551c31f0d81dfed743820d1a75a9e7c92e58616e57c38089e82bf74d0a5f9287",
+          "mtl_sha256": "42448e4bc62d6e0681e80a167b4a97754ddc4e4ec515b4b1033a936460a9c59d",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/Racing/Kit/barrier_segment_collision.obj",
+          "mtl_path": "Assets/Models/Racing/Kit/barrier_segment_collision.mtl",
+          "bounds": {
+            "min": [
+              -2.0,
+              0.0,
+              -0.3
+            ],
+            "max": [
+              2.0,
+              0.9,
+              0.3
+            ]
+          },
+          "triangle_count": 12,
+          "obj_sha256": "54809d75561d9bdeeb826a07369daa69a8dec14d993acee91deb84b58ccfc713",
+          "mtl_sha256": "47db6530677a46611089df178c88984903bfa170e5c6129b1509384935713fec",
+          "kind": "box",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "traffic_cone",
+      "obj_path": "Assets/Models/Racing/Kit/traffic_cone.obj",
+      "mtl_path": "Assets/Models/Racing/Kit/traffic_cone.mtl",
+      "bounds": {
+        "min": [
+          -0.21,
+          0.0,
+          -0.21
+        ],
+        "max": [
+          0.21,
+          0.7,
+          0.21
+        ]
+      },
+      "triangle_count": 264,
+      "obj_sha256": "8d0c1f262e412d2839a8e4058d2959a73da95bcddfc96c692ed85c12ba193d2e",
+      "mtl_sha256": "84be3bc2f396476bac403ff21c82dab55f254a55860bd78d7a14a6de5b3fb8ee",
+      "triangle_budget": 300,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/Racing/Kit/traffic_cone_lod1.obj",
+          "mtl_path": "Assets/Models/Racing/Kit/traffic_cone_lod1.mtl",
+          "bounds": {
+            "min": [
+              -0.208193,
+              0.012073,
+              -0.208013
+            ],
+            "max": [
+              0.208193,
+              0.698056,
+              0.208013
+            ]
+          },
+          "triangle_count": 94,
+          "obj_sha256": "fc10d277e26841e40ae42bd85a477f40c34ec43ed9e1e3a51340caf8e6da464b",
+          "mtl_sha256": "84be3bc2f396476bac403ff21c82dab55f254a55860bd78d7a14a6de5b3fb8ee",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/Racing/Kit/traffic_cone_collision.obj",
+          "mtl_path": "Assets/Models/Racing/Kit/traffic_cone_collision.mtl",
+          "bounds": {
+            "min": [
+              -0.21,
+              0.0,
+              -0.21
+            ],
+            "max": [
+              0.21,
+              0.7,
+              0.21
+            ]
+          },
+          "triangle_count": 76,
+          "obj_sha256": "588ccc5824e418ed11e400d5d65d792b353e736ce7a808f78711986c9753dc0e",
+          "mtl_sha256": "47db6530677a46611089df178c88984903bfa170e5c6129b1509384935713fec",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "checkpoint_arch",
+      "obj_path": "Assets/Models/Racing/Kit/checkpoint_arch.obj",
+      "mtl_path": "Assets/Models/Racing/Kit/checkpoint_arch.mtl",
+      "bounds": {
+        "min": [
+          -6.0,
+          0.0,
+          -0.7
+        ],
+        "max": [
+          6.0,
+          5.99843,
+          0.7
+        ]
+      },
+      "triangle_count": 980,
+      "obj_sha256": "7c3f615af02a2811a288a22c79cd9a4be1e1c8238492f8c1535260112473b00c",
+      "mtl_sha256": "42448e4bc62d6e0681e80a167b4a97754ddc4e4ec515b4b1033a936460a9c59d",
+      "triangle_budget": 1800,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/Racing/Kit/checkpoint_arch_lod1.obj",
+          "mtl_path": "Assets/Models/Racing/Kit/checkpoint_arch_lod1.mtl",
+          "bounds": {
+            "min": [
+              -5.988461,
+              0.011596,
+              -0.6875
+            ],
+            "max": [
+              5.988461,
+              5.987537,
+              0.6875
+            ]
+          },
+          "triangle_count": 352,
+          "obj_sha256": "96511f113f76134e24c63f3f64d527604c4fc0b5edfa3588e094ca32f560cab8",
+          "mtl_sha256": "42448e4bc62d6e0681e80a167b4a97754ddc4e4ec515b4b1033a936460a9c59d",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/Racing/Kit/checkpoint_arch_collision.obj",
+          "mtl_path": "Assets/Models/Racing/Kit/checkpoint_arch_collision.mtl",
+          "bounds": {
+            "min": [
+              -6.0,
+              0.0,
+              -0.7
+            ],
+            "max": [
+              6.0,
+              5.999326,
+              0.7
+            ]
+          },
+          "triangle_count": 178,
+          "obj_sha256": "1c52386cdb74393ca54aa2ce8d37cd1bdd82d6d3470705ae03f706e2daa98e8c",
+          "mtl_sha256": "47db6530677a46611089df178c88984903bfa170e5c6129b1509384935713fec",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "start_gantry",
+      "obj_path": "Assets/Models/Racing/Kit/start_gantry.obj",
+      "mtl_path": "Assets/Models/Racing/Kit/start_gantry.mtl",
+      "bounds": {
+        "min": [
+          -7.0,
+          0.0,
+          -0.6
+        ],
+        "max": [
+          7.0,
+          7.0,
+          0.6
+        ]
+      },
+      "triangle_count": 2076,
+      "obj_sha256": "1fbb5fb5ba928ceb7ab0d4d520c218c4730ec0277780d37430c72bb8516693f4",
+      "mtl_sha256": "5a3739550090f281845f1bc6d1391321d7c61e33dfc085789a42332d3235f465",
+      "triangle_budget": 2600,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/Racing/Kit/start_gantry_lod1.obj",
+          "mtl_path": "Assets/Models/Racing/Kit/start_gantry_lod1.mtl",
+          "bounds": {
+            "min": [
+              -6.988461,
+              0.0125,
+              -0.591962
+            ],
+            "max": [
+              6.988461,
+              6.9875,
+              0.591962
+            ]
+          },
+          "triangle_count": 746,
+          "obj_sha256": "c926f639916a919b7d3af0eacc23033c56dacbf6e796c15e19650fcbcaf23070",
+          "mtl_sha256": "5a3739550090f281845f1bc6d1391321d7c61e33dfc085789a42332d3235f465",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/Racing/Kit/start_gantry_collision.obj",
+          "mtl_path": "Assets/Models/Racing/Kit/start_gantry_collision.mtl",
+          "bounds": {
+            "min": [
+              -7.0,
+              0.0,
+              -0.6
+            ],
+            "max": [
+              7.0,
+              7.0,
+              0.6
+            ]
+          },
+          "triangle_count": 12,
+          "obj_sha256": "51e51f76a7a5b0dfd78a25684dba1b11ae7f3005b9e5fe825dbf2c3ada1f6905",
+          "mtl_sha256": "47db6530677a46611089df178c88984903bfa170e5c6129b1509384935713fec",
+          "kind": "box",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "tyre_stack",
+      "obj_path": "Assets/Models/Racing/Kit/tyre_stack.obj",
+      "mtl_path": "Assets/Models/Racing/Kit/tyre_stack.mtl",
+      "bounds": {
+        "min": [
+          -0.32,
+          0.0,
+          -0.311977
+        ],
+        "max": [
+          0.32,
+          1.2,
+          0.345
+        ]
+      },
+      "triangle_count": 940,
+      "obj_sha256": "3298860c7a58b061a8777ce2511d8f2797e651d3c6b9e2ef4a8038e8f5256caf",
+      "mtl_sha256": "07268204d7d3b291cbf57e81988c1f69b5cdab470dc02306a88e42e356ef987d",
+      "triangle_budget": 1200,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/Racing/Kit/tyre_stack_lod1.obj",
+          "mtl_path": "Assets/Models/Racing/Kit/tyre_stack_lod1.mtl",
+          "bounds": {
+            "min": [
+              -0.320374,
+              0.000768,
+              -0.318642
+            ],
+            "max": [
+              0.320374,
+              1.199232,
+              0.331364
+            ]
+          },
+          "triangle_count": 336,
+          "obj_sha256": "577f290c6077da32b11454e679a3f3310ea16a1c8b535d6528f987ad8673657e",
+          "mtl_sha256": "07268204d7d3b291cbf57e81988c1f69b5cdab470dc02306a88e42e356ef987d",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/Racing/Kit/tyre_stack_collision.obj",
+          "mtl_path": "Assets/Models/Racing/Kit/tyre_stack_collision.mtl",
+          "bounds": {
+            "min": [
+              -0.32,
+              0.0,
+              -0.311977
+            ],
+            "max": [
+              0.32,
+              1.2,
+              0.345
+            ]
+          },
+          "triangle_count": 116,
+          "obj_sha256": "a482d8d4c8617a35fe839b1c78d319418035b7995f77a1a4e47b51214bb0a9ec",
+          "mtl_sha256": "47db6530677a46611089df178c88984903bfa170e5c6129b1509384935713fec",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    }
+  ]
+}

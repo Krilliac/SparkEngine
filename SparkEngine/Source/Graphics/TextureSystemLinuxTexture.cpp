@@ -12,16 +12,20 @@
 
 #include "TextureSystem.h"
 #include <algorithm>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
+#include <system_error>
+#include <vector>
 
 #if SPARK_HAS_STB_IMAGE
 #include <stb_image.h>
 #endif
 
 #if SPARK_HAS_TINYEXR
-#include <tinyexr.h>
+#include "EXRLoader.h"
 #endif
 
 // ============================================================================
@@ -39,25 +43,38 @@ HRESULT Texture::CreateFromFile(const std::string& filePath, ID3D11Device* /*dev
         std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
         if (ext == ".exr")
         {
-            float* rgba = nullptr;
-            int width = 0, height = 0;
-            const char* err = nullptr;
-            int ret = LoadEXR(&rgba, &width, &height, filePath.c_str(), &err);
-            if (ret == TINYEXR_SUCCESS && rgba)
+            // Route through the bounded EXRLoader (16 MiB input, 16384 px per
+            // side, R/G/B[/A] half/float, 128 MiB working set) instead of raw
+            // tinyexr, whose own limits let a small header drive multi-GB
+            // allocations. A rejected EXR fails closed: no stb fallback can
+            // decode it, and "loaded" with estimated size would hide the refusal.
+            constexpr uintmax_t kMaxExrFileBytes = 16ull * 1024ull * 1024ull;
+            std::error_code ec;
+            const uintmax_t fileBytes = std::filesystem::file_size(filePath, ec);
+            Spark::Graphics::EXRImage image;
+            bool decoded = false;
+            if (!ec && fileBytes > 0 && fileBytes <= kMaxExrFileBytes)
             {
-                m_desc.width = static_cast<uint32_t>(width);
-                m_desc.height = static_cast<uint32_t>(height);
-                m_desc.format = TextureFormat::R32G32B32A32_FLOAT;
-                m_memoryUsage = static_cast<size_t>(width * height * 16);
-                m_loaded = true;
-                free(rgba);
-                return S_OK;
+                std::vector<uint8_t> bytes(static_cast<size_t>(fileBytes));
+                std::ifstream file(filePath, std::ios::binary);
+                file.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+                decoded = file && static_cast<uintmax_t>(file.gcount()) == fileBytes &&
+                          Spark::Graphics::EXRLoader::Load(bytes.data(), bytes.size(), image);
             }
-            if (err)
+            if (!decoded)
             {
-                fprintf(stderr, "[TextureSystem] tinyexr failed to load: %s (%s)\n", filePath.c_str(), err);
-                FreeEXRErrorMessage(err);
+                fprintf(stderr, "[TextureSystem] rejected EXR: %s\n", filePath.c_str());
+                m_loaded = false;
+                m_memoryUsage = 0;
+                return E_FAIL;
             }
+
+            m_desc.width = image.width;
+            m_desc.height = image.height;
+            m_desc.format = TextureFormat::R32G32B32A32_FLOAT;
+            m_memoryUsage = static_cast<size_t>(static_cast<uint64_t>(image.width) * image.height * 16u);
+            m_loaded = true;
+            return S_OK;
         }
     }
 #endif // SPARK_HAS_TINYEXR
@@ -73,7 +90,8 @@ HRESULT Texture::CreateFromFile(const std::string& filePath, ID3D11Device* /*dev
             m_desc.width = static_cast<uint32_t>(width);
             m_desc.height = static_cast<uint32_t>(height);
             m_desc.format = TextureFormat::R32G32B32A32_FLOAT;
-            m_memoryUsage = static_cast<size_t>(width * height * 16); // 4 floats per pixel
+            m_memoryUsage = static_cast<size_t>(static_cast<uint64_t>(width) * static_cast<uint64_t>(height) *
+                                                16u); // 4 floats per pixel
             m_loaded = true;
             stbi_image_free(hdrPixels);
             return S_OK;
@@ -87,17 +105,19 @@ HRESULT Texture::CreateFromFile(const std::string& filePath, ID3D11Device* /*dev
     {
         m_desc.width = static_cast<uint32_t>(width);
         m_desc.height = static_cast<uint32_t>(height);
-        m_memoryUsage = static_cast<size_t>(width * height * 4);
+        m_memoryUsage = static_cast<size_t>(static_cast<uint64_t>(width) * static_cast<uint64_t>(height) * 4u);
         m_loaded = true;
         stbi_image_free(pixels);
         return S_OK;
     }
     fprintf(stderr, "[TextureSystem] stb_image failed to load: %s (%s)\n", filePath.c_str(), stbi_failure_reason());
 #endif
-    // Fallback: mark as loaded with estimated size
-    m_loaded = true;
-    m_memoryUsage = static_cast<size_t>(m_desc.width * m_desc.height * 4);
-    return S_OK;
+    // A missing, corrupt, truncated or unsupported file fails closed. Reporting
+    // it as loaded (with a size estimated from the requested desc) would let
+    // callers cache and bind a texture that holds no decoded pixels.
+    m_loaded = false;
+    m_memoryUsage = 0;
+    return E_FAIL;
 }
 
 HRESULT Texture::CreateFromData(const void* data, size_t dataSize, ID3D11Device* /*device*/)
@@ -120,7 +140,7 @@ HRESULT Texture::CreateFromData(const void* data, size_t dataSize, ID3D11Device*
             {
                 m_desc.width = static_cast<uint32_t>(width);
                 m_desc.height = static_cast<uint32_t>(height);
-                m_memoryUsage = static_cast<size_t>(width * height * 4);
+                m_memoryUsage = static_cast<size_t>(static_cast<uint64_t>(width) * static_cast<uint64_t>(height) * 4u);
                 m_loaded = true;
                 stbi_image_free(pixels);
                 return S_OK;
@@ -136,14 +156,14 @@ HRESULT Texture::CreateFromData(const void* data, size_t dataSize, ID3D11Device*
 HRESULT Texture::CreateRenderTarget(ID3D11Device* /*device*/)
 {
     m_loaded = true;
-    m_memoryUsage = static_cast<size_t>(m_desc.width * m_desc.height * 4);
+    m_memoryUsage = static_cast<size_t>(static_cast<uint64_t>(m_desc.width) * m_desc.height * 4u);
     return S_OK;
 }
 
 HRESULT Texture::CreateDepthStencil(ID3D11Device* /*device*/)
 {
     m_loaded = true;
-    m_memoryUsage = static_cast<size_t>(m_desc.width * m_desc.height * 4);
+    m_memoryUsage = static_cast<size_t>(static_cast<uint64_t>(m_desc.width) * m_desc.height * 4u);
     return S_OK;
 }
 

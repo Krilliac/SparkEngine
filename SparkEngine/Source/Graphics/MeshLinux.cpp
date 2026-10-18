@@ -11,8 +11,10 @@
 // ============================================================================
 #include "Mesh.h"
 #include "GLTFStaticMeshLoader.h"
+#include "OBJStaticMeshLoader.h"
 #include "../Utils/Validate.h"
 #include <cstring>
+#include <string>
 #include <filesystem>
 #include <unordered_map>
 #include <utility>
@@ -349,6 +351,18 @@ bool Mesh::LoadFromFile(const std::wstring& path)
     if (!ret)
         return false;
 
+    // tinyobjloader accepts out-of-range positive face indices with only a
+    // warning; the loop below indexes the attribute arrays directly.
+    {
+        std::string indexError;
+        if (!Spark::Graphics::Detail::ValidateOBJIndices(attrib, shapes, indexError))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Graphics, "OBJ rejected '%s': %s", narrowPath.c_str(),
+                            indexError.c_str());
+            return false;
+        }
+    }
+
     // Deduplicate vertices using a hash combining vertex/normal/texcoord indices.
     std::unordered_map<size_t, unsigned int> uniqueVertices;
 
@@ -358,23 +372,21 @@ bool Mesh::LoadFromFile(const std::wstring& path)
         {
             Vertex vertex;
 
-            if (index.vertex_index >= 0)
+            // Indices were bounds-checked by ValidateOBJIndices above.
+            const size_t position = static_cast<size_t>(index.vertex_index) * 3;
+            vertex.Position = {attrib.vertices[position + 0], attrib.vertices[position + 1],
+                               attrib.vertices[position + 2]};
+
+            if (index.normal_index >= 0)
             {
-                vertex.Position = {attrib.vertices[3 * index.vertex_index + 0],
-                                   attrib.vertices[3 * index.vertex_index + 1],
-                                   attrib.vertices[3 * index.vertex_index + 2]};
+                const size_t normal = static_cast<size_t>(index.normal_index) * 3;
+                vertex.Normal = {attrib.normals[normal + 0], attrib.normals[normal + 1], attrib.normals[normal + 2]};
             }
 
-            if (index.normal_index >= 0 && !attrib.normals.empty())
+            if (index.texcoord_index >= 0)
             {
-                vertex.Normal = {attrib.normals[3 * index.normal_index + 0], attrib.normals[3 * index.normal_index + 1],
-                                 attrib.normals[3 * index.normal_index + 2]};
-            }
-
-            if (index.texcoord_index >= 0 && !attrib.texcoords.empty())
-            {
-                vertex.TexCoord = {attrib.texcoords[2 * index.texcoord_index + 0],
-                                   1.0f - attrib.texcoords[2 * index.texcoord_index + 1]};
+                const size_t texCoord = static_cast<size_t>(index.texcoord_index) * 2;
+                vertex.TexCoord = {attrib.texcoords[texCoord + 0], 1.0f - attrib.texcoords[texCoord + 1]};
             }
 
             size_t h = std::hash<int>()(index.vertex_index);

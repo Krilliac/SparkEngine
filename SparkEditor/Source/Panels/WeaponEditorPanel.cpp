@@ -13,9 +13,45 @@
 #include <cmath>
 #include <cstdio>
 #include <imgui.h>
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
+    namespace
+    {
+        /// Lethality tier of a burst DPS value, shared by the DPS chart and the comparison table.
+        Spark::Ui::Status DpsTier(float dps)
+        {
+            if (dps > 500.0f)
+            {
+                return Spark::Ui::Status::Error;
+            }
+            if (dps > 200.0f)
+            {
+                return Spark::Ui::Status::Warning;
+            }
+            if (dps > 100.0f)
+            {
+                return Spark::Ui::Status::Success;
+            }
+            return Spark::Ui::Status::Info;
+        }
+
+        /// Lethality tier of a time-to-kill value: very fast kills are flagged as errors.
+        Spark::Ui::Status TtkTier(float ttk)
+        {
+            if (ttk < 0.5f)
+            {
+                return Spark::Ui::Status::Error;
+            }
+            if (ttk < 1.5f)
+            {
+                return Spark::Ui::Status::Warning;
+            }
+            return Spark::Ui::Status::Success;
+        }
+    } // namespace
 
     WeaponEditorPanel::WeaponEditorPanel() : EditorPanel("Weapon Editor", "weapon_editor_panel") {}
 
@@ -47,15 +83,14 @@ namespace SparkEditor
         return true;
     }
 
-    void WeaponEditorPanel::Update(float deltaTime)
-    {
-        m_previewTime += deltaTime;
-    }
+    void WeaponEditorPanel::Update(float /*deltaTime*/) {}
 
     void WeaponEditorPanel::Render()
     {
         if (!IsVisible())
+        {
             return;
+        }
 
         if (BeginPanel())
         {
@@ -65,17 +100,19 @@ namespace SparkEditor
                 ResetSelectedWeapon();
             }
             if (ImGui::IsItemHovered())
+            {
                 ImGui::SetTooltip("Restore the selected weapon's starting values");
+            }
             ImGui::SameLine();
             ImGui::Checkbox("Compare", &m_showComparison);
             ImGui::SameLine();
             ImGui::Checkbox("DPS Chart", &m_showDPSChart);
-            ImGui::TextDisabled("Balance calculator: these rows are not read or written by any game");
-            ImGui::TextDisabled("module, and edits are not persisted.");
+            Spark::Ui::SecondaryText("Balance calculator: these rows are not read or written by any game");
+            Spark::Ui::SecondaryText("module, and edits are not persisted.");
             ImGui::Separator();
 
             // Layout: left list, right properties
-            float listWidth = 180.0f;
+            const float listWidth = Spark::Ui::Px(180.0f);
             ImGui::BeginChild("WeaponList", ImVec2(listWidth, 0), true);
             RenderWeaponList();
             ImGui::EndChild();
@@ -137,75 +174,69 @@ namespace SparkEditor
         if (w.isModified)
         {
             ImGui::SameLine();
-            ImGui::TextColored(ImVec4(0.96f, 0.65f, 0.14f, 1.0f), "(Modified)");
+            Spark::Ui::Badge("Modified", Spark::Ui::Status::Warning);
         }
         ImGui::Separator();
 
-        ImGui::Columns(2, "WeaponProps", false);
-        ImGui::SetColumnWidth(0, 130);
+        if (!Spark::Ui::BeginPropertyGrid("WeaponProps"))
+        {
+            return;
+        }
 
         // Damage
-        ImGui::Text("Damage");
-        ImGui::NextColumn();
-        ImGui::SetNextItemWidth(-1);
+        Spark::Ui::PropertyLabel("Damage");
         if (ImGui::SliderFloat("##Damage", &w.damage, 1.0f, 500.0f, "%.1f"))
+        {
             w.isModified = true;
-        ImGui::NextColumn();
+        }
 
         // Fire Rate
-        ImGui::Text("Fire Rate (RPM)");
-        ImGui::NextColumn();
-        ImGui::SetNextItemWidth(-1);
+        Spark::Ui::PropertyLabel("Fire Rate (RPM)");
         if (ImGui::SliderFloat("##FireRate", &w.fireRate, 10.0f, 5000.0f, "%.0f"))
+        {
             w.isModified = true;
-        ImGui::NextColumn();
+        }
 
         // Magazine Size
-        ImGui::Text("Magazine Size");
-        ImGui::NextColumn();
-        ImGui::SetNextItemWidth(-1);
+        Spark::Ui::PropertyLabel("Magazine Size");
         if (ImGui::SliderInt("##MagSize", &w.magazineSize, 1, 500))
+        {
             w.isModified = true;
-        ImGui::NextColumn();
+        }
 
         // Reload Time
-        ImGui::Text("Reload Time (s)");
-        ImGui::NextColumn();
-        ImGui::SetNextItemWidth(-1);
+        Spark::Ui::PropertyLabel("Reload Time (s)");
         if (ImGui::SliderFloat("##ReloadTime", &w.reloadTime, 0.5f, 10.0f, "%.2f"))
+        {
             w.isModified = true;
-        ImGui::NextColumn();
+        }
 
         // Muzzle Velocity
-        ImGui::Text("Muzzle Velocity");
-        ImGui::NextColumn();
-        ImGui::SetNextItemWidth(-1);
+        Spark::Ui::PropertyLabel("Muzzle Velocity");
         if (ImGui::SliderFloat("##MuzzleVel", &w.muzzleVelocity, 10.0f, 3000.0f, "%.0f"))
+        {
             w.isModified = true;
-        ImGui::NextColumn();
+        }
 
         // Accuracy
-        ImGui::Text("Accuracy");
-        ImGui::NextColumn();
-        ImGui::SetNextItemWidth(-1);
+        Spark::Ui::PropertyLabel("Accuracy");
         if (ImGui::SliderFloat("##Accuracy", &w.accuracy, 0.0f, 1.0f, "%.2f"))
+        {
             w.isModified = true;
-        ImGui::NextColumn();
+        }
 
         // Range
-        ImGui::Text("Eff. Range");
-        ImGui::NextColumn();
-        ImGui::SetNextItemWidth(-1);
+        Spark::Ui::PropertyLabel("Eff. Range");
         if (ImGui::SliderFloat("##Range", &w.range, 1.0f, 200.0f, "%.1f"))
+        {
             w.isModified = true;
-        ImGui::NextColumn();
+        }
 
-        ImGui::Columns(1);
+        Spark::Ui::EndPropertyGrid();
 
         // Computed stats
         ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Text(ICON_FA_CHART_BAR " Computed Stats");
+        Spark::Ui::SubHeader(ICON_FA_CHART_BAR " Computed Stats");
 
         float dps = w.damage * (w.fireRate / 60.0f);
         float shotInterval = (w.fireRate > 0) ? (60.0f / w.fireRate) : 1.0f;
@@ -213,61 +244,50 @@ namespace SparkEditor
         float magDamage = w.damage * w.magazineSize;
         float sustainedDPS = magDamage / (magDuration + w.reloadTime);
 
-        ImGui::Columns(2, "ComputedStats", false);
-        ImGui::SetColumnWidth(0, 130);
+        if (!Spark::Ui::BeginPropertyGrid("ComputedStats"))
+        {
+            return;
+        }
 
-        ImGui::Text("Burst DPS");
-        ImGui::NextColumn();
-        ImGui::TextColored(ImVec4(0.3f, 0.8f, 0.3f, 1.0f), "%.1f", dps);
-        ImGui::NextColumn();
+        Spark::Ui::PropertyLabel("Burst DPS");
+        Spark::Ui::MonoText("%.1f", dps);
 
-        ImGui::Text("Sustained DPS");
-        ImGui::NextColumn();
-        ImGui::TextColored(ImVec4(0.9f, 0.9f, 0.3f, 1.0f), "%.1f", sustainedDPS);
-        ImGui::NextColumn();
+        Spark::Ui::PropertyLabel("Sustained DPS");
+        Spark::Ui::MonoText("%.1f", sustainedDPS);
 
-        ImGui::Text("Shot Interval");
-        ImGui::NextColumn();
-        ImGui::Text("%.3f s", shotInterval);
-        ImGui::NextColumn();
+        Spark::Ui::PropertyLabel("Shot Interval");
+        Spark::Ui::MonoText("%.3f s", shotInterval);
 
-        ImGui::Text("Mag Duration");
-        ImGui::NextColumn();
-        ImGui::Text("%.1f s", magDuration);
-        ImGui::NextColumn();
+        Spark::Ui::PropertyLabel("Mag Duration");
+        Spark::Ui::MonoText("%.1f s", magDuration);
 
-        ImGui::Text("Mag Damage");
-        ImGui::NextColumn();
-        ImGui::Text("%.0f", magDamage);
-        ImGui::NextColumn();
+        Spark::Ui::PropertyLabel("Mag Damage");
+        Spark::Ui::MonoText("%.0f", magDamage);
 
-        ImGui::Text("TTK (100hp)");
-        ImGui::NextColumn();
+        Spark::Ui::PropertyLabel("TTK (100hp)");
         int shotsToKill = (int)ceilf(100.0f / w.damage);
         float ttk = shotInterval * (shotsToKill - 1);
-        ImGui::TextColored(ttk < 0.5f   ? ImVec4(0.9f, 0.3f, 0.3f, 1.0f)
-                           : ttk < 1.5f ? ImVec4(0.9f, 0.9f, 0.3f, 1.0f)
-                                        : ImVec4(0.3f, 0.8f, 0.3f, 1.0f),
-                           "%.2f s (%d shots)", ttk, shotsToKill);
-        ImGui::NextColumn();
+        Spark::Ui::StatusText(TtkTier(ttk), "%.2f s (%d shots)", ttk, shotsToKill);
 
-        ImGui::Columns(1);
+        Spark::Ui::EndPropertyGrid();
     }
 
     void WeaponEditorPanel::RenderDPSChart()
     {
-        ImGui::Text(ICON_FA_CHART_BAR " DPS Comparison");
+        Spark::Ui::SubHeader(ICON_FA_CHART_BAR " DPS Comparison");
 
         float maxDPS = 0;
         for (const auto& w : m_weapons)
         {
             float dps = w.damage * (w.fireRate / 60.0f);
             if (dps > maxDPS)
+            {
                 maxDPS = dps;
+            }
         }
 
         ImVec2 avail = ImGui::GetContentRegionAvail();
-        float chartH = std::min(200.0f, avail.y * 0.4f);
+        float chartH = std::min(Spark::Ui::Px(200.0f), avail.y * 0.4f);
 
         ImGui::BeginChild("DPSChart", ImVec2(0, chartH), false);
 
@@ -277,34 +297,22 @@ namespace SparkEditor
             float dps = w.damage * (w.fireRate / 60.0f);
             float pct = maxDPS > 0 ? dps / maxDPS : 0;
 
-            // Color based on DPS tier
-            ImVec4 barColor = dps > 500   ? ImVec4(0.9f, 0.2f, 0.2f, 1.0f)
-                              : dps > 200 ? ImVec4(0.9f, 0.6f, 0.1f, 1.0f)
-                              : dps > 100 ? ImVec4(0.2f, 0.7f, 0.3f, 1.0f)
-                                          : ImVec4(0.2f, 0.5f, 0.8f, 1.0f);
-
-            if (i == m_selectedWeapon)
-            {
-                barColor.w = 1.0f;
-            }
-            else
-            {
-                barColor.w = 0.6f;
-            }
+            // Color based on DPS tier; unselected weapons are dimmed.
+            const ImVec4 barColor =
+                Spark::Ui::ColV(Spark::Ui::StatusTextRole(DpsTier(dps)), i == m_selectedWeapon ? 1.0f : 0.6f);
 
             char label[64];
             snprintf(label, sizeof(label), "%.0f", dps);
 
             ImGui::PushStyleColor(ImGuiCol_PlotHistogram, barColor);
-            char barLabel[64];
-            snprintf(barLabel, sizeof(barLabel), "%s##dps%d", w.name.c_str(), i);
-            ImGui::ProgressBar(pct, ImVec2(-1, 16), label);
+            ImGui::ProgressBar(pct, ImVec2(-1.0f, Spark::Ui::Px(16.0f)), label);
             ImGui::PopStyleColor();
 
             // Show weapon name on same line
             ImVec2 textPos = ImGui::GetItemRectMin();
-            ImGui::GetWindowDrawList()->AddText(ImVec2(textPos.x + 4, textPos.y + 1), IM_COL32(255, 255, 255, 200),
-                                                w.name.c_str());
+            ImGui::GetWindowDrawList()->AddText(
+                ImVec2(textPos.x + Spark::Ui::Px(4.0f), textPos.y + Spark::Ui::Px(1.0f)),
+                Spark::Ui::Col(Spark::Ui::Role::TextPrimary, .78f), w.name.c_str());
         }
 
         ImGui::EndChild();
@@ -312,22 +320,22 @@ namespace SparkEditor
 
     void WeaponEditorPanel::RenderComparisonTable()
     {
-        ImGui::Text(ICON_FA_TH " Full Comparison");
+        Spark::Ui::SubHeader(ICON_FA_TH " Full Comparison");
 
         if (ImGui::BeginTable("WeaponCompare", 8,
                               ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Sortable |
                                   ImGuiTableFlags_ScrollY,
-                              ImVec2(0, 200)))
+                              ImVec2(0.0f, Spark::Ui::Px(200.0f))))
         {
 
-            ImGui::TableSetupColumn("Weapon", ImGuiTableColumnFlags_WidthFixed, 120);
-            ImGui::TableSetupColumn("Damage", ImGuiTableColumnFlags_WidthFixed, 60);
-            ImGui::TableSetupColumn("RPM", ImGuiTableColumnFlags_WidthFixed, 50);
-            ImGui::TableSetupColumn("Mag", ImGuiTableColumnFlags_WidthFixed, 40);
-            ImGui::TableSetupColumn("Reload", ImGuiTableColumnFlags_WidthFixed, 50);
-            ImGui::TableSetupColumn("Accuracy", ImGuiTableColumnFlags_WidthFixed, 60);
-            ImGui::TableSetupColumn("DPS", ImGuiTableColumnFlags_WidthFixed, 60);
-            ImGui::TableSetupColumn("TTK", ImGuiTableColumnFlags_WidthFixed, 50);
+            ImGui::TableSetupColumn("Weapon", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(120));
+            ImGui::TableSetupColumn("Damage", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(60));
+            ImGui::TableSetupColumn("RPM", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(50));
+            ImGui::TableSetupColumn("Mag", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(40));
+            ImGui::TableSetupColumn("Reload", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(50));
+            ImGui::TableSetupColumn("Accuracy", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(60));
+            ImGui::TableSetupColumn("DPS", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(60));
+            ImGui::TableSetupColumn("TTK", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(50));
             ImGui::TableHeadersRow();
 
             for (int i = 0; i < (int)m_weapons.size(); i++)
@@ -341,7 +349,7 @@ namespace SparkEditor
                 ImGui::TableNextRow();
                 if (i == m_selectedWeapon)
                 {
-                    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, IM_COL32(45, 140, 240, 40));
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, Spark::Ui::Col(Spark::Ui::Role::SurfaceSelected));
                 }
 
                 ImGui::TableNextColumn();
@@ -357,102 +365,13 @@ namespace SparkEditor
                 ImGui::TableNextColumn();
                 ImGui::Text("%.0f%%", w.accuracy * 100);
                 ImGui::TableNextColumn();
-                ImGui::TextColored(dps > 500   ? ImVec4(0.9f, 0.2f, 0.2f, 1)
-                                   : dps > 200 ? ImVec4(0.9f, 0.6f, 0.1f, 1)
-                                               : ImVec4(0.3f, 0.8f, 0.3f, 1),
-                                   "%.0f", dps);
+                Spark::Ui::StatusText(DpsTier(dps), "%.0f", dps);
                 ImGui::TableNextColumn();
-                ImGui::TextColored(ttk < 0.5f ? ImVec4(0.9f, 0.3f, 0.3f, 1) : ImVec4(0.8f, 0.8f, 0.8f, 1), "%.2fs",
-                                   ttk);
+                Spark::Ui::StatusText(TtkTier(ttk), "%.2fs", ttk);
             }
 
             ImGui::EndTable();
         }
-    }
-
-    void WeaponEditorPanel::RenderWeaponPreview()
-    {
-        // Wireframe weapon preview
-        ImVec2 avail = ImGui::GetContentRegionAvail();
-        float previewH = std::min(150.0f, avail.y);
-
-        ImGui::BeginChild("WeaponPreview", ImVec2(0, previewH), true);
-        ImGui::Text(ICON_FA_CUBE " 3D Preview");
-
-        ImDrawList* dl = ImGui::GetWindowDrawList();
-        ImVec2 pos = ImGui::GetCursorScreenPos();
-        ImVec2 size(avail.x - 20, previewH - 30);
-
-        // Background with subtle vignette border
-        dl->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), IM_COL32(22, 24, 30, 255), 4.0f);
-        dl->AddRect(pos, ImVec2(pos.x + size.x, pos.y + size.y), IM_COL32(60, 70, 80, 200), 4.0f);
-
-        // Animated weapon wireframe outline
-        float cx = pos.x + size.x * 0.5f;
-        float cy = pos.y + size.y * 0.5f;
-        float breathe = sinf(m_previewTime * 0.5f) * 0.05f + 1.0f;
-        float rot = m_previewTime * 0.3f;
-        float cosR = cosf(rot);
-        float sinR = sinf(rot);
-
-        // Scale factor based on preview area
-        float s = std::min(size.x, size.y) * 0.3f * breathe;
-
-        // Weapon wireframe points (barrel, body, stock, grip, trigger guard)
-        // defined in local coords [-1,1], then transformed
-        struct Point
-        {
-            float x, y;
-        };
-        auto transform = [&](float lx, float ly) -> ImVec2
-        {
-            float rx = lx * cosR - ly * sinR;
-            float ry = lx * sinR + ly * cosR;
-            return ImVec2(cx + rx * s, cy + ry * s);
-        };
-
-        ImU32 wireCol = IM_COL32(140, 180, 220, 200);
-        ImU32 accentCol = IM_COL32(100, 200, 255, 150);
-
-        // Barrel
-        dl->AddLine(transform(0.3f, -0.05f), transform(1.0f, -0.05f), wireCol, 1.5f);
-        dl->AddLine(transform(0.3f, 0.05f), transform(1.0f, 0.05f), wireCol, 1.5f);
-        dl->AddLine(transform(1.0f, -0.05f), transform(1.0f, 0.05f), wireCol, 1.5f);
-        // Muzzle flash hint
-        dl->AddLine(transform(1.0f, -0.08f), transform(1.05f, 0.0f), accentCol, 1.0f);
-        dl->AddLine(transform(1.0f, 0.08f), transform(1.05f, 0.0f), accentCol, 1.0f);
-
-        // Receiver body
-        dl->AddLine(transform(-0.3f, -0.12f), transform(0.3f, -0.12f), wireCol, 1.5f);
-        dl->AddLine(transform(-0.3f, 0.08f), transform(0.3f, 0.08f), wireCol, 1.5f);
-        dl->AddLine(transform(-0.3f, -0.12f), transform(-0.3f, 0.08f), wireCol, 1.5f);
-        dl->AddLine(transform(0.3f, -0.12f), transform(0.3f, 0.08f), wireCol, 1.5f);
-
-        // Stock
-        dl->AddLine(transform(-0.3f, -0.1f), transform(-0.7f, -0.05f), wireCol, 1.5f);
-        dl->AddLine(transform(-0.3f, 0.06f), transform(-0.7f, 0.02f), wireCol, 1.5f);
-        dl->AddLine(transform(-0.7f, -0.05f), transform(-0.7f, 0.02f), wireCol, 1.5f);
-
-        // Grip
-        dl->AddLine(transform(0.0f, 0.08f), transform(-0.08f, 0.35f), wireCol, 1.5f);
-        dl->AddLine(transform(0.1f, 0.08f), transform(0.04f, 0.35f), wireCol, 1.5f);
-        dl->AddLine(transform(-0.08f, 0.35f), transform(0.04f, 0.35f), wireCol, 1.5f);
-
-        // Trigger guard arc
-        dl->AddLine(transform(0.12f, 0.08f), transform(0.15f, 0.18f), accentCol, 1.0f);
-        dl->AddLine(transform(0.15f, 0.18f), transform(0.0f, 0.18f), accentCol, 1.0f);
-        dl->AddLine(transform(0.0f, 0.18f), transform(-0.02f, 0.08f), accentCol, 1.0f);
-
-        // Weapon name label
-        if (m_selectedWeapon >= 0 && m_selectedWeapon < static_cast<int>(m_weapons.size()))
-        {
-            const char* name = m_weapons[m_selectedWeapon].name.c_str();
-            ImVec2 nameSize = ImGui::CalcTextSize(name);
-            dl->AddText(ImVec2(pos.x + size.x - nameSize.x - 8, pos.y + size.y - nameSize.y - 4),
-                        IM_COL32(160, 170, 180, 180), name);
-        }
-
-        ImGui::EndChild();
     }
 
     bool WeaponEditorPanel::ResetSelectedWeapon()

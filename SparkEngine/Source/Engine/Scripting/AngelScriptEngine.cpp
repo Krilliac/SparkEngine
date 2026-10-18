@@ -16,11 +16,17 @@
 #include "../../Utils/LogMacros.h"
 #include "../../Utils/Assert.h"
 #include "../../Utils/Validate.h"
+#include "../../Physics/PhysicsBody.h"
+#include "../Events/EventSystem.h"
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <new>
 #include <algorithm>
+#include <cctype>
+#include <utility>
 
 namespace fs = std::filesystem;
 
@@ -90,38 +96,6 @@ EntityID ASCreateEntity(const std::string& name)
     return entity;
 }
 
-Transform* ASGetTransform(EntityID entity)
-{
-    if (entity == entt::null)
-    {
-        LogWarning("ASGetTransform: called with null entity.");
-        return nullptr;
-    }
-
-    auto* ctx = EngineContext::Get();
-    if (!ctx)
-    {
-        LogError("ASGetTransform: EngineContext not available.");
-        return nullptr;
-    }
-
-    auto* world = ctx->GetSystem<World>();
-    if (!world)
-    {
-        LogWarning("ASGetTransform: no World registered in EngineContext.");
-        return nullptr;
-    }
-
-    if (!world->HasComponent<Transform>(entity))
-    {
-        LogWarning("ASGetTransform: entity " + std::to_string(static_cast<uint32_t>(entity)) +
-                   " has no Transform component or is not valid.");
-        return nullptr;
-    }
-
-    return world->GetComponent<Transform>(entity);
-}
-
 /**
  * @brief Convert a script key name string to a Windows virtual key code.
  *
@@ -131,10 +105,13 @@ Transform* ASGetTransform(EntityID entity)
  */
 static int ScriptKeyNameToVK(const std::string& key)
 {
-#ifdef SPARK_PLATFORM_WINDOWS
+    // InputManager keys on Win32 virtual-key codes on every platform (the SDL2
+    // host translates SDL keycodes to VK_*, and Core/PlatformTypes.h defines
+    // the VK_* values off Windows), so this mapping is platform-independent.
     // Upper-case the key name for case-insensitive matching
     std::string upper = key;
-    std::transform(upper.begin(), upper.end(), upper.begin(), ::toupper);
+    std::transform(upper.begin(), upper.end(), upper.begin(),
+                   [](unsigned char ch) { return static_cast<char>(std::toupper(ch)); });
 
     // Single character letter or digit
     if (upper.size() == 1)
@@ -215,9 +192,6 @@ static int ScriptKeyNameToVK(const std::string& key)
             return VK_F1 + (num - 1);
         }
     }
-#else
-    (void)key;
-#endif
     return 0;
 }
 
@@ -266,74 +240,228 @@ void ASDestroyEntity(EntityID entity)
         world->DestroyEntity(entity);
 }
 
+namespace
+{
+    /// The bound World when @p entity is alive in it, else nullptr.
+    World* FindBoundWorldFor(EntityID entity)
+    {
+        auto* world = AngelScriptEngine::GetBoundWorld();
+        if (!world || entity == entt::null || !world->GetRegistry().valid(entity))
+            return nullptr;
+        return world;
+    }
+
+    /// The entity's @p T in the bound World, or nullptr when the World, entity or
+    /// component is missing. Checks liveness first: World::HasComponent and
+    /// GetComponent treat a destroyed entity as a fatal precondition failure, and a
+    /// script can name one (a stale id, or its own destroyEntity() target).
+    template <typename T> T* FindScriptComponent(EntityID entity)
+    {
+        World* world = FindBoundWorldFor(entity);
+        return world ? world->GetRegistry().try_get<T>(entity) : nullptr;
+    }
+
+    /// The entity's RigidBodyComponent in the bound World, or nullptr when the
+    /// World, entity or component is missing.
+    RigidBodyComponent* FindScriptRigidBody(EntityID entity)
+    {
+        return FindScriptComponent<RigidBodyComponent>(entity);
+    }
+
+    bool IsFiniteVector(const DirectX::XMFLOAT3& v)
+    {
+        return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
+    }
+
+    /// Longest sound or animation name a script may request.
+    constexpr size_t kMaxScriptAssetNameLength = 128;
+
+    /// Non-empty, bounded, and free of control characters (names end up in logs and asset lookups).
+    bool IsValidScriptAssetName(const std::string& name)
+    {
+        if (name.empty() || name.size() > kMaxScriptAssetNameLength)
+        {
+            return false;
+        }
+        return std::none_of(name.begin(), name.end(), [](unsigned char ch) { return std::iscntrl(ch) != 0; });
+    }
+} // namespace
+
 DirectX::XMFLOAT3 ASGetPosition(EntityID entity)
 {
-    auto* world = AngelScriptEngine::GetBoundWorld();
-    if (world && entity != entt::null && world->HasComponent<Transform>(entity))
-        return world->GetComponent<Transform>(entity)->position;
-    return {0.0f, 0.0f, 0.0f};
+    const Transform* transform = FindScriptComponent<Transform>(entity);
+    return transform ? transform->position : DirectX::XMFLOAT3{0.0f, 0.0f, 0.0f};
 }
 
 void ASSetPosition(EntityID entity, const DirectX::XMFLOAT3& pos)
 {
-    auto* world = AngelScriptEngine::GetBoundWorld();
-    if (world && entity != entt::null && world->HasComponent<Transform>(entity))
-        world->GetComponent<Transform>(entity)->position = pos;
+    if (auto* transform = FindScriptComponent<Transform>(entity))
+        transform->position = pos;
 }
 
 DirectX::XMFLOAT3 ASGetRotation(EntityID entity)
 {
-    auto* world = AngelScriptEngine::GetBoundWorld();
-    if (world && entity != entt::null && world->HasComponent<Transform>(entity))
-        return world->GetComponent<Transform>(entity)->rotation;
-    return {0.0f, 0.0f, 0.0f};
+    const Transform* transform = FindScriptComponent<Transform>(entity);
+    return transform ? transform->rotation : DirectX::XMFLOAT3{0.0f, 0.0f, 0.0f};
 }
 
 void ASSetRotation(EntityID entity, const DirectX::XMFLOAT3& rot)
 {
-    auto* world = AngelScriptEngine::GetBoundWorld();
-    if (world && entity != entt::null && world->HasComponent<Transform>(entity))
-        world->GetComponent<Transform>(entity)->rotation = rot;
+    if (auto* transform = FindScriptComponent<Transform>(entity))
+        transform->rotation = rot;
 }
 
 float ASGetHealth(EntityID entity)
 {
-    auto* world = AngelScriptEngine::GetBoundWorld();
-    if (world && entity != entt::null && world->HasComponent<HealthComponent>(entity))
-        return world->GetComponent<HealthComponent>(entity)->health;
-    return 0.0f;
+    const HealthComponent* health = FindScriptComponent<HealthComponent>(entity);
+    return health ? health->health : 0.0f;
 }
 
 void ASSetHealth(EntityID entity, float health)
 {
-    auto* world = AngelScriptEngine::GetBoundWorld();
-    if (world && entity != entt::null && world->HasComponent<HealthComponent>(entity))
-        world->GetComponent<HealthComponent>(entity)->health = health;
+    if (auto* component = FindScriptComponent<HealthComponent>(entity))
+        component->health = health;
 }
 
 float ASGetSpeed(EntityID entity)
 {
-    (void)entity;
-    return 0.0f; // Speed comes from physics velocity — query RigidBody if available
+    const RigidBodyComponent* rb = FindScriptRigidBody(entity);
+    if (!rb)
+        return 0.0f;
+
+    // Prefer the live simulation velocity; before PhysicsUpdateSystem has
+    // created the body, fall back to the component's cached velocity.
+    const auto* body = rb->physicsBodyHandle.As<PhysicsBody>();
+    const DirectX::XMFLOAT3 velocity = body ? body->GetLinearVelocity() : rb->linearVelocity;
+    return std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y + velocity.z * velocity.z);
 }
 
 void ASApplyForce(EntityID entity, const DirectX::XMFLOAT3& force)
 {
-    (void)entity;
-    (void)force;
-    // Force application dispatched to physics system
+    if (!IsFiniteVector(force))
+    {
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Scripting,
+                       "[Script] applyForce ignored: force (%f, %f, %f) is not finite.", force.x, force.y, force.z);
+        return;
+    }
+
+    RigidBodyComponent* rb = FindScriptRigidBody(entity);
+    if (!rb)
+    {
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Scripting,
+                       "[Script] applyForce ignored: entity %u has no RigidBodyComponent in the bound World.",
+                       static_cast<uint32_t>(entity));
+        return;
+    }
+
+    // Only Dynamic bodies respond to forces; Static never moves and Kinematic
+    // is driven by its Transform (see RigidBodyComponent).
+    if (rb->type != RigidBodyComponent::Type::Dynamic)
+    {
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Scripting,
+                       "[Script] applyForce ignored: entity %u is not a Dynamic rigid body.",
+                       static_cast<uint32_t>(entity));
+        return;
+    }
+
+    auto* body = rb->physicsBodyHandle.As<PhysicsBody>();
+    if (!body)
+    {
+        // PhysicsUpdateSystem creates the Jolt body on its first tick after the
+        // component is added; a force issued before then has nothing to act on.
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Scripting,
+                       "[Script] applyForce ignored: entity %u has no physics body yet.",
+                       static_cast<uint32_t>(entity));
+        return;
+    }
+
+    // Accumulated by Jolt and integrated over the next simulation step; the
+    // body is woken if it was sleeping.
+    body->ApplyForce(force);
 }
 
+// Scripts call playSound()/playAnimation() from Update() every frame (EnemyPatrol requests "walk" each tick), so
+// both stay cheap and idempotent, and warn at most once per call site: they only record the request on the entity
+// in the bound World, on the game thread that runs the script. AudioUpdateSystem and AnimationUpdateSystem act on
+// it the next time their ECS phase runs.
 void ASPlaySound(EntityID entity, const std::string& soundName)
 {
-    (void)entity;
-    SPARK_LOG_INFO(Spark::LogCategory::Audio, "[Script] PlaySound: %s", soundName.c_str());
+    World* world = FindBoundWorldFor(entity);
+    if (!world)
+    {
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Scripting,
+                       "[Script] playSound ignored: entity %u is not alive in the bound World.",
+                       static_cast<uint32_t>(entity));
+        return;
+    }
+    if (!IsValidScriptAssetName(soundName))
+    {
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Scripting,
+                       "[Script] playSound ignored on entity %u: the sound name must be 1-%zu printable characters.",
+                       static_cast<uint32_t>(entity), kMaxScriptAssetNameLength);
+        return;
+    }
+
+    auto& registry = world->GetRegistry();
+    auto& cues = registry.get_or_emplace<ScriptAudioCues>(entity);
+    ++cues.requested;
+    if (cues.pending.size() >= ScriptAudioCues::kMaxPending)
+    {
+        ++cues.dropped;
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Scripting,
+                       "[Script] playSound('%s') dropped on entity %u: %zu cues are already pending.",
+                       soundName.c_str(), static_cast<uint32_t>(entity), ScriptAudioCues::kMaxPending);
+        return;
+    }
+
+    ScriptAudioCues::Cue cue;
+    cue.soundName = soundName;
+    if (const Transform* transform = registry.try_get<Transform>(entity))
+    {
+        cue.position = transform->position;
+        cue.positional = true;
+    }
+    cues.pending.push_back(std::move(cue));
 }
 
 void ASPlayAnimation(EntityID entity, const std::string& animName)
 {
-    (void)entity;
-    SPARK_LOG_INFO(Spark::LogCategory::Animation, "[Script] PlayAnimation: %s", animName.c_str());
+    World* world = FindBoundWorldFor(entity);
+    AnimationController* controller = world ? world->GetRegistry().try_get<AnimationController>(entity) : nullptr;
+    if (!controller)
+    {
+        // A controller is authored with the entity's clip list; creating one here would animate nothing.
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Scripting,
+                       "[Script] playAnimation ignored: entity %u has no AnimationController in the bound World.",
+                       static_cast<uint32_t>(entity));
+        return;
+    }
+    if (!IsValidScriptAssetName(animName))
+    {
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Scripting,
+                       "[Script] playAnimation ignored on entity %u: the clip name must be 1-%zu printable characters.",
+                       static_cast<uint32_t>(entity), kMaxScriptAssetNameLength);
+        return;
+    }
+    const auto& clips = controller->availableAnimations;
+    if (!clips.empty() && std::find(clips.begin(), clips.end(), animName) == clips.end())
+    {
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Scripting,
+                       "[Script] playAnimation('%s') ignored: entity %u does not list that clip.", animName.c_str(),
+                       static_cast<uint32_t>(entity));
+        return;
+    }
+
+    // Re-requesting the clip that is already playing (the per-frame "walk") must not restart it.
+    if (controller->playing && controller->currentAnimation == animName)
+    {
+        return;
+    }
+
+    controller->currentAnimation = animName;
+    controller->currentTime = 0.0f;
+    controller->normalizedTime = 0.0f;
+    controller->playing = true;
 }
 
 EntityID ASGetEntityByName(const std::string& name)
@@ -354,7 +482,29 @@ EntityID ASGetEntityByName(const std::string& name)
 
 void ASFireEvent(const std::string& eventName)
 {
-    SPARK_LOG_INFO(Spark::LogCategory::Game, "[Script] FireEvent: %s", eventName.c_str());
+    if (eventName.empty())
+    {
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Scripting,
+                       "[Script] fireEvent ignored: event name is empty.");
+        return;
+    }
+
+    auto* ctx = EngineContext::Get();
+    Spark::EventBus* bus = ctx ? ctx->GetEventBus() : nullptr;
+    if (!bus)
+    {
+        SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Scripting,
+                       "[Script] fireEvent('%s') dropped: no EventBus is registered on EngineContext.",
+                       eventName.c_str());
+        return;
+    }
+
+    // Published synchronously on the calling (game) thread, so subscribers see
+    // the event before the script's callback returns.
+    Spark::ScriptEvent event;
+    event.eventName = eventName;
+    event.sourceEntity = static_cast<uint32_t>(AngelScriptEngine::GetExecutingEntity());
+    bus->Publish(event);
 }
 
 static DebugTraceCallback g_debugTraceCallback = nullptr;
@@ -369,6 +519,42 @@ void ASDebugTrace(uint32_t nodeId, const std::string& nodeName, const std::strin
 void ASSetDebugTraceCallback(DebugTraceCallback callback)
 {
     g_debugTraceCallback = callback;
+}
+
+// ============================================================================
+// Executing-entity query (shared by both the real and stub builds)
+// ============================================================================
+
+#ifdef SPARK_ANGELSCRIPT_SUPPORT
+namespace
+{
+    /// asIScriptContext user-data slot holding a pointer to the executing
+    /// script's EntityID ('SPEN'); distinct from slot 0 so add-ons keep theirs.
+    constexpr asPWORD kExecutingEntityUserDataType = 0x5350454E;
+} // namespace
+#endif
+
+EntityID AngelScriptEngine::GetExecutingEntity()
+{
+#ifdef SPARK_ANGELSCRIPT_SUPPORT
+    asIScriptContext* active = asGetActiveContext();
+    if (!active)
+        return entt::null;
+    const auto* entity = static_cast<const EntityID*>(active->GetUserData(kExecutingEntityUserDataType));
+    return entity ? *entity : entt::null;
+#else
+    return entt::null;
+#endif
+}
+
+// ============================================================================
+// Fault state query (shared by both the real and stub builds)
+// ============================================================================
+
+bool AngelScriptEngine::IsScriptFaulted(EntityID entity) const
+{
+    auto it = m_entityScripts.find(entity);
+    return it != m_entityScripts.end() && it->second.faulted;
 }
 
 // ============================================================================
@@ -388,20 +574,15 @@ void AngelScriptEngine::ConfigureSandboxSecurity(Spark::ScriptSecurityLevel leve
 
     if (m_sandbox)
     {
-        // Initialize() already ran and already registered the engine API
-        // through RegisterGuardedFunction under the PREVIOUS settings —
-        // AngelScript has no API to unregister a single global function, so
-        // this cannot retroactively tighten (or loosen) which functions a
-        // script can call. Only the sandbox's runtime checks (instruction
-        // limits, timeouts, memory) are actually affected at this point.
-        LogWarning("ConfigureSandboxSecurity called after Initialize(): the engine API was already "
-                   "registered under the previous security settings, so the whitelist/blacklist change "
-                   "has no effect on already-registered functions. Call this before Initialize() instead.");
-        m_sandbox->SetSecurityLevel(level);
-        for (const auto& name : allowedFunctions)
-            m_sandbox->AddAllowedFunction(name);
-        for (const auto& name : blockedFunctions)
-            m_sandbox->AddBlockedFunction(name);
+        // Initialize() already registered the engine API through
+        // RegisterGuardedFunction under the settings in force then, and
+        // AngelScript cannot unregister a global function. Applying the new
+        // level to the live sandbox would make it report a policy that is not
+        // enforced, so the live sandbox is left alone (its function policy is
+        // locked) and the configuration only takes effect at the next Initialize().
+        LogError("ConfigureSandboxSecurity called after Initialize(): the engine API is already registered "
+                 "under the previous security settings and cannot change at runtime. The new settings are "
+                 "staged for the next Initialize(); call this before Initialize() instead.");
     }
 }
 
@@ -446,7 +627,13 @@ bool AngelScriptEngine::Initialize()
 
     if (m_engine)
     {
+        // A successful Initialize() always leaves this engine as GetInstance(), as the full
+        // path below does. Another engine initialized and shut down since this one started
+        // clears s_instance, and a caller re-initializing this still-running engine (a
+        // lifecycle boot after an unfinished one) then published an engine GetInstance()
+        // did not name.
         LogWarning("Already initialized.");
+        s_instance = this;
         return true;
     }
 
@@ -459,7 +646,10 @@ bool AngelScriptEngine::Initialize()
     }
 
     // Set the message callback so compilation/runtime errors are captured.
+    // Registration errors arrive through it too; the first one is kept for the
+    // configuration probe below.
     m_engine->SetMessageCallback(asFUNCTION(MessageCallback), this, asCALL_CDECL);
+    m_firstCompileError.clear();
 
     RegisterStandardLibrary();
 
@@ -485,6 +675,29 @@ bool AngelScriptEngine::Initialize()
     m_sandbox->RegisterConsoleCommands();
 
     RegisterEngineAPI();
+    // The API is now bound under the sandbox's level and lists; freeze them so
+    // `sandbox.level` or a late ConfigureSandboxSecurity() cannot report a
+    // policy the registered functions do not follow.
+    m_sandbox->LockFunctionPolicy();
+
+    // AngelScript only reports a rejected native registration as "Invalid
+    // configuration" when the first module builds, so every script would fail
+    // later with a misleading per-module error. Build an empty probe module now
+    // and fail closed with the registration diagnostic instead.
+    asIScriptModule* probe = m_engine->GetModule("$config_probe", asGM_ALWAYS_CREATE);
+    const int probeResult = probe ? probe->Build() : asERROR;
+    if (probe)
+    {
+        probe->Discard();
+    }
+    if (probeResult < 0)
+    {
+        SetLastError("Script engine API registration is invalid on this platform: " + m_firstCompileError);
+        LogError(m_lastError);
+        m_engine->ShutDownAndRelease();
+        m_engine = nullptr;
+        return false;
+    }
 
     const char* securityLevelStr = m_sandbox->GetSecurityLevel() == Spark::ScriptSecurityLevel::Unrestricted
                                        ? "Unrestricted"
@@ -501,6 +714,9 @@ void AngelScriptEngine::Shutdown()
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Scripting);
     SPARK_LOG_INFO(Spark::LogCategory::Scripting, "AngelScriptEngine shutting down...");
+
+    // Stop contact dispatch before the instances it would call are released.
+    ConnectEventBus(nullptr);
 
     // Detach and clean up every entity script.
     for (auto& [entityID, instance] : m_entityScripts)
@@ -540,6 +756,7 @@ bool AngelScriptEngine::CompileScriptFile(const std::string& scriptPath)
     fs::path path(scriptPath);
     std::string moduleName = path.stem().string();
 
+    m_firstCompileError.clear();
     CScriptBuilder builder;
     int result = builder.StartNewModule(m_engine, moduleName.c_str());
     if (result < 0)
@@ -565,7 +782,7 @@ bool AngelScriptEngine::CompileScriptFile(const std::string& scriptPath)
     result = builder.BuildModule();
     if (result < 0)
     {
-        SetLastError("Compilation failed for module '" + moduleName + "'.");
+        SetLastError("Compilation failed for module '" + moduleName + "': " + m_firstCompileError);
         LogError(m_lastError);
         // StartNewModule already discarded any previous module of this name; drop the stale pointer.
         m_modules.erase(moduleName);
@@ -578,119 +795,14 @@ bool AngelScriptEngine::CompileScriptFile(const std::string& scriptPath)
         m_modules[moduleName] = mod;
     }
 
-    m_moduleFilePaths[moduleName] = scriptPath;
+    // Recorded absolute so HotReloadModule() finds the file after the working directory changes.
+    std::error_code absoluteError;
+    const fs::path absolutePath = fs::absolute(path, absoluteError);
+    m_moduleFilePaths[moduleName] = absoluteError ? scriptPath : absolutePath.lexically_normal().string();
     RecordModuleContexts(builder, moduleName);
 
     LogInfo("Compiled script file: " + scriptPath + " -> module '" + moduleName + "'.");
     return true;
-}
-
-// -------------------------------------------------------------------------
-// Hot-Reload Support
-// -------------------------------------------------------------------------
-
-bool AngelScriptEngine::HotReloadModule(const std::string& moduleName)
-{
-    auto fileIt = m_moduleFilePaths.find(moduleName);
-    if (fileIt == m_moduleFilePaths.end())
-    {
-        SetLastError("No file path recorded for module '" + moduleName + "'. Cannot hot-reload.");
-        LogError(m_lastError);
-        return false;
-    }
-
-    const std::string& filePath = fileIt->second;
-
-    // 1. Collect all entity scripts that reference this module
-    struct SavedBinding
-    {
-        EntityID entity;
-        std::string className;
-    };
-    std::vector<SavedBinding> bindings;
-
-    for (const auto& [entity, instance] : m_entityScripts)
-    {
-        if (instance.moduleName == moduleName)
-        {
-            bindings.push_back({entity, instance.className});
-        }
-    }
-
-    // 2. Pre-validate: compile the new source into a throwaway staging module
-    //    BEFORE touching any live script instances. The common hot-reload case
-    //    is that the user just saved a file mid-edit and introduced a syntax
-    //    error; if we detached and recompiled first, that single typo would
-    //    wipe every running script of the module with no way back. By building
-    //    a staging module first, a failed compile leaves the existing module
-    //    and all its live instances completely untouched.
-    const std::string stagingModule = moduleName + "$hotreload_stage";
-    {
-        CScriptBuilder validator;
-        bool staged = validator.StartNewModule(m_engine, stagingModule.c_str()) >= 0 &&
-                      validator.AddSectionFromFile(filePath.c_str()) >= 0 && validator.BuildModule() >= 0;
-
-        // Discard the staging module either way — it was only a compile probe;
-        // the canonical recompile below rebuilds under the real module name.
-        if (asIScriptModule* stage = m_engine->GetModule(stagingModule.c_str()))
-        {
-            stage->Discard();
-        }
-
-        if (!staged)
-        {
-            SetLastError("Hot-reload aborted: recompilation of '" + filePath + "' failed; live scripts left intact.");
-            LogError(m_lastError);
-            return false;
-        }
-    }
-
-    // 3. The new source is known good. Detach the old instances and recompile
-    //    the module under its canonical name.
-    for (const auto& binding : bindings)
-    {
-        DetachScript(binding.entity);
-    }
-
-    if (!CompileScriptFile(filePath))
-    {
-        LogError("Hot-reload failed: recompilation of '" + filePath + "' failed.");
-        return false;
-    }
-
-    // 4. Re-attach scripts to their entities
-    bool allSucceeded = true;
-    for (const auto& binding : bindings)
-    {
-        if (!AttachScript(binding.entity, binding.className, moduleName))
-        {
-            LogError("Hot-reload: failed to re-attach '" + binding.className + "' to entity " +
-                     std::to_string(static_cast<uint32_t>(binding.entity)));
-            allSucceeded = false;
-        }
-    }
-
-    LogInfo("Hot-reloaded module '" + moduleName + "' (" + std::to_string(bindings.size()) + " scripts re-attached).");
-    return allSucceeded;
-}
-
-std::string AngelScriptEngine::GetModuleFilePath(const std::string& moduleName) const
-{
-    auto it = m_moduleFilePaths.find(moduleName);
-    return it != m_moduleFilePaths.end() ? it->second : std::string{};
-}
-
-std::vector<EntityID> AngelScriptEngine::GetEntitiesForModule(const std::string& moduleName) const
-{
-    std::vector<EntityID> result;
-    for (const auto& [entity, instance] : m_entityScripts)
-    {
-        if (instance.moduleName == moduleName)
-        {
-            result.push_back(entity);
-        }
-    }
-    return result;
 }
 
 bool AngelScriptEngine::CompileScriptFromString(const std::string& script, const std::string& moduleName)
@@ -703,6 +815,7 @@ bool AngelScriptEngine::CompileScriptFromString(const std::string& script, const
         return false;
     }
 
+    m_firstCompileError.clear();
     CScriptBuilder builder;
     int result = builder.StartNewModule(m_engine, moduleName.c_str());
     if (result < 0)
@@ -715,7 +828,9 @@ bool AngelScriptEngine::CompileScriptFromString(const std::string& script, const
         return false;
     }
 
-    result = builder.AddSectionFromMemory("inline", script.c_str(), static_cast<unsigned int>(script.size()));
+    // The section is named after the module so compile and runtime diagnostics
+    // read "<module>:<line>" instead of an anonymous "inline:<line>".
+    result = builder.AddSectionFromMemory(moduleName.c_str(), script.c_str(), static_cast<unsigned int>(script.size()));
     if (result < 0)
     {
         SetLastError("Failed to add inline script section for module '" + moduleName + "'.");
@@ -728,7 +843,7 @@ bool AngelScriptEngine::CompileScriptFromString(const std::string& script, const
     result = builder.BuildModule();
     if (result < 0)
     {
-        SetLastError("Compilation failed for module '" + moduleName + "'.");
+        SetLastError("Compilation failed for module '" + moduleName + "': " + m_firstCompileError);
         LogError(m_lastError);
         // StartNewModule already discarded any previous module of this name; drop the stale pointer.
         m_modules.erase(moduleName);
@@ -894,6 +1009,10 @@ bool AngelScriptEngine::AttachScript(EntityID entity, const std::string& classNa
         ctx->SetLineCallback(asFUNCTION(Spark::ScriptSandbox::LineCallback), m_sandbox.get(), asCALL_CDECL);
     }
 
+    // The constructor may call natives such as fireEvent(); expose the entity
+    // being attached for its duration. DispatchCallback repoints the slot at
+    // the stored ScriptInstance before every later call.
+    ctx->SetUserData(&entity, kExecutingEntityUserDataType);
     ctx->Prepare(factory);
     int execResult = ctx->Execute();
 
@@ -904,14 +1023,7 @@ bool AngelScriptEngine::AttachScript(EntityID entity, const std::string& classNa
 
     if (execResult != asEXECUTION_FINISHED)
     {
-        if (execResult == asEXECUTION_ABORTED && m_sandbox && m_sandbox->WasTerminated())
-        {
-            SetLastError("Constructor for class '" + className + "' terminated by sandbox.");
-        }
-        else
-        {
-            SetLastError("Factory execution failed for class '" + className + "'.");
-        }
+        SetLastError(DescribeScriptFault(ctx, execResult, "Constructor of class '" + className + "'"));
         LogError(m_lastError);
         ctx->Release();
         return false;
@@ -943,6 +1055,8 @@ bool AngelScriptEngine::AttachScript(EntityID entity, const std::string& classNa
     instance.context = ctx;
     instance.className = className;
     instance.moduleName = moduleName;
+    instance.entity = entity;
+    instance.generation = ++m_nextScriptGeneration;
 
     CacheScriptMethods(instance);
 
@@ -967,103 +1081,180 @@ void AngelScriptEngine::DetachScript(EntityID entity)
 
 void AngelScriptEngine::CallStart(EntityID entity)
 {
-    ScriptInstance* inst = GetScriptInstance(entity);
-    if (!inst || !inst->startMethod || !inst->context)
-        return;
-
-    if (m_sandbox)
+    if (ScriptInstance* inst = GetScriptInstance(entity))
     {
-        m_sandbox->BeginExecution(inst->className + "::Start");
-        inst->context->SetLineCallback(asFUNCTION(Spark::ScriptSandbox::LineCallback), m_sandbox.get(), asCALL_CDECL);
-    }
-
-    inst->context->Prepare(inst->startMethod);
-    inst->context->SetObject(inst->object);
-    int result = inst->context->Execute();
-
-    if (m_sandbox)
-    {
-        m_sandbox->EndExecution();
-    }
-
-    if (result == asEXECUTION_EXCEPTION)
-    {
-        SetLastError(std::string("Exception in Start(): ") + inst->context->GetExceptionString());
-        LogError(m_lastError);
-    }
-    else if (result == asEXECUTION_ABORTED && m_sandbox && m_sandbox->WasTerminated())
-    {
-        SetLastError("Start() terminated by sandbox");
-        LogError(m_lastError);
+        inst->started = true;
+        DispatchCallback(*inst, inst->startMethod, "Start()", {});
     }
 }
 
 void AngelScriptEngine::CallUpdate(EntityID entity, float deltaTime)
 {
-    ScriptInstance* inst = GetScriptInstance(entity);
-    if (!inst || !inst->updateMethod || !inst->context)
-        return;
-
-    if (m_sandbox)
+    if (ScriptInstance* inst = GetScriptInstance(entity))
     {
-        m_sandbox->BeginExecution(inst->className + "::Update");
-        inst->context->SetLineCallback(asFUNCTION(Spark::ScriptSandbox::LineCallback), m_sandbox.get(), asCALL_CDECL);
+        DispatchCallback(*inst, inst->updateMethod, "Update()",
+                         [deltaTime](asIScriptContext* ctx) { ctx->SetArgFloat(0, deltaTime); });
     }
+}
 
-    inst->context->Prepare(inst->updateMethod);
-    inst->context->SetObject(inst->object);
-    inst->context->SetArgFloat(0, deltaTime);
-    int result = inst->context->Execute();
+void AngelScriptEngine::PruneInvalidScripts(const World& world)
+{
+    for (auto it = m_entityScripts.begin(); it != m_entityScripts.end();)
+    {
+        if (!world.GetRegistry().valid(it->first))
+        {
+            CleanupScriptInstance(it->second);
+            it = m_entityScripts.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+}
 
-    if (m_sandbox)
-    {
-        m_sandbox->EndExecution();
-    }
+uint64_t AngelScriptEngine::GetScriptGeneration(EntityID entity) const
+{
+    const auto it = m_entityScripts.find(entity);
+    return it == m_entityScripts.end() ? 0 : it->second.generation;
+}
 
-    if (result == asEXECUTION_EXCEPTION)
-    {
-        SetLastError(std::string("Exception in Update(): ") + inst->context->GetExceptionString());
-        LogError(m_lastError);
-    }
-    else if (result == asEXECUTION_ABORTED && m_sandbox && m_sandbox->WasTerminated())
-    {
-        SetLastError("Update() terminated by sandbox");
-        LogError(m_lastError);
-    }
+bool AngelScriptEngine::IsScriptStarted(EntityID entity) const
+{
+    const auto it = m_entityScripts.find(entity);
+    return it != m_entityScripts.end() && it->second.started;
+}
+
+std::size_t AngelScriptEngine::GetAttachedScriptCount() const
+{
+    return m_entityScripts.size();
 }
 
 void AngelScriptEngine::CallOnCollision(EntityID entity, EntityID other)
 {
-    ScriptInstance* inst = GetScriptInstance(entity);
-    if (!inst || !inst->onCollisionMethod || !inst->context)
+    if (ScriptInstance* inst = GetScriptInstance(entity))
+    {
+        DispatchCallback(*inst, inst->onCollisionMethod, "OnCollision()",
+                         [other](asIScriptContext* ctx) { ctx->SetArgDWord(0, static_cast<asDWORD>(other)); });
+    }
+}
+
+void AngelScriptEngine::CallOnTriggerEnter(EntityID entity, EntityID other)
+{
+    if (ScriptInstance* inst = GetScriptInstance(entity))
+    {
+        DispatchCallback(*inst, inst->onTriggerEnterMethod, "OnTriggerEnter()",
+                         [other](asIScriptContext* ctx) { ctx->SetArgDWord(0, static_cast<asDWORD>(other)); });
+    }
+}
+
+void AngelScriptEngine::CallOnTriggerExit(EntityID entity, EntityID other)
+{
+    if (ScriptInstance* inst = GetScriptInstance(entity))
+    {
+        DispatchCallback(*inst, inst->onTriggerExitMethod, "OnTriggerExit()",
+                         [other](asIScriptContext* ctx) { ctx->SetArgDWord(0, static_cast<asDWORD>(other)); });
+    }
+}
+
+void AngelScriptEngine::DispatchCallback(ScriptInstance& instance, asIScriptFunction* method, const char* callbackName,
+                                         const std::function<void(asIScriptContext*)>& setArgs)
+{
+    if (instance.faulted || !method || !instance.context)
         return;
+
+    const std::string where =
+        "Script '" + instance.className + "' (module '" + instance.moduleName + "') " + callbackName;
+
+    // A re-entrant dispatch into the same instance (script -> native -> Call*)
+    // finds its context still executing; Prepare() refuses instead of
+    // clobbering the outer call, so skip this callback without faulting.
+    const int prepareResult = instance.context->Prepare(method);
+    if (prepareResult < 0)
+    {
+        SetLastError(where + " skipped: context could not be prepared (AngelScript code " +
+                     std::to_string(prepareResult) + ").");
+        LogError(m_lastError);
+        return;
+    }
+    instance.context->SetObject(instance.object);
+    // unordered_map nodes are address-stable, so this pointer outlives Execute().
+    instance.context->SetUserData(&instance.entity, kExecutingEntityUserDataType);
+    if (setArgs)
+        setArgs(instance.context);
 
     if (m_sandbox)
     {
-        m_sandbox->BeginExecution(inst->className + "::OnCollision");
-        inst->context->SetLineCallback(asFUNCTION(Spark::ScriptSandbox::LineCallback), m_sandbox.get(), asCALL_CDECL);
+        m_sandbox->BeginExecution(instance.className + "::" + callbackName);
+        instance.context->SetLineCallback(asFUNCTION(Spark::ScriptSandbox::LineCallback), m_sandbox.get(),
+                                          asCALL_CDECL);
     }
 
-    inst->context->Prepare(inst->onCollisionMethod);
-    inst->context->SetObject(inst->object);
-    inst->context->SetArgDWord(0, static_cast<asDWORD>(other));
-    int result = inst->context->Execute();
+    const int result = instance.context->Execute();
 
     if (m_sandbox)
     {
         m_sandbox->EndExecution();
     }
 
-    if (result == asEXECUTION_EXCEPTION)
+    if (result == asEXECUTION_FINISHED)
+        return;
+
+    // Disable the instance: re-running a faulting or runaway script every
+    // frame only repeats the fault (and, for a runaway, burns the whole
+    // sandbox budget each tick). Re-attaching the class clears the flag.
+    instance.faulted = true;
+    SetLastError(DescribeScriptFault(instance.context, result, where) +
+                 " Script disabled until it is re-attached or hot-reloaded.");
+    LogError(m_lastError);
+}
+
+std::string AngelScriptEngine::DescribeScriptFault(asIScriptContext* ctx, int execResult,
+                                                   const std::string& where) const
+{
+    std::string reason;
+    const char* section = nullptr;
+    int line = 0;
+    int column = 0;
+    asIScriptFunction* function = nullptr;
+
+    if (execResult == asEXECUTION_EXCEPTION)
     {
-        SetLastError(std::string("Exception in OnCollision(): ") + inst->context->GetExceptionString());
-        LogError(m_lastError);
+        const char* exception = ctx->GetExceptionString();
+        reason = std::string("threw exception '") + (exception ? exception : "unknown") + "'";
+        line = ctx->GetExceptionLineNumber(&column, &section);
+        function = ctx->GetExceptionFunction();
     }
-    else if (result == asEXECUTION_ABORTED && m_sandbox && m_sandbox->WasTerminated())
+    else if (execResult == asEXECUTION_ABORTED)
     {
-        SetLastError("OnCollision() terminated by sandbox");
-        LogError(m_lastError);
+        reason = "was interrupted";
+        if (m_sandbox && m_sandbox->WasTerminated())
+        {
+            const auto violations = m_sandbox->GetViolations();
+            reason = "was terminated by sandbox";
+            if (!violations.empty())
+                reason += " (" + violations.back().details + ")";
+        }
+        // The aborted context keeps its call stack until the next Prepare(),
+        // so the innermost frame still names the line that was running.
+        line = ctx->GetLineNumber(0, &column, &section);
+        function = ctx->GetFunction(0);
     }
+    else
+    {
+        reason = "did not finish (AngelScript execution result " + std::to_string(execResult) + ")";
+    }
+
+    std::string description = where + " " + reason;
+    if (section && line > 0)
+    {
+        description += " at " + std::string(section) + ":" + std::to_string(line) + ":" + std::to_string(column);
+    }
+    if (function)
+    {
+        description += std::string(" in '") + function->GetDeclaration(true, true) + "'";
+    }
+    return description + ".";
 }
 
 // -------------------------------------------------------------------------
@@ -1084,27 +1275,82 @@ void AngelScriptEngine::RegisterEngineAPI()
     AutoRegisterReflectedTypes();
 }
 
+namespace
+{
+    /// Script constructor Vector3(float x, float y, float z) (asCALL_CDECL_OBJLAST).
+    void ConstructVector3(float x, float y, float z, DirectX::XMFLOAT3* self)
+    {
+        new (self) DirectX::XMFLOAT3(x, y, z);
+    }
+} // namespace
+
 void AngelScriptEngine::RegisterMathTypes()
 {
-    // Register a lightweight Vector3 value type for script use.
+    // Register a lightweight Vector3 value type for script use. ALLFLOATS is
+    // required for natives that return Vector3 by value (getPosition,
+    // getRotation): on System V x86-64 (Linux/macOS) a three-float struct comes
+    // back in XMM registers, and without the flag AngelScript refuses the
+    // registration, which invalidates the whole engine configuration so that
+    // no script can compile. Other ABIs ignore the flag.
     m_engine->RegisterObjectType("Vector3", sizeof(DirectX::XMFLOAT3),
-                                 asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<DirectX::XMFLOAT3>());
+                                 asOBJ_VALUE | asOBJ_POD | asGetTypeTraits<DirectX::XMFLOAT3>() |
+                                     asOBJ_APP_CLASS_ALLFLOATS);
     m_engine->RegisterObjectProperty("Vector3", "float x", asOFFSET(DirectX::XMFLOAT3, x));
     m_engine->RegisterObjectProperty("Vector3", "float y", asOFFSET(DirectX::XMFLOAT3, y));
     m_engine->RegisterObjectProperty("Vector3", "float z", asOFFSET(DirectX::XMFLOAT3, z));
+    // POD without a default constructor: `Vector3 v;` stays legal, and the visual script
+    // compiler emits `Vector3(x, y, z)` for Vector3 literals.
+    m_engine->RegisterObjectBehaviour("Vector3", asBEHAVE_CONSTRUCT, "void f(float, float, float)",
+                                      asFUNCTION(ConstructVector3), asCALL_CDECL_OBJLAST);
 }
 
 void AngelScriptEngine::RegisterComponentTypes()
 {
-    // Register Transform as a reference type so scripts can manipulate it
-    // through the pointer returned by getTransform().
-    m_engine->RegisterObjectType("Transform", 0, asOBJ_REF | asOBJ_NOCOUNT);
-    m_engine->RegisterObjectProperty("Transform", "Vector3 position", asOFFSET(Transform, position));
-    m_engine->RegisterObjectProperty("Transform", "Vector3 rotation", asOFFSET(Transform, rotation));
-    m_engine->RegisterObjectProperty("Transform", "Vector3 scale", asOFFSET(Transform, scale));
-
     // Register EntityID as a simple typedef (uint32).
     m_engine->RegisterTypedef("EntityID", "uint32");
+
+    // `Transform@` is a reference-counted ScriptTransformRef that stores only the
+    // EntityID; position/rotation/scale are virtual properties that re-resolve the
+    // entity on every access. It must never be a raw pointer into ECS storage: a
+    // script can keep the handle past destroyEntity() or World teardown.
+    int result = m_engine->RegisterObjectType("Transform", 0, asOBJ_REF);
+    const auto check = [&result](const char* what)
+    {
+        if (result < 0)
+            LogError(std::string("Transform script type registration failed at '") + what +
+                     "', AngelScript error code " + std::to_string(result));
+    };
+    check("type");
+    result = m_engine->RegisterObjectBehaviour("Transform", asBEHAVE_ADDREF, "void f()",
+                                               asMETHOD(ScriptTransformRef, AddRef), asCALL_THISCALL);
+    check("addref");
+    result = m_engine->RegisterObjectBehaviour("Transform", asBEHAVE_RELEASE, "void f()",
+                                               asMETHOD(ScriptTransformRef, Release), asCALL_THISCALL);
+    check("release");
+    result = m_engine->RegisterObjectMethod("Transform", "bool isValid() const", asMETHOD(ScriptTransformRef, IsValid),
+                                            asCALL_THISCALL);
+    check("isValid");
+    result = m_engine->RegisterObjectMethod("Transform", "EntityID get_entity() const property",
+                                            asMETHOD(ScriptTransformRef, GetEntity), asCALL_THISCALL);
+    check("entity");
+    result = m_engine->RegisterObjectMethod("Transform", "Vector3 get_position() const property",
+                                            asMETHOD(ScriptTransformRef, GetPosition), asCALL_THISCALL);
+    check("get_position");
+    result = m_engine->RegisterObjectMethod("Transform", "void set_position(const Vector3 &in) property",
+                                            asMETHOD(ScriptTransformRef, SetPosition), asCALL_THISCALL);
+    check("set_position");
+    result = m_engine->RegisterObjectMethod("Transform", "Vector3 get_rotation() const property",
+                                            asMETHOD(ScriptTransformRef, GetRotation), asCALL_THISCALL);
+    check("get_rotation");
+    result = m_engine->RegisterObjectMethod("Transform", "void set_rotation(const Vector3 &in) property",
+                                            asMETHOD(ScriptTransformRef, SetRotation), asCALL_THISCALL);
+    check("set_rotation");
+    result = m_engine->RegisterObjectMethod("Transform", "Vector3 get_scale() const property",
+                                            asMETHOD(ScriptTransformRef, GetScale), asCALL_THISCALL);
+    check("get_scale");
+    result = m_engine->RegisterObjectMethod("Transform", "void set_scale(const Vector3 &in) property",
+                                            asMETHOD(ScriptTransformRef, SetScale), asCALL_THISCALL);
+    check("set_scale");
 }
 
 bool AngelScriptEngine::RegisterGuardedFunction(const char* declaration, const char* scriptVisibleName,
@@ -1170,7 +1416,9 @@ namespace
     // Generic script function: get any reflected field by component type and field name
     std::string ASGetComponentField(uint32_t entityId, const std::string& compType, const std::string& fieldName)
     {
-        auto* world = AngelScriptEngine::GetBoundWorld();
+        // A stale id must not reach the reflected ops: World::GetComponent/HasComponent
+        // treat a destroyed entity as a fatal precondition failure.
+        World* world = FindBoundWorldFor(static_cast<EntityID>(entityId));
         if (!world)
             return "";
 
@@ -1194,7 +1442,9 @@ namespace
     void ASSetComponentField(uint32_t entityId, const std::string& compType, const std::string& fieldName,
                              const std::string& value)
     {
-        auto* world = AngelScriptEngine::GetBoundWorld();
+        // A stale id must not reach the reflected ops: World::GetComponent/HasComponent
+        // treat a destroyed entity as a fatal precondition failure.
+        World* world = FindBoundWorldFor(static_cast<EntityID>(entityId));
         if (!world)
             return;
 
@@ -1217,7 +1467,9 @@ namespace
     // Generic script function: check if entity has a component by type name
     bool ASHasComponent(uint32_t entityId, const std::string& compType)
     {
-        auto* world = AngelScriptEngine::GetBoundWorld();
+        // A stale id must not reach the reflected ops: World::GetComponent/HasComponent
+        // treat a destroyed entity as a fatal precondition failure.
+        World* world = FindBoundWorldFor(static_cast<EntityID>(entityId));
         if (!world)
             return false;
         return Spark::ComponentFactory::Get().HasComponent(compType, world, entityId);
@@ -1270,6 +1522,8 @@ void AngelScriptEngine::CacheScriptMethods(ScriptInstance& instance)
     instance.startMethod = instance.typeInfo->GetMethodByDecl("void Start()");
     instance.updateMethod = instance.typeInfo->GetMethodByDecl("void Update(float)");
     instance.onCollisionMethod = instance.typeInfo->GetMethodByDecl("void OnCollision(EntityID)");
+    instance.onTriggerEnterMethod = instance.typeInfo->GetMethodByDecl("void OnTriggerEnter(EntityID)");
+    instance.onTriggerExitMethod = instance.typeInfo->GetMethodByDecl("void OnTriggerExit(EntityID)");
 }
 
 void AngelScriptEngine::CleanupScriptInstance(ScriptInstance& instance)
@@ -1288,6 +1542,8 @@ void AngelScriptEngine::CleanupScriptInstance(ScriptInstance& instance)
     instance.startMethod = nullptr;
     instance.updateMethod = nullptr;
     instance.onCollisionMethod = nullptr;
+    instance.onTriggerEnterMethod = nullptr;
+    instance.onTriggerExitMethod = nullptr;
 }
 
 void AngelScriptEngine::MessageCallback(const asSMessageInfo* msg, void* param)
@@ -1311,11 +1567,23 @@ void AngelScriptEngine::MessageCallback(const asSMessageInfo* msg, void* param)
     }
 
     std::ostringstream oss;
-    oss << msg->section << " (" << msg->row << ", " << msg->col << ") : " << prefix << " : " << msg->message;
+    // Registration-time messages carry no script section; only compiler
+    // messages get a "<section>:<line>:<column>:" location prefix.
+    if (msg->section && msg->section[0] != '\0')
+    {
+        oss << msg->section << ":" << msg->row << ":" << msg->col << ": ";
+    }
+    oss << prefix << ": " << msg->message;
 
     std::string formatted = oss.str();
     if (msg->type == asMSGTYPE_ERROR)
     {
+        // Later errors are usually cascades of the first; the first is the
+        // actionable one, so the compile-failure message reports it.
+        if (self->m_firstCompileError.empty())
+        {
+            self->m_firstCompileError = formatted;
+        }
         self->SetLastError(formatted);
         LogError(formatted);
     }
@@ -1349,6 +1617,7 @@ void AngelScriptEngine::Shutdown()
 {
     SPARK_TRACE_ENTER(Spark::LogCategory::Scripting);
     SPARK_LOG_INFO(Spark::LogCategory::Scripting, "AngelScriptEngine shutting down (stub)...");
+    ConnectEventBus(nullptr);
     LogWarning("AngelScript support is not compiled in. Shutdown is a no-op.");
     if (s_instance == this)
     {
@@ -1393,7 +1662,37 @@ void AngelScriptEngine::CallUpdate(EntityID /*entity*/, float /*deltaTime*/)
     // No-op without AngelScript.
 }
 
+void AngelScriptEngine::PruneInvalidScripts(const World& /*world*/)
+{
+    // No-op without AngelScript.
+}
+
+uint64_t AngelScriptEngine::GetScriptGeneration(EntityID /*entity*/) const
+{
+    return 0;
+}
+
+bool AngelScriptEngine::IsScriptStarted(EntityID /*entity*/) const
+{
+    return false;
+}
+
+std::size_t AngelScriptEngine::GetAttachedScriptCount() const
+{
+    return 0;
+}
+
 void AngelScriptEngine::CallOnCollision(EntityID /*entity*/, EntityID /*other*/)
+{
+    // No-op without AngelScript.
+}
+
+void AngelScriptEngine::CallOnTriggerEnter(EntityID /*entity*/, EntityID /*other*/)
+{
+    // No-op without AngelScript.
+}
+
+void AngelScriptEngine::CallOnTriggerExit(EntityID /*entity*/, EntityID /*other*/)
 {
     // No-op without AngelScript.
 }
@@ -1426,23 +1725,6 @@ void AngelScriptEngine::RegisterGlobalFunctions()
 void AngelScriptEngine::AutoRegisterReflectedTypes()
 {
     // No-op without AngelScript.
-}
-
-bool AngelScriptEngine::HotReloadModule(const std::string& moduleName)
-{
-    LogWarning("Cannot hot-reload module '" + moduleName + "': AngelScript support not compiled in.");
-    SetLastError("AngelScript support not available.");
-    return false;
-}
-
-std::string AngelScriptEngine::GetModuleFilePath(const std::string& /*moduleName*/) const
-{
-    return {};
-}
-
-std::vector<EntityID> AngelScriptEngine::GetEntitiesForModule(const std::string& /*moduleName*/) const
-{
-    return {};
 }
 
 AngelScriptEngine::ScriptInstance* AngelScriptEngine::GetScriptInstance(EntityID /*entity*/)

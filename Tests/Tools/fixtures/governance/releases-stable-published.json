@@ -1,0 +1,14 @@
+[
+  {
+    "tag_name": "v1.0.0",
+    "name": "SparkEngine 1.0.0",
+    "draft": false,
+    "prerelease": false
+  },
+  {
+    "tag_name": "nightly-4242-1-0123456789ab",
+    "name": "Nightly Build (0123456789ab)",
+    "draft": false,
+    "prerelease": true
+  }
+]

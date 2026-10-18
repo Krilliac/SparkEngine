@@ -1,0 +1,6 @@
+// Guard NPC
+name = GuardNPC
+category = Characters
+component = Transform: 0,0,0 / 0,0,0 / 1,1,1
+component = LightComponent: Point / 1,1,1 / 1.0 / 10.0
+component = NameComponent: Guard

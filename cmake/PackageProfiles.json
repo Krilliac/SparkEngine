@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "components": ["runtime", "sdk", "tools", "templates", "samples", "redist"],
+  "archives": {
+    "components": ["runtime", "sdk", "tools", "templates", "samples"],
+    "msvcAdditionalComponents": ["redist"]
+  },
+  "windowsRuntime": {
+    "components": ["runtime", "redist", "tools", "samples"],
+    "msiRootFeature": "ProductFeature",
+    "msiFeaturePrefix": "CM_C_"
+  }
+}

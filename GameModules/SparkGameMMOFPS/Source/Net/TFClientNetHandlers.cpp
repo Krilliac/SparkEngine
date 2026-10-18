@@ -12,14 +12,18 @@
 #include "Net/TFClientNet.h"
 #include "Net/TFChatRules.h"
 
+#include "Data/TFDataTables.h" // TF-120: the continent this client loaded, for TF_ContinentIdentity
 #include "Game/TFPlayerSystem.h"
-#include "Net/TFRedeployProtocol.h" // W7 ui-map-keys: redeploy reply -> map screen
+#include "Net/TFRedeployProtocol.h"  // W7 ui-map-keys: redeploy reply -> map screen
+#include "Persistence/TFSavePaths.h" // TF-120: IsValidContinentKey
 #include "UI/TFHUD.h"
 #include "UI/TFMapScreen.h" // W7 ui-map-keys: OnRedeployReply sink
 #include "UI/TFLoginFlow.h" // W5 onboarding (Task 6): direct reply-sink forwarding
 #include "UI/TFScoreboard.h"
 
 #include "Utils/LogMacros.h"
+#include "Utils/SecureMemory.h"
+#include "Utils/SparkConsole.h"
 
 #ifdef ENABLE_NETWORKING
 #include "Engine/Networking/NetworkManager.h"
@@ -27,6 +31,8 @@
 
 #include <algorithm>
 #include <cstring>
+#include <optional>
+#include <string>
 
 namespace Terrafront
 {
@@ -48,6 +54,8 @@ namespace Terrafront
 
         route(TFMsg::WorldWelcome,
               [this](const NetworkMessage& m) { OnWorldWelcome(m.payload.data(), m.payload.size()); });
+        route(TFMsg::ContinentIdentity,
+              [this](const NetworkMessage& m) { OnContinentIdentity(m.payload.data(), m.payload.size()); });
         route(TFMsg::SpawnReply, [this](const NetworkMessage& m) { OnSpawnReply(m.payload.data(), m.payload.size()); });
         route(TFMsg::HitConfirm, [this](const NetworkMessage& m) { OnHitConfirm(m.payload.data(), m.payload.size()); });
         route(TFMsg::DamageEvent,
@@ -74,6 +82,8 @@ namespace Terrafront
 
         // W5 onboarding (Task 4): login/register/char-CRUD replies. TF_WorldWelcome
         // (already routed above) is the enter-world reply — no separate message id.
+        route(TFMsg::LoginChallenge,
+              [this](const NetworkMessage& m) { OnLoginChallenge(m.payload.data(), m.payload.size()); });
         route(TFMsg::LoginReply, [this](const NetworkMessage& m) { OnLoginReply(m.payload.data(), m.payload.size()); });
         route(TFMsg::RegisterReply,
               [this](const NetworkMessage& m) { OnRegisterReply(m.payload.data(), m.payload.size()); });
@@ -90,17 +100,20 @@ namespace Terrafront
 
     void TFClientNet::ReleaseClientHandlers()
     {
-        // NetworkManager has no per-type removal; replace our handlers with no-ops
-        // so no dangling `this` survives module shutdown (TFServerSim pattern).
+        // Remove (never replace) every observer RegisterClientHandlers installed, including the accept-and-
+        // ignore routes (they are image-resident too). An empty placeholder lambda is itself code in this
+        // module image: it outlived unload, and during hot reload it overwrote the replacement module's
+        // handler. Inside the module's teardown scope NetworkManager leaves a slot the replacement already
+        // owns untouched.
         using Spark::Net::MessageType;
         auto& nm = Spark::Net::NetworkManager::GetInstance();
-        for (TFMsg id : {TFMsg::WorldWelcome, TFMsg::SpawnReply, TFMsg::HitConfirm, TFMsg::DamageEvent,
-                         TFMsg::KillEvent, TFMsg::XPEvent, TFMsg::RegionState, TFMsg::CaptureTick, TFMsg::ChatMsg,
-                         TFMsg::SquadMsg, TFMsg::LoginReply, TFMsg::RegisterReply, TFMsg::CharListReply,
-                         TFMsg::CharCreateReply, TFMsg::CharDeleteReply, TFMsg::RedeployReply})
+        for (TFMsg id :
+             {TFMsg::WorldWelcome, TFMsg::ContinentIdentity, TFMsg::SpawnReply, TFMsg::HitConfirm, TFMsg::DamageEvent,
+              TFMsg::KillEvent, TFMsg::XPEvent, TFMsg::RegionState, TFMsg::CaptureTick, TFMsg::ChatMsg, TFMsg::SquadMsg,
+              TFMsg::LoginChallenge, TFMsg::LoginReply, TFMsg::RegisterReply, TFMsg::CharListReply,
+              TFMsg::CharCreateReply, TFMsg::CharDeleteReply, TFMsg::RedeployReply})
         {
-            nm.RegisterHandler(static_cast<MessageType>(static_cast<uint16_t>(id)),
-                               [](const Spark::Net::NetworkMessage&) {});
+            nm.UnregisterHandler(static_cast<MessageType>(static_cast<uint16_t>(id)));
         }
         m_handlersRegistered = false;
     }
@@ -137,6 +150,9 @@ namespace Terrafront
             break;
         case TFMsg::ChatMsg:
             OnChatMsg(data, size);
+            break;
+        case TFMsg::LoginChallenge:
+            OnLoginChallenge(data, size);
             break;
         case TFMsg::LoginReply:
             OnLoginReply(data, size);
@@ -220,6 +236,44 @@ namespace Terrafront
         m_ctx->inWorld = true;
         if (m_ctx->loginFlow)
             m_ctx->loginFlow->OnEnteredWorld();
+    }
+
+    void TFClientNet::OnContinentIdentity(const void* data, size_t size)
+    {
+        if (size != sizeof(TF_ContinentIdentity) || !m_ctx->data || !m_ctx->data->IsLoaded())
+        {
+            return;
+        }
+        TF_ContinentIdentity identity;
+        std::memcpy(&identity, data, sizeof(identity));
+        const char* end = static_cast<const char*>(std::memchr(identity.key, '\0', sizeof(identity.key)));
+        const std::string serverKey(identity.key, end ? static_cast<size_t>(end - identity.key) : 0);
+        const std::string& localKey = m_ctx->data->GetContinent().key;
+        if (!end || !SavePaths::IsValidContinentKey(serverKey))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] malformed continent identity from the server ignored");
+            return;
+        }
+        if (serverKey == localKey)
+        {
+            return;
+        }
+
+        // The scene, collision and region lattice were built for localKey at boot (tf_continent is
+        // RequiresRestart), so entering this server's world would put the pawn on the wrong continent.
+        const std::string refusal = "[TF] server hosts continent '" + serverKey + "' but this client loaded '" +
+                                    localKey + "'; restart with TF_CONTINENT=" + serverKey;
+        SPARK_LOG_WARN(Spark::LogCategory::Game, "%s", refusal.c_str());
+        Spark::SimpleConsole::GetInstance().LogWarning(refusal);
+        // NetworkManager::Update invokes this observer from a copy with its API lock released and stops the rest
+        // of the batch once the connection's lifecycle changes, so disconnecting here also drops the
+        // TF_WorldWelcome queued behind this message. Same pair as TFTravelSystem::ApplyPendingContinentHop.
+        Disconnect();
+        auto& nm = Spark::Net::NetworkManager::GetInstance();
+        if (nm.IsInitialized())
+        {
+            nm.Disconnect();
+        }
     }
 
     void TFClientNet::OnSpawnReply(const void* data, size_t size)
@@ -312,12 +366,48 @@ namespace Terrafront
     // loginFlow`. Task 5/6 should replace the stash-and-log body with a direct
     // forward once that pointer is wired.
 
+    void TFClientNet::OnLoginChallenge(const void* data, size_t size)
+    {
+        if (size != sizeof(TF_LoginChallenge))
+        {
+            return;
+        }
+        TF_LoginChallenge challenge;
+        std::memcpy(&challenge, data, sizeof(challenge));
+        TFAuthErr error = TFAuthErr::ServerError;
+        std::optional<TF_LoginProof> proof = m_scram.Answer(challenge, error);
+        if (!proof)
+        {
+            // An out-of-policy challenge (or one nobody asked for) fails this login locally.
+            m_scram.Clear();
+            m_session.ApplyLoginReply(false, 0, error);
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] login challenge refused by the client policy");
+            if (m_ctx->loginFlow)
+            {
+                m_ctx->loginFlow->OnLoginReply(false, static_cast<uint8_t>(error), 0);
+            }
+            return;
+        }
+        SendMsg(TFMsg::LoginProof, &*proof, sizeof(*proof));
+        Spark::SecureErase(&*proof, sizeof(*proof));
+    }
+
     void TFClientNet::OnLoginReply(const void* data, size_t size)
     {
         if (size != sizeof(TF_AuthReply))
             return;
         TF_AuthReply rep;
         std::memcpy(&rep, data, sizeof(rep));
+        // Mutual authentication: a success only counts if the server proved it holds this
+        // account's ServerKey. A server that skipped or forged the check is refused.
+        if (rep.ok != 0 && !m_scram.VerifyServer(rep))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] login reply failed server-signature verification");
+            rep.ok = 0;
+            rep.err = static_cast<uint8_t>(TFAuthErr::ServerError);
+            rep.accountId = 0;
+        }
+        m_scram.Clear();
         m_session.ApplyLoginReply(rep.ok != 0, rep.accountId, static_cast<TFAuthErr>(rep.err));
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] login reply: ok=%d err=%u account=%llu", rep.ok,
                        static_cast<unsigned>(rep.err), static_cast<unsigned long long>(rep.accountId));
@@ -344,7 +434,15 @@ namespace Terrafront
             return;
         TF_CharListReply rep;
         std::memcpy(&rep, data, sizeof(rep));
-        m_session.characters.assign(rep.chars, rep.chars + std::min<uint8_t>(rep.count, 5));
+        // Trust boundary: a malformed reply (count > 5 or an unterminated name)
+        // is dropped whole, so neither the session list nor the login flow ever
+        // holds a name that C-string sinks could over-read.
+        if (!m_session.ApplyCharListReply(rep))
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] malformed char list reply rejected (count=%u)",
+                           static_cast<unsigned>(rep.count));
+            return;
+        }
         SPARK_LOG_INFO(Spark::LogCategory::Game, "[TF] char list reply: %u character(s)",
                        static_cast<unsigned>(rep.count));
         if (m_ctx->loginFlow)

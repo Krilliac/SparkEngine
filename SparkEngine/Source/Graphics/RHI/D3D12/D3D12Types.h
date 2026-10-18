@@ -27,7 +27,10 @@
 #endif // SPARK_PLATFORM_WINDOWS
 
 #include <array>
+#include <deque>
+#include <memory>
 #include <mutex>
+#include <span>
 #include <vector>
 
 using Microsoft::WRL::ComPtr;
@@ -50,11 +53,46 @@ namespace Spark
             /// CPU blocks, controlling render latency vs. throughput.
             static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
-            /// Default descriptor heap sizes per type.
+            /// Default descriptor heap sizes per type. All four are CPU-only: views are created
+            /// here and copied into the shader-visible table pages (D3D12DescriptorPagePool) per draw.
             static constexpr uint32_t CBV_SRV_UAV_HEAP_SIZE = 1'000'000;
             static constexpr uint32_t RTV_HEAP_SIZE = 256;
             static constexpr uint32_t DSV_HEAP_SIZE = 64;
             static constexpr uint32_t SAMPLER_HEAP_SIZE = 2048;
+
+            /**
+             * @brief Layout of the root signature every RHI graphics pipeline uses
+             *        (D3D12Device::CreateDefaultRootSignature).
+             *
+             * 8 root CBVs (2 DWORDs each) + 3 descriptor tables (1 DWORD each) = 19 of the
+             * 64 root-signature DWORDs. All parameters are visible to every stage, so the RHI
+             * stage argument of SetConstantBuffer/SetShaderResource/SetSampler selects no
+             * separate binding space on D3D12: one slot number means one register for all stages.
+             */
+            namespace DefaultRootLayout
+            {
+                /// Root parameters 0..7 are root CBVs for registers b0..b7.
+                static constexpr uint32_t kConstantBufferCount = 8;
+                /// Root parameter of the SRV table (t0..t31).
+                static constexpr uint32_t kShaderResourceTable = kConstantBufferCount;
+                /// Root parameter of the sampler table (s0..s15).
+                static constexpr uint32_t kSamplerTable = kConstantBufferCount + 1;
+                /// Root parameter of the UAV table (u0..u7). Declared, not bound by the RHI yet.
+                static constexpr uint32_t kUnorderedAccessTable = kConstantBufferCount + 2;
+                static constexpr uint32_t kParameterCount = kConstantBufferCount + 3;
+
+                static constexpr uint32_t kShaderResourceSlots = 32;
+                static constexpr uint32_t kSamplerSlots = 16;
+                static constexpr uint32_t kUnorderedAccessSlots = 8;
+            } // namespace DefaultRootLayout
+
+            /// Shader-visible table pages: 64 x 1024 CBV/SRV/UAV descriptors (32 SRV tables per
+            /// page) and 16 x 128 samplers (8 sampler tables per page, 2048 = the D3D12 limit
+            /// for a shader-visible sampler heap).
+            static constexpr uint32_t SRV_TABLE_PAGE_SIZE = 1024;
+            static constexpr uint32_t SRV_TABLE_PAGE_COUNT = 64;
+            static constexpr uint32_t SAMPLER_TABLE_PAGE_SIZE = 128;
+            static constexpr uint32_t SAMPLER_TABLE_PAGE_COUNT = 16;
 
             // ============================================================================
             // DESCRIPTOR HEAP ALLOCATOR
@@ -156,6 +194,173 @@ namespace Spark
             };
 
             // ============================================================================
+            // DEFERRED RELEASE QUEUE
+            // ============================================================================
+
+            /**
+             * @brief Fence-tagged release queue shared by a D3D12Device and the resources it creates.
+             *
+             * D3D12 command lists hold no references to the resources they use, so a resource
+             * and the descriptor slots that name it must outlive every submission that touched
+             * them. D3D12Buffer and D3D12Texture destructors hand their ComPtr and descriptor
+             * allocations here instead of releasing them; Process() drops the COM reference and
+             * returns the descriptor slots to their heaps once the frame fence has passed the
+             * value recorded at destruction.
+             *
+             * - Thread affinity: async-safe; every method takes the internal mutex.
+             * - Ownership: owned by D3D12Device through std::shared_ptr. Resources hold a
+             *   std::weak_ptr, so a resource destroyed after its device has shut down releases
+             *   immediately (Shutdown waited for the GPU and drained this queue first).
+             * - Allocation: one deque node per destroyed resource; never on the per-draw path.
+             * - Scalability: entries are released in fence order, O(1) per entry.
+             */
+            class D3D12DeferredReleaseQueue
+            {
+              public:
+                /// Heap a descriptor allocation was taken from.
+                enum class Heap : uint8_t
+                {
+                    CbvSrvUav,
+                    Rtv,
+                    Dsv
+                };
+
+                /// One descriptor range to recycle together with a resource.
+                struct Descriptor
+                {
+                    Heap heap = Heap::CbvSrvUav;
+                    DescriptorAllocation allocation;
+                };
+
+                /// Most descriptor ranges a single resource can carry (SRV, RTV, DSV, UAV).
+                static constexpr size_t kMaxDescriptorsPerResource = 4;
+
+                D3D12DeferredReleaseQueue(const D3D12Fence& fence, DescriptorHeapAllocator& cbvSrvUavHeap,
+                                          DescriptorHeapAllocator& rtvHeap, DescriptorHeapAllocator& dsvHeap);
+
+                /**
+                 * @brief Queue a resource and its descriptors for release once the GPU has
+                 *        finished every submission made before this call.
+                 *
+                 * The entry is tagged with the value the next fence Signal() will produce, so
+                 * any work already submitted to the direct queue completes before release.
+                 * @param resource     COM reference to release (may be null).
+                 * @param descriptors  At most kMaxDescriptorsPerResource ranges; invalid ones are skipped.
+                 */
+                void Enqueue(ComPtr<IUnknown> resource, std::span<const Descriptor> descriptors);
+
+                /// Queue a resource for release once the fence reaches @p fenceValue.
+                void EnqueueAtFence(ComPtr<IUnknown> resource, uint64_t fenceValue);
+
+                /// Release every entry whose fence value the GPU has completed.
+                void Process();
+
+                /// Release everything unconditionally. The caller must have waited for GPU idle.
+                void ReleaseAll();
+
+                /// Number of entries still waiting on the GPU (test seam and diagnostics).
+                size_t GetPendingCount() const;
+
+              private:
+                struct Entry
+                {
+                    ComPtr<IUnknown> resource;
+                    std::array<Descriptor, kMaxDescriptorsPerResource> descriptors = {};
+                    uint32_t descriptorCount = 0;
+                    uint64_t fenceValue = 0;
+                };
+
+                void ReleaseEntry(Entry& entry);
+                DescriptorHeapAllocator& HeapFor(Heap heap);
+
+                const D3D12Fence& m_fence;
+                DescriptorHeapAllocator& m_cbvSrvUavHeap;
+                DescriptorHeapAllocator& m_rtvHeap;
+                DescriptorHeapAllocator& m_dsvHeap;
+                mutable std::mutex m_mutex;
+                std::deque<Entry> m_entries; ///< Non-decreasing fenceValue order.
+            };
+
+            // ============================================================================
+            // SHADER-VISIBLE DESCRIPTOR TABLE PAGES
+            // ============================================================================
+
+            /**
+             * @brief Fixed pool of equal-sized pages in one shader-visible descriptor heap.
+             *
+             * A command list takes a page, carves per-draw descriptor tables out of it linearly
+             * and hands every page it filled back through Retire() when it is submitted. A
+             * retired page returns to the free list only once the frame fence reaches the value
+             * recorded at submission, so a table is never overwritten while the GPU reads it.
+             *
+             * - Thread affinity: async-safe (internal mutex); in practice the render thread.
+             * - Ownership: shared by the D3D12Device and its command lists (D3D12DescriptorTables),
+             *   so a command list that outlives its device never touches a freed heap.
+             * - Allocation: the free list and retire queue are sized once in Initialize(); Acquire
+             *   and Retire never allocate. The per-draw path does not touch the pool at all.
+             * - Scalability: pageCount x pageSize descriptors in flight; exhaustion is reported
+             *   by Acquire() returning false, never by reusing a live page.
+             */
+            class D3D12DescriptorPagePool
+            {
+              public:
+                /// Creates the shader-visible heap. @p fence is the device frame fence.
+                bool Initialize(ID3D12Device* device, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32_t pageSize,
+                                uint32_t pageCount, ID3D12Fence* fence);
+
+                /// Takes a free page, first reclaiming pages the GPU has finished with.
+                /// @return False when every page is still in flight.
+                bool Acquire(uint32_t& page);
+
+                /// Returns @p pages to the pool once the frame fence reaches @p fenceValue
+                /// (0 returns them immediately: pages the GPU never saw).
+                void Retire(std::span<const uint32_t> pages, uint64_t fenceValue);
+
+                ID3D12DescriptorHeap* GetHeap() const { return m_heap.Get(); }
+                uint32_t GetPageSize() const { return m_pageSize; }
+                uint32_t GetDescriptorSize() const { return m_descriptorSize; }
+                D3D12_CPU_DESCRIPTOR_HANDLE CpuStart(uint32_t page) const;
+                D3D12_GPU_DESCRIPTOR_HANDLE GpuStart(uint32_t page) const;
+
+                /// Free pages right now, after reclaiming completed ones (test seam and diagnostics).
+                size_t GetFreePageCount();
+
+              private:
+                struct RetiredPage
+                {
+                    uint64_t fenceValue = 0;
+                    uint32_t page = 0;
+                };
+
+                void ReclaimCompleted(); ///< Caller holds m_mutex.
+
+                ComPtr<ID3D12DescriptorHeap> m_heap;
+                ComPtr<ID3D12Fence> m_fence; ///< Keeps the fence valid for as long as the pool lives.
+                D3D12_CPU_DESCRIPTOR_HANDLE m_cpuStart = {};
+                D3D12_GPU_DESCRIPTOR_HANDLE m_gpuStart = {};
+                uint32_t m_descriptorSize = 0;
+                uint32_t m_pageSize = 0;
+                std::vector<uint32_t> m_freePages;
+                std::vector<RetiredPage> m_retired; ///< FIFO in [m_retiredHead, size); non-decreasing fence values.
+                size_t m_retiredHead = 0;
+                std::mutex m_mutex;
+            };
+
+            /**
+             * @brief The shader-visible heaps command lists bind, plus the CPU null descriptors
+             *        that fill unbound table slots. Created by D3D12Device::Initialize().
+             */
+            struct D3D12DescriptorTables
+            {
+                D3D12DescriptorPagePool shaderResources; ///< CBV_SRV_UAV pages (SRV tables).
+                D3D12DescriptorPagePool samplers;        ///< Sampler pages (sampler tables).
+                DescriptorHeapAllocator nullDescriptors; ///< CPU-only: one null Texture2D SRV.
+                DescriptorHeapAllocator nullSamplers;    ///< CPU-only: one default point sampler.
+                D3D12_CPU_DESCRIPTOR_HANDLE nullShaderResource = {};
+                D3D12_CPU_DESCRIPTOR_HANDLE nullSampler = {};
+            };
+
+            // ============================================================================
             // D3D12 RESOURCE IMPLEMENTATIONS
             // ============================================================================
 
@@ -171,7 +376,19 @@ namespace Spark
               public:
                 D3D12Buffer(const RHIBufferDesc& desc, ComPtr<ID3D12Resource> resource,
                             ComPtr<ID3D12Resource> uploadResource = nullptr);
-                ~D3D12Buffer() override = default;
+
+                /// Hands the resources and descriptor to the release queue when one is attached;
+                /// otherwise releases them immediately.
+                ~D3D12Buffer() override;
+
+                D3D12Buffer(const D3D12Buffer&) = delete;
+                D3D12Buffer& operator=(const D3D12Buffer&) = delete;
+
+                /// Route destruction through @p queue (set by the creating D3D12Device).
+                void SetReleaseQueue(std::weak_ptr<D3D12DeferredReleaseQueue> queue)
+                {
+                    m_releaseQueue = std::move(queue);
+                }
 
                 const std::string& GetDebugName() const override { return m_desc.debugName; }
                 void SetDebugName(const std::string& name) override { m_desc.debugName = name; }
@@ -190,7 +407,7 @@ namespace Spark
                     return m_resource ? m_resource->GetGPUVirtualAddress() : 0;
                 }
 
-                /// CBV/SRV/UAV descriptor allocated from the shader-visible heap.
+                /// CBV/SRV/UAV descriptor allocated from the CPU-only CBV/SRV/UAV heap.
                 void SetDescriptor(const DescriptorAllocation& descriptor) { m_descriptor = descriptor; }
                 const DescriptorAllocation& GetDescriptor() const { return m_descriptor; }
 
@@ -204,6 +421,7 @@ namespace Spark
                 ComPtr<ID3D12Resource> m_uploadResource;
                 DescriptorAllocation m_descriptor;
                 void* m_mappedPointer = nullptr;
+                std::weak_ptr<D3D12DeferredReleaseQueue> m_releaseQueue;
             };
 
             /**
@@ -222,7 +440,19 @@ namespace Spark
                              const DescriptorAllocation& rtvDescriptor = {},
                              const DescriptorAllocation& dsvDescriptor = {},
                              const DescriptorAllocation& uavDescriptor = {});
-                ~D3D12Texture() override = default;
+
+                /// Hands the resource and its SRV/RTV/DSV/UAV slots to the release queue when one
+                /// is attached; otherwise (swap-chain back buffers) releases them immediately.
+                ~D3D12Texture() override;
+
+                D3D12Texture(const D3D12Texture&) = delete;
+                D3D12Texture& operator=(const D3D12Texture&) = delete;
+
+                /// Route destruction through @p queue (set by the creating D3D12Device).
+                void SetReleaseQueue(std::weak_ptr<D3D12DeferredReleaseQueue> queue)
+                {
+                    m_releaseQueue = std::move(queue);
+                }
 
                 const std::string& GetDebugName() const override { return m_desc.debugName; }
                 void SetDebugName(const std::string& name) override { m_desc.debugName = name; }
@@ -276,6 +506,7 @@ namespace Spark
                 mutable DescriptorAllocation m_dsvDescriptor;
                 mutable DescriptorAllocation m_uavDescriptor;
                 D3D12_RESOURCE_STATES m_currentState = D3D12_RESOURCE_STATE_COMMON;
+                std::weak_ptr<D3D12DeferredReleaseQueue> m_releaseQueue;
             };
 
             /**
@@ -424,15 +655,33 @@ namespace Spark
              * is reset at the start of each frame (once the GPU has finished
              * executing the commands from the previous use of this allocator).
              *
-             * Resource barrier transitions are tracked internally so that the
-             * caller does not need to manage resource states manually.
+             * Resource binding (DefaultRootLayout): SetConstantBuffer stages a root CBV,
+             * SetShaderResource/SetSampler stage CPU descriptor handles, and every draw first
+             * applies what changed. Dirty SRV and sampler slots are copied, with null
+             * descriptors in unbound slots, into a table carved from a page of the shader-visible
+             * heaps (D3D12DescriptorTables) and bound with SetGraphicsRootDescriptorTable. Pages
+             * are handed back at submission (D3D12Device::ExecuteCommandList) and reused only
+             * after the frame fence passes. Bindings do not survive Begin()/Reset().
+             *
+             * Contract: render thread (one thread per list); no heap allocation per draw (fixed
+             * staging arrays, pages from a fixed pool); a draw whose tables cannot be allocated
+             * is logged and skipped rather than bound to stale descriptors. SetShaderResource
+             * moves a texture that is not in a shader-resource state there (batched barrier), so a
+             * render target can be sampled by a later pass as on D3D11; SetRenderTargets and the
+             * clears move targets back to their write states. Compute root signatures are out of
+             * scope: Dispatch binds nothing.
              */
             class D3D12CommandList : public IRHICommandList
             {
               public:
                 D3D12CommandList(ID3D12Device* device, D3D12_COMMAND_LIST_TYPE type,
+                                 std::shared_ptr<D3D12DescriptorTables> tables,
                                  ID3D12PipelineState* initialPSO = nullptr);
-                ~D3D12CommandList() override = default;
+                /// Returns pages no submission used; submitted pages were retired at submission.
+                ~D3D12CommandList() override;
+
+                D3D12CommandList(const D3D12CommandList&) = delete;
+                D3D12CommandList& operator=(const D3D12CommandList&) = delete;
 
                 // IRHICommandList interface
                 void Begin() override;
@@ -487,6 +736,14 @@ namespace Spark
                                        D3D12_RESOURCE_STATES stateAfter);
 
                 /**
+                 * @brief Batches a transition of @p texture to @p state unless its tracked state
+                 *        already includes it. SetRenderTargets, the clears and SetShaderResource use
+                 *        it, so RHI callers never issue barriers (the swap-chain PRESENT
+                 *        transition is not covered).
+                 */
+                void RequireState(D3D12Texture* texture, D3D12_RESOURCE_STATES state);
+
+                /**
                  * @brief Inserts a UAV barrier for the given resource (or nullptr for all).
                  */
                 void UAVBarrier(ID3D12Resource* resource = nullptr);
@@ -497,13 +754,63 @@ namespace Spark
                  */
                 void FlushBarriers();
 
+                /**
+                 * @brief Hands every descriptor page this list filled to the pool, reusable once
+                 *        the frame fence reaches @p fenceValue. Called by the device right after
+                 *        it submits this list.
+                 */
+                void RetireDescriptorPages(uint64_t fenceValue);
+
                 ID3D12GraphicsCommandList* GetCommandList() const { return m_commandList.Get(); }
                 ID3D12CommandAllocator* GetAllocator() const { return m_commandAllocator.Get(); }
 
               private:
+                /// Linear cursor into the page a list is currently filling.
+                struct TablePage
+                {
+                    uint32_t page = UINT32_MAX;
+                    uint32_t used = 0;
+                };
+
+                /// Maximum pages one list can hold between submissions.
+                static constexpr size_t kMaxHeldPages = 32;
+
+                /// Applies staged bindings before a draw. False: the draw must be skipped.
+                bool PrepareDraw();
+                /// Copies @p slots (null descriptor where unbound) into a fresh table and binds it.
+                bool BindTable(D3D12DescriptorPagePool& pool, TablePage& cursor,
+                               std::array<uint32_t, kMaxHeldPages>& held, uint32_t& heldCount,
+                               const D3D12_CPU_DESCRIPTOR_HANDLE* slots, uint32_t slotCount,
+                               D3D12_CPU_DESCRIPTOR_HANDLE nullDescriptor, D3D12_DESCRIPTOR_HEAP_TYPE heapType,
+                               uint32_t rootParameter);
+                /// Clears staged bindings (a reset list has no root arguments).
+                void ResetBindings();
+                /// Binds the shader-visible heaps on a freshly reset list.
+                void BindDescriptorHeaps();
+
                 ComPtr<ID3D12GraphicsCommandList> m_commandList;
                 ComPtr<ID3D12CommandAllocator> m_commandAllocator;
                 D3D12_COMMAND_LIST_TYPE m_type;
+                ID3D12Device* m_device = nullptr;
+                std::shared_ptr<D3D12DescriptorTables> m_tables;
+
+                // -- Staged bindings (DefaultRootLayout) ---------------------------------
+                std::array<D3D12_GPU_VIRTUAL_ADDRESS, DefaultRootLayout::kConstantBufferCount> m_constantBuffers = {};
+                uint32_t m_dirtyConstantBuffers = 0; ///< Bit i: root CBV i must be re-set.
+                std::array<D3D12_CPU_DESCRIPTOR_HANDLE, DefaultRootLayout::kShaderResourceSlots> m_shaderResources = {};
+                std::array<D3D12_CPU_DESCRIPTOR_HANDLE, DefaultRootLayout::kSamplerSlots> m_samplers = {};
+                uint32_t m_boundShaderResources = 0; ///< Bit i: SRV slot i holds a view.
+                uint32_t m_boundSamplers = 0;        ///< Bit i: sampler slot i holds a sampler.
+                bool m_shaderResourcesDirty = false;
+                bool m_samplersDirty = false;
+
+                // -- Shader-visible table pages held until submission ---------------------
+                TablePage m_shaderResourcePage;
+                TablePage m_samplerPage;
+                std::array<uint32_t, kMaxHeldPages> m_heldShaderResourcePages = {};
+                std::array<uint32_t, kMaxHeldPages> m_heldSamplerPages = {};
+                uint32_t m_heldShaderResourcePageCount = 0;
+                uint32_t m_heldSamplerPageCount = 0;
 
                 /// ExecuteIndirect signature for D3D12_DRAW_ARGUMENTS (null if creation failed).
                 ComPtr<ID3D12CommandSignature> m_drawSignature;

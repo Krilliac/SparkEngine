@@ -1,6 +1,11 @@
 #include "SparkBuild.h"
 #include "Terminal.h"
 #include "Downloader.h"
+
+#ifndef SPARK_BUILD_VERSION
+#error "SPARK_BUILD_VERSION must be supplied by the build system"
+#endif
+
 #include <algorithm>
 #include <cerrno>
 #include <iostream>
@@ -88,7 +93,7 @@ namespace SparkBuild
         Term::EnableColors();
         Term::ClearScreen();
 
-        Term::PrintHeader("SparkBuild - SparkEngine Build Tool v2.1");
+        Term::PrintHeader("SparkBuild - SparkEngine Build Tool v" SPARK_BUILD_VERSION);
         std::cout << Term::Dim("  Platform: " SPARK_PLATFORM_NAME) << "\n";
         std::cout << Term::Dim("  Config:   " + ConfigManager::GetDefaultIniPath()) << "\n\n";
 

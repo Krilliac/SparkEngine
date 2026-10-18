@@ -345,7 +345,8 @@ namespace SparkEditor
                                 return false;
                             }
                             bool saved = prefabMgr->SavePrefab("ExportedPrefab");
-                            ctx.Log(saved ? "Prefab exported as ExportedPrefab.sparkprefab" : "Prefab save failed");
+                            ctx.Log(saved ? "Prefab exported as Prefabs/ExportedPrefab.sparkprefab in the open project"
+                                          : "Prefab save failed; a project must be open (see the log)");
                             return saved;
                         }});
 

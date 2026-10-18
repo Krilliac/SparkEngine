@@ -37,6 +37,9 @@ namespace MMO
     {
         uint32_t areaId = 0;
         std::string name;
+        /// Source-root-relative scene path with exact on-disk case (e.g. Assets/Scenes/MMO/town_square.scene).
+        /// The scene's JSON "areaId" header must equal areaId.
+        std::string sceneFile;
         float boundsMinX = 0.0f;
         float boundsMinY = 0.0f;
         float boundsMinZ = 0.0f;
@@ -89,6 +92,33 @@ namespace MMO
 
         /// Get the WorldServer instance (for tests)
         Spark::Net::WorldServer* GetWorldServer() const { return m_worldServer.get(); }
+
+        /// Require the MMO session gate to admit clients before world services observe them.
+        void SetSessionGateRequired(bool required) { m_sessionGateRequired = required; }
+
+        /**
+         * @brief Apply one client-authored player state request (server role only).
+         *
+         * The payload is the EntityStateUpdate layout MMOPlayerSystem sends: networkId,
+         * position, rotation, velocity, and a zero property count, with nothing trailing,
+         * decoded and bounds-checked by DecodeClientStateRequest (MMOClientStateCodec.h).
+         * The client-chosen networkId is ignored. The state lands on the one replicated
+         * entity this server owns for message.senderID (created on first request), and
+         * normal server replication republishes it; nothing is relayed verbatim.
+         *
+         * Accepted state: position within 1000 km of the origin, rotation within one turn
+         * (Euler degrees), speed at most 100 m/s, all finite. Movement stays client-authored:
+         * the client also performs its own teleports (travel, respawn), so there is no
+         * per-request displacement bound. Volume needs no extra limit here: each request is
+         * O(1), the latest one per sender wins, and the transport bounds the queued datagrams.
+         *
+         * Thread affinity: game thread (NetworkManager handler dispatch).
+         *
+         * @return The sender's authoritative network ID, or 0 when the request is rejected
+         *         (not a server, unattributed sender, malformed, non-finite or implausible).
+         */
+        uint32_t ApplyClientStateRequest(Spark::Net::NetworkManager& network,
+                                         const Spark::Net::NetworkMessage& message);
 #endif
 
         size_t GetAreaCount() const { return m_areas.size(); }
@@ -110,8 +140,12 @@ namespace MMO
 #ifdef ENABLE_NETWORKING
         std::unique_ptr<Spark::Net::WorldServer> m_worldServer;
         std::unordered_map<Spark::Net::ClientID, bool> m_knownClients; ///< Clients we've seen (for delta detection)
+        /// Server-owned player entity per admitted client (entries for departed clients are pruned in ServerTick).
+        std::unordered_map<Spark::Net::ClientID, uint32_t> m_serverPlayerEntities;
         bool m_networkServerRunning{false};
+        bool m_networkOwnedByModule{false};
 #endif
+        bool m_sessionGateRequired{false};
         float m_worldTime{0.0f};
         bool m_initialized{false};
     };

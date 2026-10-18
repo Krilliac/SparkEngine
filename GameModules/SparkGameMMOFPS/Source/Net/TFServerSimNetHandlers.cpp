@@ -10,6 +10,7 @@
 
 #include "Net/TFChatRules.h"
 #include "Net/TFNetProtocol.h"
+#include "Net/TFOnboardingSessionRules.h" // CanApplyFactionSelect
 #include "Net/TFRedeployProtocol.h"
 #include "Data/TFDataTables.h"
 #include "World/TFRegionSystem.h"
@@ -228,10 +229,25 @@ namespace Terrafront
         TF_FactionSelect sel;
         std::memcpy(&sel, data, sizeof(sel));
 
-        if (m_move.contains(sender))
+        // Every sender that passes the enter-world gate is bound to a character
+        // whose faction HandleEnterWorld already applied; the legacy packet
+        // must not rebind it (it used to, whenever no pawn was alive: before the
+        // first spawn and after every death -- cross-faction chat and spawns).
+        const bool characterBound = ActiveCharacterOf(sender) != 0;
+        if (!CanApplyFactionSelect(characterBound, m_move.contains(sender)))
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] player %u tried to switch faction while alive — ignored",
-                           sender);
+            if (characterBound && static_cast<FactionId>(sel.faction) != GetPlayerFaction(sender))
+            {
+                ++m_badPackets;
+                SPARK_LOG_WARN(Spark::LogCategory::Game,
+                               "[TF] player %u FactionSelect rejected: faction is bound to the entered character",
+                               sender);
+            }
+            else if (!characterBound)
+            {
+                SPARK_LOG_WARN(Spark::LogCategory::Game, "[TF] player %u tried to switch faction while alive — ignored",
+                               sender);
+            }
             return;
         }
         SetPlayerFaction(sender, static_cast<FactionId>(sel.faction));
@@ -339,6 +355,20 @@ namespace Terrafront
 
     void TFServerSim::SendWorldWelcome(PlayerId player)
     {
+        // TF-120: name the hosted continent first, so a client that booted another continent's scene and lattice
+        // refuses before it enters the world (TFClientNet::OnContinentIdentity).
+        if (m_ctx->data && m_ctx->data->IsLoaded())
+        {
+            const std::string& key = m_ctx->data->GetContinent().key;
+            TF_ContinentIdentity identity{};
+            if (!key.empty() && key.size() < sizeof(identity.key))
+            {
+                std::memcpy(identity.key, key.data(), key.size());
+                SendToPlayer(player, static_cast<uint16_t>(TFMsg::ContinentIdentity), &identity, sizeof(identity),
+                             true);
+            }
+        }
+
         TF_WorldWelcome w{};
         w.yourPlayerId = player;
         w.yourFaction = static_cast<uint8_t>(GetPlayerFaction(player));

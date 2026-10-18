@@ -1,0 +1,26 @@
+diff --git a/Tests/TestObjectPool.cpp b/Tests/TestObjectPool.cpp
+index 50b36b373..2f0179654 100644
+--- a/Tests/TestObjectPool.cpp
++++ b/Tests/TestObjectPool.cpp
+@@ -129,3 +129,21 @@ TEST(ObjectPool_MultipleAcquireRelease)
+     }
+     EXPECT_EQ(pool.GetActiveCount(), 10u);
+ }
++
++// CI-100 controlled-failure probe (sanitizer class). Under an AddressSanitizer
++// build (ASan defines __SANITIZE_ADDRESS__) this reads freed heap memory, which
++// ASan reports as heap-use-after-free; with halt_on_error=1 the SparkTests
++// process aborts and run-sanitizer-tests.sh turns the build-linux-asan job red.
++// Outside a sanitizer build the body is inert, so no other lane is perturbed.
++TEST(CI100_SanitizerProbe_HeapUseAfterFree)
++{
++#if defined(__SANITIZE_ADDRESS__)
++    int* buffer = new int[8];
++    buffer[0] = 42;
++    delete[] buffer;
++    volatile int observed = buffer[0];
++    EXPECT_EQ(observed, 42);
++#else
++    EXPECT_NO_CRASH("CI-100 sanitizer probe is inert outside an AddressSanitizer build");
++#endif
++}

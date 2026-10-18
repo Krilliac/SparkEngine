@@ -17,6 +17,7 @@
 
 #include "Utils/DaemonClient.h"
 #include "Utils/DaemonFraming.h"
+#include "Utils/LogMacros.h"
 #include "Utils/ScopeGuard.h"
 #include "Utils/SecureMemory.h"
 #include "Utils/SecureRandom.h"
@@ -628,6 +629,38 @@ namespace Spark::Gateway
         }
     } // namespace
 
+    std::string_view AreaControlAuditReasonName(AreaControlAuditReason reason)
+    {
+        switch (reason)
+        {
+        case AreaControlAuditReason::Accepted:
+            return "accepted";
+        case AreaControlAuditReason::Incomplete:
+            return "incomplete";
+        case AreaControlAuditReason::PeerMismatch:
+            return "peer_mismatch";
+        case AreaControlAuditReason::Oversize:
+            return "oversize";
+        case AreaControlAuditReason::WrongService:
+            return "wrong_service";
+        case AreaControlAuditReason::DecodeFailed:
+            return "decode_failed";
+        case AreaControlAuditReason::PhaseMismatch:
+            return "phase_mismatch";
+        case AreaControlAuditReason::TimestampWindow:
+            return "timestamp_window";
+        case AreaControlAuditReason::MacInvalid:
+            return "mac_invalid";
+        case AreaControlAuditReason::Replay:
+            return "replay";
+        case AreaControlAuditReason::LedgerFull:
+            return "ledger_full";
+        case AreaControlAuditReason::Count:
+            break;
+        }
+        return "unknown";
+    }
+
     LocalAreaControlPlane::LocalAreaControlPlane(const std::filesystem::path& keyFile)
     {
         (void)LoadPrivateGatewayKey(keyFile, m_key, m_error);
@@ -904,25 +937,12 @@ namespace Spark::Gateway
                 HandoffOperationResult result = HandoffOperationResult::Rejected;
                 const bool received = ReceiveFrameUntil(pipe, header, payload, m_stop);
                 const bool trusted = received && SameUserPeer(pipe);
-                if (trusted && payload.size() <= GatewayMaximumBodySize &&
-                    header.serviceId == static_cast<uint16_t>(Daemon::ServiceId::Orchestration))
-                {
-                    DecodedRequest request;
-                    const int64_t now = NowMilliseconds();
-                    if (DecodeRequest(payload, request) &&
-                        request.phase == static_cast<AreaControlPhase>(header.messageType) &&
-                        request.timestamp >= now - 60000 && request.timestamp <= now + 60000 &&
-                        VerifyGatewayMac(m_key, request.signedBody, request.mac))
-                    {
-                        std::lock_guard lock(m_mutex);
-                        std::erase_if(m_seenNonces, [&](const auto& item) { return item.second < now - 60000; });
-                        if (!m_seenNonces.contains(request.nonce))
-                        {
-                            m_seenNonces.emplace(request.nonce, request.timestamp);
-                            result = Apply(request.command.sessionId, request.command.epoch, request.phase);
-                        }
-                    }
-                }
+                if (!received)
+                    RecordAudit(AreaControlAuditReason::Incomplete, 0, 0, {}, result);
+                else if (!trusted)
+                    RecordAudit(AreaControlAuditReason::PeerMismatch, 0, 0, {}, result);
+                else
+                    result = HandleFrame(header.serviceId, header.messageType, payload);
                 if (trusted)
                 {
                     const std::vector<uint8_t> response{static_cast<uint8_t>(result)};
@@ -970,6 +990,7 @@ namespace Spark::Gateway
             ConfigureAcceptedSocket(connection);
             if (!SameUserPeer(connection))
             {
+                RecordAudit(AreaControlAuditReason::PeerMismatch, 0, 0, {}, HandoffOperationResult::Rejected);
                 ::close(connection);
                 continue;
             }
@@ -978,25 +999,10 @@ namespace Spark::Gateway
             const auto clearPayload = Spark::MakeScopeExit([&] { Spark::SecureClear(payload); });
             HandoffOperationResult result = HandoffOperationResult::Rejected;
             const bool received = ReceiveFrameUntil(connection, header, payload, m_stop);
-            if (received && payload.size() <= GatewayMaximumBodySize &&
-                header.serviceId == static_cast<uint16_t>(Daemon::ServiceId::Orchestration))
-            {
-                DecodedRequest request;
-                const int64_t now = NowMilliseconds();
-                if (DecodeRequest(payload, request) &&
-                    request.phase == static_cast<AreaControlPhase>(header.messageType) &&
-                    request.timestamp >= now - 60000 && request.timestamp <= now + 60000 &&
-                    VerifyGatewayMac(m_key, request.signedBody, request.mac))
-                {
-                    std::lock_guard lock(m_mutex);
-                    std::erase_if(m_seenNonces, [&](const auto& item) { return item.second < now - 60000; });
-                    if (!m_seenNonces.contains(request.nonce))
-                    {
-                        m_seenNonces.emplace(request.nonce, request.timestamp);
-                        result = Apply(request.command.sessionId, request.command.epoch, request.phase);
-                    }
-                }
-            }
+            if (received)
+                result = HandleFrame(header.serviceId, header.messageType, payload);
+            else
+                RecordAudit(AreaControlAuditReason::Incomplete, 0, 0, {}, result);
             if (received)
             {
                 const std::vector<uint8_t> response{static_cast<uint8_t>(result)};
@@ -1011,37 +1017,229 @@ namespace Spark::Gateway
         m_ready.store(false, std::memory_order_release);
     }
 
-    HandoffOperationResult LocalAreaControlService::Apply(std::string_view sessionId, uint64_t epoch,
-                                                          AreaControlPhase phase)
+    uint64_t LocalAreaControlService::GetAuditCount(AreaControlAuditReason reason) const
+    {
+        const auto index = static_cast<size_t>(reason);
+        return index < m_auditCounts.size() ? m_auditCounts[index].load(std::memory_order_acquire) : 0;
+    }
+
+    HandoffOperationResult LocalAreaControlService::HandleFrame(uint16_t serviceId, uint16_t messageType,
+                                                                const std::vector<uint8_t>& payload)
+    {
+        constexpr auto rejected = HandoffOperationResult::Rejected;
+        constexpr int64_t freshnessWindowMilliseconds = 60000;
+        if (payload.size() > GatewayMaximumBodySize)
+        {
+            RecordAudit(AreaControlAuditReason::Oversize, messageType, 0, {}, rejected);
+            return rejected;
+        }
+        if (serviceId != static_cast<uint16_t>(Daemon::ServiceId::Orchestration))
+        {
+            RecordAudit(AreaControlAuditReason::WrongService, messageType, 0, {}, rejected);
+            return rejected;
+        }
+        DecodedRequest request;
+        if (!DecodeRequest(payload, request))
+        {
+            RecordAudit(AreaControlAuditReason::DecodeFailed, messageType, 0, {}, rejected);
+            return rejected;
+        }
+
+        // Until the MAC verifies, phase/epoch/session are attacker-claimed and
+        // are recorded only as sanitized, truncated forensic hints.
+        const auto phase = static_cast<unsigned int>(request.phase);
+        const uint64_t epoch = request.command.epoch;
+        const std::string_view sessionId = request.command.sessionId;
+        if (request.phase != static_cast<AreaControlPhase>(messageType))
+        {
+            RecordAudit(AreaControlAuditReason::PhaseMismatch, phase, epoch, sessionId, rejected);
+            return rejected;
+        }
+        const int64_t now = NowMilliseconds();
+        if (request.timestamp < now - freshnessWindowMilliseconds ||
+            request.timestamp > now + freshnessWindowMilliseconds)
+        {
+            RecordAudit(AreaControlAuditReason::TimestampWindow, phase, epoch, sessionId, rejected);
+            return rejected;
+        }
+        if (!VerifyGatewayMac(m_key, request.signedBody, request.mac))
+        {
+            RecordAudit(AreaControlAuditReason::MacInvalid, phase, epoch, sessionId, rejected);
+            return rejected;
+        }
+
+        AreaControlAuditReason reason = AreaControlAuditReason::Accepted;
+        HandoffOperationResult result = rejected;
+        {
+            std::lock_guard lock(m_mutex);
+            std::erase_if(m_seenNonces,
+                          [&](const auto& item) { return item.second < now - freshnessWindowMilliseconds; });
+            if (m_seenNonces.contains(request.nonce))
+                reason = AreaControlAuditReason::Replay;
+            else if (m_seenNonces.size() >= GatewayMaximumReplayEntries)
+                reason = AreaControlAuditReason::LedgerFull;
+            else
+            {
+                m_seenNonces.emplace(request.nonce, request.timestamp);
+                result = Apply(request.command, request.phase);
+            }
+        }
+        RecordAudit(reason, phase, epoch, sessionId, result);
+        return result;
+    }
+
+    void LocalAreaControlService::RecordAudit(AreaControlAuditReason reason, unsigned int phase, uint64_t epoch,
+                                              std::string_view sessionId, HandoffOperationResult outcome)
+    {
+        const auto index = static_cast<size_t>(reason);
+        if (index < m_auditCounts.size())
+            m_auditCounts[index].fetch_add(1, std::memory_order_acq_rel);
+
+        // The record never carries the key, MAC, nonce, timestamp or signed
+        // body. The session identifier is reduced to a short printable prefix
+        // so a hostile frame cannot inject log lines or bloat the log.
+        constexpr size_t sessionPrefixLength = 16;
+        std::string session;
+        for (const char character : sessionId.substr(0, sessionPrefixLength))
+        {
+            const bool printable = std::isalnum(static_cast<unsigned char>(character)) || character == '-' ||
+                                   character == '_' || character == '.';
+            session.push_back(printable ? character : '?');
+        }
+        if (sessionId.size() > sessionPrefixLength)
+            session.push_back('~');
+        if (session.empty())
+            session = "-";
+
+        static constexpr const char* OutcomeNames[] = {"applied", "duplicate", "rejected", "unavailable"};
+        const auto outcomeIndex = static_cast<size_t>(outcome);
+        const char* outcomeName = outcomeIndex < std::size(OutcomeNames) ? OutcomeNames[outcomeIndex] : "unknown";
+        const std::string reasonName(AreaControlAuditReasonName(reason));
+        const auto epochValue = static_cast<unsigned long long>(epoch);
+        if (reason != AreaControlAuditReason::Accepted)
+        {
+            SPARK_LOG_WARN(Spark::LogCategory::Network,
+                           "GatewayAreaControl: reason=%s phase=%u epoch=%llu session=%s outcome=%s",
+                           reasonName.c_str(), phase, epochValue, session.c_str(), outcomeName);
+        }
+        else if (phase == static_cast<unsigned int>(AreaControlPhase::Probe))
+        {
+            // Readiness probes run on every health poll; keep them out of release logs.
+            SPARK_LOG_DEBUG(Spark::LogCategory::Network,
+                            "GatewayAreaControl: reason=%s phase=%u epoch=%llu session=%s outcome=%s",
+                            reasonName.c_str(), phase, epochValue, session.c_str(), outcomeName);
+        }
+        else
+        {
+            SPARK_LOG_INFO(Spark::LogCategory::Network,
+                           "GatewayAreaControl: reason=%s phase=%u epoch=%llu session=%s outcome=%s",
+                           reasonName.c_str(), phase, epochValue, session.c_str(), outcomeName);
+        }
+    }
+
+    HandoffOperationResult LocalAreaControlService::Apply(const HandoffCommand& command, AreaControlPhase phase)
     {
         if (phase == AreaControlPhase::Probe)
-            return HandoffOperationResult::Applied;
-        auto found = m_sessions.find(std::string(sessionId));
+        {
+            // Services without a gameplay dispatcher retain their existing generic control-plane contract.
+            // SparkServer attaches its dispatcher for participating modules; it then requires a live participant.
+            return m_dispatcher == nullptr || m_dispatcher->IsReady() ? HandoffOperationResult::Applied
+                                                                      : HandoffOperationResult::Unavailable;
+        }
+
+        auto existing = m_sessions.find(command.sessionId);
+        if (existing == m_sessions.end() && (phase != AreaControlPhase::Prepare || command.epoch == 0))
+        {
+            return HandoffOperationResult::Rejected;
+        }
+        if (existing != m_sessions.end())
+        {
+            const SessionFence& current = existing->second;
+            if (command.epoch == current.epoch &&
+                (current.sourceArea != command.sourceArea || current.targetArea != command.targetArea))
+            {
+                return HandoffOperationResult::Rejected;
+            }
+            if (command.epoch < current.epoch)
+            {
+                return HandoffOperationResult::Rejected;
+            }
+            if (command.epoch > current.epoch &&
+                ((current.phase != AreaControlPhase::Acknowledge && current.phase != AreaControlPhase::Abort) ||
+                 phase != AreaControlPhase::Prepare))
+            {
+                return HandoffOperationResult::Rejected;
+            }
+            if (command.epoch == current.epoch && phase != current.phase)
+            {
+                const bool sequential =
+                    (current.phase == AreaControlPhase::Prepare && phase == AreaControlPhase::Transfer) ||
+                    (current.phase == AreaControlPhase::Transfer && phase == AreaControlPhase::Commit) ||
+                    (current.phase == AreaControlPhase::Commit && phase == AreaControlPhase::Acknowledge);
+                const bool abort = phase == AreaControlPhase::Abort && current.phase != AreaControlPhase::Commit &&
+                                   current.phase != AreaControlPhase::Acknowledge;
+                if (!sequential && !abort)
+                {
+                    return HandoffOperationResult::Rejected;
+                }
+            }
+        }
+
+        if (m_dispatcher != nullptr)
+        {
+            Spark::Net::HandoffRequest request;
+            request.sessionId = command.sessionId;
+            request.epoch = command.epoch;
+            request.sourceArea = command.sourceArea;
+            request.targetArea = command.targetArea;
+            const auto phaseValue = static_cast<unsigned int>(phase);
+            if (phaseValue <= static_cast<unsigned int>(AreaControlPhase::Abort))
+            {
+                const auto enginePhase = static_cast<Spark::Net::HandoffPhase>(phaseValue);
+                const auto dispatched = m_dispatcher->Submit(enginePhase, request);
+                if (dispatched == Spark::Net::HandoffResult::Unavailable ||
+                    dispatched == Spark::Net::HandoffResult::Rejected)
+                {
+                    return dispatched == Spark::Net::HandoffResult::Rejected ? HandoffOperationResult::Rejected
+                                                                             : HandoffOperationResult::Unavailable;
+                }
+            }
+        }
+
+        auto found = m_sessions.find(command.sessionId);
         if (found == m_sessions.end())
         {
-            if (phase != AreaControlPhase::Prepare || epoch == 0)
+            if (phase != AreaControlPhase::Prepare || command.epoch == 0)
+            {
                 return HandoffOperationResult::Rejected;
-            const std::string session(sessionId);
-            m_sessions.emplace(session, SessionFence{epoch, phase});
+            }
+            m_sessions.emplace(command.sessionId,
+                               SessionFence{command.epoch, phase, command.sourceArea, command.targetArea});
             if (!SaveState())
             {
-                m_sessions.erase(session);
+                m_sessions.erase(command.sessionId);
                 return HandoffOperationResult::Unavailable;
             }
             return HandoffOperationResult::Applied;
         }
         SessionFence& fence = found->second;
-        if (epoch < fence.epoch)
+        if (command.epoch < fence.epoch)
+        {
             return HandoffOperationResult::Rejected;
-        if (epoch == fence.epoch && phase == fence.phase)
+        }
+        if (command.epoch == fence.epoch && phase == fence.phase)
+        {
             return HandoffOperationResult::Duplicate;
-        if (epoch > fence.epoch)
+        }
+        if (command.epoch > fence.epoch)
         {
             if ((fence.phase != AreaControlPhase::Acknowledge && fence.phase != AreaControlPhase::Abort) ||
                 phase != AreaControlPhase::Prepare)
+            {
                 return HandoffOperationResult::Rejected;
+            }
             const SessionFence previous = fence;
-            fence = {epoch, phase};
+            fence = {command.epoch, phase, command.sourceArea, command.targetArea};
             if (!SaveState())
             {
                 fence = previous;
@@ -1052,7 +1250,8 @@ namespace Spark::Gateway
         const bool sequential = (fence.phase == AreaControlPhase::Prepare && phase == AreaControlPhase::Transfer) ||
                                 (fence.phase == AreaControlPhase::Transfer && phase == AreaControlPhase::Commit) ||
                                 (fence.phase == AreaControlPhase::Commit && phase == AreaControlPhase::Acknowledge);
-        const bool abort = phase == AreaControlPhase::Abort && fence.phase != AreaControlPhase::Acknowledge;
+        const bool abort = phase == AreaControlPhase::Abort && fence.phase != AreaControlPhase::Commit &&
+                           fence.phase != AreaControlPhase::Acknowledge;
         if (!sequential && !abort)
             return HandoffOperationResult::Rejected;
         const SessionFence previous = fence;
@@ -1070,36 +1269,19 @@ namespace Spark::Gateway
         std::error_code error;
         if (!std::filesystem::exists(m_epochStateFile, error))
             return !error;
-        std::ifstream input(m_epochStateFile);
+        std::ifstream input(m_epochStateFile, std::ios::binary);
         if (!input)
             return false;
-        std::unordered_map<std::string, SessionFence> loaded;
-        std::string session;
-        uint64_t epoch = 0;
-        unsigned int phase = 0;
-        while (true)
-        {
-            input >> std::ws;
-            if (input.peek() == std::char_traits<char>::eof())
-                break;
-            if (!(input >> std::quoted(session) >> epoch >> phase) || session.empty() || session.size() > 128 ||
-                epoch == 0 || phase < 1 || phase > 5 || loaded.contains(session))
-                return false;
-            loaded.emplace(session, SessionFence{epoch, static_cast<AreaControlPhase>(phase)});
-        }
+        std::ostringstream contents;
+        contents << input.rdbuf();
         if (input.bad())
             return false;
-        m_sessions.swap(loaded);
-        return true;
+        return ParseAreaControlState(contents.str(), m_sessions);
     }
 
     bool LocalAreaControlService::SaveState() const
     {
-        std::ostringstream output;
-        for (const auto& [session, fence] : m_sessions)
-            output << std::quoted(session) << ' ' << fence.epoch << ' ' << static_cast<unsigned int>(fence.phase)
-                   << '\n';
-        return AtomicWriteText(m_epochStateFile, output.str());
+        return AtomicWriteText(m_epochStateFile, SerializeAreaControlState(m_sessions));
     }
 
     namespace

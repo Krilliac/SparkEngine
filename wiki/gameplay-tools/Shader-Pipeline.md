@@ -48,7 +48,7 @@ SparkEngine authors shaders in HLSL. On Windows the `SparkShaderCompiler` tool a
 |----------|----------------------|----------------|--------------------|
 | HLSL     | DirectX 11 / D3D12   | `.hlsl`        | `.cso` bytecode    |
 | GLSL     | OpenGL               | `.glsl`        | `.glsl.spv`        |
-| SPIR-V   | Vulkan (cross-compiled from HLSL) | `.spv` | Binary SPIR-V |
+| SPIR-V   | Vulkan (built from `Shaders/GLSL` by `glslangValidator` at build time; see [RHI Abstraction Layer](../graphics/RHI-Abstraction-Layer.md#shipped-shader-spir-v-build-rhi-230)) | `.spv` | Binary SPIR-V |
 
 ## Directory Structure
 
@@ -810,6 +810,10 @@ SparkShaderCompiler -batch Shaders/HLSL -backend d3d11 -o Shaders/Compiled/
 ```
 
 Recognized shader file extensions for batch mode: `.hlsl`, `.glsl`, `.vert`, `.frag`, `.comp`, `.geom`, `.tesc`, `.tese`, `.vs`, `.ps`, `.gs`, `.cs`.
+
+With `-o`, each artifact keeps its source's path relative to the batch root (`Shaders/HLSL/a/Blur.hlsl` writes `Shaders/Compiled/a/Blur.cso`); without `-o` it is written beside its source. Before compiling anything, the tool checks that no two sources map to one artifact (for example `Blur.vs` and `Blur.ps` in one directory both become `Blur.cso`), comparing paths case-insensitively on Windows. A collision names both sources and exits 1 without compiling. `-validate` writes nothing, so it skips that check.
+
+The relative path is computed lexically from the path the directory walk returned, never by resolving links, so a symlinked or junctioned source (`Shaders/HLSL/x.hlsl -> ../Lib/Foo.hlsl`) still writes `Shaders/Compiled/x.cso`. Any source whose relative path would be rooted or climb out with `..` fails the whole batch (exit 1) before any directory is created or shader compiled.
 
 The batch summary reports total, success, failure counts, and total compilation time.
 

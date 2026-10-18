@@ -4,6 +4,7 @@
  */
 
 #include "EventResponsePanel.h"
+#include "../Core/EditorIcons.h"
 #include "Engine/Gameplay/EventResponseSystem.h"
 #include <imgui.h>
 
@@ -12,6 +13,8 @@
 #include <cstring>
 #include <type_traits>
 #include <variant>
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
@@ -226,7 +229,7 @@ namespace SparkEditor
         ImGui::Columns(2, "EventResponseColumns", true);
 
         // Left column: rule list
-        ImGui::SetColumnWidth(0, 250.0f);
+        ImGui::SetColumnWidth(0, Spark::Ui::Px(250.0f));
         RenderRuleList();
 
         ImGui::NextColumn();
@@ -238,7 +241,7 @@ namespace SparkEditor
         }
         else
         {
-            ImGui::TextDisabled("Select a rule or create a new one");
+            Spark::Ui::EmptyState(ICON_FA_BOLT, "No rule selected", "Select a rule or create a new one");
         }
 
         ImGui::Columns(1);
@@ -261,7 +264,7 @@ namespace SparkEditor
     void EventResponsePanel::RenderRuleList()
     {
         ImGui::Text("Rules (%zu)", m_rules.size());
-        ImGui::SameLine(ImGui::GetColumnWidth() - 70.0f);
+        ImGui::SameLine(ImGui::GetColumnWidth() - Spark::Ui::Px(70.0f));
         if (ImGui::SmallButton("+ New"))
         {
             AddNewRule();
@@ -270,13 +273,12 @@ namespace SparkEditor
         ImGui::Separator();
 
         // Stats
-        ImGui::TextDisabled("Fired: %u", m_totalFired);
+        Spark::Ui::KeyValue("Fired", "%u", m_totalFired);
 
         ImGui::Separator();
 
         // Search
-        ImGui::SetNextItemWidth(-1.0f);
-        ImGui::InputTextWithHint("##RuleSearch", "Search rules...", m_searchFilter, sizeof(m_searchFilter));
+        Spark::Ui::SearchField("RuleSearch", m_searchFilter, sizeof(m_searchFilter), "Search rules");
 
         ImGui::Separator();
 
@@ -363,8 +365,7 @@ namespace SparkEditor
     {
         auto& rule = m_rules[m_selectedRule];
 
-        ImGui::Text("Edit Rule");
-        ImGui::Separator();
+        Spark::Ui::SubHeader("Edit Rule");
 
         // Name
         if (ImGui::InputText("Name", rule.name, sizeof(rule.name)))
@@ -386,11 +387,8 @@ namespace SparkEditor
             m_dirty = true;
         }
 
-        ImGui::Separator();
         RenderTriggerSection();
-        ImGui::Separator();
         RenderConditionSection();
-        ImGui::Separator();
         RenderActionList();
     }
 
@@ -398,7 +396,7 @@ namespace SparkEditor
     {
         auto& rule = m_rules[m_selectedRule];
 
-        ImGui::Text("WHEN:");
+        Spark::Ui::SubHeader("WHEN");
         ImGui::Indent();
 
         if (ImGui::Combo("Trigger", &rule.triggerIndex, kTriggerNames, kTriggerCount))
@@ -433,7 +431,8 @@ namespace SparkEditor
     {
         auto& rule = m_rules[m_selectedRule];
 
-        ImGui::Text("IF: (conditions, leave empty to always fire)");
+        Spark::Ui::SubHeader("IF");
+        Spark::Ui::SecondaryText("Conditions; leave empty to always fire.");
         ImGui::Indent();
 
         for (int g = 0; g < static_cast<int>(rule.conditionGroups.size()); ++g)
@@ -443,7 +442,7 @@ namespace SparkEditor
 
             // Group header
             const char* logicItems[] = {"AND", "OR"};
-            ImGui::SetNextItemWidth(60.0f);
+            ImGui::SetNextItemWidth(Spark::Ui::Px(60.0f));
             if (ImGui::Combo("##logic", &group.logic, logicItems, 2))
             {
                 m_dirty = true;
@@ -471,20 +470,20 @@ namespace SparkEditor
                 }
                 ImGui::SameLine();
 
-                ImGui::SetNextItemWidth(160.0f);
+                ImGui::SetNextItemWidth(Spark::Ui::Px(160.0f));
                 if (ImGui::Combo("##condType", &cond.typeIndex, kConditionNames, kConditionCount))
                 {
                     m_dirty = true;
                 }
 
                 ImGui::SameLine();
-                ImGui::SetNextItemWidth(80.0f);
+                ImGui::SetNextItemWidth(Spark::Ui::Px(80.0f));
                 if (ImGui::InputText("##p1", cond.param1, sizeof(cond.param1)))
                 {
                     m_dirty = true;
                 }
                 ImGui::SameLine();
-                ImGui::SetNextItemWidth(80.0f);
+                ImGui::SetNextItemWidth(Spark::Ui::Px(80.0f));
                 if (ImGui::InputText("##p2", cond.param2, sizeof(cond.param2)))
                 {
                     m_dirty = true;
@@ -524,7 +523,8 @@ namespace SparkEditor
     {
         auto& rule = m_rules[m_selectedRule];
 
-        ImGui::Text("THEN: (actions, executed in order)");
+        Spark::Ui::SubHeader("THEN");
+        Spark::Ui::SecondaryText("Actions, executed in order.");
         ImGui::Indent();
 
         for (int a = 0; a < static_cast<int>(rule.actions.size()); ++a)
@@ -572,7 +572,7 @@ namespace SparkEditor
         auto& action = rule.actions[actionIndex];
 
         // Action type selector
-        ImGui::SetNextItemWidth(160.0f);
+        ImGui::SetNextItemWidth(Spark::Ui::Px(160.0f));
         if (ImGui::Combo("##actType", &action.typeIndex, kActionNames, kActionCount))
         {
             action.paramCount = GetActionParamCount(action.typeIndex);
@@ -584,7 +584,7 @@ namespace SparkEditor
         for (int p = 0; p < pCount && p < 4; ++p)
         {
             ImGui::SameLine();
-            ImGui::SetNextItemWidth(80.0f);
+            ImGui::SetNextItemWidth(Spark::Ui::Px(80.0f));
             const char* label = GetActionParamLabel(action.typeIndex, p);
             char fieldId[32];
             std::snprintf(fieldId, sizeof(fieldId), "##p%d", p);

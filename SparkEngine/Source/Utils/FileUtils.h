@@ -29,6 +29,8 @@
 #include <sstream>
 #include <cstdint>
 #include <optional>
+#include <string_view>
+#include <system_error>
 
 #if __has_include(<filesystem>)
 #include <filesystem>
@@ -44,13 +46,194 @@ namespace Spark
     {
 
         // =============================================================================
+        // Path encoding
+        //
+        // Engine path strings are UTF-8. On Windows the narrow std::filesystem::path and
+        // std::fstream constructors decode their bytes in the active ANSI code page
+        // instead, so a UTF-8 path with any non-ASCII character opens nothing, or writes
+        // a mojibake-named sibling. Every function below converts through
+        // PathFromUtf8() and returns strings in the encoding it was given.
+        // =============================================================================
+
+        /// True when @p text is well-formed UTF-8: no overlong forms, no UTF-16
+        /// surrogates, nothing above U+10FFFF, no truncated sequence.
+        inline bool IsValidUtf8(std::string_view text) noexcept
+        {
+            size_t i = 0;
+            while (i < text.size())
+            {
+                const auto lead = static_cast<unsigned char>(text[i]);
+                if (lead < 0x80)
+                {
+                    ++i;
+                    continue;
+                }
+
+                size_t length = 0;
+                uint32_t codePoint = 0;
+                if (lead >= 0xC2 && lead <= 0xDF)
+                {
+                    length = 2;
+                    codePoint = lead & 0x1Fu;
+                }
+                else if (lead >= 0xE0 && lead <= 0xEF)
+                {
+                    length = 3;
+                    codePoint = lead & 0x0Fu;
+                }
+                else if (lead >= 0xF0 && lead <= 0xF4)
+                {
+                    length = 4;
+                    codePoint = lead & 0x07u;
+                }
+                else
+                {
+                    return false; // continuation byte, overlong 2-byte lead, or 0xF5+
+                }
+
+                if (text.size() - i < length)
+                    return false;
+                for (size_t k = 1; k < length; ++k)
+                {
+                    const auto continuation = static_cast<unsigned char>(text[i + k]);
+                    if ((continuation & 0xC0u) != 0x80u)
+                        return false;
+                    codePoint = (codePoint << 6) | (continuation & 0x3Fu);
+                }
+
+                const bool overlong = (length == 3 && codePoint < 0x800u) || (length == 4 && codePoint < 0x10000u);
+                const bool surrogate = codePoint >= 0xD800u && codePoint <= 0xDFFFu;
+                if (overlong || surrogate || codePoint > 0x10FFFFu)
+                    return false;
+                i += length;
+            }
+            return true;
+        }
+
+#if SPARK_HAS_FILESYSTEM
+
+        /**
+         * @brief Convert an engine path string to a filesystem path.
+         *
+         * Valid UTF-8 is decoded as UTF-8 on every platform. A string that is not valid
+         * UTF-8 can only be a legacy active-code-page string (for example the result of
+         * path::string() on Windows), so it keeps the native narrow interpretation. A
+         * string the code page cannot decode yields an empty path, which opens nothing.
+         */
+        inline fs::path PathFromUtf8(const std::string& path)
+        {
+#ifdef _WIN32
+            if (IsValidUtf8(path))
+            {
+                const auto* first = reinterpret_cast<const char8_t*>(path.data());
+                return fs::path(std::u8string(first, first + path.size()));
+            }
+            try
+            {
+                return fs::path(path);
+            }
+            catch (const std::system_error&)
+            {
+                return {};
+            }
+#else
+            return {path};
+#endif
+        }
+
+        /**
+         * @brief Render @p path in the same encoding as @p source.
+         *
+         * UTF-8 unless @p source was a legacy active-code-page string. Throws
+         * std::system_error on Windows when a legacy caller needs a name its code page
+         * cannot represent.
+         */
+        inline std::string PathToString(const fs::path& path, [[maybe_unused]] const std::string& source)
+        {
+#ifdef _WIN32
+            if (IsValidUtf8(source))
+            {
+                const std::u8string utf8 = path.u8string();
+                return std::string(reinterpret_cast<const char*>(utf8.data()), utf8.size());
+            }
+#endif
+            return path.string();
+        }
+
+        /**
+         * @brief UTF-8 spelling of @p path, never routed through the ANSI code page.
+         *
+         * Use it for every path a directory scan hands to UTF-8 consumers: logs, UI
+         * text, report entries, archive/manifest names, and strings later reopened
+         * through PathFromUtf8(). Returns nullopt only for a Windows name that is not
+         * well-formed UTF-16 (an unpaired surrogate), which has no UTF-8 spelling.
+         */
+        inline std::optional<std::string> TryPathToUtf8(const fs::path& path)
+        {
+            try
+            {
+                const std::u8string utf8 = path.u8string();
+                return std::string(reinterpret_cast<const char*>(utf8.data()), utf8.size());
+            }
+            catch (const std::system_error&)
+            {
+                return std::nullopt;
+            }
+        }
+
+        /**
+         * @brief Native narrow spelling of @p path, only when it reopens the same path.
+         *
+         * For scans whose results feed the narrow std::string file APIs (std::fstream,
+         * std::filesystem::path(std::string)), which decode in the active ANSI code page
+         * on Windows. path::string() throws std::system_error for a name that code page
+         * cannot spell, so a scan calling it unguarded dies on the first such entry.
+         * Returns nullopt in that case; the caller skips the entry, because no narrow
+         * spelling could open it. Always succeeds on POSIX, where narrow is native.
+         */
+        inline std::optional<std::string> TryPathToNarrow(const fs::path& path)
+        {
+            try
+            {
+                std::string narrow = path.string();
+                if (fs::path(narrow) == path)
+                {
+                    return narrow;
+                }
+            }
+            catch (const std::system_error&)
+            {
+                // The active code page cannot spell this name, so no narrow string reopens it.
+                return std::nullopt;
+            }
+            return std::nullopt;
+        }
+
+#endif // SPARK_HAS_FILESYSTEM
+
+        namespace detail
+        {
+#if SPARK_HAS_FILESYSTEM
+            inline fs::path StreamPath(const std::string& path)
+            {
+                return PathFromUtf8(path);
+            }
+#else
+            inline const std::string& StreamPath(const std::string& path) noexcept
+            {
+                return path;
+            }
+#endif
+        } // namespace detail
+
+        // =============================================================================
         // File I/O
         // =============================================================================
 
         /// Read entire text file into a string. Returns nullopt on failure.
         inline std::optional<std::string> ReadTextFile(const std::string& path)
         {
-            std::ifstream file(path, std::ios::in);
+            std::ifstream file(detail::StreamPath(path), std::ios::in);
             if (!file.is_open())
                 return std::nullopt;
             std::ostringstream ss;
@@ -61,7 +244,7 @@ namespace Spark
         /// Write string to a text file. Returns true on success.
         inline bool WriteTextFile(const std::string& path, const std::string& content)
         {
-            std::ofstream file(path, std::ios::out | std::ios::trunc);
+            std::ofstream file(detail::StreamPath(path), std::ios::out | std::ios::trunc);
             if (!file.is_open())
                 return false;
             file << content;
@@ -71,7 +254,7 @@ namespace Spark
         /// Read entire binary file. Returns nullopt on failure.
         inline std::optional<std::vector<uint8_t>> ReadBinaryFile(const std::string& path)
         {
-            std::ifstream file(path, std::ios::in | std::ios::binary | std::ios::ate);
+            std::ifstream file(detail::StreamPath(path), std::ios::in | std::ios::binary | std::ios::ate);
             if (!file.is_open())
                 return std::nullopt;
             auto size = file.tellg();
@@ -88,7 +271,7 @@ namespace Spark
         /// Write binary data to file. Returns true on success.
         inline bool WriteBinaryFile(const std::string& path, const std::vector<uint8_t>& data)
         {
-            std::ofstream file(path, std::ios::out | std::ios::binary | std::ios::trunc);
+            std::ofstream file(detail::StreamPath(path), std::ios::out | std::ios::binary | std::ios::trunc);
             if (!file.is_open())
                 return false;
             file.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
@@ -103,39 +286,41 @@ namespace Spark
 
         inline std::string GetExtension(const std::string& path)
         {
-            return fs::path(path).extension().string();
+            return PathToString(PathFromUtf8(path).extension(), path);
         }
 
         inline std::string GetFilename(const std::string& path)
         {
-            return fs::path(path).filename().string();
+            return PathToString(PathFromUtf8(path).filename(), path);
         }
 
         inline std::string GetStem(const std::string& path)
         {
-            return fs::path(path).stem().string();
+            return PathToString(PathFromUtf8(path).stem(), path);
         }
 
         inline std::string GetDirectory(const std::string& path)
         {
-            return fs::path(path).parent_path().string();
+            return PathToString(PathFromUtf8(path).parent_path(), path);
         }
 
         inline std::string JoinPath(const std::string& a, const std::string& b)
         {
-            return (fs::path(a) / fs::path(b)).string();
+            // UTF-8 only when both halves are, so a legacy half keeps its code page.
+            const std::string& encoding = IsValidUtf8(a) ? b : a;
+            return PathToString(PathFromUtf8(a) / PathFromUtf8(b), encoding);
         }
 
         inline std::string NormalizePath(const std::string& path)
         {
-            return fs::path(path).lexically_normal().string();
+            return PathToString(PathFromUtf8(path).lexically_normal(), path);
         }
 
         inline std::string ChangeExtension(const std::string& path, const std::string& newExt)
         {
-            fs::path p(path);
-            p.replace_extension(newExt);
-            return p.string();
+            fs::path p = PathFromUtf8(path);
+            p.replace_extension(PathFromUtf8(newExt));
+            return PathToString(p, IsValidUtf8(path) ? newExt : path);
         }
 
         // =============================================================================
@@ -145,19 +330,19 @@ namespace Spark
         inline bool FileExists(const std::string& path)
         {
             std::error_code ec;
-            return fs::exists(path, ec);
+            return fs::exists(PathFromUtf8(path), ec);
         }
 
         inline bool IsDirectory(const std::string& path)
         {
             std::error_code ec;
-            return fs::is_directory(path, ec);
+            return fs::is_directory(PathFromUtf8(path), ec);
         }
 
         inline std::optional<uintmax_t> GetFileSize(const std::string& path)
         {
             std::error_code ec;
-            auto size = fs::file_size(path, ec);
+            auto size = fs::file_size(PathFromUtf8(path), ec);
             if (ec)
                 return std::nullopt;
             return size;
@@ -170,53 +355,55 @@ namespace Spark
         inline bool CreateDirectories(const std::string& path)
         {
             std::error_code ec;
-            fs::create_directories(path, ec);
+            fs::create_directories(PathFromUtf8(path), ec);
             return !ec;
         }
+
+        namespace detail
+        {
+            /// Shared body of ListFiles / ListFilesRecursive. Entries come back in the
+            /// encoding of @p dir; a name a legacy code-page caller cannot represent is skipped.
+            template <typename Iterator>
+            std::vector<std::string> ListFilesWith(const std::string& dir, const std::string& extensionFilter)
+            {
+                std::vector<std::string> files;
+                std::error_code ec;
+                const fs::path root = PathFromUtf8(dir);
+                if (!fs::is_directory(root, ec))
+                    return files;
+
+                const fs::path extension = PathFromUtf8(extensionFilter);
+                for (const auto& entry : Iterator(root, ec))
+                {
+                    if (!entry.is_regular_file())
+                        continue;
+                    if (!extensionFilter.empty() && entry.path().extension() != extension)
+                        continue;
+                    try
+                    {
+                        files.push_back(PathToString(entry.path(), dir));
+                    }
+                    catch (const std::system_error&)
+                    {
+                        // The caller's encoding cannot spell this name, so it could never be reopened.
+                        continue;
+                    }
+                }
+                return files;
+            }
+        } // namespace detail
 
         /// List files in a directory, optionally filtering by extension (e.g. ".png")
         inline std::vector<std::string> ListFiles(const std::string& dir, const std::string& extensionFilter = "")
         {
-            std::vector<std::string> files;
-            std::error_code ec;
-            if (!fs::is_directory(dir, ec))
-                return files;
-
-            for (const auto& entry : fs::directory_iterator(dir, ec))
-            {
-                if (!entry.is_regular_file())
-                    continue;
-                if (!extensionFilter.empty())
-                {
-                    if (entry.path().extension().string() != extensionFilter)
-                        continue;
-                }
-                files.push_back(entry.path().string());
-            }
-            return files;
+            return detail::ListFilesWith<fs::directory_iterator>(dir, extensionFilter);
         }
 
         /// Recursively list all files in a directory tree
         inline std::vector<std::string> ListFilesRecursive(const std::string& dir,
                                                            const std::string& extensionFilter = "")
         {
-            std::vector<std::string> files;
-            std::error_code ec;
-            if (!fs::is_directory(dir, ec))
-                return files;
-
-            for (const auto& entry : fs::recursive_directory_iterator(dir, ec))
-            {
-                if (!entry.is_regular_file())
-                    continue;
-                if (!extensionFilter.empty())
-                {
-                    if (entry.path().extension().string() != extensionFilter)
-                        continue;
-                }
-                files.push_back(entry.path().string());
-            }
-            return files;
+            return detail::ListFilesWith<fs::recursive_directory_iterator>(dir, extensionFilter);
         }
 
 #else

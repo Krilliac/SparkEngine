@@ -78,3 +78,32 @@ TEST(Editor_Collab_LockReplyTypes_AreDistinct)
     EXPECT_TRUE(InternalMessageType::LockGranted != InternalMessageType::LockRequest);
     EXPECT_TRUE(InternalMessageType::LockDenied != InternalMessageType::LockRelease);
 }
+
+TEST(Editor_Collab_MalformedFrame_DoesNotPartiallyPublish)
+{
+    InternalMessage valid;
+    valid.type = InternalMessageType::LockGranted;
+    valid.sourcePeer = 42;
+    valid.nodeId = "Entity_7";
+    valid.timestamp = 123456;
+    const std::vector<uint8_t> encoded = SerializeMessage(valid);
+
+    // The frame contains the type and source peer, then ends before the first
+    // length-prefixed string. The decoder must reject it without publishing
+    // those already-read fields over the caller's existing state.
+    const size_t truncatedSize = 5;
+    InternalMessage output;
+    output.type = InternalMessageType::AuthAccepted;
+    output.sourcePeer = 999;
+    output.nodeId = "sentinel-node";
+    output.payload = "sentinel-payload";
+    output.timestamp = 0xDEADBEEFu;
+
+    EXPECT_TRUE(encoded.size() >= truncatedSize);
+    EXPECT_FALSE(DeserializeMessage(encoded.data(), truncatedSize, output));
+    EXPECT_TRUE(output.type == InternalMessageType::AuthAccepted);
+    EXPECT_EQ(output.sourcePeer, static_cast<PeerID>(999));
+    EXPECT_EQ(output.nodeId, std::string("sentinel-node"));
+    EXPECT_EQ(output.payload, std::string("sentinel-payload"));
+    EXPECT_EQ(output.timestamp, static_cast<uint64_t>(0xDEADBEEFu));
+}

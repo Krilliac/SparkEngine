@@ -226,7 +226,37 @@ TEST(BenchmarkFramework_CompareWithBaseline_NoMatchingBaseline)
     baseline.metrics = {{"FrameTime", 10.0}};
 
     auto comparisons = bench.CompareWithBaseline({result}, {baseline});
-    EXPECT_TRUE(comparisons.empty());
+    EXPECT_EQ(comparisons.size(), 1u);
+    EXPECT_FALSE(comparisons[0].passed);
+    EXPECT_STR_CONTAINS(comparisons[0].failureReason, "baseline");
+    EXPECT_TRUE(bench.HasRegressions(comparisons));
+
+    bench.Shutdown();
+}
+
+TEST(BenchmarkFramework_CompareWithBaseline_MissingBaselineFailsClosed)
+{
+    auto& bench = Spark::BenchmarkFramework::GetInstance();
+    bench.Initialize();
+
+    Spark::BenchmarkResult coveredResult;
+    coveredResult.scenarioName = "CoveredScene";
+    coveredResult.metrics = {{"FrameTime", 10.0, "ms", true}};
+
+    Spark::BenchmarkResult missingResult;
+    missingResult.scenarioName = "MissingScene";
+    missingResult.metrics = {{"FrameTime", 10.0, "ms", true}};
+
+    Spark::BenchmarkBaseline baseline;
+    baseline.scenarioName = "CoveredScene";
+    baseline.metrics = {{"FrameTime", 10.0}};
+
+    auto comparisons = bench.CompareWithBaseline({coveredResult, missingResult}, {baseline});
+    EXPECT_EQ(comparisons.size(), 2u);
+    EXPECT_TRUE(comparisons[0].passed);
+    EXPECT_FALSE(comparisons[1].passed);
+    EXPECT_STR_CONTAINS(comparisons[1].failureReason, "baseline");
+    EXPECT_TRUE(bench.HasRegressions(comparisons));
 
     bench.Shutdown();
 }
@@ -269,7 +299,7 @@ TEST(BenchmarkFramework_HasRegressions_EmptyList)
     auto& bench = Spark::BenchmarkFramework::GetInstance();
     bench.Initialize();
 
-    EXPECT_FALSE(bench.HasRegressions({}));
+    EXPECT_TRUE(bench.HasRegressions({}));
 
     bench.Shutdown();
 }

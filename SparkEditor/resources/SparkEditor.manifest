@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  SparkEditor application manifest, merged by the MSVC linker with the manifest it generates.
+  longPathAware lets every Win32 file API in the editor accept paths past MAX_PATH (260) when the
+  machine's LongPathsEnabled policy is on. Project scaffolding does not depend on it: ProjectManager
+  spells long paths with the \\?\ prefix itself. DPI awareness is set at runtime
+  (Spark::Ui::EnableProcessDpiAwareness), so it is deliberately not declared here.
+-->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings xmlns:ws2="http://schemas.microsoft.com/SMI/2016/WindowsSettings">
+      <ws2:longPathAware>true</ws2:longPathAware>
+    </windowsSettings>
+  </application>
+</assembly>

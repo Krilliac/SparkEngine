@@ -57,7 +57,6 @@ delete. Any wiki page that describes these as active is stale.
 | `AIDebugRenderer` | `Engine/AI/` | Tested (`Tests/TestAIDebugRendererReal.cpp`) but no draw consumer. |
 | `HLODSystem` | `Engine/HLOD/` | No renderer consumer; see [HLOD and World Partition](../gameplay-tools/HLOD-And-World-Partition.md). |
 | `Engine/HotReload/ModuleHotReload` singleton | `Engine/HotReload/` | Duplicate of the live `Spark::ModuleHotReloadManager` (`Core/ModuleHotReload.cpp`, polled by the platform frame loops). |
-| `Spark::FileLogger` + `SPARK_FILE_LOG*` | `Utils/FileLogger.h` | Zero production writers; its two lifecycle calls were removed in the 2026-09 sweep. Engine log files come from the `Logger` `FileSink` installed by `InstallDefaultSinks`. Pending wire-it-in-or-delete. |
 | `RenderingSettings::occlusionCulling` | `Core/EngineSettings.h` | Setting is still exposed although the implementation behind it is unreachable (see `OcclusionCullingSystem` above). |
 | `ReplicatedFieldSet::WriteDirtyMask`/`ReadDirtyMask` | `Engine/Networking/` | Not wired into `EntityReplicator`'s serialize/deserialize path (zero callers), so `ReadDirtyMask`'s `[[nodiscard]]` "abandon the packet" contract is unenforced and untested. |
 | `MobilePlatform`, `RagdollSystem` | `Engine/Mobile/`, `Engine/Physics/` | Lifecycle comment corrected; deletion routed to their owners. |
@@ -78,6 +77,7 @@ could never report occlusion is retired: both trace `WorldStatic` hits once a
 | `SparkEditor/Source/MaterialEditor/MaterialEditor.{h,cpp}` | Standalone class with no production caller; the shipped panel is `Panels/MaterialEditorPanel`. |
 | `SparkEditor/Source/Lighting/LightingTools*.{h,cpp}` | No production caller. `BakeLightmaps` wrote a fixed radial ramp in texture space (nothing scene-derived) and `GenerateLightProbes` discarded its probes -- no lightmap baking or light probes are claimed anywhere now. |
 | `SparkEditor/Source/Animation/*` (timeline, clip manager, curve, playback) | No production caller. |
+| `SparkEngine/Source/Utils/FileLogger.{h,cpp}` + `SPARK_FILE_LOG*` | Zero production writers; a duplicate of the `Logger` `FileSink` that `InstallDefaultSinks` installs, which produces every engine log file. |
 | `SparkEditor/Source/AssetBrowser/AssetDatabase.{h,cpp}` | No production caller. |
 | Former AssetDatabase and PrefabManager test stubs | Decoy tests that included no production header; `Tests/TestEditorSubsystemsReal.cpp` covers the real `PrefabManager`. |
 | `GameModules/SparkGameFPS/Source/Game/{Console,Terrain,ArenaBuilder}.*` | Unreachable in-game console overlay, unreferenced terrain, and an `ArenaBuilder` whose body was entirely commented out. |
@@ -93,7 +93,7 @@ could never report occlusion is retired: both trace `WorldStatic` hits once a
 
 ### Graphics subsystems
 
-The Graphics audit listed ~30 header-only files with no engine call sites (~10,000 lines total). Per-file verification found 1 filename-collision false positive among the high-value set and 2 already-wired among the smaller set; the remainder are legitimate reusable utilities and were documented in-header (resolution path "(c) document as intentional utility"). None were deleted — each is substantial working code (200–750 lines) useful when the corresponding render feature is built.
+The Graphics audit listed header-only utility files with no engine call sites. Per-file verification found 1 filename-collision false positive among the high-value set and 2 already-wired among the smaller set; the remainder are legitimate reusable utilities and were documented in-header (resolution path "(c) document as intentional utility"). None were deleted — each is substantial working code useful when the corresponding render feature is built.
 
 High-value utilities, all **documented as intentional** (selected):
 
@@ -125,7 +125,7 @@ Smaller utilities — 2 of 8 were false positives (already wired); the rest docu
 | File | Lines | Note |
 |---|---|---|
 | `Graphics/LineTrailRenderer.h` | 127 | Data-carrier structs for line/trail components. |
-| `Graphics/SpringArm.h` | 69 | Pure-CPU `SpringArmState`. `Tests/TestSpringArm.cpp` added (6 tests). |
+| `Graphics/SpringArm.h` | 69 | Pure-CPU `SpringArmState`. `Tests/TestSpringArm.cpp` added. |
 | `Graphics/DirtyRectTracker.h` | 167 | CPU rectangle-merge for partial texture updates. Tested. |
 | `Graphics/ClusteredLightGPU.h` | 163 | Bridge to structured-buffer arrays for forward+. Tested. |
 | `Graphics/ConstantBufferDiff.h` | 138 | **False positive.** `ConstantBufferDiffManager` wired in the per-frame loop. |
@@ -140,7 +140,7 @@ Smaller utilities — 2 of 8 were false positives (already wired); the rest docu
 | `ClusteredLightGPU` | `Graphics/ClusteredLightGPU.h` | Tested; documented as an intentional Tier-2 utility (no render-path call yet). |
 | `DirtyRectTracker` | `Graphics/DirtyRectTracker.h` | Tested; documented as intentional utility. |
 | `DeferredDeletionQueue` | `Graphics/RHI/DeferredDeletionQueue.h` | Tested (`TestDeferredDeletionReal.cpp`); no production caller (see Tier 2). |
-| `AdvancedAssetPipeline` | `SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h` | 3,835 lines with a real test (`Tests/TestAdvancedAssetPipeline.cpp`) and no production caller; ship-or-delete needs a product decision. |
+| `AdvancedAssetPipeline` | `SparkEditor/Source/AssetPipeline/AdvancedAssetPipeline.h` | A large implementation with a real test (`Tests/TestAdvancedAssetPipeline.cpp`) and no production caller; ship-or-delete needs a product decision. |
 
 Resolved and no longer tracked: `TutorialSystem`, `AssetAuditGraph`, `ConstantBufferDiff` (wired), `AIIntegratedSystem` + `ParallelPerceptionSystem`.
 
@@ -149,7 +149,7 @@ Resolved and no longer tracked: `TutorialSystem`, `AssetAuditGraph`, `ConstantBu
 | File | Current Status |
 |---|---|
 | `SparkEditor/Source/Core/EditorWindowManager.h` | **Resolved (2026-09).** `SaveCurrentLayoutToFile()`/`LoadLayoutFromFile()` now have real callers: `EditorApplication::Initialize` restores `<EditorData>/window_layout.json` and `Shutdown` writes it (`EditorApplication::WindowLayoutFilePath`). |
-| `SparkEditor/Source/Panels/SelectionManager.h` | **Partially resolved.** Singleton now initialized/torn down from `EditorUI`. 13 new tests. **Still pending:** migrating `HierarchyPanel`/`InspectorPanel`/`SceneView` off their per-panel selection state — blocked on unifying `SelectionManager::EntityId` (`uint32_t`) with the editor's `ObjectID` (`uint64_t`). |
+| `SparkEditor/Source/Panels/SelectionManager.h` | **Partially resolved.** Singleton now initialized/torn down from `EditorUI`. Regression coverage was added. **Still pending:** migrating `HierarchyPanel`/`InspectorPanel`/`SceneView` off their per-panel selection state — blocked on unifying `SelectionManager::EntityId` (`uint32_t`) with the editor's `ObjectID` (`uint64_t`). |
 | `SparkEditor/Source/Panels/NetworkDebugPanel.h` | **Resolved (data + UI).** Data model and ImGui rendering implemented. **Still pending:** wiring `NetworkManager` to feed `RecordBytesSent`/`RecordBytesRecv`/`LogPacket`/`SetCurrentLatency` — verified 2026-06-08 that no producer calls these in the networking `.cpp` files yet. |
 
 ## Confirmed false positives (do NOT add to any deletion list)

@@ -6,6 +6,61 @@ The `SceneManager` handles loading, saving, and manipulating scenes at runtime. 
 
 **Source:** `SparkEngine/Source/SceneManager/SceneManager.h`
 
+## Reflected startup scenes in FPS
+
+The editor packages its selected default scene as `Startup.sparkscene` beside
+the game host. SparkGameFPS consumes that file through `SceneManager::LoadScene`
+before initializing its camera and player. Selection uses the executable directory,
+not the working directory. Only a genuinely absent startup file permits the legacy
+`Assets/Scenes/level1.scene` path; an unreadable or invalid selected file fails module
+initialization. The host's separate `-scene` preview mode is unchanged.
+
+This is a deliberately bounded adapter, not complete ECS-to-FPS scene support.
+It accepts root entities with unique nonempty names and Transform plus exactly one
+OBJ MeshRenderer, the main Camera, or a supported SpawnPointComponent. A main Camera
+and at least one mesh are required even when spawn points are present. Position/rotation/scale, camera FOV and clipping
+are transferred to gameplay state. Camera scale must be one, pitch must be within
+[-89,89] degrees, FOV within [10,170], near within [0.01,10], and far within [100,10000]
+with near below far. Hierarchy, other components, explicit materials, nondefault
+visibility/shadow/emissive settings, missing meshes and unsupported camera values
+fail rather than silently lose authored state. Unicode and quoted names are accepted;
+the legacy node lookup requires unique names. Mesh references must resolve beneath
+the scene's project root and load as actual OBJ geometry, without placeholder fallback.
+
+SpawnPointComponent support is limited to enabled neutral player points with
+`spawnTag="default"`, `teamID=0`, `spawnRadius=0`, `respawnDelay=0`, and
+`maxConcurrent=-1`. The adapter preserves priority, position and facing as an
+existing FPS SpawnPoint node. Spawn transforms must have unit scale and pitch in
+[-89,89]; hierarchy remains unsupported. More than 32 points rejects the whole
+scene instead of silently truncating the FPS table. Mixed mesh/camera/spawn
+components on one entity also reject the scene. The strict reflected schema
+requires all authored fields and rejects unknown or runtime-only fields.
+
+The existing FPS selector uses highest priority and first-stored ties for F11
+match start and respawn. The component's reuse cooldown is distinct from the
+player's independent death timer, which remains unchanged. The component defaults
+`spawnRadius=1` and `respawnDelay=5` must be changed explicitly for this exact-point
+subset. Disabled/team-specific/radius/cooldown/concurrency-limited points and
+`wave_spawn` are rejected. WaveSpawner's separate jittered placement does not
+implement these component semantics. No SpawnPoint-aware cook transformation is
+needed: the existing cooker preserves the selected scene bytes.
+
+The direct reflected SceneManager family now contains ten source cases (six
+existing plus four spawn regressions). Its real RespawnSystem/event test covers
+selection and the death timer, not physical F11 input or a rendered match. The
+installed two-entity camera/mesh lineage fixture remains separate and does not
+prove packaged spawn consumption; that requires an explicit fixture/validator
+extension and fresh native evidence.
+
+The primary reflected document is read with the existing strict deserializer and
+size bound, without automatic `.bak` recovery. The existing LoadScene transaction
+retains the old nodes, object ownership, path and dirty state on failure. Successful
+windowed FPS startup exposes committed node, actual mesh, camera and player records.
+Data-only SceneManager loading cannot establish GPU mesh consumption, and the separate
+headless FPS arena does not exercise this startup adapter. Native regression and
+installed windowed WARP results are required for the new source; prior Release
+evidence does not cover it or certify a final Shipping playthrough.
+
 ## Overview
 
 The SceneManager owns:
@@ -19,7 +74,6 @@ The SceneManager owns:
 |----------------|-------------|
 | **Serialization** | JSON and legacy binary round-trip via `LoadJSON`/`SaveJSON`/`LoadCustom` |
 | **Hierarchy management** | Add, remove, reparent nodes; maintain index invariants |
-| **Prefab system** | Save/load subtrees as reusable prefab assets |
 | **Async loading** | Background scene transitions via `LoadSceneAsync` |
 | **Console integration** | Runtime inspection and manipulation from the debug console |
 | **Dirty tracking** | Tracks unsaved changes for editor "Save changes?" prompts |
@@ -292,13 +346,6 @@ sceneMgr.SaveScene(L"Assets/Scenes/Modified.scene");
 | `int FindNode(const string& name) const` | Find node index by name (-1 if not found) |
 | `int GetNodeCount() const` | Total number of nodes |
 
-### Prefab System
-
-| Method | Description |
-|--------|-------------|
-| `bool SavePrefab(int nodeIndex, const wstring& filepath) const` | Save subtree as prefab |
-| `int LoadPrefab(const wstring& filepath, const XMFLOAT3& pos)` | Instantiate prefab at position |
-
 ### State and Metadata
 
 | Method | Description |
@@ -393,26 +440,9 @@ for (const auto& path : scenes) {
 }
 ```
 
-## Prefab System
+## Prefabs
 
-Save and load reusable prefab templates:
-
-```cpp
-// Save a node subtree as a prefab
-sceneMgr.SavePrefab(nodeIndex, L"Assets/Prefabs/Enemy.prefab");
-
-// Instantiate a prefab into the scene at a specific position
-int newNodeIndex = sceneMgr.LoadPrefab(
-    L"Assets/Prefabs/Enemy.prefab",
-    {10.0f, 0.0f, 5.0f}  // World-space offset
-);
-
-if (newNodeIndex < 0) {
-    LOG_ERROR("Failed to load prefab");
-}
-```
-
-Prefab files use the same JSON format as scene files but contain only the exported subtree. Node positions are stored relative to the prefab's internal origin and offset by the `position` parameter during instantiation.
+SceneManager has no prefab API: its line-based `SavePrefab`/`LoadPrefab` had no caller and were removed. Editor prefabs are `.sparkprefab` assets owned by `SparkEditor::PrefabManager`.
 
 ## Dirty State Tracking
 

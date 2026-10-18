@@ -23,6 +23,7 @@
 #include <atomic>
 #include <mutex>
 #include <deque>
+#include <istream>
 #include <unordered_map>
 #ifdef SPARK_PLATFORM_WINDOWS
 #include <windows.h>
@@ -38,11 +39,14 @@
 class ConsoleApp
 {
   public:
-    explicit ConsoleApp(bool enginePipeRequested = false);
+    explicit ConsoleApp(bool enginePipeRequested = false, bool batchMode = false);
     ~ConsoleApp();
 
     /** @brief Enter the main event loop; blocks until exit is requested. */
     void Run();
+
+    /** @brief Execute newline-delimited commands from stdin without prompts or terminal setup. */
+    void RunBatch(std::istream& input);
 
 #ifdef SPARK_PLATFORM_WINDOWS
     /**
@@ -69,8 +73,9 @@ class ConsoleApp
     void ReadEngineInput(); ///< Background thread: reads log messages from engine pipe.
 
     // --- Run() helpers ---
-    void PrintBanner();    ///< Clear screen and print the startup banner.
-    bool DetectPipeMode(); ///< Detect if stdin is a pipe; print connection status. Returns true if pipe mode.
+    void PrintBanner();     ///< Clear screen and print the startup banner.
+    bool DetectPipeMode();  ///< Detect if stdin is a pipe; print connection status. Returns true if pipe mode.
+    void PrintPipePrompt(); ///< Human-facing prompt when ready for another command, never during idle polling.
     void PipeKeyboardThreadFunc(std::string& input,
                                 std::atomic<bool>& keyboardThreadRunning); ///< Keyboard input loop for pipe mode.
     void PollPipeModeInput(std::string& input, int& noInputCounter, bool& pipeMode,
@@ -85,6 +90,7 @@ class ConsoleApp
 #else
     void ReadEngineInputPosix(); ///< POSIX (Linux/macOS) pipe reading loop.
 #endif
+    void OnEnginePipeClosed(); ///< Reader thread saw the engine pipe end: stop the console (pipe mode only).
 
     // --- Keyboard input helpers (pipe-mode line editing) ---
     void HandleBackspaceKey(std::string& input);           ///< Process Backspace/DEL keypress.
@@ -107,10 +113,11 @@ class ConsoleApp
     void RegisterCoreCommands();                     ///< Register core commands (help, clear, echo, version).
     void RegisterDiagnosticCommands();               ///< Register diagnostic commands (status, diag, pipe_test, etc).
     void RegisterAliasCommands();                    ///< Register alias/history commands and default aliases.
-    bool ShouldForwardToEngine(const std::string& command); ///< True if this command should be sent to the engine.
 
     // --- Command history ---
-    void AddToHistory(const std::string& cmd); ///< Append a command to the history ring buffer.
+    /// Append the history-safe form of @p typedLine (ConsoleHistoryPolicy) to the ring buffer.
+    /// @p resolvedLine is the alias-expanded line, which decides whether its arguments may be kept.
+    void AddToHistory(const std::string& typedLine, const std::string& resolvedLine);
 
     // --- Alias system ---
     std::string ResolveAlias(const std::string& input); ///< Expand aliases before command dispatch.
@@ -118,6 +125,7 @@ class ConsoleApp
     // --- State ---
     std::atomic<bool> m_running;     ///< False signals all threads to exit.
     bool m_enginePipeRequested;      ///< True only when launched by an engine/editor IPC parent.
+    bool m_batchMode;                ///< True when running the deterministic noninteractive CLI contract.
     std::thread m_engineInputThread; ///< Background thread reading engine pipe input.
     std::mutex m_outputMutex;        ///< Serializes console output from multiple threads.
     std::mutex m_historyMutex;       ///< Guards m_commandHistory.

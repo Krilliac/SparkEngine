@@ -22,7 +22,7 @@ docs/update-all-docs.sh check        # Dry-run: report what's stale
 | Script | What it updates | Deps | Speed |
 |--------|----------------|------|-------|
 | `docs/sync-wiki.sh sync` | Wiki AUTO: sections (components, systems, panels, tests) | None | ~2s |
-| `docs/generate-api-docs.sh generate` | API reference (~250 headers → ~240 pages) | None | ~15s |
+| `docs/generate-api-docs.sh generate` | API reference generated from the header inventory | None | ~15s |
 | `docs/generate-symbol-index.sh generate` | Symbol/Function/Class/Enum/Macro indexes | None | ~2s |
 | `docs/generate-file-tree.sh generate` | File tree (LOC + Mermaid module graph) | None | ~10s |
 | `docs/generate-class-hierarchy.sh generate` | Inheritance Mermaid classDiagrams | None | ~5s |
@@ -88,7 +88,7 @@ docs/
 | Directory | Description |
 |-----------|-------------|
 | `SparkEngine/Source/` | Core engine library (all subsystems) |
-| `SparkEditor/Source/` | ImGui visual editor (65 `*Panel.h` classes; registration and visibility are separate metrics) |
+| `SparkEditor/Source/` | ImGui visual editor (64 `*Panel.h` classes; registration and visibility are separate metrics) |
 | `SparkConsole/src/` | Standalone debug console application |
 | `SparkShaderCompiler/src/` | Offline shader compilation tool |
 | `GameModules/*/Source/` | 11 in-tree module targets: the base game plus genre and prototype modules |

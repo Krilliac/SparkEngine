@@ -423,6 +423,9 @@ namespace Spark
                     if (step.action)
                         step.action();
                     m_currentStep++;
+                    // An action may cancel its own coroutine; no later step may run after that.
+                    if (m_cancelled)
+                        break;
                     continue;
                 }
 

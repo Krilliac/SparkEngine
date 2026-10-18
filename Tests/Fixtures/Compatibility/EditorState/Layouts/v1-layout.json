@@ -1,0 +1,57 @@
+{
+  "layout": {
+    "name": "v1-layout",
+    "description": "Three-panel authoring layout",
+    "version": 1,
+    "panels": [
+      {
+        "name": "Hierarchy",
+        "displayName": "Scene Hierarchy",
+        "dock": 0,
+        "sizeX": 320,
+        "sizeY": 640,
+        "posX": 0,
+        "posY": 48,
+        "visible": true,
+        "floating": false,
+        "canClose": true,
+        "canDock": true,
+        "dockRatio": 0.25,
+        "tabOrder": 0,
+        "parentDock": "MainDock"
+      },
+      {
+        "name": "Inspector",
+        "displayName": "Inspector",
+        "dock": 1,
+        "sizeX": 360.5,
+        "sizeY": 640,
+        "posX": 1520,
+        "posY": 48,
+        "visible": false,
+        "floating": false,
+        "canClose": true,
+        "canDock": true,
+        "dockRatio": 0.1875,
+        "tabOrder": 1,
+        "parentDock": "MainDock"
+      },
+      {
+        "name": "Console",
+        "displayName": "Console",
+        "dock": 3,
+        "sizeX": 1280,
+        "sizeY": 220,
+        "posX": 200,
+        "posY": 860,
+        "visible": true,
+        "floating": true,
+        "canClose": false,
+        "canDock": false,
+        "dockRatio": 0.3125,
+        "tabOrder": 2,
+        "parentDock": ""
+      }
+    ]
+  }
+}

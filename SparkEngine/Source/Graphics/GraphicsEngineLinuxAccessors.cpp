@@ -53,6 +53,10 @@ Spark::Graphics::PostProcessingPipeline* GraphicsEngine::GetPostProcessingPipeli
 {
     return m_postProcessing.get();
 }
+const RenderStatistics& GraphicsEngine::GetStatistics() const
+{
+    return m_statistics;
+}
 AssetPipeline* GraphicsEngine::GetAssetPipeline() const
 {
     return m_assetPipeline.get();

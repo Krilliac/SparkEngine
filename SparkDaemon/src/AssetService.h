@@ -23,6 +23,12 @@
  * either way because it's keyed by the full path string).
  *
  * Thread-safe: `HandleMessage` is called from per-connection worker threads.
+ * Every mutation (Put, Invalidate, Clear) holds `m_persistMutex` across both
+ * its in-memory update and its disk write or delete, so the on-disk state is
+ * always produced in the same mutation order as memory. Gets and stats take
+ * only `m_mutex` and never wait on disk I/O. Lock order: `m_persistMutex`
+ * before `m_mutex`. A Put whose disk write fails drops the entry and returns
+ * an error instead of reporting success for a value that is not durable.
  */
 
 #pragma once
@@ -124,6 +130,8 @@ namespace Spark::Daemon
         void DeleteBlobFile(const Key& key);
         void DeleteAllBlobFiles();
 
+        /// Serializes mutations end to end (memory + disk). Taken before m_mutex.
+        std::mutex m_persistMutex;
         mutable std::mutex m_mutex;
         EntryList m_lruList;
         std::unordered_map<Key, EntryIter, KeyHash> m_index;

@@ -55,13 +55,14 @@ Thresholds are guidelines for when to pause and think, not hard limits — a cle
 | `Graphics/BasisTranscoder.h` | 912 |
 | `Engine/ECS/Systems/ECSystems.h` | 849 |
 | `Graphics/MeshClusterSystem.h` | 824 |
-| `Graphics/SVGRenderer.h` | 803 |
 | `Engine/DataTable/DataTableSystem.h` | 800 |
 | `GameModules/SparkGameFPS/Source/Game/Player.h` | 795 |
 | `Physics/PhysicsTypes.h` | 779 |
 | `Engine/Networking/NetworkManager.h` | 732 |
 
 **`.h` files over 300 lines: 216** (of which **64 exceed 500 lines**). Many of the largest are data-heavy headers (`SceneFileTypes.h`, `PhysicsTypes.h`, `JsonUtils.h`, `FastNoiseLite.h`, `FastNoise2SIMD.h`) where size is acceptable per the data-heavy-headers exception.
+
+`Graphics/SVGRenderer.h` was in this list until it was deleted: nothing in the engine, editor, game modules or tests included it, so under the wiring rule it was removed rather than kept as an unwired SVG parser. The counts above predate that deletion.
 
 ---
 
@@ -87,10 +88,10 @@ The original `Physics/PhysicsSystem.h` (1,909) and `Graphics/RenderGraph.h` (1,7
 
 ### Two parallel visual-scripting systems → resolved
 
-The original audit's biggest structural finding was two overlapping ~4,000-line visual-scripting systems (`Engine/Scripting/VisualScriptSystem` and `SparkEditor/VisualScripting/VisualScriptingSystem`) totaling ~8,000 lines, neither wired in. Today there is a clean split with distinct roles:
+The original audit's biggest structural finding was two overlapping ~4,000-line visual-scripting systems (`Engine/Scripting/VisualScriptSystem` and `SparkEditor/VisualScripting/VisualScriptingSystem`), neither wired in. Today there is a clean split with distinct roles:
 
 - `SparkEngine/Source/Engine/Scripting/VisualScriptCompiler.{h,cpp}` — the engine-side runtime/compiler.
-- `SparkEditor/Source/Panels/VisualScriptPanel.{h,cpp}` — the editor authoring UI (1,773 lines, a top `.cpp` offender but a single coherent panel).
+- `SparkEditor/Source/Panels/VisualScriptPanel.{h,cpp}` — the editor authoring UI (a top `.cpp` offender but a single coherent panel).
 
 The duplicate editor `VisualScriptingSystem` is gone.
 
@@ -102,7 +103,7 @@ The duplicate editor `VisualScriptingSystem` is gone.
 
 ## 4. Dead Code and Orphaned Systems
 
-The original audit's "dead headers" (ChromeTracing, MemoryDebugger, FrameInspector, Tween, DebugDraw, DebugOverlay) were wired into the startup/loop paths in March 2026 and are no longer dead. **`FileLogger` is the exception:** it still has zero writers -- its two lifecycle calls were removed in the 2026-09 sweep. Engine log files come from `Spark::FileSink`, installed by `Logger::InstallDefaultSinks` (per-user `Logs/SparkEngine_<timestamp>.log`), and the `SPARK_FILE_LOG*` macros have no production caller. Where `FileLogger.h` is still present it is covered only by `Tests/TestDebugTools.cpp` and is pending a wire-it-in-or-delete decision.
+The original audit's "dead headers" (ChromeTracing, MemoryDebugger, FrameInspector, Tween, DebugDraw, DebugOverlay) were wired into the startup/loop paths in March 2026 and are no longer dead. **`FileLogger` was the exception** and has been deleted (2026-10-15): it had zero writers after its two lifecycle calls were removed in the 2026-09 sweep, and the `SPARK_FILE_LOG*` macros never had a production caller. Engine log files come from `Spark::FileSink`, installed by `Logger::InstallDefaultSinks` (per-user `Logs/SparkEngine_<timestamp>.log`).
 
 For systems the original audit flagged as orphaned (DecalSystem, NavMesh, Sequencer, MeshLOD, etc.), a current reference scan shows each is now referenced from multiple engine `.cpp` files (DecalSystem: 6, NavMesh: 7, Sequencer: 3, MeshLOD: 3), indicating they have been wired in or are at least integrated into other systems. A definitive wired-in audit should use `tools/check-wiring.sh`, which is the maintained source of truth for "Initialize() exists ⇒ called."
 

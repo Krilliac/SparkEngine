@@ -1,0 +1,1 @@
+{"id":"guard","startNode":"start","nodes":[{"nodeId":"start","type":"Text","speaker":"Guard","text":"Halt!","next":"end"},{"nodeId":"end","type":"End"}]}

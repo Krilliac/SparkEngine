@@ -1,0 +1,41 @@
+{
+  "Windows Git is absent in the Wine prefix": [
+    "VersionControlPhaseAA_InitializeShutdown"
+  ],
+  "Native WARP and D3DCompiler include/reflection semantics; retained on real Windows": [
+    "GPUDriven_D3D11_ShaderReflectionMatchesSharedABI",
+    "GPUDriven_D3D11_PrimitiveLosesSparseSourceIdentityAndProductionGateFailsClosed",
+    "PostProcessingD3D11_ZeroAndOnePassRouteWithoutViewHazards",
+    "WorldBasicRender_DrawsGeometryIntoOffscreenRTV",
+    "WARP_D3D11DeviceInit",
+    "WARP_D3D11BufferCreation",
+    "WARP_D3D11FactoryCreate"
+  ],
+  "Wine stack walking does not supply native Windows frame addresses": [
+    "StackTrace_FramesHaveAddresses"
+  ],
+  "Wine does not implement the owner-only protected DACL, owner and hard-link security contract": [
+    "GatewaySecurity_AcceptsOwnerOnlyGeneratedKeyFile",
+    "GatewaySecurity_FailedReloadRevokesPriorOutputKey",
+    "GatewaySecurity_RejectsHardLinkedKeyFile",
+    "GatewaySecurity_GeneratedKeyRemainsPrivateUnderInheritableParentAcl",
+    "GatewaySecurity_RejectsUnprotectedAcl",
+    "GatewaySecurity_AllowsConcurrentOwnerReadHandle",
+    "GatewaySecurity_RejectsOwnerOnlyAclWhenOwnerIsNotCurrentProcessUser",
+    "CrashHandler_UngatedReportWritesAnArtifactAndTheAssertGateDoesNot"
+  ],
+  "Wine named-pipe disconnect and PeekNamedPipe timing differ from native Windows": [
+    "GatewayAreaControl_LiveLoopbackIsIdempotentAndPersistsEpochFence",
+    "GatewayAreaControl_RecoversWhenClientDisconnectsBeforeAccept"
+  ],
+  "Wine Windows profile-directory mapping differs in the legacy-save migration fixture; native recheck required": [
+    "UserDataPaths_ResolveSaveDirectoryMigratesLegacyWorkingDirectorySaves"
+  ],
+  "Wine mapped-PE replacement/reload differs in the real DLL fixture; native retry/exception tests stay enabled": [
+    "ModuleHotReload_FailedPollKeepsChangePendingForRetry",
+    "ModuleHotReload_PollChangesContainsNonStandardCallbackExceptions"
+  ],
+  "Hosted runner has no ALSA device; Wine FAudio device enumeration crashed in run 34983218822": [
+    "AudioEngineReal_PooledVoiceIsRebuiltForANewSoundFormat"
+  ]
+}

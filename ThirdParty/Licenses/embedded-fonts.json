@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "description": "GOV-400 inventory of fonts that third-party code compiles into SparkEngine binaries (they ship inside executables and libraries, not as font files). Keys are the names the embedding code gives each font; the same string is compiled into every binary that carries the font, and cmake/PackageNoticeCoverageRules.json 'embeddedFonts.markers' must list exactly these keys (Tests/Tools/test_third_party_notices.py enforces it) so the staged-package gate finds them. 'sources' names, per ThirdParty/dependencies.lock component, the source files that embed font data; tools/governance/generate_third_party_notices.py scans them and requires every '[SECTION] Default font data (...)' declaration to have an entry whose 'source_section' names it, whose declaration lines are reproduced verbatim in 'license_file' (a file in ThirdParty/Licenses), whose 'copyright' and 'license' appear in that declaration, and whose key is a string literal in the source.",
+  "sources": {
+    "Dear ImGui": ["imgui_draw.cpp"]
+  },
+  "fonts": {
+    "ProggyClean.ttf": {
+      "component": "Dear ImGui",
+      "source_section": "ProggyClean.ttf",
+      "family": "ProggyClean",
+      "license": "MIT",
+      "copyright": "Copyright (c) 2004, 2005 Tristan Grimmer",
+      "license_file": "ProggyClean-LICENSE.txt",
+      "license_source": "Declaration in ThirdParty/UI/imgui/imgui_draw.cpp section 'Default font data (ProggyClean.ttf)'; upstream https://github.com/bluescan/proggyfonts"
+    },
+    "ProggyForever.ttf": {
+      "component": "Dear ImGui",
+      "source_section": "ProggyForever-Regular-minimal.ttf",
+      "family": "ProggyForever (minimal subset)",
+      "license": "MIT",
+      "copyright": "Copyright (c) 2026 Disco Hello, Copyright (c) 2019,2023 Tristan Grimmer",
+      "license_file": "ProggyForever-LICENSE.txt",
+      "license_source": "Declaration in ThirdParty/UI/imgui/imgui_draw.cpp section 'Default font data (ProggyForever-Regular-minimal.ttf)'; upstream https://github.com/ocornut/proggyforever"
+    }
+  }
+}

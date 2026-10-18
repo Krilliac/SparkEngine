@@ -25,11 +25,13 @@ MAX_RELEASES = 500
 MAX_ASSET_PAGES = 100
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 VERSION_TAG_RE = re.compile(r"^v[0-9]+\.[0-9]+\.[0-9]+$")
+NIGHTLY_TAG_RE = re.compile(r"^nightly-[1-9][0-9]*-[1-9][0-9]*-[0-9a-f]{12}$")
 SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 OPERATION_RE = re.compile(r"^[0-9]+:[0-9]+$")
 DIGEST_RE = re.compile(r"^sha256:[0-9a-fA-F]{64}$")
 PENDING_PHASES = frozenset({"prepared", "staged"})
 EXACT_CI_EVIDENCE_ASSET = "SparkEngine-Exact-CI-Evidence.json"
+SIGNATURE_CONTROL_ASSET = "SparkEngine-release-signature-bundle.tar.gz"
 
 
 class CounterError(RuntimeError):
@@ -246,8 +248,8 @@ def _validate_tag(tag: Any, is_versioned: bool, label: str) -> str:
     if is_versioned:
         if not VERSION_TAG_RE.fullmatch(tag):
             raise CounterError(f"{label} must have the form vMAJOR.MINOR.PATCH")
-    elif tag != "nightly":
-        raise CounterError(f"{label} must be nightly for a rolling publication")
+    elif tag != "nightly" and NIGHTLY_TAG_RE.fullmatch(tag) is None:
+        raise CounterError(f"{label} must be nightly or a unique immutable nightly tag")
     return tag
 
 
@@ -936,6 +938,11 @@ def fetch_inventory_once(api: GitHubApi, repository: str) -> Inventory:
             name = raw_asset.get("name")
             if not isinstance(name, str) or not name or "\n" in name or "\r" in name:
                 raise CounterError(f"{label}.name must be a non-empty single-line string")
+            # Stable detached signatures are a control asset, not a
+            # distributable tracked by download counters. The publication
+            # boundary verifies this reserved asset separately.
+            if VERSION_TAG_RE.fullmatch(tag_name) and name == SIGNATURE_CONTROL_ASSET:
+                continue
             count = _nonnegative_integer(
                 raw_asset.get("download_count"), f"{label}.download_count"
             )

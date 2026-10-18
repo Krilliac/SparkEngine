@@ -988,7 +988,14 @@ TEST(LoadTest_Severe_EventBusStorm)
               << std::flush;
 
     EXPECT_EQ(totalDelivered.load(), expected);
+#if SPARK_TEST_SANITIZER_BUILD
+    // Sanitizer instrumentation intentionally trades throughput for memory and
+    // concurrency diagnostics. Keep the full delivery-count correctness load,
+    // but reserve wall-clock budgets for non-instrumented performance lanes.
+    std::cout << "  Timing budget check skipped: sanitizer instrumentation\n";
+#else
     EXPECT_TRUE(totalMs < 5000.0); // < 5 seconds for 5M deliveries
+#endif
 }
 
 // ============================================================================

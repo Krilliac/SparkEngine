@@ -16,9 +16,12 @@
 #include "Engine/Gameplay/QuestSystem.h"
 #include "Engine/Persistence/AsyncDatabase.h"
 #include "Engine/SaveSystem/SaveSystem.h"
+#include "Spark/PersistedSchema.h"
 
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -296,6 +299,68 @@ TEST(SaveSystemRoundTripReal_SlotSurvivingOnlyAsItsRetainedCopyStaysVisibleAndLo
     std::filesystem::remove_all(dir);
 }
 
+TEST(SaveSystemRoundTripReal_MetadataCarriageReturnSlotFallsBackToTheRetainedCopy)
+{
+    // SEC-120 fuzz finding (FuzzerTests/corpora/save-system/regression-metadata-carriage-return.save):
+    // getline keeps a carriage return inside a metadata line, but the writer refuses one, so
+    // DeserializeWorld rejected every such file after ReadFromFile had accepted it. The slot was
+    // listed with that metadata, Load failed without trying the retained copy, and the next
+    // Save rotated the unloadable primary over the good retained copy.
+    const std::string dir = MakeTempDir("metadata_cr");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    ASSERT_TRUE(saveSystem.Initialize(dir));
+
+    World good;
+    good.AddComponent<Transform>(good.CreateEntity("good-revision"));
+    SaveMetadata goodMetadata;
+    goodMetadata.saveName = "Good revision";
+    ASSERT_TRUE(saveSystem.Save("carriage", good, goodMetadata));
+    ASSERT_TRUE(saveSystem.Save("carriage", good, goodMetadata));
+
+    const auto slotPath = std::filesystem::path(dir) / "carriage.spark_save";
+    const auto backupPath = std::filesystem::path(dir) / "carriage.spark_save.bak";
+    ASSERT_TRUE(std::filesystem::exists(backupPath));
+
+    // A structurally complete v3 (N-1, no trailer) file whose sceneName line is "\revel02".
+    const std::string metadata = "Seed\n\revel02\nSoldier\n\n1700000000\n125.5\n80\n25\n1 2.5 -3\n7\n2\n";
+    std::string bytes = "SPRK";
+    const auto appendU32 = [&bytes](uint32_t value)
+    {
+        for (int shift = 0; shift < 32; shift += 8)
+            bytes.push_back(static_cast<char>((value >> shift) & 0xFFu));
+    };
+    appendU32(3);
+    appendU32(static_cast<uint32_t>(metadata.size()));
+    bytes += metadata;
+    appendU32(0); // entities
+    appendU32(0); // custom-state entries
+    {
+        std::ofstream primary(slotPath, std::ios::binary | std::ios::trunc);
+        primary.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    }
+
+    SaveMetadata listed;
+    EXPECT_FALSE(saveSystem.GetSaveMetadata("carriage", listed));
+
+    World recovered;
+    ASSERT_TRUE(saveSystem.Load("carriage", recovered));
+    EXPECT_TRUE(FindNamed(recovered, "good-revision") != entt::null);
+
+    // Saving over the unreadable primary must keep the retained copy byte-identical.
+    const auto readAll = [](const std::filesystem::path& path)
+    {
+        std::ifstream stream(path, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>());
+    };
+    const std::string retainedBefore = readAll(backupPath);
+    World next;
+    next.AddComponent<Transform>(next.CreateEntity("next-revision"));
+    ASSERT_TRUE(saveSystem.Save("carriage", next, goodMetadata));
+    EXPECT_TRUE(readAll(backupPath) == retainedBefore);
+
+    std::filesystem::remove_all(dir);
+}
+
 TEST(SaveSystemRoundTripReal_FailedDeleteKeepsTheRetainedRecoveryCopy)
 {
     const std::string dir = MakeTempDir("delete_order");
@@ -379,8 +444,70 @@ TEST(SaveSystemRoundTripReal_TransientComponentsAreExcludedFromTheSnapshot)
     std::filesystem::remove_all(dir);
 }
 
-TEST(SaveMigration_VersionTwoSnapshotGainsExplicitTransformRoots)
+TEST(SaveSystemRoundTripReal_MetadataCustomStateAndFieldValuesSurviveTheFile)
 {
+    const std::string dir = MakeTempDir("field_values");
+    SaveSystem& saveSystem = SaveSystem::GetInstance();
+    ASSERT_TRUE(saveSystem.Initialize(dir));
+
+    World source;
+    Transform& transform = source.AddComponent<Transform>(source.CreateEntity("value-carrier"));
+    transform.position.x = -1.5f;
+    transform.position.y = 0.0f;
+    transform.position.z = 3.25f;
+
+    SaveMetadata metadata;
+    metadata.saveName = "Field values";
+    metadata.sceneName = ""; // an empty string is a value, not a missing field
+    metadata.playerClass = "Engineer";
+    metadata.playTime = 3.14f;
+    metadata.playerHealth = -1.0f;
+    metadata.playerArmor = 0.5f;
+    metadata.playerPosition = {4.0f, -2.0f, 0.25f};
+    metadata.playerKills = 7;
+    metadata.playerDeaths = 0;
+    const std::unordered_map<std::string, std::string> customState = {{"cursor", "encounter-3"}, {"empty", ""}};
+    ASSERT_TRUE(saveSystem.Save("field-values", source, metadata, customState));
+
+    SaveMetadata read;
+    ASSERT_TRUE(saveSystem.GetSaveMetadata("field-values", read));
+    EXPECT_EQ(read.saveName, std::string("Field values"));
+    EXPECT_TRUE(read.sceneName.empty());
+    EXPECT_EQ(read.playerClass, std::string("Engineer"));
+    EXPECT_EQ(read.version, kCurrentSaveVersion);
+    EXPECT_NE(read.timestamp, 0u); // the writer stamps the save time
+    EXPECT_NEAR(read.playTime, 3.14f, 0.0001f);
+    EXPECT_NEAR(read.playerHealth, -1.0f, 0.0001f);
+    EXPECT_NEAR(read.playerArmor, 0.5f, 0.0001f);
+    EXPECT_NEAR(read.playerPosition.x, 4.0f, 0.0001f);
+    EXPECT_NEAR(read.playerPosition.y, -2.0f, 0.0001f);
+    EXPECT_NEAR(read.playerPosition.z, 0.25f, 0.0001f);
+    EXPECT_EQ(read.playerKills, 7);
+    EXPECT_EQ(read.playerDeaths, 0);
+
+    World loaded;
+    std::unordered_map<std::string, std::string> loadedState;
+    ASSERT_TRUE(saveSystem.Load("field-values", loaded, loadedState));
+    EXPECT_EQ(loadedState.size(), 2u);
+    EXPECT_EQ(loadedState["cursor"], std::string("encounter-3"));
+    ASSERT_TRUE(loadedState.count("empty") == 1u);
+    EXPECT_TRUE(loadedState["empty"].empty());
+
+    const EntityID carrier = FindNamed(loaded, "value-carrier");
+    ASSERT_TRUE(carrier != entt::null);
+    const Transform* loadedTransform = loaded.GetComponent<Transform>(carrier);
+    ASSERT_TRUE(loadedTransform != nullptr);
+    EXPECT_NEAR(loadedTransform->position.x, -1.5f, 0.0001f);
+    EXPECT_NEAR(loadedTransform->position.y, 0.0f, 0.0001f);
+    EXPECT_NEAR(loadedTransform->position.z, 3.25f, 0.0001f);
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SaveMigration_VersionTwoSnapshotIsOutsideTheCompatibilityWindow)
+{
+    // OD-03: this build reads N (v4) and N-1 (v3) only. A v2 snapshot is refused
+    // before any migration step runs, so no parent edge is invented for it.
     SaveData legacy;
     legacy.metadata.version = 2;
     legacy.metadata.saveName = "Legacy v2 snapshot";
@@ -390,18 +517,17 @@ TEST(SaveMigration_VersionTwoSnapshotGainsExplicitTransformRoots)
     entity.components.push_back(MakeTransformRecord(""));
     legacy.entities.push_back(std::move(entity));
 
-    ASSERT_TRUE(SaveSystem::MigrateToCurrentVersion(legacy));
-    EXPECT_EQ(legacy.metadata.version, kCurrentSaveVersion);
+    ASSERT_TRUE(legacy.metadata.version < kOldestSupportedSaveVersion);
+    EXPECT_FALSE(SaveSystem::MigrateToCurrentVersion(legacy));
+    EXPECT_EQ(legacy.metadata.version, 2u);
     ASSERT_EQ(legacy.entities.size(), 1u);
     ASSERT_EQ(legacy.entities[0].components.size(), 1u);
-    const auto& properties = legacy.entities[0].components[0].properties;
-    ASSERT_EQ(properties.count("parent"), 1u);
-    EXPECT_EQ(properties.at("parent"), std::string("-1"));
+    EXPECT_EQ(legacy.entities[0].components[0].properties.count("parent"), 0u);
 
-    // Migrating an already-current snapshot must not change it.
-    const std::string once = properties.at("parent");
-    EXPECT_TRUE(SaveSystem::MigrateToCurrentVersion(legacy));
-    EXPECT_EQ(legacy.entities[0].components[0].properties.at("parent"), once);
+    World live;
+    live.CreateEntity("live-sentinel");
+    EXPECT_FALSE(SaveSystem::GetInstance().DeserializeWorld(legacy, live));
+    EXPECT_EQ(live.GetEntityCount(), 1u);
 }
 
 TEST(SaveMigration_OutOfRangeParentIndexIsRejectedWithoutTouchingTheWorld)
@@ -620,4 +746,50 @@ TEST(AsyncDatabaseReal_KeyValueFlushReplacesTheStoreWithoutResidue)
     }
 
     std::filesystem::remove_all(dir);
+}
+
+TEST(SaveMigration_ModuleSchemaReadsCurrentAndPreviousOnly)
+{
+    // A module on schema 3 reads 3 (current) and 2 (N-1) and refuses the rest.
+    constexpr Spark::ModulePersistedSchema schema{"TestModule", "test.module.schemaVersion", 3};
+    static_assert(schema.OldestReadableVersion() == 2);
+
+    std::unordered_map<std::string, std::string> customState = {{"unrelated", "kept"}};
+    Spark::WriteModuleSchemaVersion(schema, customState);
+    EXPECT_EQ(customState.at("test.module.schemaVersion"), std::string("3"));
+    EXPECT_EQ(customState.at("unrelated"), std::string("kept"));
+
+    uint32_t version = 0;
+    std::string error = "stale";
+    EXPECT_TRUE(Spark::CheckModuleSchemaVersion(schema, customState, version, error));
+    EXPECT_EQ(version, 3u);
+    EXPECT_TRUE(error.empty());
+
+    customState["test.module.schemaVersion"] = "2";
+    EXPECT_TRUE(Spark::CheckModuleSchemaVersion(schema, customState, version, error));
+    EXPECT_EQ(version, 2u);
+
+    const auto rejects = [&](const char* stored, const char* expected)
+    {
+        customState["test.module.schemaVersion"] = stored;
+        uint32_t untouched = 77;
+        std::string reason;
+        EXPECT_FALSE(Spark::CheckModuleSchemaVersion(schema, customState, untouched, reason));
+        EXPECT_EQ(untouched, 77u);
+        EXPECT_TRUE(reason.find("TestModule persisted schema") != std::string::npos);
+        EXPECT_TRUE(reason.find(expected) != std::string::npos);
+    };
+    rejects("1", "data is version 1, but this build reads versions 2-3 and writes version 3");
+    rejects("4", "data is version 4, but this build reads versions 2-3 and writes version 3");
+    rejects("abc", "is not a version number");
+    rejects("", "is not a version number");
+
+    customState.erase("test.module.schemaVersion");
+    uint32_t missing = 5;
+    EXPECT_FALSE(Spark::CheckModuleSchemaVersion(schema, customState, missing, error));
+    EXPECT_TRUE(error.find("missing version key 'test.module.schemaVersion'") != std::string::npos);
+
+    // The first schema of a module has no earlier version to read.
+    constexpr Spark::ModulePersistedSchema firstSchema{"FirstModule", "first.version", 1};
+    static_assert(firstSchema.OldestReadableVersion() == 1);
 }

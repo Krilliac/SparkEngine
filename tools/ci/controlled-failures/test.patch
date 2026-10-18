@@ -1,0 +1,17 @@
+diff --git a/Tests/TestMathUtils.cpp b/Tests/TestMathUtils.cpp
+index 0a09734b8..8ddd7cde4 100644
+--- a/Tests/TestMathUtils.cpp
++++ b/Tests/TestMathUtils.cpp
+@@ -88,3 +88,12 @@ TEST(InverseLerp_AtBounds)
+     EXPECT_NEAR(TestMath::InverseLerp(0.0f, 10.0f, 0.0f), 0.0f, 0.001f);
+     EXPECT_NEAR(TestMath::InverseLerp(0.0f, 10.0f, 10.0f), 1.0f, 0.001f);
+ }
++
++// CI-100 controlled-failure probe (test class). A deliberately failing
++// assertion in an already-registered SparkTests source. The runner records a
++// hard failure and main() returns EXIT_FAILURE (TestMain.cpp), so ctest
++// --no-tests=error turns the build-linux-gcc "Run Tests" step red.
++TEST(CI100_ControlledTestFailure)
++{
++    EXPECT_TRUE(false);
++}

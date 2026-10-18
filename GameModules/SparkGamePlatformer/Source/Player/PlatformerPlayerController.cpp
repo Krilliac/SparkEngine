@@ -6,10 +6,9 @@
 #include "PlatformerPlayerController.h"
 #include "Checkpoint/PlatformerCheckpointSystem.h"
 #include "Input/InputManager.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include "Spark/ModuleLog.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -19,29 +18,32 @@
 namespace Platformer
 {
 
-    bool PlatformerPlayerController::Initialize(Spark::IEngineContext* context, PlatformerCheckpointSystem* checkpoints)
+    bool PlatformerPlayerController::Initialize(Spark::IEngineContext* context, PlatformerCheckpointSystem* checkpoints,
+                                                PlatformerLevelSystem* level)
     {
         m_context = context;
         m_checkpoints = checkpoints;
+        m_level = level;
+        m_groundPlatform = NO_PLATFORM;
 
         // Start at origin; the level system will set the proper spawn point
         m_position = {0.0f, 5.0f, 0.0f};
         m_velocity = {0.0f, 0.0f, 0.0f};
         m_state = PlayerState::Falling;
-        m_lives = 3;
+        m_lives = DEFAULT_LIVES;
 
         m_initialized = true;
 
-        auto& console = Spark::SimpleConsole::GetInstance();
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer player controller initialized");
-        console.LogInfo("[Platformer Player] Player controller initialized");
+        Spark::ModuleLog::Info(m_context, "[Platformer Player] Player controller initialized");
         return true;
     }
 
     void PlatformerPlayerController::Update(float deltaTime)
     {
         if (!m_initialized || !std::isfinite(deltaTime) || deltaTime <= 0.0f)
+        {
             return;
+        }
 
         ProcessInput(deltaTime);
         UpdateInvincibility(deltaTime);
@@ -51,14 +53,26 @@ namespace Platformer
     void PlatformerPlayerController::FixedUpdate(float fixedDeltaTime)
     {
         if (!m_initialized || !std::isfinite(fixedDeltaTime) || fixedDeltaTime <= 0.0f)
+        {
             return;
+        }
 
+        // Game over: restart at the last checkpoint once the death delay elapses (no R key needed).
         if (m_state == PlayerState::Dead)
+        {
+            m_deathRestartTimer -= fixedDeltaTime;
+            if (m_deathRestartTimer <= 0.0f)
+            {
+                Respawn();
+            }
             return;
+        }
 
         // Save previous grounded state for coyote time
         m_wasGrounded = m_grounded;
 
+        ApplyPlatformCarry(fixedDeltaTime);
+        ResolvePlatformPenetration();
         CheckGrounded();
         UpdateCoyoteTime(fixedDeltaTime);
         UpdateJumpBuffer(fixedDeltaTime);
@@ -70,6 +84,10 @@ namespace Platformer
 
         ApplyGravity(fixedDeltaTime);
         ApplyMovement(fixedDeltaTime);
+        if (HandleKillPlane())
+        {
+            return;
+        }
         UpdateState();
     }
 
@@ -78,8 +96,10 @@ namespace Platformer
         (void)deltaTime;
 
         InputManager* input = m_context ? m_context->GetInput() : nullptr;
-        if (!input)
+        if (!input || m_externalInputDriven)
+        {
             return;
+        }
 
         constexpr int kShift = 0x10;
         constexpr int kControl = 0x11;
@@ -91,11 +111,17 @@ namespace Platformer
         const bool groundPoundHeld = input->IsKeyDown(kControl);
         const bool respawnHeld = input->IsKeyDown('R');
         if (dashHeld && !m_dashInputHeld)
+        {
             RequestDash();
+        }
         if (groundPoundHeld && !m_groundPoundInputHeld)
+        {
             RequestGroundPound();
+        }
         if (respawnHeld && !m_respawnInputHeld)
+        {
             Respawn();
+        }
         m_dashInputHeld = dashHeld;
         m_groundPoundInputHeld = groundPoundHeld;
         m_respawnInputHeld = respawnHeld;
@@ -104,7 +130,9 @@ namespace Platformer
     void PlatformerPlayerController::ApplyGravity(float fixedDeltaTime)
     {
         if (m_state == PlayerState::Dashing)
+        {
             return;
+        }
 
         // Wall slide has reduced gravity
         if (m_state == PlayerState::WallSliding)
@@ -130,21 +158,23 @@ namespace Platformer
         // Dash overrides normal movement
         if (m_state == PlayerState::Dashing)
         {
-            m_position.x += m_facingDirection * m_dashSpeed * fixedDeltaTime;
+            MoveAndCollide(m_facingDirection * m_dashSpeed * fixedDeltaTime, 0.0f, 0.0f);
             return;
         }
 
         // Ground pound locks horizontal movement
         if (m_state == PlayerState::GroundPounding)
         {
-            m_position.y += m_velocity.y * fixedDeltaTime;
+            MoveAndCollide(0.0f, m_velocity.y * fixedDeltaTime, 0.0f);
             return;
         }
 
         // Apply speed boost if active
         float currentMoveSpeed = m_moveSpeed;
         if (m_speedBoostTimer > 0.0f)
+        {
             currentMoveSpeed *= 1.5f;
+        }
 
         const float maxHorizontalSpeed = currentMoveSpeed * (m_runHeld ? m_runMultiplier : 1.0f);
         const float targetVelocity = m_moveInput * maxHorizontalSpeed;
@@ -164,32 +194,7 @@ namespace Platformer
         // Clamp horizontal speed
         m_velocity.x = std::clamp(m_velocity.x, -maxHorizontalSpeed, maxHorizontalSpeed);
 
-        // Apply velocity to position
-        m_position.x += m_velocity.x * fixedDeltaTime;
-        m_position.y += m_velocity.y * fixedDeltaTime;
-        m_position.z += m_velocity.z * fixedDeltaTime;
-
-        // Simple ground plane collision (y = 0)
-        if (m_position.y <= 0.0f)
-        {
-            m_position.y = 0.0f;
-            m_velocity.y = 0.0f;
-            m_grounded = true;
-        }
-    }
-
-    void PlatformerPlayerController::CheckGrounded()
-    {
-        // In a full implementation, this raycasts downward using the physics engine.
-        // For the demo, we use a simple ground plane check at y = 0.
-        m_grounded = (m_position.y <= 0.01f && m_velocity.y <= 0.0f);
-
-        // Reset jump/dash when landing
-        if (m_grounded && !m_wasGrounded)
-        {
-            m_hasDoubleJumped = false;
-            m_hasDashed = false;
-        }
+        MoveAndCollide(m_velocity.x * fixedDeltaTime, m_velocity.y * fixedDeltaTime, m_velocity.z * fixedDeltaTime);
     }
 
     void PlatformerPlayerController::UpdateCoyoteTime(float fixedDeltaTime)
@@ -201,7 +206,9 @@ namespace Platformer
         }
 
         if (m_coyoteTimer > 0.0f)
+        {
             m_coyoteTimer -= fixedDeltaTime;
+        }
     }
 
     void PlatformerPlayerController::UpdateJumpBuffer(float fixedDeltaTime)
@@ -212,7 +219,9 @@ namespace Platformer
             m_jumpRequested = false;
         }
         else if (m_jumpBufferTimer > 0.0f)
+        {
             m_jumpBufferTimer -= fixedDeltaTime;
+        }
     }
 
     void PlatformerPlayerController::HandleJump()
@@ -227,6 +236,7 @@ namespace Platformer
             m_coyoteTimer = 0.0f;
             m_jumpBufferTimer = 0.0f;
             m_grounded = false;
+            m_jumpCutEligible = true;
             TransitionState(PlayerState::Jumping);
             return;
         }
@@ -237,12 +247,14 @@ namespace Platformer
             m_velocity.y = m_doubleJumpForce;
             m_hasDoubleJumped = true;
             m_jumpBufferTimer = 0.0f;
+            m_jumpCutEligible = true;
             TransitionState(PlayerState::DoubleJumping);
             return;
         }
 
-        // Variable jump height: cut velocity when button released early
-        if (!m_jumpHeld && m_velocity.y > 0.0f &&
+        // Variable jump height: cut velocity when button released early. Only an ascent the player started
+        // with the jump button is cut; a bouncy-platform launch or hazard knockback keeps its full height.
+        if (m_jumpCutEligible && !m_jumpHeld && m_velocity.y > 0.0f &&
             (m_state == PlayerState::Jumping || m_state == PlayerState::DoubleJumping))
         {
             m_velocity.y *= m_jumpCutMultiplier;
@@ -254,7 +266,19 @@ namespace Platformer
         (void)fixedDeltaTime;
 
         if (!m_abilities.wallJump)
+        {
             return;
+        }
+
+        // Leave wall states once the wall contact or the upward launch ends.
+        if (m_state == PlayerState::WallSliding && (m_grounded || !m_touchingWall))
+        {
+            TransitionState(m_grounded ? PlayerState::Idle : PlayerState::Falling);
+        }
+        if (m_state == PlayerState::WallJumping && (m_grounded || m_velocity.y <= 0.0f))
+        {
+            TransitionState(m_grounded ? PlayerState::Idle : PlayerState::Falling);
+        }
 
         // Wall slide: touching wall + falling + holding toward wall
         if (m_touchingWall && !m_grounded && m_velocity.y < 0.0f)
@@ -307,7 +331,9 @@ namespace Platformer
 
         // Dash cooldown
         if (m_dashCooldownTimer > 0.0f)
+        {
             m_dashCooldownTimer -= fixedDeltaTime;
+        }
     }
 
     void PlatformerPlayerController::HandleGroundPound()
@@ -346,18 +372,26 @@ namespace Platformer
         if (m_grounded)
         {
             if (std::abs(m_velocity.x) > 0.5f)
+            {
                 TransitionState(PlayerState::Running);
+            }
             else
+            {
                 TransitionState(PlayerState::Idle);
+            }
         }
         else
         {
             if (m_velocity.y > 0.0f)
             {
                 if (m_hasDoubleJumped)
+                {
                     TransitionState(PlayerState::DoubleJumping);
+                }
                 else
+                {
                     TransitionState(PlayerState::Jumping);
+                }
             }
             else
             {
@@ -369,7 +403,9 @@ namespace Platformer
     void PlatformerPlayerController::TransitionState(PlayerState newState)
     {
         if (m_state == newState)
+        {
             return;
+        }
 
         m_state = newState;
 
@@ -380,7 +416,9 @@ namespace Platformer
     void PlatformerPlayerController::UpdateInvincibility(float deltaTime)
     {
         if (!m_invincible)
+        {
             return;
+        }
 
         m_invincibilityTimer -= deltaTime;
         if (m_invincibilityTimer <= 0.0f)
@@ -393,30 +431,44 @@ namespace Platformer
     void PlatformerPlayerController::UpdatePowerUps(float deltaTime)
     {
         if (m_speedBoostTimer > 0.0f)
+        {
             m_speedBoostTimer -= deltaTime;
+        }
         if (m_magnetTimer > 0.0f)
+        {
             m_magnetTimer -= deltaTime;
+        }
         if (m_shieldTimer > 0.0f)
         {
             m_shieldTimer -= deltaTime;
             if (m_shieldTimer <= 0.0f)
+            {
                 m_hasShield = false;
+            }
         }
         if (m_ghostTimer > 0.0f)
+        {
             m_ghostTimer -= deltaTime;
+        }
     }
 
     bool PlatformerPlayerController::TakeDamage(int amount)
     {
         if (amount <= 0)
+        {
             return false;
+        }
 
         if (m_invincible || m_state == PlayerState::Dead)
+        {
             return false;
+        }
 
         // Ghost mode ignores damage
         if (m_ghostTimer > 0.0f)
+        {
             return false;
+        }
 
         // Shield absorbs hit
         if (m_hasShield)
@@ -428,14 +480,11 @@ namespace Platformer
             return false;
         }
 
-        SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Platformer player took %d damage (lives remaining: %d)", amount,
-                        m_lives - amount);
         m_lives -= amount;
         if (m_lives <= 0)
         {
             m_lives = 0;
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer player died — game over");
-            TransitionState(PlayerState::Dead);
+            EnterDeadState();
             return true;
         }
 
@@ -463,45 +512,49 @@ namespace Platformer
 
         m_velocity = {0.0f, 0.0f, 0.0f};
         m_state = PlayerState::Falling;
+        m_grounded = false;
+        m_groundPlatform = NO_PLATFORM;
+        m_touchingWall = false;
+        m_deathRestartTimer = 0.0f;
         m_invincible = true;
         m_invincibilityTimer = m_invincibilityDuration;
         m_hasDoubleJumped = false;
         m_hasDashed = false;
+        m_jumpCutEligible = false;
         m_dashRequested = false;
         m_groundPoundRequested = false;
 
         if (m_lives <= 0)
-            m_lives = 3; // Restart with default lives on game over
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer player respawned at (%.0f, %.0f, %.0f)", m_position.x,
-                       m_position.y, m_position.z);
+        {
+            m_lives = DEFAULT_LIVES; // Restart with default lives on game over
+        }
+        Spark::ModuleLog::Info(m_context, "[Platformer Player] Respawned at ({:.0f}, {:.0f}, {:.0f})", m_position.x,
+                               m_position.y, m_position.z);
     }
 
     void PlatformerPlayerController::UnlockAbility(PowerUpType type)
     {
-        auto& console = Spark::SimpleConsole::GetInstance();
-
         switch (type)
         {
         case PowerUpType::DoubleJump:
             m_abilities.doubleJump = true;
-            SPARK_LOG_INFO(Spark::LogCategory::Game, "Platformer ability unlocked: Double Jump");
-            console.LogInfo("[Platformer Player] Unlocked: Double Jump");
+            Spark::ModuleLog::Info(m_context, "[Platformer Player] Unlocked: Double Jump");
             break;
         case PowerUpType::WallJump:
             m_abilities.wallJump = true;
-            console.LogInfo("[Platformer Player] Unlocked: Wall Jump");
+            Spark::ModuleLog::Info(m_context, "[Platformer Player] Unlocked: Wall Jump");
             break;
         case PowerUpType::Dash:
             m_abilities.dash = true;
-            console.LogInfo("[Platformer Player] Unlocked: Dash");
+            Spark::ModuleLog::Info(m_context, "[Platformer Player] Unlocked: Dash");
             break;
         case PowerUpType::GroundPound:
             m_abilities.groundPound = true;
-            console.LogInfo("[Platformer Player] Unlocked: Ground Pound");
+            Spark::ModuleLog::Info(m_context, "[Platformer Player] Unlocked: Ground Pound");
             break;
         case PowerUpType::Climb:
             m_abilities.climb = true;
-            console.LogInfo("[Platformer Player] Unlocked: Climb");
+            Spark::ModuleLog::Info(m_context, "[Platformer Player] Unlocked: Climb");
             break;
         case PowerUpType::SpeedBoost:
             // Speed boost is a temporary power-up, not a permanent unlock
@@ -523,7 +576,9 @@ namespace Platformer
     void PlatformerPlayerController::ApplyPowerUp(PowerUpType type, float duration)
     {
         if (!std::isfinite(duration) || duration <= 0.0f)
+        {
             return;
+        }
 
         switch (type)
         {
@@ -554,13 +609,17 @@ namespace Platformer
         m_moveInput = std::clamp(horizontalAxis, -1.0f, 1.0f);
         m_runHeld = runHeld;
         if (std::abs(m_moveInput) > 0.01f)
+        {
             m_facingDirection = std::copysign(1.0f, m_moveInput);
+        }
     }
 
     void PlatformerPlayerController::SetJumpInput(bool held)
     {
         if (held && !m_jumpHeld)
+        {
             m_jumpRequested = true;
+        }
         m_jumpHeld = held;
     }
 
@@ -577,23 +636,31 @@ namespace Platformer
     void PlatformerPlayerController::ApplyImpulse(float horizontal, float vertical)
     {
         if (m_state == PlayerState::Dead)
+        {
             return;
+        }
         m_velocity.x += horizontal;
         m_velocity.y += vertical;
         if (vertical > 0.0f)
+        {
             m_grounded = false;
+        }
     }
 
     void PlatformerPlayerController::GrantLives(int amount)
     {
         if (amount > 0)
+        {
             m_lives = (amount >= MAX_LIVES - m_lives) ? MAX_LIVES : m_lives + amount;
+        }
     }
 
     void PlatformerPlayerController::Render()
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         // In a full implementation, this would render the player model,
         // ability VFX (dash trail, shield bubble, ghost transparency),
@@ -650,18 +717,30 @@ namespace Platformer
 
         status += "Abilities:";
         if (m_abilities.doubleJump)
+        {
             status += " DoubleJump";
+        }
         if (m_abilities.wallJump)
+        {
             status += " WallJump";
+        }
         if (m_abilities.dash)
+        {
             status += " Dash";
+        }
         if (m_abilities.groundPound)
+        {
             status += " GroundPound";
+        }
         if (m_abilities.climb)
+        {
             status += " Climb";
+        }
         if (!m_abilities.doubleJump && !m_abilities.wallJump && !m_abilities.dash && !m_abilities.groundPound &&
             !m_abilities.climb)
+        {
             status += " None";
+        }
         status += "\n";
 
         return status;
@@ -669,9 +748,11 @@ namespace Platformer
 
     void PlatformerPlayerController::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Platformer Player"))
+        {
             return;
+        }
 
         ImGui::Text("State: %s", GetStateString().c_str());
         ImGui::Text("Position: (%.2f, %.2f, %.2f)", m_position.x, m_position.y, m_position.z);
@@ -691,15 +772,25 @@ namespace Platformer
         ImGui::Separator();
 
         if (m_invincible)
+        {
             ImGui::TextColored(ImVec4(1, 1, 0, 1), "INVINCIBLE (%.1fs)", m_invincibilityTimer);
+        }
         if (m_speedBoostTimer > 0.0f)
+        {
             ImGui::TextColored(ImVec4(0, 1, 1, 1), "Speed Boost (%.1fs)", m_speedBoostTimer);
+        }
         if (m_magnetTimer > 0.0f)
+        {
             ImGui::TextColored(ImVec4(1, 0, 1, 1), "Magnet (%.1fs)", m_magnetTimer);
+        }
         if (m_hasShield)
+        {
             ImGui::TextColored(ImVec4(0, 0.5f, 1, 1), "Shield (%.1fs)", m_shieldTimer);
+        }
         if (m_ghostTimer > 0.0f)
+        {
             ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1), "Ghost Mode (%.1fs)", m_ghostTimer);
+        }
 #endif
     }
 

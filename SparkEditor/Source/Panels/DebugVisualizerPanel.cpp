@@ -10,6 +10,8 @@
 #include <imgui.h>
 
 #include "../Core/EditorIcons.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #include "Utils/LogMacros.h"
 #include "Utils/Validate.h"
 
@@ -41,39 +43,40 @@ namespace SparkEditor
 
         if (BeginPanel())
         {
-            ImGui::TextDisabled("Preview - not connected: the scene viewport does not read these");
-            ImGui::TextDisabled("toggles yet, so changing them does not alter what is drawn.");
-            ImGui::Separator();
+            Spark::Ui::Banner(Spark::Ui::Status::Info,
+                              "Preview - not connected: the scene viewport does not read these toggles yet, so "
+                              "changing them does not alter what is drawn.");
+            ImGui::Spacing();
 
             RenderQuickToggles();
             ImGui::Separator();
 
-            if (ImGui::CollapsingHeader(ICON_FA_TH " Grid Settings", ImGuiTreeNodeFlags_DefaultOpen))
+            if (Spark::Ui::SectionHeader("Grid Settings", ICON_FA_TH, true))
             {
                 RenderGridSettings();
             }
 
-            if (ImGui::CollapsingHeader(ICON_FA_EYE " Shading & Overlays"))
+            if (Spark::Ui::SectionHeader("Shading & Overlays", ICON_FA_EYE, false))
             {
                 RenderOverlaySettings();
             }
 
-            if (ImGui::CollapsingHeader(ICON_FA_CUBE " Physics Debug"))
+            if (Spark::Ui::SectionHeader("Physics Debug", ICON_FA_CUBE, false))
             {
                 RenderPhysicsDebug();
             }
 
-            if (ImGui::CollapsingHeader(ICON_FA_MAP " Navigation Debug"))
+            if (Spark::Ui::SectionHeader("Navigation Debug", ICON_FA_MAP, false))
             {
                 RenderNavigationDebug();
             }
 
-            if (ImGui::CollapsingHeader(ICON_FA_LIGHTBULB " Rendering Debug"))
+            if (Spark::Ui::SectionHeader("Rendering Debug", ICON_FA_LIGHTBULB, false))
             {
                 RenderRenderingDebug();
             }
 
-            if (ImGui::CollapsingHeader(ICON_FA_VOLUME_UP " Audio Debug"))
+            if (Spark::Ui::SectionHeader("Audio Debug", ICON_FA_VOLUME_UP, false))
             {
                 RenderAudioDebug();
             }
@@ -96,18 +99,20 @@ namespace SparkEditor
 
     void DebugVisualizerPanel::RenderQuickToggles()
     {
-        ImGui::Text(ICON_FA_BOLT " Quick Toggles");
-        ImGui::Spacing();
+        Spark::Ui::SubHeader(ICON_FA_BOLT " Quick Toggles");
 
-        float btnWidth = (ImGui::GetContentRegionAvail().x - 8.0f) / 3.0f;
-        ImVec2 btnSize(btnWidth, 28.0f);
+        // Three buttons per row share the width left after the two gaps between them.
+        const float gaps = ImGui::GetStyle().ItemSpacing.x * 2.0f;
+        const float btnWidth = (ImGui::GetContentRegionAvail().x - gaps) / 3.0f;
+        const ImVec2 btnSize(btnWidth, Spark::Ui::Px(28.0f));
 
+        // An enabled toggle reads as selected (selection surface + accent ink), not as a primary action.
         auto ToggleButton = [&](const char* label, bool& value)
         {
             if (value)
             {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.55f, 0.9f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.6f, 0.95f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_Button, Spark::Ui::ColV(Spark::Ui::Role::SurfaceSelected));
+                ImGui::PushStyleColor(ImGuiCol_Text, Spark::Ui::ColV(Spark::Ui::Role::AccentText));
             }
             if (ImGui::Button(label, btnSize))
                 value = !value;
@@ -136,7 +141,7 @@ namespace SparkEditor
 
     void DebugVisualizerPanel::RenderGridSettings()
     {
-        ImGui::Indent(8.0f);
+        ImGui::Indent(Spark::Ui::Px(8.0f));
         ImGui::Checkbox("Show Grid", &m_showGrid);
         if (m_showGrid)
         {
@@ -150,12 +155,12 @@ namespace SparkEditor
             const char* planes[] = {"XZ (Floor)", "XY (Front)", "YZ (Side)"};
             ImGui::Combo("Grid Plane", &m_gridPlane, planes, 3);
         }
-        ImGui::Unindent(8.0f);
+        ImGui::Unindent(Spark::Ui::Px(8.0f));
     }
 
     void DebugVisualizerPanel::RenderOverlaySettings()
     {
-        ImGui::Indent(8.0f);
+        ImGui::Indent(Spark::Ui::Px(8.0f));
 
         const char* shadingModes[] = {"Lit", "Unlit", "Wireframe", "Normals", "UVs", "Overdraw"};
         int prevMode = m_shadingMode;
@@ -176,12 +181,12 @@ namespace SparkEditor
         ImGui::Checkbox("Show Selection Outline", &m_showSelectionOutline);
         ImGui::Checkbox("Show Object Origins", &m_showObjectOrigins);
 
-        ImGui::Unindent(8.0f);
+        ImGui::Unindent(Spark::Ui::Px(8.0f));
     }
 
     void DebugVisualizerPanel::RenderPhysicsDebug()
     {
-        ImGui::Indent(8.0f);
+        ImGui::Indent(Spark::Ui::Px(8.0f));
 
         ImGui::Checkbox("Show Colliders", &m_showColliders);
         if (m_showColliders)
@@ -198,12 +203,12 @@ namespace SparkEditor
             ImGui::DragFloat("Velocity Scale", &m_velocityScale, 0.01f, 0.01f, 1.0f, "%.2f");
         }
 
-        ImGui::Unindent(8.0f);
+        ImGui::Unindent(Spark::Ui::Px(8.0f));
     }
 
     void DebugVisualizerPanel::RenderNavigationDebug()
     {
-        ImGui::Indent(8.0f);
+        ImGui::Indent(Spark::Ui::Px(8.0f));
 
         ImGui::Checkbox("Show NavMesh", &m_showNavMesh);
         if (m_showNavMesh)
@@ -214,12 +219,12 @@ namespace SparkEditor
         ImGui::Checkbox("Show Agent Paths", &m_showNavPaths);
         ImGui::Checkbox("Show AI Agents", &m_showNavAgents);
 
-        ImGui::Unindent(8.0f);
+        ImGui::Unindent(Spark::Ui::Px(8.0f));
     }
 
     void DebugVisualizerPanel::RenderRenderingDebug()
     {
-        ImGui::Indent(8.0f);
+        ImGui::Indent(Spark::Ui::Px(8.0f));
 
         ImGui::Checkbox("Show Light Radii", &m_showLightRadii);
         ImGui::Checkbox("Show Shadow Cascades", &m_showShadowCascades);
@@ -229,23 +234,22 @@ namespace SparkEditor
         ImGui::Checkbox("Show Draw Calls", &m_showDrawCalls);
         ImGui::Checkbox("Show Triangle Count", &m_showTriangleCount);
 
-        ImGui::Unindent(8.0f);
+        ImGui::Unindent(Spark::Ui::Px(8.0f));
     }
 
     void DebugVisualizerPanel::RenderAudioDebug()
     {
-        ImGui::Indent(8.0f);
+        ImGui::Indent(Spark::Ui::Px(8.0f));
 
         ImGui::Checkbox("Show Audio Source Radii", &m_showAudioRadii);
         ImGui::Checkbox("Show Audio Source Icons", &m_showAudioSourceIcons);
 
-        ImGui::Unindent(8.0f);
+        ImGui::Unindent(Spark::Ui::Px(8.0f));
     }
 
     void DebugVisualizerPanel::RenderStats()
     {
-        ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "Debug Draw Stats:");
-        ImGui::TextDisabled("  No renderer reports debug-draw counts to this panel.");
+        Spark::Ui::UnavailableFeature("Debug draw stats", "No renderer reports debug-draw counts to this panel.");
     }
 
 } // namespace SparkEditor

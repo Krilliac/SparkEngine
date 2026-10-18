@@ -44,6 +44,19 @@ namespace Spark
         };
 
         /**
+         * @brief Whether [offset, offset + size) lies inside a buffer of @p bufferSize bytes.
+         *
+         * Every backend's IRHIDevice::UpdateBuffer checks this before it copies, so a
+         * caller's bad size or offset is rejected instead of writing past the mapping.
+         * Written without `offset + size` so a huge offset cannot wrap and pass.
+         * An empty range is not a valid update.
+         */
+        [[nodiscard]] constexpr bool IsBufferRangeValid(uint64_t bufferSize, uint64_t offset, uint64_t size) noexcept
+        {
+            return size != 0 && offset <= bufferSize && size <= bufferSize - offset;
+        }
+
+        /**
  * @brief Abstract GPU texture resource
  */
         class IRHITexture : public IRHIResource

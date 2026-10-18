@@ -8,126 +8,12 @@
 #include "../../Utils/ContainerUtils.h"
 #include "../../Utils/Validate.h"
 
-#include <fstream>
 #include <sstream>
 #include <algorithm>
 #include <charconv>
-#include <regex>
 
 namespace Spark
 {
-
-    // =============================================================================
-    // StringTable
-    // =============================================================================
-
-    bool StringTable::LoadFromFile(const std::string& filePath)
-    {
-        std::ifstream file(filePath);
-        if (!file.is_open())
-        {
-            SPARK_LOG_ERROR(Spark::LogCategory::Core, "StringTable: failed to open localization file: %s",
-                            filePath.c_str());
-            return false;
-        }
-
-        // Simple JSON parser for flat key-value string maps.
-        // Handles: { "key": "value", "key2": "value2" }
-        std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-
-        // Match quoted key/value pairs. The (?:[^"\\]|\\.)* body allows escaped
-        // characters inside the strings (e.g. \" \\ \n), so a value such as
-        // "He said \"hi\"" is captured whole instead of being truncated at the
-        // first inner quote.
-        std::regex kvRegex(R"~~("((?:[^"\\]|\\.)*)"\s*:\s*"((?:[^"\\]|\\.)*)")~~");
-        auto begin = std::sregex_iterator(content.begin(), content.end(), kvRegex);
-        auto end = std::sregex_iterator();
-
-        // Translate JSON backslash escapes in a captured string to their literal
-        // characters. Unknown escapes keep the escaped character verbatim.
-        auto unescape = [](const std::string& in)
-        {
-            std::string out;
-            out.reserve(in.size());
-            for (size_t i = 0; i < in.size(); ++i)
-            {
-                if (in[i] == '\\' && i + 1 < in.size())
-                {
-                    switch (const char next = in[++i])
-                    {
-                    case 'n':
-                        out.push_back('\n');
-                        break;
-                    case 't':
-                        out.push_back('\t');
-                        break;
-                    case 'r':
-                        out.push_back('\r');
-                        break;
-                    default:
-                        out.push_back(next);
-                        break;
-                    }
-                }
-                else
-                {
-                    out.push_back(in[i]);
-                }
-            }
-            return out;
-        };
-
-        size_t parsed = 0;
-        for (auto it = begin; it != end; ++it)
-        {
-            const std::smatch& match = *it;
-            m_entries[unescape(match[1].str())] = unescape(match[2].str());
-            ++parsed;
-        }
-
-        if (parsed == 0)
-        {
-            SPARK_LOG_WARN(Spark::LogCategory::Core,
-                           "StringTable: parsed 0 entries from '%s' (%zu content bytes) — bad JSON format?",
-                           filePath.c_str(), content.size());
-            return false;
-        }
-
-        return true;
-    }
-
-    void StringTable::SetEntry(const std::string& key, const std::string& value)
-    {
-        m_entries[key] = value;
-    }
-
-    std::string StringTable::GetEntry(const std::string& key) const
-    {
-        auto it = m_entries.find(key);
-        if (it != m_entries.end())
-        {
-            return it->second;
-        }
-        // Return a copy of the key itself as the missing-entry fallback.
-        return key;
-    }
-
-    bool StringTable::HasEntry(const std::string& key) const
-    {
-        return m_entries.count(key) > 0;
-    }
-
-    std::vector<std::string> StringTable::GetAllKeys() const
-    {
-        std::vector<std::string> keys;
-        keys.reserve(m_entries.size());
-        for (const auto& [key, value] : m_entries)
-        {
-            keys.push_back(key);
-        }
-        std::sort(keys.begin(), keys.end());
-        return keys;
-    }
 
     // =============================================================================
     // LocalizationSystem
@@ -144,12 +30,14 @@ namespace Spark
         SPARK_TRACE_ENTER(Spark::LogCategory::Core);
         SPARK_LOG_INFO(Spark::LogCategory::Core, "Loading language '%s' from '%s'", languageCode.c_str(),
                        filePath.c_str());
-        std::lock_guard<std::mutex> lock(m_mutex);
+        // Read and parse without holding m_mutex; lookups from other threads only wait
+        // for the final insert.
         StringTable table;
         if (!table.LoadFromFile(filePath))
         {
             return false;
         }
+        std::lock_guard<std::mutex> lock(m_mutex);
         m_languages[languageCode] = std::move(table);
         return true;
     }

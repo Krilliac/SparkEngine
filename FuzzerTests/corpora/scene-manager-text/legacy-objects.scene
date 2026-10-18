@@ -1,0 +1,8 @@
+# legacy object lines: Type x y z [params]
+Cube 0 0 0 2
+Plane 0 -1 0 20 20
+Sphere 3 1 0 0.75 24 12
+Pyramid -3 0 0 1.5
+Ramp 0 0 5 4 2   # trailing comment
+Wall 5 0 0 1 3
+Cube 1 1 1

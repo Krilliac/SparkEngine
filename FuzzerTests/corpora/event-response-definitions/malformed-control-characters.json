@@ -1,0 +1,1 @@
+{"rules":[{"name":"tab\there\r\u0001","actions":[{"type":"ShowMessage","params":["bell\u0007"]}]}]}

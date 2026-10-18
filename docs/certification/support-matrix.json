@@ -10,27 +10,30 @@
       "os": {
         "family": "windows",
         "version": "11",
-        "build": "10.0.22631"
+        "build": "10.0.26200"
       },
       "arch": "x86_64",
       "compiler": {
         "id": "msvc",
-        "version": "19.42.34435",
+        "version": "19.44.35229",
         "toolset": "v143",
-        "windowsSdkVersion": "10.0.22621.0"
+        "windowsSdkVersion": "10.0.26100.0"
       },
       "gpu": {
         "api": "d3d11",
         "device": "NVIDIA GeForce RTX 5070 Ti",
         "vendor": "nvidia",
-        "driverVersion": "576.40",
+        "driverVersion": "32.0.16.1088",
         "featureLevel": "11.1"
       },
       "audio": {
         "api": "xaudio2",
         "version": "2.9"
       },
-      "cpuFeatures": ["SSE4.2", "AVX2"],
+      "cpuFeatures": [
+        "SSE4.2",
+        "AVX2"
+      ],
       "evidenceRequired": [
         "build",
         "install",
@@ -46,7 +49,7 @@
         "uninstall",
         "dependency_closure"
       ],
-      "notes": "Declared primary row for stable-v1, not a certified one. All 13 evidence categories are required before it can certify."
+      "notes": "Declared primary row for stable-v1, not a certified one. All 13 evidence categories are required before it can certify. OD-31: measured on the owner's self-hosted GPU runner (gpu-certification.yml); driverVersion is the WMI Win32_VideoController form the collector measures, and compiler.version is the cl banner of the Windows Shipping toolchain pin (cmake/WindowsShippingToolchain.json)."
     },
     {
       "id": "win11-x64-msvc143-nullrhi",
@@ -73,7 +76,10 @@
       "audio": {
         "api": "none"
       },
-      "cpuFeatures": ["SSE4.2", "AVX2"],
+      "cpuFeatures": [
+        "SSE4.2",
+        "AVX2"
+      ],
       "evidenceRequired": [
         "build",
         "install",
@@ -86,6 +92,53 @@
         "dependency_closure"
       ],
       "notes": "Declared headless NullRHI row, not a certified one. Renderer/content/input/audio probes do not apply because NullRHI rasterizes nothing."
+    },
+    {
+      "id": "win11-x64-msvc143-d3d11-amd-igpu",
+      "tier": "experimental",
+      "os": {
+        "family": "windows",
+        "version": "11",
+        "build": "10.0.26200"
+      },
+      "arch": "x86_64",
+      "compiler": {
+        "id": "msvc",
+        "version": "19.44.35229",
+        "toolset": "v143",
+        "windowsSdkVersion": "10.0.26100.0"
+      },
+      "gpu": {
+        "api": "d3d11",
+        "device": "AMD Radeon(TM) Graphics",
+        "vendor": "amd",
+        "driverVersion": "32.0.21036.18",
+        "featureLevel": "11.1"
+      },
+      "audio": {
+        "api": "xaudio2",
+        "version": "2.9"
+      },
+      "cpuFeatures": [
+        "SSE4.2",
+        "AVX2"
+      ],
+      "evidenceRequired": [
+        "build",
+        "install",
+        "launch",
+        "renderer",
+        "content",
+        "input",
+        "audio",
+        "save",
+        "crash",
+        "upgrade",
+        "rollback",
+        "uninstall",
+        "dependency_closure"
+      ],
+      "notes": "OD-31 experimental second driver row on the self-hosted GPU runner: the Ryzen 9 9900X3D integrated RDNA2 GPU. Not a release claim and not certifiable. It has no collector plan or workflow job yet: the engine always creates the default D3D11 adapter and the collector records the first WMI adapter, so evidence for this row cannot be produced honestly until engine adapter selection and adapter-matched measurement land."
     }
   ]
 }

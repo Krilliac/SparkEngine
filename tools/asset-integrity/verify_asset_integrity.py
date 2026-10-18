@@ -14,6 +14,16 @@ TOCTOU limitations (honest boundary):
 - This is a repository-content gate, not proof that the verified snapshot was
   consumed atomically by package assembly. Immutable handoff requires a separate
   mechanism (e.g. content-addressed staging or sealed archive).
+
+Provenance (manifest schema v2):
+- Every v2 entry carries ``license`` and ``provenance``. Their values are never
+  typed into the manifest; ``generate`` resolves them from the reviewed policy
+  (tools/asset-integrity/provenance.json by default) and refuses to write when a
+  file is unclaimed, claimed ambiguously, or its hash-bound claim is stale.
+- ``NOASSERTION`` is a truthful "no tracked license record" value. The policy
+  must name the work item that owns closing each such gap.
+- Schema v1 (integrity only) still loads so that staged package fixtures remain
+  verifiable; any caller that passes ``require_provenance=True`` rejects it.
 """
 from __future__ import annotations
 
@@ -31,10 +41,24 @@ from pathlib import Path
 from typing import Any, Iterable
 
 
-MANIFEST_SCHEMA_VERSION = 1
+LEGACY_MANIFEST_SCHEMA_VERSION = 1
+MANIFEST_SCHEMA_VERSION = 2
+SUPPORTED_MANIFEST_VERSIONS = frozenset({LEGACY_MANIFEST_SCHEMA_VERSION, MANIFEST_SCHEMA_VERSION})
 HASH_ALGORITHM = "sha256"
 MANIFEST_FILENAME = "assets.integrity.json"
 REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_PROVENANCE_POLICY = REPO_ROOT / "tools" / "asset-integrity" / "provenance.json"
+PROVENANCE_POLICY_VERSION = 1
+NOASSERTION = "NOASSERTION"
+LEGACY_ENTRY_KEYS = frozenset({"path", "sha256", "size"})
+ENTRY_KEYS = frozenset({"path", "sha256", "size", "license", "provenance"})
+LICENSE_ID_RE = re.compile(r"(?:NOASSERTION|LicenseRef-[A-Za-z0-9.-]+|[A-Za-z0-9][A-Za-z0-9.+-]*)\Z")
+RULE_ID_RE = re.compile(r"[a-z0-9][a-z0-9-]*\Z")
+GAP_ID_RE = re.compile(r"[A-Z]+-[0-9]{3}\Z")
+MAX_PROVENANCE_BYTES = 1024
+RULE_KEYS = frozenset({"id", "license", "provenance", "evidence", "gap", "files", "prefixes", "records"})
+RECORD_KEYS = frozenset({"path", "format", "exclude"})
+RECORD_FORMATS = frozenset({"terrafront-asset-manifest", "blender-provenance", "starter-model-manifest"})
 
 MAX_MANIFEST_BYTES = 64 * 1024 * 1024
 MAX_ENTRY_COUNT = 100_000
@@ -43,11 +67,24 @@ MAX_PATH_BYTES = 1024
 MAX_FILE_BYTES = 4 * 1024 * 1024 * 1024
 MAX_TOTAL_BYTES = 64 * 1024 * 1024 * 1024
 MAX_DIRECTORY_DEPTH = 128
+MAX_REFERENCE_SOURCE_BYTES = 16 * 1024 * 1024
 HASH_CHUNK_BYTES = 1024 * 1024
 
-KNOWN_MANIFESTS = (("Assets/assets.integrity.json", "Assets"),)
+# (manifest, asset root, provenance policy) — all repository-relative.
+KNOWN_MANIFESTS = (
+    ("Assets/assets.integrity.json", "Assets", "tools/asset-integrity/provenance.json"),
+)
 ROOT_IGNORES = frozenset({MANIFEST_FILENAME})
+# Package profiles. OD-09: the stable-v1 package ships no asset whose license is
+# NOASSERTION. Those files stay in the repository and in the default package;
+# their provenance remains open outside stable-v1.
+PACKAGE_PROFILES = frozenset({"default", "stable-v1"})
+NOASSERTION_EXCLUDED_PROFILES = frozenset({"stable-v1"})
+# RDY-020: these profiles ship only the runtime asset closure of their
+# in-profile modules (tools/asset-integrity/package_closure.py), not every root.
+CLOSURE_PROFILES = frozenset({"stable-v1"})
 TEMPLATE_ROOT_METADATA = frozenset({"README.md", "manifest.json"})
+TEMPLATE_COLLECTION_METADATA = frozenset({"README.md", "assets.lock.json"})
 INVALID_WINDOWS_CHARS = frozenset('<>:"|?*')
 RESERVED_WINDOWS_NAMES = frozenset(
     {"CON", "PRN", "AUX", "NUL", "CLOCK$", "CONIN$", "CONOUT$"}
@@ -447,16 +484,635 @@ def scan_directory(
     return entries, errors
 
 
-def generate_manifest(root: Path) -> tuple[dict[str, Any], list[IntegrityError]]:
+def _text_problem(value: Any, *, limit: int = MAX_PROVENANCE_BYTES) -> str | None:
+    if not isinstance(value, str) or not value:
+        return "must be a non-empty string"
+    if value != value.strip():
+        return "must not have leading or trailing whitespace"
+    if len(value.encode("utf-8")) > limit:
+        return f"exceeds {limit} UTF-8 bytes"
+    for char in value:
+        cp = ord(char)
+        if cp < 0x20 or cp == 0x7F:
+            return f"contains control character U+{cp:04X}"
+    return None
+
+
+def _require_canonical(value: Any, where: str) -> str:
+    canonical, problem = _canonical_relative_path(value)
+    if problem is not None or canonical is None:
+        raise ManifestFormatError(f"{where}: unsafe path {value!r}: {problem}")
+    return canonical
+
+
+def _validate_policy_rule(rule: Any, index: int, licenses: dict[str, Any], seen_ids: set[str]) -> None:
+    where = f"rules[{index}]"
+    if not isinstance(rule, dict):
+        raise ManifestFormatError(f"{where} must be an object")
+    unknown = set(rule) - RULE_KEYS
+    if unknown:
+        raise ManifestFormatError(f"{where} has unknown keys: {sorted(unknown)}")
+    for required in ("id", "license", "provenance", "evidence"):
+        if required not in rule:
+            raise ManifestFormatError(f"{where} is missing {required!r}")
+    rule_id = rule["id"]
+    if not isinstance(rule_id, str) or RULE_ID_RE.fullmatch(rule_id) is None:
+        raise ManifestFormatError(f"{where} id must match {RULE_ID_RE.pattern}")
+    if rule_id in seen_ids:
+        raise ManifestFormatError(f"duplicate rule id: {rule_id}")
+    seen_ids.add(rule_id)
+    where = f"rule {rule_id!r}"
+    if rule["license"] not in licenses:
+        raise ManifestFormatError(f"{where} license {rule['license']!r} is not declared in licenses")
+    problem = _text_problem(rule["provenance"])
+    if problem:
+        raise ManifestFormatError(f"{where} provenance {problem}")
+    evidence = rule["evidence"]
+    if not isinstance(evidence, list):
+        raise ManifestFormatError(f"{where} evidence must be an array")
+    canonical_evidence = [_require_canonical(item, f"{where} evidence") for item in evidence]
+    if len(set(canonical_evidence)) != len(canonical_evidence):
+        raise ManifestFormatError(f"{where} evidence has duplicates")
+    if rule["license"] == NOASSERTION:
+        gap = rule.get("gap")
+        if not isinstance(gap, str) or GAP_ID_RE.fullmatch(gap) is None:
+            raise ManifestFormatError(
+                f"{where} asserts no license and must name the owning work item in 'gap'")
+    else:
+        if "gap" in rule:
+            raise ManifestFormatError(f"{where} asserts a license and must not declare a gap")
+        if not canonical_evidence:
+            raise ManifestFormatError(f"{where} asserts a license and must cite tracked evidence")
+
+    files = rule.get("files", {})
+    if not isinstance(files, dict):
+        raise ManifestFormatError(f"{where} files must be an object of path -> sha256")
+    for path, digest in files.items():
+        _require_canonical(path, f"{where} files")
+        if not isinstance(digest, str) or SHA256_RE.fullmatch(digest) is None:
+            raise ManifestFormatError(f"{where} files[{path!r}] must be a lowercase sha256")
+    prefixes = rule.get("prefixes", [])
+    if not isinstance(prefixes, list):
+        raise ManifestFormatError(f"{where} prefixes must be an array")
+    for prefix in prefixes:
+        if not isinstance(prefix, str) or not prefix.endswith("/"):
+            raise ManifestFormatError(f"{where} prefix {prefix!r} must be a directory ending in '/'")
+        _require_canonical(prefix[:-1], f"{where} prefixes")
+    records = rule.get("records", [])
+    if not isinstance(records, list):
+        raise ManifestFormatError(f"{where} records must be an array")
+    for record in records:
+        if not isinstance(record, dict) or set(record) - RECORD_KEYS or not {"path", "format"} <= set(record):
+            raise ManifestFormatError(f"{where} record must contain path, format, and optional exclude")
+        _require_canonical(record["path"], f"{where} record")
+        if record["format"] not in RECORD_FORMATS:
+            raise ManifestFormatError(f"{where} record format {record['format']!r} is not supported")
+        exclude = record.get("exclude", [])
+        if not isinstance(exclude, list):
+            raise ManifestFormatError(f"{where} record exclude must be an array")
+        excluded = [_require_canonical(item, f"{where} record exclude") for item in exclude]
+        if len(set(excluded)) != len(excluded):
+            raise ManifestFormatError(f"{where} record exclude has duplicates")
+    if not (files or prefixes or records):
+        raise ManifestFormatError(f"{where} claims no files, prefixes, or records")
+
+
+def load_provenance_policy(path: Path) -> dict[str, Any]:
+    """Load and structurally validate a provenance policy; filesystem checks come later."""
+    data = _read_bounded_json(path, limit=MAX_MANIFEST_BYTES)
+    if not isinstance(data, dict):
+        raise ManifestFormatError("provenance policy root must be an object")
+    if set(data) != {"version", "root", "licenses", "rules"}:
+        raise ManifestFormatError("provenance policy must contain exactly version, root, licenses, and rules")
+    if data["version"] != PROVENANCE_POLICY_VERSION:
+        raise ManifestFormatError(f"unsupported provenance policy version: {data['version']!r}")
+    if not isinstance(data["root"], str) or not data["root"]:
+        raise ManifestFormatError("provenance policy root must be a non-empty string")
+    licenses = data["licenses"]
+    if not isinstance(licenses, dict) or not licenses:
+        raise ManifestFormatError("provenance policy licenses must be a non-empty object")
+    for license_id, details in licenses.items():
+        if LICENSE_ID_RE.fullmatch(license_id) is None:
+            raise ManifestFormatError(f"invalid license identifier: {license_id!r}")
+        if not isinstance(details, dict) or set(details) != {"name"} or _text_problem(details["name"]):
+            raise ManifestFormatError(f"license {license_id!r} must be an object with exactly a non-empty name")
+    rules = data["rules"]
+    if not isinstance(rules, list) or not rules:
+        raise ManifestFormatError("provenance policy rules must be a non-empty array")
+    seen_ids: set[str] = set()
+    for index, rule in enumerate(rules):
+        _validate_policy_rule(rule, index, licenses, seen_ids)
+    return data
+
+
+def _record_claims(
+    fmt: str, data: Any, root_name: str
+) -> list[tuple[str, str | None, str | None, str | None]]:
+    """Return (root-relative path, detail, license, sha256) rows for one record file."""
+    rows: list[tuple[str, str | None, str | None, str | None]] = []
+    prefix = f"{root_name}/"
+    if not isinstance(data, dict):
+        raise ManifestFormatError("record root must be an object")
+    if fmt == "terrafront-asset-manifest":
+        files = data.get("files")
+        if not isinstance(files, list):
+            raise ManifestFormatError("record files must be an array")
+        for index, row in enumerate(files):
+            if not isinstance(row, dict):
+                raise ManifestFormatError(f"record files[{index}] must be an object")
+            pack, author, license_id = (row.get(key) for key in ("source_pack", "author", "license"))
+            if any(_text_problem(part) for part in (pack, author, license_id)):
+                raise ManifestFormatError(
+                    f"record files[{index}] must record source_pack, author, and license")
+            url = row.get("url", "")
+            if url != "" and _text_problem(url):
+                raise ManifestFormatError(f"record files[{index}] url must be a string")
+            path = _require_canonical(row.get("path"), f"record files[{index}]")
+            detail = f"{pack} by {author}" + (f" <{url}>" if url else "")
+            rows.append((path, detail, license_id, None))
+    elif fmt == "blender-provenance":
+        license_info = data.get("license")
+        license_name = license_info.get("name") if isinstance(license_info, dict) else None
+        if _text_problem(license_name):
+            raise ManifestFormatError("record must name its license")
+        assets = data.get("assets")
+        if not isinstance(assets, list):
+            raise ManifestFormatError("record assets must be an array")
+        for index, row in enumerate(assets):
+            if not isinstance(row, dict) or _text_problem(row.get("name")):
+                raise ManifestFormatError(f"record assets[{index}] must be an object with a name")
+            for path_key, hash_key in (("obj_path", "obj_sha256"), ("mtl_path", "mtl_sha256")):
+                value = row.get(path_key)
+                digest = row.get(hash_key)
+                if not isinstance(value, str) or not value.startswith(prefix):
+                    raise ManifestFormatError(f"record assets[{index}].{path_key} must be under {prefix}")
+                if not isinstance(digest, str) or SHA256_RE.fullmatch(digest) is None:
+                    raise ManifestFormatError(f"record assets[{index}].{hash_key} must be a sha256")
+                path = _require_canonical(value[len(prefix):], f"record assets[{index}]")
+                rows.append((path, f"Blender-authored {row['name']}", license_name, digest))
+    elif fmt == "starter-model-manifest":
+        assets = data.get("assets")
+        if not isinstance(assets, list):
+            raise ManifestFormatError("record assets must be an array")
+        for index, row in enumerate(assets):
+            if not isinstance(row, dict) or not isinstance(row.get("path"), str):
+                raise ManifestFormatError(f"record assets[{index}] must be an object with a path")
+            value = row["path"]
+            if not value.startswith(prefix):
+                continue  # rows for other trees (e.g. Templates) are verified by their own manifests
+            if not value.endswith(".obj"):
+                raise ManifestFormatError(f"record assets[{index}] path must name an .obj model")
+            label = f"{row.get('pack')}/{row.get('name')}"
+            if _text_problem(label):
+                raise ManifestFormatError(f"record assets[{index}] must name its pack and model")
+            obj = _require_canonical(value[len(prefix):], f"record assets[{index}]")
+            for path, hash_key in ((obj, "sha256"), (obj[:-4] + ".mtl", "mtlSha256")):
+                digest = row.get(hash_key)
+                if not isinstance(digest, str) or SHA256_RE.fullmatch(digest) is None:
+                    raise ManifestFormatError(f"record assets[{index}].{hash_key} must be a sha256")
+                rows.append((path, f"starter model {label}", None, digest))
+    else:  # pragma: no cover - load_provenance_policy rejects unknown formats first
+        raise ManifestFormatError(f"unsupported record format {fmt!r}")
+    seen: set[str] = set()
+    for path, *_ in rows:
+        if path in seen:
+            raise ManifestFormatError(f"record declares {path!r} twice")
+        seen.add(path)
+    return rows
+
+
+def resolve_provenance(
+    policy_path: Path,
+    root: Path,
+    entries: list[dict[str, Any]],
+    repo_root: Path | None = None,
+) -> tuple[dict[str, tuple[str, str]], list[IntegrityError]]:
+    """Resolve (license, provenance) for every scanned entry, failing closed.
+
+    Precedence: an exact claim (``files`` or a record row) beats any prefix, and
+    the longest matching prefix beats shorter ones. Two exact claims on one
+    path, or one prefix claimed twice, is ambiguous. Every file must be claimed
+    and every claim must govern at least one file.
+    """
+    policy_label = str(policy_path)
+    root = _absolute_lexical(root)
+    repo_root = _absolute_lexical(repo_root) if repo_root is not None else root.parent
+    try:
+        policy = load_provenance_policy(_absolute_lexical(policy_path))
+    except (ManifestFormatError, OSError) as exc:
+        return {}, [IntegrityError(policy_label, "provenance-policy", str(exc))]
+    if policy["root"] != root.name:
+        return {}, [IntegrityError(
+            policy_label, "provenance-policy",
+            f"policy root {policy['root']!r} does not exactly match asset root {root.name!r}")]
+    repo, repo_resolved, repo_errors = _prepare_root(repo_root)
+    if repo_errors or repo is None or repo_resolved is None:
+        return {}, [IntegrityError(policy_label, "provenance-policy", str(error)) for error in repo_errors]
+
+    errors: list[IntegrityError] = []
+    licenses: dict[str, Any] = policy["licenses"]
+    disk = {entry["path"]: entry["sha256"] for entry in entries}
+    exact: dict[str, tuple[dict[str, Any], str | None]] = {}
+    prefixes: dict[str, dict[str, Any]] = {}
+
+    def claim(path: str, rule: dict[str, Any], detail: str | None) -> None:
+        previous = exact.get(path)
+        if previous is not None:
+            errors.append(IntegrityError(
+                path, "provenance-ambiguous",
+                f"claimed by both rule {previous[0]['id']!r} and rule {rule['id']!r}"))
+            return
+        exact[path] = (rule, detail)
+
+    for rule in policy["rules"]:
+        rule_id = rule["id"]
+        for evidence in rule["evidence"]:
+            _, _, error = _checked_candidate(repo, repo_resolved, evidence, want_directory=False)
+            if error is not None:
+                errors.append(IntegrityError(
+                    evidence, "provenance-policy",
+                    f"rule {rule_id!r} evidence is missing or unsafe: [{error.category}] {error.message}"))
+        for path, digest in rule.get("files", {}).items():
+            if path not in disk:
+                errors.append(IntegrityError(
+                    path, "provenance-record-missing", f"rule {rule_id!r} claims a file that is absent"))
+                continue
+            if disk[path] != digest:
+                errors.append(IntegrityError(
+                    path, "provenance-stale",
+                    f"rule {rule_id!r} is bound to sha256 {digest}, actual {disk[path]}"))
+                continue
+            claim(path, rule, None)
+        for record in rule.get("records", []):
+            record_path = record["path"]
+            candidate, _, error = _checked_candidate(repo, repo_resolved, record_path, want_directory=False)
+            if error is not None or candidate is None:
+                errors.append(IntegrityError(
+                    record_path, "provenance-policy",
+                    f"rule {rule_id!r} record is missing or unsafe: {error.message if error else 'missing'}"))
+                continue
+            try:
+                rows = _record_claims(record["format"], _read_bounded_json(candidate), root.name)
+            except (ManifestFormatError, OSError) as exc:
+                errors.append(IntegrityError(record_path, "provenance-policy", f"rule {rule_id!r}: {exc}"))
+                continue
+            row_paths = {row[0] for row in rows}
+            excluded = set(record.get("exclude", []))
+            for path in sorted(excluded - row_paths):
+                errors.append(IntegrityError(
+                    path, "provenance-policy",
+                    f"rule {rule_id!r} excludes a path that {record_path} does not record"))
+            allowed_licenses = {rule["license"], licenses[rule["license"]]["name"]}
+            for path, detail, record_license, digest in rows:
+                if path in excluded:
+                    continue
+                if path not in disk:
+                    errors.append(IntegrityError(
+                        path, "provenance-record-missing", f"{record_path} records a file that is absent"))
+                    continue
+                if digest is not None and disk[path] != digest:
+                    errors.append(IntegrityError(
+                        path, "provenance-stale",
+                        f"{record_path} is bound to sha256 {digest}, actual {disk[path]}"))
+                    continue
+                if record_license is not None and record_license not in allowed_licenses:
+                    errors.append(IntegrityError(
+                        path, "provenance-record-conflict",
+                        f"{record_path} records license {record_license!r}; rule {rule_id!r} asserts "
+                        f"{rule['license']!r}"))
+                    continue
+                claim(path, rule, detail)
+        for prefix in rule.get("prefixes", []):
+            previous = prefixes.get(prefix)
+            if previous is not None:
+                errors.append(IntegrityError(
+                    prefix, "provenance-ambiguous",
+                    f"prefix claimed by both rule {previous['id']!r} and rule {rule_id!r}"))
+                continue
+            prefixes[prefix] = rule
+
+    ordered_prefixes = sorted(prefixes, key=lambda item: (-len(item), item))
+    used_prefixes: set[str] = set()
+    resolved: dict[str, tuple[str, str]] = {}
+    for path in sorted(disk):
+        governing = exact.get(path)
+        if governing is None:
+            match = next((prefix for prefix in ordered_prefixes if path.startswith(prefix)), None)
+            if match is None:
+                errors.append(IntegrityError(path, "provenance-unclaimed", "no provenance rule claims this file"))
+                continue
+            used_prefixes.add(match)
+            governing = (prefixes[match], None)
+        rule, detail = governing
+        text = rule["provenance"] if detail is None else f"{rule['provenance']}: {detail}"
+        if rule["license"] == NOASSERTION:
+            text += f" (license unasserted; gap {rule['gap']})"
+        text += f" [{rule['id']}]"
+        problem = _text_problem(text)
+        if problem:
+            errors.append(IntegrityError(path, "provenance-policy", f"resolved provenance {problem}"))
+            continue
+        resolved[path] = (rule["license"], text)
+    for prefix in sorted(set(prefixes) - used_prefixes):
+        errors.append(IntegrityError(
+            prefix, "provenance-unused-claim",
+            f"rule {prefixes[prefix]['id']!r} prefix governs no file"))
+    errors.sort(key=lambda error: (error.path, error.category, error.message))
+    return resolved, errors
+
+
+def generate_manifest(
+    root: Path,
+    provenance_policy: Path | None = None,
+    repo_root: Path | None = None,
+) -> tuple[dict[str, Any], list[IntegrityError]]:
+    """Snapshot ``root``. With a policy, emit schema v2 with per-entry provenance.
+
+    Without a policy the result is a legacy v1 integrity-only manifest, suitable
+    only for staged fixtures; repository gates require v2.
+    """
     entries, errors = scan_directory(root)
+    version = LEGACY_MANIFEST_SCHEMA_VERSION
+    if provenance_policy is not None:
+        version = MANIFEST_SCHEMA_VERSION
+        if not errors:
+            resolved, provenance_errors = resolve_provenance(provenance_policy, root, entries, repo_root)
+            errors.extend(provenance_errors)
+            entries = [
+                {**entry, "license": resolved[entry["path"]][0], "provenance": resolved[entry["path"]][1]}
+                for entry in entries
+                if entry["path"] in resolved
+            ]
     manifest = {
-        "version": MANIFEST_SCHEMA_VERSION,
+        "version": version,
         "algorithm": HASH_ALGORITHM,
         "root": _absolute_lexical(root).name,
         "fileCount": len(entries),
         "entries": entries,
     }
     return manifest, errors
+
+
+def provenance_summary(manifest: dict[str, Any]) -> dict[str, Any]:
+    entries = manifest.get("entries", [])
+    unasserted = [entry for entry in entries if entry.get("license") == NOASSERTION]
+    gaps = sorted({
+        match.group(1)
+        for entry in unasserted
+        for match in [re.search(r"\(license unasserted; gap ([A-Z]+-[0-9]{3})\)", entry.get("provenance", ""))]
+        if match
+    })
+    return {
+        "entries": len(entries),
+        "asserted": sum(1 for entry in entries if entry.get("license") not in (None, NOASSERTION)),
+        "unasserted": len(unasserted),
+        "gaps": gaps,
+    }
+
+
+def _sibling_module(filename: str, module_name: str) -> Any:
+    """Load a sibling helper module; this verifier is also loaded by file path."""
+    import importlib.util
+
+    path = Path(__file__).resolve().with_name(filename)
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    if spec is None or spec.loader is None:
+        raise ManifestFormatError(f"cannot load the helper module: {path}")
+    module = importlib.util.module_from_spec(spec)
+    # Dataclasses resolve their module through sys.modules while the class body runs.
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _package_closure_module() -> Any:
+    return _sibling_module("package_closure.py", "spark_asset_package_closure")
+
+
+def derive_profile_closure(
+    repo_root: Path, manifest: dict[str, Any], profile: str
+) -> tuple[dict[str, list[str]] | None, list[Path]]:
+    """Return ``(closure, inputs)`` for a closure profile, or ``(None, [])`` for a whole-tree profile.
+
+    Raises ``ManifestFormatError`` when the closure cannot be derived: an
+    unresolved reference, a NOASSERTION entry the profile needs, or a profile
+    definition that disagrees with the module inventory.
+    """
+    if profile not in PACKAGE_PROFILES:
+        raise ManifestFormatError(f"unknown package profile: {profile!r}")
+    if profile not in CLOSURE_PROFILES:
+        return None, []
+    closure_module = _package_closure_module()
+    try:
+        return closure_module.derive_closure(repo_root, manifest, profile)
+    except closure_module.ClosureError as exc:
+        raise ManifestFormatError(f"package profile {profile!r} asset closure:\n{exc}") from exc
+
+
+def derive_package_manifest(
+    manifest: dict[str, Any], profile: str, closure: Iterable[str] | None = None
+) -> tuple[dict[str, Any], list[str]]:
+    """Return ``(package manifest, excluded paths)`` for one package profile.
+
+    The input must already have passed ``load_manifest``. A profile in
+    ``NOASSERTION_EXCLUDED_PROFILES`` drops every NOASSERTION entry (OD-09) and
+    requires schema v2, because a v1 manifest cannot show which files lack a
+    license record. With ``closure`` (see ``derive_profile_closure``) only the
+    closure entries are kept; a closure path the manifest does not declare, or
+    one whose license is NOASSERTION, is an error rather than a silent drop.
+    Entry objects are copied unchanged, so the result stays sorted and
+    verifiable against an installed root.
+    """
+    if profile not in PACKAGE_PROFILES:
+        raise ManifestFormatError(f"unknown package profile: {profile!r}")
+    entries = manifest["entries"]
+    excluded: list[str] = []
+    if profile in NOASSERTION_EXCLUDED_PROFILES:
+        if manifest["version"] != MANIFEST_SCHEMA_VERSION:
+            raise ManifestFormatError(
+                f"package profile {profile!r} needs a schema v{MANIFEST_SCHEMA_VERSION} manifest "
+                "that records each entry's license")
+    if closure is not None:
+        kept = set(closure)
+        by_path = {entry["path"]: entry for entry in entries}
+        undeclared = sorted(kept - by_path.keys())
+        if undeclared:
+            raise ManifestFormatError(f"package profile {profile!r} closure names undeclared files: {undeclared}")
+        if profile in NOASSERTION_EXCLUDED_PROFILES:
+            unasserted = sorted(path for path in kept if by_path[path]["license"] == NOASSERTION)
+            if unasserted:
+                raise ManifestFormatError(
+                    f"package profile {profile!r} closure needs NOASSERTION files (OD-09): {unasserted}")
+        excluded = [entry["path"] for entry in entries if entry["path"] not in kept]
+        entries = [entry for entry in entries if entry["path"] in kept]
+    elif profile in NOASSERTION_EXCLUDED_PROFILES:
+        excluded = [entry["path"] for entry in entries if entry["license"] == NOASSERTION]
+        entries = [entry for entry in entries if entry["license"] != NOASSERTION]
+    derived = {
+        "version": manifest["version"],
+        "algorithm": manifest["algorithm"],
+        "root": manifest["root"],
+        "fileCount": len(entries),
+        "entries": [dict(entry) for entry in entries],
+    }
+    return derived, excluded
+
+
+def package_exclusion_prefixes(all_paths: Iterable[str], excluded: Iterable[str]) -> list[str]:
+    """Collapse excluded files into the fewest directory prefixes and file paths.
+
+    A directory (returned with a trailing ``/``) is used only when no kept file
+    lives anywhere beneath it, so an install rule built from the result cannot
+    drop a kept file. Files in mixed directories are returned individually.
+    """
+    excluded_set = set(excluded)
+    kept_directories: set[str] = set()
+    for path in all_paths:
+        if path in excluded_set:
+            continue
+        parts = path.split("/")
+        for depth in range(1, len(parts)):
+            kept_directories.add("/".join(parts[:depth]))
+    result: set[str] = set()
+    for path in excluded_set:
+        parts = path.split("/")
+        chosen = path
+        for depth in range(1, len(parts)):
+            directory = "/".join(parts[:depth])
+            if directory not in kept_directories:
+                chosen = f"{directory}/"
+                break
+        result.add(chosen)
+    return sorted(result)
+
+
+def package_profile_errors(
+    manifest: dict[str, Any],
+    profile: str,
+    label: str,
+    source_manifest: dict[str, Any] | None = None,
+) -> list[IntegrityError]:
+    """Reject a package manifest that ships content its profile excludes.
+
+    For a NOASSERTION-excluding profile every packaged entry must assert a
+    license. With ``source_manifest`` (the reviewed repository manifest) every
+    packaged entry must also equal a source entry exactly, so a package cannot
+    relabel an excluded file or add a file whose provenance was never reviewed.
+    """
+    if profile not in PACKAGE_PROFILES:
+        return [IntegrityError(label, "package-profile", f"unknown package profile {profile!r}")]
+    if profile not in NOASSERTION_EXCLUDED_PROFILES:
+        return []
+    for candidate, name in ((manifest, "package"), (source_manifest, "source")):
+        if candidate is not None and candidate["version"] != MANIFEST_SCHEMA_VERSION:
+            return [IntegrityError(
+                label, "provenance-missing",
+                f"{name} manifest version {candidate['version']} records no license; package profile "
+                f"{profile!r} needs schema v{MANIFEST_SCHEMA_VERSION}")]
+    source = None if source_manifest is None else {entry["path"]: entry for entry in source_manifest["entries"]}
+    errors: list[IntegrityError] = []
+    for entry in manifest["entries"]:
+        path = entry["path"]
+        if entry["license"] == NOASSERTION:
+            errors.append(IntegrityError(
+                path, "profile-excluded",
+                f"package profile {profile!r} must not ship an asset whose license is NOASSERTION (OD-09)"))
+            continue
+        if source is None:
+            continue
+        reviewed = source.get(path)
+        if reviewed is None:
+            errors.append(IntegrityError(
+                path, "profile-unreviewed",
+                f"package profile {profile!r} ships a file the source manifest does not declare"))
+        elif reviewed["license"] == NOASSERTION:
+            errors.append(IntegrityError(
+                path, "profile-excluded",
+                f"source manifest records NOASSERTION for this file; package profile {profile!r} excludes it"))
+        elif reviewed != entry:
+            errors.append(IntegrityError(
+                path, "profile-mismatch",
+                "packaged entry differs from the source manifest entry"))
+    return errors
+
+
+def verify_package_manifest(
+    manifest_path: Path,
+    root: Path,
+    profile: str,
+    *,
+    source_manifest_path: Path | None = None,
+    provenance_policy: Path | None = None,
+    require_provenance: bool = False,
+) -> list[IntegrityError]:
+    """Verify an installed package root, then apply its package profile.
+
+    For a NOASSERTION-excluding profile the source manifest defaults to the
+    repository manifest beside this verifier.
+    """
+    if profile not in PACKAGE_PROFILES:
+        return [IntegrityError(str(manifest_path), "package-profile", f"unknown package profile {profile!r}")]
+    excludes = profile in NOASSERTION_EXCLUDED_PROFILES
+    errors = verify_manifest(
+        manifest_path, root,
+        provenance_policy=provenance_policy,
+        require_provenance=require_provenance or excludes)
+    if not excludes:
+        return errors
+    # A manifest that did not load, or records no license, already failed.
+    if any(error.category in ("manifest-load", "provenance-missing") for error in errors):
+        return errors
+    source_path = source_manifest_path or (REPO_ROOT / KNOWN_MANIFESTS[0][0])
+    try:
+        manifest = load_manifest(_absolute_lexical(manifest_path))
+        source = load_manifest(_absolute_lexical(source_path))
+    except (ManifestFormatError, OSError) as exc:
+        return errors + [IntegrityError(str(source_path), "manifest-load", str(exc))]
+    errors += package_profile_errors(manifest, profile, str(manifest_path), source)
+    return errors + _package_closure_errors(manifest, profile, _absolute_lexical(source_path), source)
+
+
+def _package_closure_errors(
+    manifest: dict[str, Any], profile: str, source_path: Path, source: dict[str, Any]
+) -> list[IntegrityError]:
+    """Require a closure profile's package to ship exactly its derived asset closure.
+
+    The closure is derived from the repository that holds the source manifest
+    (``<repo>/<root>/assets.integrity.json``) when that tree defines the
+    package profiles, and otherwise from the checkout holding this verifier.
+    It never fails open: when neither defines the profiles the package is
+    rejected with a ``profile-closure`` error.
+    """
+    if profile not in CLOSURE_PROFILES:
+        return []
+    closure_module = _package_closure_module()
+    definitions = closure_module.PROFILE_DEFINITIONS_RELATIVE
+    repo_root = source_path.parent.parent
+    if source_path.name != MANIFEST_FILENAME or not (repo_root / definitions).is_file():
+        repo_root = REPO_ROOT
+    if not (repo_root / definitions).is_file():
+        return [IntegrityError(
+            str(source_path), "profile-closure",
+            f"package profile {profile!r} needs {definitions.as_posix()} to derive its asset closure, "
+            f"but neither the source manifest's tree nor {REPO_ROOT} provides it")]
+    try:
+        closure, _ = derive_profile_closure(repo_root, source, profile)
+    except ManifestFormatError as exc:
+        return [IntegrityError(str(source_path), "profile-closure", str(exc))]
+    assert closure is not None
+    shipped = {entry["path"] for entry in manifest["entries"]}
+    errors = [
+        IntegrityError(path, "profile-outside-closure",
+                       f"package profile {profile!r} ships a file outside its runtime asset closure")
+        for path in sorted(shipped - closure.keys())
+    ]
+    errors += [
+        IntegrityError(path, "profile-incomplete",
+                       f"package profile {profile!r} omits a file its runtime asset closure needs "
+                       f"(first needed by {closure[path][0]})")
+        for path in sorted(closure.keys() - shipped)
+    ]
+    return errors
 
 
 def manifest_bytes(manifest: dict[str, Any]) -> bytes:
@@ -472,8 +1128,10 @@ def load_manifest(path: Path) -> dict[str, Any]:
     data = _read_bounded_json(path)
     if not isinstance(data, dict):
         raise ManifestFormatError("manifest root must be an object")
-    if data.get("version") != MANIFEST_SCHEMA_VERSION:
-        raise ManifestFormatError(f"unsupported manifest version: {data.get('version')!r}")
+    version = data.get("version")
+    if isinstance(version, bool) or version not in SUPPORTED_MANIFEST_VERSIONS:
+        raise ManifestFormatError(f"unsupported manifest version: {version!r}")
+    entry_keys = ENTRY_KEYS if version == MANIFEST_SCHEMA_VERSION else LEGACY_ENTRY_KEYS
     if data.get("algorithm") != HASH_ALGORITHM:
         raise ManifestFormatError(f"unsupported algorithm: {data.get('algorithm')!r}")
     root_metadata = data.get("root")
@@ -497,8 +1155,17 @@ def load_manifest(path: Path) -> dict[str, Any]:
     for index, entry in enumerate(entries):
         if not isinstance(entry, dict):
             raise ManifestFormatError(f"entry {index} must be an object")
-        if set(entry) != {"path", "sha256", "size"}:
-            raise ManifestFormatError(f"entry {index} must contain exactly path, sha256, and size")
+        if set(entry) != entry_keys:
+            raise ManifestFormatError(
+                f"entry {index} must contain exactly {', '.join(sorted(entry_keys))} "
+                f"for manifest version {version}")
+        if version == MANIFEST_SCHEMA_VERSION:
+            license_id = entry.get("license")
+            if not isinstance(license_id, str) or LICENSE_ID_RE.fullmatch(license_id) is None:
+                raise ManifestFormatError(f"entry {index} license must be a license identifier")
+            problem = _text_problem(entry.get("provenance"))
+            if problem:
+                raise ManifestFormatError(f"entry {index} provenance {problem}")
         relative, problem = _canonical_relative_path(entry.get("path"))
         if problem is not None or relative is None:
             raise ManifestFormatError(f"entry {index} has unsafe path: {problem}")
@@ -527,8 +1194,20 @@ def load_manifest(path: Path) -> dict[str, Any]:
     return data
 
 
-def verify_manifest(manifest_path: Path, root: Path) -> list[IntegrityError]:
-    """Verify a manifest against a caller-authorized root in one disk scan."""
+def verify_manifest(
+    manifest_path: Path,
+    root: Path,
+    *,
+    provenance_policy: Path | None = None,
+    repo_root: Path | None = None,
+    require_provenance: bool = False,
+) -> list[IntegrityError]:
+    """Verify a manifest against a caller-authorized root in one disk scan.
+
+    ``require_provenance`` rejects a legacy v1 manifest. ``provenance_policy``
+    additionally proves every entry's license/provenance equals what the policy
+    resolves for the bytes on disk.
+    """
     try:
         manifest = load_manifest(_absolute_lexical(manifest_path))
     except (ManifestFormatError, OSError) as exc:
@@ -540,13 +1219,35 @@ def verify_manifest(manifest_path: Path, root: Path) -> list[IntegrityError]:
             str(manifest_path), "root-metadata",
             f"manifest root {manifest['root']!r} does not exactly match caller root {absolute_root.name!r}")]
 
+    errors: list[IntegrityError] = []
+    has_provenance = manifest["version"] == MANIFEST_SCHEMA_VERSION
+    if (require_provenance or provenance_policy is not None) and not has_provenance:
+        errors.append(IntegrityError(
+            str(manifest_path), "provenance-missing",
+            f"manifest version {manifest['version']} carries no license/provenance; "
+            f"regenerate schema v{MANIFEST_SCHEMA_VERSION} with the provenance policy"))
+
     disk_entries, scan_errors = scan_directory(absolute_root)
     if scan_errors:
-        return scan_errors
+        return errors + scan_errors
 
     declared = {entry["path"]: entry for entry in manifest["entries"]}
     disk = {entry["path"]: entry for entry in disk_entries}
-    errors: list[IntegrityError] = []
+    if provenance_policy is not None and has_provenance:
+        resolved, provenance_errors = resolve_provenance(
+            provenance_policy, absolute_root, disk_entries, repo_root)
+        errors.extend(provenance_errors)
+        for relative in sorted(declared.keys() & resolved.keys()):
+            expected_license, expected_provenance = resolved[relative]
+            entry = declared[relative]
+            if entry["license"] != expected_license:
+                errors.append(IntegrityError(
+                    relative, "provenance-mismatch",
+                    f"manifest license {entry['license']!r}, policy resolves {expected_license!r}"))
+            if entry["provenance"] != expected_provenance:
+                errors.append(IntegrityError(
+                    relative, "provenance-mismatch",
+                    f"manifest provenance {entry['provenance']!r}, policy resolves {expected_provenance!r}"))
     for relative in sorted(declared.keys() - disk.keys()):
         errors.append(IntegrityError(relative, "missing", "declared file is absent from snapshot"))
     for relative in sorted(disk.keys() - declared.keys()):
@@ -561,6 +1262,111 @@ def verify_manifest(manifest_path: Path, root: Path) -> list[IntegrityError]:
             errors.append(IntegrityError(
                 relative, "hash-mismatch", f"expected {expected['sha256']}, actual {actual['sha256']}"))
     return errors
+
+
+def _read_contained_bytes(
+    root: Path, root_resolved: Path, relative: str, limit: int
+) -> tuple[bytes | None, IntegrityError | None]:
+    """Read one staged file that is proven regular, link-free and inside ``root``."""
+    candidate, before, error = _checked_candidate(root, root_resolved, relative, want_directory=False)
+    if error is not None or candidate is None or before is None:
+        return None, error
+    if before.st_size > limit:
+        return None, IntegrityError(relative, "resource-limit", f"reference source exceeds {limit} bytes")
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(candidate, flags)
+        try:
+            opened = os.fstat(fd)
+            if not stat.S_ISREG(opened.st_mode) or _fingerprint(opened) != _fingerprint(before):
+                return None, IntegrityError(relative, "io-race", "file changed between inspection and open")
+            data = os.read(fd, limit + 1)
+        finally:
+            os.close(fd)
+    except OSError as exc:
+        return None, IntegrityError(relative, "io-error", str(exc))
+    if len(data) != opened.st_size:
+        return None, IntegrityError(relative, "io-race", "file size changed during read")
+    return data, None
+
+
+def verify_references(manifest_path: Path, root: Path) -> tuple[list[IntegrityError], int, int]:
+    """Prove the reference closure of a staged Assets root (ENG-220).
+
+    Every ``.scene`` entry and every ``Materials/**.json`` entry the manifest
+    lists is parsed by ``asset_references.py``; so is any other material a
+    scene names. Each reference must resolve inside ``root`` to a regular,
+    link-free file that the manifest lists with exact case. Failures name the
+    referencing file, line or JSON key, and the offending value. Returns
+    ``(errors, parsed file count, reference count)``. Run it after
+    ``verify``: this check trusts the manifest's hashes, not the bytes.
+    """
+    try:
+        manifest = load_manifest(_absolute_lexical(manifest_path))
+    except (ManifestFormatError, OSError) as exc:
+        return [IntegrityError(str(manifest_path), "manifest-load", str(exc))], 0, 0
+    absolute_root = _absolute_lexical(root)
+    if manifest["root"] != absolute_root.name:
+        return [IntegrityError(
+            str(manifest_path), "root-metadata",
+            f"manifest root {manifest['root']!r} does not exactly match caller root {absolute_root.name!r}")], 0, 0
+    prepared_root, root_resolved, errors = _prepare_root(absolute_root)
+    if errors or prepared_root is None or root_resolved is None:
+        return errors, 0, 0
+
+    parser = _sibling_module("asset_references.py", "spark_asset_references")
+    listed = {entry["path"] for entry in manifest["entries"]}
+    folded = {path.casefold(): path for path in listed}
+    pending = sorted(
+        path for path in listed
+        if path.lower().endswith(".scene") or (path.startswith("Materials/") and path.lower().endswith(".json")))
+    queued = set(pending)
+    parsed = 0
+    checked = 0
+    while pending:
+        relative = pending.pop(0)
+        data, error = _read_contained_bytes(prepared_root, root_resolved, relative, MAX_REFERENCE_SOURCE_BYTES)
+        if error is not None or data is None:
+            errors.append(error or IntegrityError(relative, "io-error", "unknown read failure"))
+            continue
+        extract = parser.scene_references if relative.lower().endswith(".scene") else parser.material_references
+        references, problems = extract(relative, data)
+        parsed += 1
+        for problem in problems:
+            detail = f"{problem.key}={problem.value!r} " if problem.key else ""
+            errors.append(IntegrityError(problem.location, "reference", f"{detail}{problem.message}"))
+        for reference in references:
+            checked += 1
+            target = reference.target
+            named = f"{reference.key}={reference.value!r}"
+            _, _, unsafe = _checked_candidate(prepared_root, root_resolved, target, want_directory=False)
+            staged = os.path.lexists(prepared_root / target)
+            declared = folded.get(target.casefold())
+            if target not in listed and declared is not None:
+                errors.append(IntegrityError(
+                    reference.location, "reference-case",
+                    f"{named} resolves to {target!r}, which differs in case from the listed {declared!r}"))
+                continue
+            if not staged:
+                errors.append(IntegrityError(
+                    reference.location, "reference-missing",
+                    f"{named} resolves to {target!r}, which is not staged in {absolute_root.name}"))
+                continue
+            if unsafe is not None:
+                errors.append(IntegrityError(
+                    reference.location, "reference-unsafe",
+                    f"{named} resolves to {target!r}, which is not a regular file inside the staged root: "
+                    f"{unsafe.message}"))
+                continue
+            if target not in listed:
+                errors.append(IntegrityError(
+                    reference.location, "reference-unlisted",
+                    f"{named} resolves to staged file {target!r}, which {MANIFEST_FILENAME} does not list"))
+                continue
+            if reference.kind == "material" and target not in queued:
+                queued.add(target)
+                pending.append(target)
+    return errors, parsed, checked
 
 
 def _validate_lock(lock_path: Path) -> dict[str, str]:
@@ -601,8 +1407,8 @@ def _validate_template_manifest(path: Path, template_name: str) -> dict[str, str
         raise ManifestFormatError(
             f"package {data.get('package')!r} does not exactly match {template_name!r}")
     assets = data.get("assets")
-    if not isinstance(assets, list):
-        raise ManifestFormatError("template manifest assets must be an array")
+    if not isinstance(assets, list) or not assets:
+        raise ManifestFormatError("template manifest assets must be a non-empty array")
     if len(assets) > MAX_ENTRY_COUNT:
         raise ManifestFormatError(f"template manifest exceeds {MAX_ENTRY_COUNT} entries")
     result: dict[str, str] = {}
@@ -660,7 +1466,22 @@ def verify_template_manifests(repo_root: Path) -> list[IntegrityError]:
         except OSError as exc:
             errors.append(IntegrityError(f"Templates/{child.name}", "io-error", str(exc)))
             continue
+        relative = f"Templates/{child.name}"
+        if child.name in TEMPLATE_COLLECTION_METADATA:
+            if _stat_is_reparse(info) or not stat.S_ISREG(info.st_mode):
+                errors.append(IntegrityError(
+                    relative,
+                    "concealed-payload",
+                    "template collection metadata is not a regular file",
+                ))
+            continue
+        if _stat_is_reparse(info):
+            errors.append(IntegrityError(
+                relative, "reparse", "template directory is a reparse point"))
+            continue
         if not stat.S_ISDIR(info.st_mode):
+            errors.append(IntegrityError(
+                relative, "undeclared", "template root entry is not a template directory"))
             continue
         template_name, problem = _canonical_relative_path(child.name)
         if problem is not None or template_name is None:
@@ -728,8 +1549,15 @@ def verify_template_manifests(repo_root: Path) -> list[IntegrityError]:
 def verify_repository(repo_root: Path) -> list[IntegrityError]:
     repo_root = _absolute_lexical(repo_root)
     errors: list[IntegrityError] = []
-    for manifest_relative, root_relative in KNOWN_MANIFESTS:
-        errors.extend(verify_manifest(repo_root / manifest_relative, repo_root / root_relative))
+    for manifest_relative, root_relative, policy_relative in KNOWN_MANIFESTS:
+        errors.extend(verify_manifest(
+            repo_root / manifest_relative,
+            repo_root / root_relative,
+            provenance_policy=repo_root / policy_relative,
+            repo_root=repo_root,
+            require_provenance=True,
+        ))
+        errors.extend(verify_references(repo_root / manifest_relative, repo_root / root_relative)[0])
     errors.extend(verify_template_manifests(repo_root))
     return errors
 
@@ -749,9 +1577,11 @@ def cmd_generate(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
-    manifest, errors = generate_manifest(root)
+    policy_arg = getattr(args, "provenance", None)
+    policy = _absolute_lexical(Path(policy_arg)) if policy_arg else DEFAULT_PROVENANCE_POLICY
+    manifest, errors = generate_manifest(root, provenance_policy=policy)
     if errors:
-        print(f"Refusing generation after {len(errors)} scan error(s):", file=sys.stderr)
+        print(f"Refusing generation after {len(errors)} scan/provenance error(s):", file=sys.stderr)
         _print_errors(errors)
         return 1
     payload = manifest_bytes(manifest)
@@ -787,14 +1617,95 @@ def cmd_generate(args: argparse.Namespace) -> int:
 
 
 def cmd_verify(args: argparse.Namespace) -> int:
-    errors = verify_manifest(Path(args.manifest), Path(args.root))
+    policy = getattr(args, "provenance", None)
+    profile = getattr(args, "profile", None)
+    source = getattr(args, "source_manifest", None)
+    if source and not profile:
+        print("--source-manifest requires --profile", file=sys.stderr)
+        return 1
+    options = {
+        "provenance_policy": Path(policy) if policy else None,
+        "require_provenance": bool(getattr(args, "require_provenance", False)),
+    }
+    if profile:
+        errors = verify_package_manifest(
+            Path(args.manifest), Path(args.root), profile,
+            source_manifest_path=Path(source) if source else None, **options)
+    else:
+        errors = verify_manifest(Path(args.manifest), Path(args.root), **options)
     if errors:
         print(f"FAILED: {len(errors)} error(s)", file=sys.stderr)
         _print_errors(errors)
         return 1
     manifest = load_manifest(_absolute_lexical(Path(args.manifest)))
-    print(f"OK: {manifest['fileCount']} entries verified")
+    suffix = f", package profile {profile}" if profile else ""
+    print(f"OK: {manifest['fileCount']} entries verified (manifest v{manifest['version']}{suffix})")
     return 0
+
+
+def cmd_references(args: argparse.Namespace) -> int:
+    errors, parsed, checked = verify_references(Path(args.manifest), Path(args.root))
+    if errors:
+        print(f"FAILED: {len(errors)} reference error(s)", file=sys.stderr)
+        _print_errors(errors)
+        return 1
+    print(f"OK: {checked} references in {parsed} scene and material files resolve to listed staged assets")
+    return 0
+
+
+def cmd_package_profile(args: argparse.Namespace) -> int:
+    """Write the package manifest and install exclusion list for one profile."""
+    source = _absolute_lexical(Path(args.manifest))
+    output = _absolute_lexical(Path(args.output))
+    exclusions_output = _absolute_lexical(Path(args.exclusions))
+    if len({source, output, exclusions_output}) != 3:
+        print("Refusing: source, --output, and --exclusions must be three different files", file=sys.stderr)
+        return 1
+    repo_root = _absolute_lexical(Path(args.repo_root)) if args.repo_root else REPO_ROOT
+    try:
+        manifest = load_manifest(source)
+        closure, inputs = derive_profile_closure(repo_root, manifest, args.profile)
+        derived, excluded = derive_package_manifest(manifest, args.profile, closure)
+    except (ManifestFormatError, OSError) as exc:
+        print(f"Cannot derive package profile {args.profile!r}: {exc}", file=sys.stderr)
+        return 1
+    # Defense in depth: the derived manifest must pass the same check a
+    # staged package will face.
+    errors = package_profile_errors(derived, args.profile, str(output), manifest)
+    if errors:
+        print(f"FAILED: derived {args.profile} manifest violates its profile", file=sys.stderr)
+        _print_errors(errors)
+        return 1
+    prefixes = package_exclusion_prefixes((entry["path"] for entry in manifest["entries"]), excluded)
+    try:
+        output.write_bytes(manifest_bytes(derived))
+        exclusions_output.write_bytes("".join(f"{prefix}\n" for prefix in prefixes).encode("utf-8"))
+        if args.inputs:
+            inputs_output = _absolute_lexical(Path(args.inputs))
+            inputs_output.write_bytes("".join(f"{path.as_posix()}\n" for path in inputs).encode("utf-8"))
+    except OSError as exc:
+        print(f"Cannot write package profile outputs: {exc}", file=sys.stderr)
+        return 1
+    print(f"Package profile {args.profile}: {derived['fileCount']} of {manifest['fileCount']} entries kept, "
+          f"{_exclusion_summary(manifest, excluded)} excluded as {len(prefixes)} install exclusion(s)")
+    return 0
+
+
+def _exclusion_summary(manifest: dict[str, Any], excluded: list[str]) -> str:
+    excluded_set = set(excluded)
+    unasserted = sum(
+        1 for entry in manifest["entries"]
+        if entry["path"] in excluded_set and entry.get("license") == NOASSERTION)
+    return (f"{len(excluded)} entries ({unasserted} NOASSERTION, "
+            f"{len(excluded) - unasserted} outside the profile closure)")
+
+
+def _format_summary(summary: dict[str, Any]) -> str:
+    gaps = ", ".join(summary["gaps"]) or "none"
+    return (
+        f"provenance: {summary['entries']} entries, {summary['asserted']} license-asserted, "
+        f"{summary['unasserted']} NOASSERTION (owning gaps: {gaps})"
+    )
 
 
 def cmd_check_all(args: argparse.Namespace) -> int:
@@ -805,6 +1716,37 @@ def cmd_check_all(args: argparse.Namespace) -> int:
         _print_errors(errors)
         return 1
     print("OK: first-party and template asset integrity checks passed")
+    unasserted = 0
+    for manifest_relative, _, _ in KNOWN_MANIFESTS:
+        summary = provenance_summary(load_manifest(_absolute_lexical(Path(repo_root) / manifest_relative)))
+        unasserted += summary["unasserted"]
+        print(f"{manifest_relative} {_format_summary(summary)}")
+    source_manifest = load_manifest(_absolute_lexical(Path(repo_root) / KNOWN_MANIFESTS[0][0]))
+    selected = getattr(args, "profile", None)
+    profiles = [selected] if selected else sorted(NOASSERTION_EXCLUDED_PROFILES | CLOSURE_PROFILES)
+    for profile in profiles:
+        try:
+            closure, _ = derive_profile_closure(Path(repo_root), source_manifest, profile)
+            derived, excluded = derive_package_manifest(source_manifest, profile, closure)
+        except ManifestFormatError as exc:
+            print(f"FAILED: cannot derive package profile {profile}: {exc}", file=sys.stderr)
+            return 1
+        profile_errors = package_profile_errors(derived, profile, profile, source_manifest)
+        if profile_errors:
+            print(f"FAILED: derived {profile} package manifest violates its profile", file=sys.stderr)
+            _print_errors(profile_errors)
+            return 1
+        print(f"package profile {profile}: {derived['fileCount']} entries packaged, "
+              f"{_exclusion_summary(source_manifest, excluded)} excluded")
+        if selected:
+            # With --profile, --strict-provenance judges only what that profile ships.
+            unasserted = sum(1 for entry in derived["entries"] if entry.get("license") in (None, NOASSERTION))
+            print(f"package profile {profile} {_format_summary(provenance_summary(derived))}")
+    if getattr(args, "strict_provenance", False) and unasserted:
+        scope = f"package profile {selected} ships" if selected else "the repository manifest has"
+        print(f"FAILED: --strict-provenance and {scope} {unasserted} entries that assert no license",
+              file=sys.stderr)
+        return 1
     return 0
 
 
@@ -815,15 +1757,60 @@ def main() -> int:
     generate = commands.add_parser("generate", help="Generate the fixed-root manifest")
     generate.add_argument("root", help="Caller-authorized asset root")
     generate.add_argument("-o", "--output", help="Must equal <root>/assets.integrity.json")
+    generate.add_argument(
+        "--provenance",
+        help=f"Provenance policy (default: {DEFAULT_PROVENANCE_POLICY.relative_to(REPO_ROOT).as_posix()})")
     generate.set_defaults(handler=cmd_generate)
 
     verify = commands.add_parser("verify", help="Verify a manifest and explicit root")
     verify.add_argument("manifest", help="Manifest JSON path")
     verify.add_argument("--root", required=True, help="Caller-authorized asset root")
+    verify.add_argument("--provenance", help="Also prove license/provenance against this policy")
+    verify.add_argument(
+        "--require-provenance", action="store_true",
+        help="Reject a legacy v1 manifest that carries no license/provenance")
     verify.set_defaults(handler=cmd_verify)
+
+    verify.add_argument(
+        "--profile", choices=sorted(PACKAGE_PROFILES),
+        help="Also enforce this package profile; stable-v1 rejects NOASSERTION entries (OD-09)")
+    verify.add_argument(
+        "--source-manifest",
+        help="Reviewed repository manifest every packaged entry must match "
+             f"(default for NOASSERTION-excluding profiles: {KNOWN_MANIFESTS[0][0]})")
+
+    references = commands.add_parser(
+        "references", help="Prove scene and material references resolve to listed files inside the root")
+    references.add_argument("manifest", help="Manifest JSON path")
+    references.add_argument("--root", required=True, help="Caller-authorized asset root")
+    references.set_defaults(handler=cmd_references)
+
+    package_profile = commands.add_parser(
+        "package-profile", help="Derive a package manifest and install exclusions for a profile")
+    package_profile.add_argument("manifest", help="Reviewed source manifest (schema v2)")
+    package_profile.add_argument("--profile", required=True, choices=sorted(PACKAGE_PROFILES))
+    package_profile.add_argument("--output", required=True, help="Derived package manifest path")
+    package_profile.add_argument(
+        "--exclusions", required=True,
+        help="Root-relative excluded files and directories (trailing '/'), one per line")
+    package_profile.add_argument(
+        "--repo-root",
+        help="Repository whose module sources and profile definitions derive the asset closure "
+             "(default: auto-detect)")
+    package_profile.add_argument(
+        "--inputs",
+        help="Also write the closure's re-derivation inputs, one absolute path per line: every data file "
+             "read plus each scanned source directory")
+    package_profile.set_defaults(handler=cmd_package_profile)
 
     check_all = commands.add_parser("check-all", help="Verify all repository asset contracts")
     check_all.add_argument("--repo-root", help="Repository root (default: auto-detect)")
+    check_all.add_argument(
+        "--profile", choices=sorted(PACKAGE_PROFILES),
+        help="Derive only this package profile; --strict-provenance then judges only the entries it ships")
+    check_all.add_argument(
+        "--strict-provenance", action="store_true",
+        help="Also fail while any entry asserts NOASSERTION (release-promotion gate)")
     check_all.set_defaults(handler=cmd_check_all)
 
     args = parser.parse_args()

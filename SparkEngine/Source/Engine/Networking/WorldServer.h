@@ -227,6 +227,17 @@ namespace Spark::Net
         AreaID HandlePlayerConnect(ClientID clientId, const std::string& playerName, const XMFLOAT3& spawnPosition);
 
         /**
+         * @brief Handle a new player connection placed by an external policy
+         *
+         * Used when a placement policy (the gateway's IAreaPlacementPolicy) has
+         * already chosen the area, instead of the spawn-position lookup above.
+         * @param targetArea Area chosen by the caller
+         * @return true if the player was recorded; false if targetArea is not a registered, online area
+         */
+        bool HandlePlayerConnectToArea(ClientID clientId, const std::string& playerName, const XMFLOAT3& spawnPosition,
+                                       AreaID targetArea);
+
+        /**
          * @brief Handle player disconnection
          * @param clientId Client ID
          */

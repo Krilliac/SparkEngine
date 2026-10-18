@@ -46,6 +46,7 @@ namespace SparkEditor
         bool m_useStandaloneBroker = true;
         char m_brokerEndpointBuffer[128] = ".spark-collab.sock";
         char m_brokerSessionBuffer[65] = "default";
+        char m_joinCodeBuffer[kCollabJoinSecretBytes * 2 + 1] = ""; ///< Peer-session join code (join side)
         std::string m_statusMessage;
 
         // Edit log (ring buffer of recent edits)

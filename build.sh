@@ -36,6 +36,7 @@ SUBMODULES=(
   "ThirdParty/UI/imgui|Dear ImGui|Editor UI, debug overlays"
   "ThirdParty/ECS/entt|EnTT|Entity component system"
   "ThirdParty/Scripting/angelscript-mirror|AngelScript|Hot-reload scripting"
+  "ThirdParty/Security/libsodium|libsodium|Network transport cryptography (required)"
   "ThirdParty/Networking/curl|curl|HTTP networking (optional)"
 )
 

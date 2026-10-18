@@ -24,3 +24,13 @@ The accompanying electrical ignition/resolve cue is deliberately short and quiet
 ## Engine behavior target
 
 Ship this as the runtime default for graphical builds. Play once per process launch before the first game frame, skip it for headless/dedicated servers and automated tests, and support `-no-splash` plus a project-level override. Preserve aspect ratio with black letterboxing rather than cropping the logo.
+
+## Logomark
+
+The four-point "spark" logomark used as the app icon of SparkEditor, SparkLauncher, SparkInstaller and SparkCrashReporter, and drawn in-engine by `Spark::Ui::DrawLogomark`.
+
+- `sparkengine_logomark.svg` — 256×256 outlined paths (no live text) filled with the ember gradient `#e8611a` → `#f1823a` → `#ffc857`, top-left to bottom-right.
+- `sparkengine.ico` — PNG-in-ICO with the 16, 20, 24, 32, 40, 48, 64 and 256 px sizes.
+- `generate_logomark.py` — stdlib-only deterministic generator (`python generate_logomark.py [--out-dir DIR]`). Its geometry constants (unit square, four-point concave star centred at 0.5/0.5, outer radius 0.46, inner radius 0.13, ember dot at 0.78/0.22 with radius 0.075) are shared verbatim with `Spark::Ui::DrawLogomark`; change both together.
+
+The three files are recorded under `LicenseRef-SparkOpenLicense-1.0` by the `engine-logomark` rule in `tools/asset-integrity/provenance.json`, bound to their SHA-256 digests. After regenerating, re-pin the digests in that rule and regenerate `Assets/assets.integrity.json` with `python tools/asset-integrity/verify_asset_integrity.py generate Assets`.

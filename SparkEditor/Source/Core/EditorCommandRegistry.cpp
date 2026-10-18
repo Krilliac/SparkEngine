@@ -16,6 +16,9 @@
 #include "../UndoRedo/UndoRedoManager.h"
 #include "../Prefabs/PrefabManager.h"
 
+#include <string>
+#include <string_view>
+
 namespace SparkEditor
 {
 
@@ -36,8 +39,9 @@ namespace SparkEditor
     {
         auto RegisterPanelToggle = [this](const std::string& panelKey, const std::string& displayName)
         {
-            m_commandPalette->RegisterAction("Toggle " + displayName, "Panel", [this, panelKey]()
-                                             { SetPanelVisible(panelKey, !IsPanelVisible(panelKey)); });
+            // Init-captures hold non-const strings, so moving the callback into std::function cannot throw.
+            m_commandPalette->RegisterAction("Toggle " + displayName, "Panel",
+                                             [this, key = panelKey]() { SetPanelVisible(key, !IsPanelVisible(key)); });
         };
 
         // Core panels
@@ -111,6 +115,7 @@ namespace SparkEditor
         // Layout commands
         m_commandPalette->RegisterAction("Reset Layout", "Layout", [this]() { ResetToDefaultLayout(); });
         m_commandPalette->RegisterAction("Save Layout", "Layout", [this]() { SaveLayout("Quick Save"); });
+        m_commandPalette->RegisterAction("Save Layout As...", "Layout", [this]() { m_saveLayoutAsRequested = true; });
 
         // Prefab commands
         m_commandPalette->RegisterAction("Create Empty Prefab", "Command",
@@ -131,46 +136,72 @@ namespace SparkEditor
 
         m_commandPalette->RegisterAction("Save Scene", "Scene", [this]() { SaveScene(); });
 
-        // Play mode
+        // F5 opens real-play controls. The old editor state machine only
+        // advances preview counters, so it must not be advertised as gameplay.
         m_commandPalette->RegisterAction(
-            "Play", "Command",
+            "Open Play Control", "Command",
             [this]()
             {
-                if (m_playModeManager.IsPaused())
-                    m_playModeManager.ResumePlayMode();
-                else if (m_playModeManager.IsStopped())
-                    m_playModeManager.EnterPlayMode();
-
-                m_playMode = m_playModeManager.IsPlaying()
-                                 ? PlayMode::Playing
-                                 : (m_playModeManager.IsSimulating()
-                                        ? PlayMode::Simulating
-                                        : (m_playModeManager.IsPaused() ? PlayMode::Paused : PlayMode::Stopped));
-                const bool running = m_playMode != PlayMode::Stopped;
-                ShowNotification(running ? "Running..." : "Unable to enter play mode", running ? "success" : "error");
+                SetPanelVisible("PlayControl", true);
+                ShowNotification("Play Control opened — select a module, then Launch Game", "info", 3.0f);
             },
             "F5");
 
         m_commandPalette->RegisterAction(
-            "Stop", "Command",
+            "Open Play Control to stop games", "Command",
             [this]()
             {
-                m_playModeManager.ExitPlayMode();
-                m_playMode = PlayMode::Stopped;
-                ShowNotification("Stopped", "info");
+                SetPanelVisible("PlayControl", true);
+                ShowNotification("Play Control opened — use STOP ALL to stop game processes", "info", 3.0f);
             },
             "Shift+F5");
     }
 
     void EditorUI::RegisterToolCommands()
     {
-        // Theme commands
-        m_commandPalette->RegisterAction("Theme: Spark Fusion", "Command", [this]() { ApplyTheme("Spark Fusion"); });
-        m_commandPalette->RegisterAction("Theme: Spark Professional", "Command",
-                                         [this]() { ApplyTheme("Spark Professional"); });
-        m_commandPalette->RegisterAction("Theme: Spark Ember", "Command", [this]() { ApplyTheme("Spark Ember"); });
-        m_commandPalette->RegisterAction("Theme: Professional Light", "Command",
-                                         [this]() { ApplyTheme("Professional Light"); });
+        // Appearance commands edit the same preferences as View > Appearance, so a choice made here persists.
+        for (const std::string_view family : EditorAppearanceWindow::kPaletteFamilies)
+        {
+            // Not const: a const capture turns the closure's move into a throwing copy.
+            std::string palette(family);
+            m_commandPalette->RegisterAction("Theme: " + palette, "Command",
+                                             [this, palette]()
+                                             {
+                                                 m_preferences.palette = palette;
+                                                 CommitPreferenceChange();
+                                             });
+        }
+        struct AppearanceCommand
+        {
+            const char* label;
+            const char* value;
+        };
+        static constexpr AppearanceCommand kAppearanceCommands[] = {{"Appearance: Dark", "dark"},
+                                                                    {"Appearance: Light", "light"},
+                                                                    {"Appearance: High Contrast", "hc"},
+                                                                    {"Appearance: Match System", "system"}};
+        for (const AppearanceCommand& command : kAppearanceCommands)
+        {
+            std::string value = command.value; // non-const for the same reason as the palette loop
+            m_commandPalette->RegisterAction(command.label, "Command",
+                                             [this, value]()
+                                             {
+                                                 m_preferences.appearance = value;
+                                                 CommitPreferenceChange();
+                                             });
+        }
+        m_commandPalette->RegisterAction("Appearance...", "Command", [this]() { OpenAppearanceWindow(); });
+        m_commandPalette->RegisterAction("UI Scale: Increase", "Command", [this]() { StepUiScale(1); }, "Ctrl+=");
+        m_commandPalette->RegisterAction("UI Scale: Decrease", "Command", [this]() { StepUiScale(-1); }, "Ctrl+-");
+        m_commandPalette->RegisterAction("UI Scale: Reset to 100%", "Command", [this]() { StepUiScale(0); }, "Ctrl+0");
+        m_commandPalette->RegisterAction("Toggle Status Bar", "Command",
+                                         [this]()
+                                         {
+                                             m_preferences.showStatusBar = !m_preferences.showStatusBar;
+                                             SavePreferences();
+                                         });
+        m_commandPalette->RegisterAction("Show Notifications", "Command", [this]() { OpenNotificationHistory(); });
+        m_commandPalette->RegisterAction("Show Start Page", "Command", [this]() { OpenStartPage(); });
 
         // Transform tool commands
         m_commandPalette->RegisterAction(

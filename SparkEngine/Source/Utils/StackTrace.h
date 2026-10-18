@@ -176,6 +176,75 @@ namespace Spark
             return s_symbolMutex;
         }
 
+#ifdef SPARK_PLATFORM_WINDOWS
+        /// Own DbgHelp's shared mutex without re-entering it on a faulting thread.
+        class SymbolLockLease
+        {
+          public:
+            explicit SymbolLockLease(bool bounded = false) : m_lock(SymbolLock(), std::defer_lock)
+            {
+                bool& active = InSymbolOperation();
+                if (active)
+                    return;
+
+                // Mark the attempt before touching the mutex so an exception
+                // inside lock acquisition cannot re-enter std::mutex::try_lock.
+                active = true;
+                m_entered = true;
+                try
+                {
+                    if (bounded)
+                    {
+                        for (int attempt = 0; attempt < 50 && !m_lock.owns_lock(); ++attempt)
+                        {
+                            if (m_lock.try_lock())
+                                break;
+                            Sleep(10); // At most 500 ms on the crash path.
+                        }
+                    }
+                    else
+                    {
+                        m_lock.lock();
+                    }
+                }
+                catch (...)
+                {
+                    active = false;
+                    m_entered = false;
+                    throw;
+                }
+                if (!m_lock.owns_lock())
+                {
+                    active = false;
+                    m_entered = false;
+                }
+            }
+
+            SymbolLockLease(const SymbolLockLease&) = delete;
+            SymbolLockLease& operator=(const SymbolLockLease&) = delete;
+
+            ~SymbolLockLease()
+            {
+                if (m_lock.owns_lock())
+                    m_lock.unlock();
+                if (m_entered)
+                    InSymbolOperation() = false;
+            }
+
+            [[nodiscard]] bool owns_lock() const noexcept { return m_lock.owns_lock(); }
+
+          private:
+            static bool& InSymbolOperation()
+            {
+                static thread_local bool active = false;
+                return active;
+            }
+
+            std::unique_lock<std::mutex> m_lock;
+            bool m_entered = false;
+        };
+#endif
+
         /**
          * @brief Initialize the DbgHelp symbol handler once per process (Windows only)
          *
@@ -268,7 +337,13 @@ namespace Spark
 #ifdef SPARK_PLATFORM_WINDOWS
             // DbgHelp is single-threaded; hold the process-wide lock across the
             // whole resolve loop, not just the one-time initialization.
-            std::lock_guard<std::mutex> symbolLock(SymbolLock());
+            SymbolLockLease symbolLock;
+            if (!symbolLock.owns_lock())
+            {
+                for (size_t i = 0; i < m_frames.size(); ++i)
+                    m_frames[i].address = reinterpret_cast<uintptr_t>(m_rawAddresses[i]);
+                return;
+            }
             EnsureSymbolsInitialized();
             HANDLE process = GetCurrentProcess();
 

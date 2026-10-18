@@ -48,6 +48,7 @@ namespace RPG
         bool isSafeZone = false;
         std::vector<uint32_t> connectedAreas; ///< IDs of adjacent areas
         std::vector<EncounterEntry> encounters;
+        std::vector<std::string> propMeshPaths; ///< Kit meshes streamed with the area (complete Assets/ paths)
     };
 
     /**

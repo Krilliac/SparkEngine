@@ -1,0 +1,9 @@
+{
+  "name": "Blank3D",
+  "identity": "blank-3d",
+  "description": "A ready-to-edit 3D composition study.",
+  "genre": "General",
+  "gameModule": "Blank3D",
+  "defaultScene": "Scenes/Default.sparkscene",
+  "features": ["primitive", "ground"]
+}

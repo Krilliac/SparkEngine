@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "lane": "L1",
+  "description": "Editor theme core: theme adapter, fonts, icons, dock layout, application window platform.",
+  "allowlisted_tables": {},
+  "total": 0,
+  "files": {
+    "SparkEditor/Source/Core/EditorApplication.cpp": 0,
+    "SparkEditor/Source/Core/EditorApplication.h": 0,
+    "SparkEditor/Source/Core/EditorApplicationLinux.cpp": 0,
+    "SparkEditor/Source/Core/EditorApplicationWindows.cpp": 0,
+    "SparkEditor/Source/Core/EditorDockLayout.h": 0,
+    "SparkEditor/Source/Core/EditorFonts.cpp": 0,
+    "SparkEditor/Source/Core/EditorFonts.h": 0,
+    "SparkEditor/Source/Core/EditorIcons.h": 0,
+    "SparkEditor/Source/Core/EditorTheme.cpp": 0,
+    "SparkEditor/Source/Core/EditorTheme.h": 0,
+    "SparkEditor/Source/Utils/ImGuiUtils.h": 0,
+    "SparkEditor/Source/main.cpp": 0
+  }
+}

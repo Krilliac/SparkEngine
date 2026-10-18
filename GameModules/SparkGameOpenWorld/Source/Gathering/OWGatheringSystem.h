@@ -117,6 +117,10 @@ namespace OpenWorld
         /// @brief Harvest a resource node, adding resources to inventory
         uint32_t HarvestNode(uint32_t nodeId);
 
+        /// @brief Nearest non-depleted node within maxDistance of (x, z) on the ground plane
+        /// @return The node id, or 0 when none is in range (ties resolve to the lower id)
+        uint32_t FindNearestHarvestableNode(float x, float z, float maxDistance) const;
+
         /// @brief Add resources directly (e.g., from hunting)
         void AddResource(ResourceType type, uint32_t amount);
 

@@ -4,7 +4,7 @@
  */
 
 #include "WeaponStats.h"
-#include "Utils/LogMacros.h"
+#include "Core/FPSLog.h"
 
 #include <algorithm>
 #include <cctype>
@@ -16,8 +16,8 @@ using SparkEditor::WeaponType;
 WeaponStats ApplyWeaponModifications(const WeaponStats& baseStats, float damageMultiplier, float fireRateMultiplier,
                                      float accuracyMultiplier, float reloadTimeMultiplier)
 {
-    SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Applying weapon mods: dmg=%.2fx, fire=%.2fx, acc=%.2fx, reload=%.2fx",
-                    damageMultiplier, fireRateMultiplier, accuracyMultiplier, reloadTimeMultiplier);
+    FPS_LOG_DEBUG("Applying weapon mods: dmg={:.2f}x, fire={:.2f}x, acc={:.2f}x, reload={:.2f}x", damageMultiplier,
+                  fireRateMultiplier, accuracyMultiplier, reloadTimeMultiplier);
     WeaponStats modified = baseStats;
 
     modified.Damage *= damageMultiplier;
@@ -104,6 +104,6 @@ WeaponType StringToWeaponType(const char* str)
         return WeaponType::MELEE_WEAPON;
 
     // Default fallback
-    SPARK_LOG_WARN(Spark::LogCategory::Game, "Unknown weapon type string: %s, defaulting to Pistol", str);
+    FPS_LOG_WARN("Unknown weapon type string: {}, defaulting to Pistol", str);
     return WeaponType::PISTOL;
 }

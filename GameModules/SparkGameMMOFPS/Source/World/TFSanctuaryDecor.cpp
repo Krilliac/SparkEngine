@@ -155,6 +155,21 @@ namespace Terrafront
             {"Assets/Models/MMOFPS/props/prop_crate_s.obj", kMatConcrete, 262.8f, 3796.6f, 40.0f, 1.0f, 1.0f, 1.0f,
              0.0f, true, 0.9f},
 
+            // East logistics yard (TERRAFRONT kit, tools/blender/author_mmofps_kit.py), past the east
+            // barrier at 400/3776. Kit meshes carry their palette as OBJ/MTL Kd colours, so the material
+            // stays empty (an explicit material would override them). Kit fronts face +Z; yaw -90 turns
+            // them west toward the plaza, so the pad's drive-on arrow points at the barricade gap.
+            {"Assets/Models/MMOFPS/Kit/vehicle_pad.obj", "", 430.0f, 3776.0f, -90.0f, 1.0f, 1.0f, 1.0f, 0.0f, false,
+             0.0f},
+            {"Assets/Models/MMOFPS/Kit/deployable_barricade.obj", "", 421.0f, 3769.0f, -90.0f, 1.0f, 1.0f, 1.0f, 0.0f,
+             true, 0.0f},
+            {"Assets/Models/MMOFPS/Kit/deployable_barricade.obj", "", 421.0f, 3783.0f, -90.0f, 1.0f, 1.0f, 1.0f, 0.0f,
+             true, 0.0f},
+            {"Assets/Models/MMOFPS/Kit/comms_relay.obj", "", 442.0f, 3763.0f, -90.0f, 1.0f, 1.0f, 1.0f, 0.0f, true,
+             0.0f},
+            {"Assets/Models/MMOFPS/Kit/supply_drop_pod.obj", "", 442.0f, 3791.0f, -110.0f, 1.0f, 1.0f, 1.0f, 0.0f, true,
+             0.0f},
+
             // Class terminal (kClassTermX/Z; yaw 180 = console faces the pads).
             {"Assets/Models/MMOFPS/buildings/sanc_terminal.obj", kMatSanctuary, kClassTermX, kClassTermZ, 180.0f, 1.0f,
              1.0f, 1.0f, 0.5f, true, 0.0f},

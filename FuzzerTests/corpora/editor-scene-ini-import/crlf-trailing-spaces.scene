@@ -1,0 +1,6 @@
+[Scene]
+name=Windows File   
+[Object]  
+type=cube 
+position=1,2,3
+

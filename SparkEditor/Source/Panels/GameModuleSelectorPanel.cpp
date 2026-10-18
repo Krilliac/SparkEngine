@@ -4,6 +4,7 @@
  */
 
 #include "GameModuleSelectorPanel.h"
+#include "../Core/EditorIcons.h"
 #include "Core/ModuleManager.h"
 #include "Core/ProjectManager.h"
 #include "Utils/LogMacros.h"
@@ -14,6 +15,8 @@
 #include <filesystem>
 #include <fstream>
 #include <vector>
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
@@ -57,8 +60,7 @@ namespace SparkEditor
             return;
         }
 
-        ImGui::Text("Discover game module DLLs and launch the game from the editor.");
-        ImGui::Separator();
+        Spark::Ui::SecondaryText("Discover game module DLLs and launch the game from the editor.");
 
         // Single-game-module policy banner
         size_t gameKindCount = 0;
@@ -67,7 +69,7 @@ namespace SparkEditor
             if (mod.kindKnown && mod.isGameKind)
                 gameKindCount++;
         }
-        ImGui::TextColored(ImVec4(0.9f, 0.75f, 0.3f, 1.0f), "Policy: exactly ONE Game-kind module loads per process.");
+        Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Policy: exactly ONE Game-kind module loads per process.");
         if (ImGui::IsItemHovered())
         {
             ImGui::BeginTooltip();
@@ -76,9 +78,9 @@ namespace SparkEditor
                                    "freely alongside the one game module.");
             ImGui::EndTooltip();
         }
-        ImGui::Text("Available: %zu  |  Known Game-kind: %zu", m_modules.size(), gameKindCount);
+        Spark::Ui::SecondaryText("Available: %zu  |  Known Game-kind: %zu", m_modules.size(), gameKindCount);
 
-        if (ImGui::Button("Refresh"))
+        if (Spark::Ui::SecondaryButton(ICON_FA_REFRESH " Refresh"))
             m_needsRefresh = true;
         if (ImGui::IsItemHovered())
         {
@@ -89,12 +91,15 @@ namespace SparkEditor
             ImGui::EndTooltip();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Save Module Manifest"))
+        if (Spark::Ui::PrimaryButton(ICON_FA_SAVE " Save Module Manifest"))
             SaveModuleManifest();
 
         if (!m_statusMessage.empty())
         {
-            ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "%s", m_statusMessage.c_str());
+            // Only a successful save starts with "Saved"; every other message reports a failure.
+            const Spark::Ui::Status status =
+                m_statusMessage.starts_with("Saved") ? Spark::Ui::Status::Success : Spark::Ui::Status::Error;
+            Spark::Ui::StatusText(status, "%s", m_statusMessage.c_str());
         }
 
         ImGui::Separator();
@@ -199,12 +204,12 @@ namespace SparkEditor
     {
         if (m_modules.empty())
         {
-            ImGui::TextDisabled("No game modules found next to the editor executable.");
-            ImGui::TextDisabled("Build SparkGame / SparkGameMMOFPS to see them here.");
+            Spark::Ui::EmptyState(ICON_FA_PUZZLE_PIECE, "No game modules found next to the editor executable.",
+                                  "Build SparkGame / SparkGameMMOFPS to see them here.");
             return;
         }
 
-        ImGui::BeginChild("ModuleList", ImVec2(0, 250), true);
+        ImGui::BeginChild("ModuleList", Spark::Ui::Px2(0, 250), true);
 
         for (size_t i = 0; i < m_modules.size(); ++i)
         {
@@ -229,17 +234,17 @@ namespace SparkEditor
 
             // Kind tag
             if (!mod.kindKnown)
-                ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "[?]");
+                Spark::Ui::Badge("?");
             else if (mod.isGameKind)
-                ImGui::TextColored(ImVec4(0.3f, 0.9f, 0.3f, 1.0f), "[GAME]");
+                Spark::Ui::Badge("GAME", Spark::Ui::Status::Success);
             else
-                ImGui::TextColored(ImVec4(0.4f, 0.7f, 0.95f, 1.0f), "[ADDON]");
+                Spark::Ui::Badge("ADDON", Spark::Ui::Status::Info);
             ImGui::SameLine();
 
             // Module name and version
-            ImGui::Text("%s", mod.name.c_str());
+            ImGui::TextUnformatted(mod.name.c_str());
             ImGui::SameLine();
-            ImGui::TextDisabled("v%s", mod.version.c_str());
+            Spark::Ui::MonoText("v%s", mod.version.c_str());
 
             // Show path on hover
             if (ImGui::IsItemHovered())
@@ -247,7 +252,7 @@ namespace SparkEditor
                 ImGui::BeginTooltip();
                 ImGui::Text("Path: %s", mod.path.c_str());
                 if (!mod.kindKnown)
-                    ImGui::TextDisabled("Kind/version unknown — unloaded DLL code is not probed.");
+                    Spark::Ui::SecondaryText("Kind/version unknown — unloaded DLL code is not probed.");
                 ImGui::EndTooltip();
             }
 
@@ -259,18 +264,18 @@ namespace SparkEditor
 
     void GameModuleSelectorPanel::RenderLaunchControls()
     {
-        ImGui::TextUnformatted("Launch");
+        Spark::Ui::SubHeader("Launch");
 
         const bool hasSelection = m_launchSelection >= 0 && m_launchSelection < static_cast<int>(m_modules.size());
         if (hasSelection)
             ImGui::Text("Selected: %s", m_modules[static_cast<size_t>(m_launchSelection)].name.c_str());
         else
-            ImGui::TextDisabled("Select a module (radio button) to enable launching.");
+            Spark::Ui::SecondaryText("Select a module (radio button) to enable launching.");
 
         const bool running = m_gameProcess.IsRunning();
         ImGui::BeginDisabled(!hasSelection || running);
 
-        if (ImGui::Button("Launch Game"))
+        if (Spark::Ui::PrimaryButton(ICON_FA_PLAY " Launch Game"))
             LaunchGame(false);
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
         {
@@ -282,7 +287,7 @@ namespace SparkEditor
             ImGui::EndTooltip();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Launch Dedicated (Headless)"))
+        if (Spark::Ui::SecondaryButton(ICON_FA_SERVER " Launch Dedicated (Headless)"))
             LaunchGame(true);
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
         {
@@ -296,7 +301,7 @@ namespace SparkEditor
 
         ImGui::SameLine();
         ImGui::BeginDisabled(!running);
-        if (ImGui::Button("Stop"))
+        if (Spark::Ui::DangerButton(ICON_FA_STOP " Stop"))
             StopLaunchedProcess();
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
         {
@@ -309,9 +314,8 @@ namespace SparkEditor
 
         if (!m_launchStatus.empty())
         {
-            ImGui::TextColored(m_gameProcess.IsRunning() ? ImVec4(0.3f, 0.9f, 0.3f, 1.0f)
-                                                         : ImVec4(0.75f, 0.75f, 0.75f, 1.0f),
-                               "%s", m_launchStatus.c_str());
+            Spark::Ui::StatusText(m_gameProcess.IsRunning() ? Spark::Ui::Status::Success : Spark::Ui::Status::Neutral,
+                                  "%s", m_launchStatus.c_str());
         }
     }
 
@@ -437,13 +441,14 @@ namespace SparkEditor
 
     void GameModuleSelectorPanel::RenderManifestControls()
     {
+        Spark::Ui::SubHeader("Startup manifest");
         ImGui::TextWrapped("The spark.modules.json manifest controls which modules load on startup. "
                            "Select modules above (checkbox) and click 'Save Module Manifest' to persist your choice. "
                            "The engine will load only the selected modules on next launch — at most ONE of them "
                            "may be Game-kind.");
 
         ImGui::Spacing();
-        ImGui::TextDisabled("Tip: Use -game <path> on the command line to override the manifest.");
+        Spark::Ui::SecondaryText("Tip: Use -game <path> on the command line to override the manifest.");
     }
 
     void GameModuleSelectorPanel::SaveModuleManifest()

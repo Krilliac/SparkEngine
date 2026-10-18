@@ -15,7 +15,7 @@ namespace SparkEditor
      * @brief Panel for configuring VR headset, controllers, and tracking
      *
      * Shows VR device connection status, head/controller tracking data,
-     * tracking space configuration, and haptic feedback testing.
+     * tracking space configuration, and haptic settings (test pulses run in the launched game).
      */
     class VRConfigPanel : public EditorPanel
     {

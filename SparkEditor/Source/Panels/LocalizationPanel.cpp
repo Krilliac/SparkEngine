@@ -5,10 +5,12 @@
 
 #include "LocalizationPanel.h"
 #include "../Core/EditorIcons.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #include "Utils/LogMacros.h"
-#include <imgui.h>
-#include <iostream>
+#include <cstdio>
 #include <cstring>
+#include <imgui.h>
 
 namespace SparkEditor
 {
@@ -50,50 +52,56 @@ namespace SparkEditor
 
     void LocalizationPanel::RenderToolbar()
     {
-        if (ImGui::Button(ICON_FA_FILE_IMPORT " Import CSV"))
-        {
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "LocalizationPanel: import CSV requested");
-        }
+        if (!Spark::Ui::BeginPanelToolbar("##LocalizationToolbar"))
+            return;
+
+        // No CSV reader or writer exists for the string table yet; the buttons say so instead of
+        // logging a request that nothing services.
+        Spark::Ui::IconButton("ImportCsv", ICON_FA_FILE_IMPORT,
+                              "Import CSV is unavailable: no CSV importer is implemented yet.", false, false);
         ImGui::SameLine();
-        if (ImGui::Button(ICON_FA_FILE_EXPORT " Export CSV"))
-        {
-            SPARK_LOG_INFO(Spark::LogCategory::Editor, "LocalizationPanel: export CSV requested");
-        }
-        ImGui::SameLine();
+        Spark::Ui::IconButton("ExportCsv", ICON_FA_FILE_EXPORT,
+                              "Export CSV is unavailable: no CSV exporter is implemented yet.", false, false);
+        Spark::Ui::ToolbarSeparator();
         ImGui::Checkbox("Show Missing Only", &m_showMissingOnly);
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(80);
-        ImGui::DragInt("Char Warn", &m_charLengthWarning, 1.0f, 10, 1000);
+        ImGui::AlignTextToFramePadding();
+        Spark::Ui::SecondaryText("Char Warn");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(Spark::Ui::Px(80));
+        ImGui::DragInt("##CharWarn", &m_charLengthWarning, 1.0f, 10, 1000);
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Warn when string exceeds this character count");
+        Spark::Ui::EndPanelToolbar();
     }
 
     void LocalizationPanel::RenderLanguageSelector()
     {
-        ImGui::Text(ICON_FA_GLOBE " Languages:");
+        ImGui::AlignTextToFramePadding();
+        Spark::Ui::SecondaryText(ICON_FA_GLOBE " Language");
         ImGui::SameLine();
 
         const char* langNames[] = {"English", "Spanish", "French", "German", "Japanese", "Chinese"};
-        ImGui::SetNextItemWidth(150);
+        ImGui::SetNextItemWidth(Spark::Ui::Px(150));
         ImGui::Combo("##Language", &m_currentLanguage, langNames, IM_ARRAYSIZE(langNames));
 
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(200);
-        ImGui::InputText(ICON_FA_FILTER " Filter", m_filterText, sizeof(m_filterText));
+        Spark::Ui::SecondaryText("Strings:");
+        ImGui::SameLine();
+        Spark::Ui::MonoText("%d", static_cast<int>(m_strings.size()));
 
         ImGui::SameLine();
-        ImGui::Text("Strings: %d", static_cast<int>(m_strings.size()));
+        Spark::Ui::SearchField("##LocalizationFilter", m_filterText, sizeof(m_filterText), "Filter keys");
     }
 
     void LocalizationPanel::RenderCoverageMetrics()
     {
         if (m_strings.empty())
         {
-            ImGui::TextDisabled("No strings to analyze.");
             return;
         }
 
-        ImGui::Text(ICON_FA_CHART_BAR " Coverage:");
+        Spark::Ui::SubHeader(ICON_FA_CHART_BAR " Coverage");
         int totalStrings = static_cast<int>(m_strings.size());
 
         for (int l = 0; l < static_cast<int>(m_languages.size()); ++l)
@@ -109,16 +117,16 @@ namespace SparkEditor
 
             float coverage = totalStrings > 0 ? static_cast<float>(translated) / totalStrings : 0.0f;
             char overlay[32];
-            snprintf(overlay, sizeof(overlay), "%s: %d/%d (%.0f%%)", lang.c_str(), translated, totalStrings,
-                     coverage * 100.0f);
+            std::snprintf(overlay, sizeof(overlay), "%s: %d/%d (%.0f%%)", lang.c_str(), translated, totalStrings,
+                          coverage * 100.0f);
 
-            ImVec4 barColor = coverage >= 1.0f  ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f)
-                              : coverage > 0.5f ? ImVec4(1.0f, 0.8f, 0.0f, 1.0f)
-                                                : ImVec4(1.0f, 0.3f, 0.3f, 1.0f);
-
-            ImGui::PushStyleColor(ImGuiCol_PlotHistogram, barColor);
-            ImGui::ProgressBar(coverage, ImVec2(250, 0), overlay);
-            ImGui::PopStyleColor();
+            const Spark::Ui::Role barRole = coverage >= 1.0f  ? Spark::Ui::Role::SuccessText
+                                            : coverage > 0.5f ? Spark::Ui::Role::WarningText
+                                                              : Spark::Ui::Role::ErrorText;
+            {
+                const Spark::Ui::ScopedRoleColor barColor(ImGuiCol_PlotHistogram, barRole);
+                ImGui::ProgressBar(coverage, ImVec2(Spark::Ui::Px(250), 0.0f), overlay);
+            }
 
             if (l % 3 != 2 && l < static_cast<int>(m_languages.size()) - 1)
                 ImGui::SameLine();
@@ -127,16 +135,22 @@ namespace SparkEditor
 
     void LocalizationPanel::RenderStringTable()
     {
-        ImGui::BeginChild("StringTable", ImVec2(0, -80), true);
+        ImGui::BeginChild("StringTable", ImVec2(0.0f, -Spark::Ui::Px(80)), true);
+
+        if (m_strings.empty())
+        {
+            Spark::Ui::EmptyState(ICON_FA_GLOBE, "No strings to analyze",
+                                  "Add a key and its text with the form below to start the string table.");
+            ImGui::EndChild();
+            return;
+        }
 
         // Columns: Key, Context, then one per language
         int columnCount = 2 + static_cast<int>(m_languages.size());
-        if (ImGui::BeginTable("L10NTable", columnCount,
-                              ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable |
-                                  ImGuiTableFlags_ScrollY))
+        if (Spark::Ui::BeginDataTable("L10NTable", columnCount))
         {
-            ImGui::TableSetupColumn("Key", ImGuiTableColumnFlags_WidthFixed, 180);
-            ImGui::TableSetupColumn("Context", ImGuiTableColumnFlags_WidthFixed, 120);
+            ImGui::TableSetupColumn("Key", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(180));
+            ImGui::TableSetupColumn("Context", ImGuiTableColumnFlags_WidthFixed, Spark::Ui::Px(120));
             for (const auto& lang : m_languages)
                 ImGui::TableSetupColumn(lang.c_str());
             ImGui::TableHeadersRow();
@@ -172,7 +186,7 @@ namespace SparkEditor
 
                 // Key
                 ImGui::TableNextColumn();
-                ImGui::TextUnformatted(entry.key.c_str());
+                Spark::Ui::MonoText("%s", entry.key.c_str());
 
                 // Context
                 ImGui::TableNextColumn();
@@ -195,28 +209,34 @@ namespace SparkEditor
                     }
 
                     char widgetId[32];
-                    snprintf(widgetId, sizeof(widgetId), "##%s", lang.c_str());
-                    ImGui::SetNextItemWidth(-1);
+                    std::snprintf(widgetId, sizeof(widgetId), "##%s", lang.c_str());
 
-                    // Color the background if missing
-                    bool isMissing = (strlen(buf) == 0);
-                    if (isMissing)
-                        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.5f, 0.1f, 0.1f, 0.5f));
+                    // A missing translation gets the error fill and a "Missing" hint, so it is not
+                    // signalled by colour alone.
+                    const int length = static_cast<int>(strlen(buf));
+                    const bool isMissing = length == 0;
+                    const bool tooLong = !isMissing && length > m_charLengthWarning;
+                    ImGui::SetNextItemWidth(tooLong ? -(ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.x)
+                                                    : -1.0f);
+                    {
+                        const Spark::Ui::ScopedRoleColor fill(
+                            ImGuiCol_FrameBg, isMissing ? Spark::Ui::Role::ErrorFill : Spark::Ui::Role::SurfaceSunken);
+                        if (ImGui::InputTextWithHint(widgetId, isMissing ? "Missing" : "", buf, sizeof(buf),
+                                                     ImGuiInputTextFlags_EnterReturnsTrue))
+                            entry.translations[lang] = buf;
+                    }
 
-                    if (ImGui::InputText(widgetId, buf, sizeof(buf), ImGuiInputTextFlags_EnterReturnsTrue))
-                        entry.translations[lang] = buf;
-
-                    if (isMissing)
-                        ImGui::PopStyleColor();
-
-                    // Character length warning
-                    if (!isMissing && static_cast<int>(strlen(buf)) > m_charLengthWarning)
+                    // Character length warning: warning glyph plus a tooltip that names it.
+                    if (tooLong)
                     {
                         ImGui::SameLine();
-                        ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), "!");
+                        {
+                            const Spark::Ui::ScopedRoleColor warning(ImGuiCol_Text, Spark::Ui::Role::WarningText);
+                            ImGui::TextUnformatted(Spark::Ui::StatusGlyph(Spark::Ui::Status::Warning));
+                        }
                         if (ImGui::IsItemHovered())
-                            ImGui::SetTooltip("String exceeds %d characters (%d)", m_charLengthWarning,
-                                              static_cast<int>(strlen(buf)));
+                            ImGui::SetTooltip("Warning: string exceeds %d characters (%d)", m_charLengthWarning,
+                                              length);
                     }
                 }
 
@@ -231,18 +251,20 @@ namespace SparkEditor
 
     void LocalizationPanel::RenderAddEntryForm()
     {
-        ImGui::TextDisabled("Add New Entry");
-        ImGui::SetNextItemWidth(180);
-        ImGui::InputText("Key##New", m_newKey, sizeof(m_newKey));
+        Spark::Ui::SubHeader("Add New Entry");
+        ImGui::SetNextItemWidth(Spark::Ui::Px(180));
+        ImGui::InputTextWithHint("##NewKey", "Key", m_newKey, sizeof(m_newKey));
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(200);
-        ImGui::InputText("Value##New", m_newValue, sizeof(m_newValue));
+        ImGui::SetNextItemWidth(Spark::Ui::Px(200));
+        ImGui::InputTextWithHint("##NewValue", "Value", m_newValue, sizeof(m_newValue));
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(150);
-        ImGui::InputText("Context##New", m_newContext, sizeof(m_newContext));
+        ImGui::SetNextItemWidth(Spark::Ui::Px(150));
+        ImGui::InputTextWithHint("##NewContext", "Context", m_newContext, sizeof(m_newContext));
         ImGui::SameLine();
 
-        if (ImGui::Button(ICON_FA_PLUS " Add") && strlen(m_newKey) > 0)
+        const bool hasKey = m_newKey[0] != '\0';
+        const Spark::Ui::ScopedDisabled disabled(!hasKey, "Enter a key first.");
+        if (Spark::Ui::SecondaryButton(ICON_FA_PLUS " Add") && hasKey)
         {
             LocalizedString entry;
             entry.key = m_newKey;

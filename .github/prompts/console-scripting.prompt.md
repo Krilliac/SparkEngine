@@ -113,10 +113,11 @@ engine.CompileScriptFile("Assets/Scripts/EnemyAI.as");
 engine.CompileScriptFromString(
     "class Test { void Start() { print(\"Hello!\"); } }", "InlineModule");
 
-// Attach to entity and drive lifecycle
+// Attach to an entity with a Script component; ScriptRuntimeSystem owns lifecycle dispatch
+auto& script = world.AddComponent<Script>(entity);
+script.className = "EnemyBehavior";
+script.moduleName = "EnemyAI";
 engine.AttachScript(entity, "EnemyBehavior", "EnemyAI");
-engine.CallStart(entity);
-engine.CallUpdate(entity, deltaTime);
 engine.CallOnCollision(entity, otherEntity);
 
 // Detach

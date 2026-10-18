@@ -37,6 +37,7 @@
 #pragma once
 
 #include "../Core/EditorPanel.h"
+#include "../Gizmos/SceneEditTools.h"
 
 #include <string>
 #include <vector>
@@ -69,17 +70,8 @@ namespace SparkEditor
         void SetEditorUI(EditorUI* ui) { m_editorUI = ui; }
 
       private:
-        /// @brief One importable [Object] parsed out of a .scene file.
-        struct SceneObjectRecord
-        {
-            std::string type;                          ///< "cube" or "model" (lower/upper accepted)
-            std::string name;                          ///< name= key, or "<type>_<index>" fallback
-            std::string model;                         ///< model= path; empty for cubes
-            std::string material;                      ///< material= path (may be empty)
-            float position[3] = {0.0f, 0.0f, 0.0f};    ///< world-space meters
-            float rotationDeg[3] = {0.0f, 0.0f, 0.0f}; ///< Euler degrees (editor Transform convention)
-            float scale[3] = {1.0f, 1.0f, 1.0f};       ///< non-uniform scale
-        };
+        /// @brief One importable [Object]; SceneEditTools::CommitSceneImport consumes it.
+        using SceneObjectRecord = SceneEditTools::SceneObjectRecord;
 
         /// @brief Full parse result for one .scene file.
         struct ParsedScene

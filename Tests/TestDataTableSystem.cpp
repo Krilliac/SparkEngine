@@ -1,5 +1,9 @@
 // TestDataTableSystem.cpp - Tests for Spark::Data::DataTableRegistry and DataTable
 #include "TestFramework.h"
+
+#include <string>
+#include <filesystem>
+#include <fstream>
 #include "Engine/DataTable/DataTableSystem.h"
 
 // ============================================================================
@@ -86,6 +90,87 @@ TEST(DataTable_RowTypedAccessors)
     EXPECT_NEAR(3.14f, row->GetFloat("speed"), 0.01f);
     EXPECT_TRUE(row->GetBool("active"));
     EXPECT_FALSE(row->GetBool("missing_col"));
+}
+
+TEST(DataTable_RejectsOversizedDocumentBeforeParsing)
+{
+    Spark::Data::DataTable table;
+    std::string oversized = "id,name\n1,";
+    oversized.append(Spark::Data::DataTable::kMaxDocumentBytes + 1 - oversized.size(), 'x');
+    EXPECT_FALSE(table.LoadFromCSV(oversized));
+    EXPECT_EQ(static_cast<size_t>(0), table.GetRowCount());
+    EXPECT_FALSE(table.LoadFromJSON("[{}]" + oversized));
+}
+
+TEST(DataTable_CsvRoundTripKeepsEmptySingleCellRow)
+{
+    // Found by the SEC-120 DataTable fuzz campaign: a lone empty cell was saved as a
+    // blank line, which LoadFromCSV skips, so the row vanished on reload.
+    Spark::Data::DataTable table;
+    ASSERT_TRUE(table.LoadFromCSV("id\n,x\n"));
+    ASSERT_EQ(static_cast<size_t>(1), table.GetRowCount());
+    Spark::Data::DataTable reloaded;
+    EXPECT_TRUE(reloaded.LoadFromCSV(table.SaveToCSV()));
+    EXPECT_EQ(table.GetRowCount(), reloaded.GetRowCount());
+}
+
+TEST(DataTable_CsvRoundTripKeepsTrailingCarriageReturn)
+{
+    // Found by the SEC-120 DataTable fuzz campaign: a last-column cell ending in CR was
+    // written unquoted, and the line splitter stripped that CR on reload.
+    Spark::Data::DataTable table;
+    ASSERT_TRUE(table.LoadFromCSV("a,b\ny,x\r\r\n"));
+    const auto* row = table.GetRow("y");
+    ASSERT_TRUE(row != nullptr);
+    EXPECT_EQ(std::string("x\r"), row->GetString("b"));
+    Spark::Data::DataTable reloaded;
+    ASSERT_TRUE(reloaded.LoadFromCSV(table.SaveToCSV()));
+    const auto* reloadedRow = reloaded.GetRow("y");
+    ASSERT_TRUE(reloadedRow != nullptr);
+    EXPECT_EQ(std::string("x\r"), reloadedRow->GetString("b"));
+}
+
+TEST(DataTableRegistry_RejectsOversizedValidFileBeforeReading)
+{
+    const auto path = std::filesystem::temp_directory_path() / "spark_datatable_oversized.csv";
+    const std::string prefix = "id,name\n1,";
+    {
+        std::ofstream file(path, std::ios::binary);
+        file << prefix << std::string(Spark::Data::DataTable::kMaxDocumentBytes + 1 - prefix.size(), 'x');
+    }
+
+    auto& registry = Spark::Data::DataTableRegistry::GetInstance();
+    registry.Initialize();
+    EXPECT_FALSE(registry.LoadTableFromFile("oversized", path.string()));
+    EXPECT_EQ(static_cast<size_t>(0), registry.GetTableCount());
+    registry.Shutdown();
+    std::filesystem::remove(path);
+}
+
+TEST(DataTable_RejectsTrailingJSONWithoutPartialRows)
+{
+    Spark::Data::DataTable table;
+    EXPECT_FALSE(table.LoadFromJSON(R"([{"id":"one"}] trailing)"));
+    EXPECT_EQ(static_cast<size_t>(0), table.GetRowCount());
+}
+
+TEST(DataTable_NumericLookingStringRoundTripsAsValidJSON)
+{
+    Spark::Data::DataTable table;
+    ASSERT_TRUE(table.LoadFromJSON(R"([{"id":"001"}])"));
+    const std::string encoded = table.SaveToJSON();
+    // "001" is not a JSON number; it must be written as a string, not as a bare 001.
+    EXPECT_TRUE(encoded.find(R"("id": "001")") != std::string::npos);
+    Spark::Data::DataTable reloaded;
+    EXPECT_TRUE(reloaded.LoadFromJSON(encoded));
+    const auto* row = reloaded.GetRow("001");
+    ASSERT_TRUE(row != nullptr);
+    EXPECT_EQ(std::string("001"), row->GetString("id"));
+
+    // An empty cell in a numeric column keeps its historical 0.
+    Spark::Data::DataTable counts;
+    ASSERT_TRUE(counts.LoadFromCSV("id,count\na,5\nb,\n"));
+    EXPECT_TRUE(counts.SaveToJSON().find(R"("count": 0)") != std::string::npos);
 }
 
 // ============================================================================

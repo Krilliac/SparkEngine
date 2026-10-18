@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="Spark Engine logomark">
+  <defs>
+    <linearGradient id="ember" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="256" y2="256">
+      <stop offset="0" stop-color="#e8611a"/>
+      <stop offset="0.5" stop-color="#f1823a"/>
+      <stop offset="1" stop-color="#ffc857"/>
+    </linearGradient>
+  </defs>
+  <path id="spark" fill="url(#ember)" d="M245.76 128 L151.533 151.533 L128 245.76 L104.467 151.533 L10.24 128 L104.467 104.467 L128 10.24 L151.533 104.467 Z"/>
+  <path id="ember-dot" fill="url(#ember)" d="M180.48 56.32 A19.2 19.2 0 1 0 218.88 56.32 A19.2 19.2 0 1 0 180.48 56.32 Z"/>
+</svg>

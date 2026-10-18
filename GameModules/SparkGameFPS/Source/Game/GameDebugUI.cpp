@@ -1,16 +1,18 @@
 /**
  * @file GameDebugUI.cpp
- * @brief Live status and editor controls for the playable Spark Arena example
+ * @brief Live status, editor controls and the developer arena autopilot for the playable Spark Arena example
  */
 
 #include "Game.h"
 
+#include "Camera/SparkEngineCamera.h"
+#include "Input/InputManager.h"
 #include "Player.h"
 #include "ProgressionSystem.h"
 #include "WaveSpawner.h"
 #include "Projectiles/WeaponStats.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -89,10 +91,24 @@ std::string Game::GetStatusString() const
                << m_player->GetCurrentAmmo() << '\n';
     }
 
+    if (m_camera && m_player)
+    {
+        const auto camera = m_camera->GetPosition();
+        const auto player = m_player->GetPosition();
+        status << std::fixed << std::setprecision(1);
+        status << "Camera/Player XZ: (" << camera.x << ", " << camera.z << ") / (" << player.x << ", " << player.z
+               << ")\n";
+    }
+
     if (m_progression)
     {
         status << "Level " << m_progression->GetLevel() << " | XP " << m_progression->GetCurrentXP() << '/'
                << m_progression->GetXPToNextLevel() << '\n';
+    }
+
+    if (m_gameMode && m_respawnSystem)
+    {
+        status << m_arenaAutopilot.FormatLoopLine(*m_gameMode, *m_respawnSystem) << '\n';
     }
 
     status << "SDK services: " << (m_engineSystemsInitialized ? "wired" : "legacy/minimal")
@@ -103,11 +119,72 @@ std::string Game::GetStatusString() const
     return status.str();
 }
 
+bool Game::SetArenaAutopilot(bool enabled)
+{
+    if (!m_player || !m_camera || !m_input || !m_gameMode || !m_respawnSystem)
+    {
+        return false;
+    }
+    if (enabled && !m_arenaAutopilot.IsEnabled())
+    {
+        m_arenaAutopilot.Enable(m_player->GetPosition());
+    }
+    else if (!enabled)
+    {
+        m_arenaAutopilot.Disable(*m_input);
+    }
+    return true;
+}
+
+void Game::UpdateArenaAutopilot(float dt)
+{
+    if (!m_arenaAutopilot.IsEnabled() || !m_player || !m_camera || !m_input || !m_gameMode || !m_respawnSystem)
+    {
+        return;
+    }
+
+    m_arenaAutopilotTargets.clear();
+    for (const Enemy* enemy : m_enemies)
+    {
+        if (enemy && enemy->IsActive() && enemy->IsAlive())
+        {
+            m_arenaAutopilotTargets.push_back(enemy->GetPosition());
+        }
+    }
+
+    const SparkFPS::ArenaView view{m_player->GetPosition(), m_player->IsAlive(), m_arenaAutopilotTargets};
+    if (!m_arenaAutopilot.Step(*m_gameMode, *m_respawnSystem, *m_camera, *m_input, view, dt))
+    {
+        return;
+    }
+
+    // The same calls the R key and the left mouse button make in Player::HandleInput.
+    if (m_player->GetCurrentAmmo() <= 0)
+    {
+        m_player->StartReload();
+    }
+    else
+    {
+        m_player->Fire();
+    }
+}
+
 void Game::RenderDebugUI()
 {
-#ifdef ENABLE_EDITOR
-    if (!ImGui::CollapsingHeader("Spark Arena", ImGuiTreeNodeFlags_DefaultOpen))
+    // Developer panel (autopilot, survival restart, raw status): it follows the
+    // developer-command policy in Console/FPSConsolePolicy.h, so a Shipping
+    // build without ENABLE_DEVCOMMANDS_IN_SHIPPING draws no overlay over play.
+#if defined(SPARK_HAS_IMGUI) && (defined(SPARK_DEVCOMMANDS_IN_SHIPPING) || !defined(SPARK_BUILD_SHIPPING))
+    // Its own window, collapsed in the top-left corner on first use. Without a Begin
+    // the panel landed in ImGui's implicit "Debug" window (400x400 at 60,60), which
+    // covered the play area that FPSVisibleFrame_AuthoredAndFallback samples.
+    // Expanding it is one click; the F-key shortcuts below work either way. It does
+    // not take focus on appearing, so it never captures the game's keyboard input.
+    ImGui::SetNextWindowPos(ImVec2(8.0f, 8.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowCollapsed(true, ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin("Spark Arena", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing))
     {
+        ImGui::End();
         return;
     }
 
@@ -142,6 +219,8 @@ void Game::RenderDebugUI()
         CycleNextClass();
     }
 
-    ImGui::TextDisabled("F11: start survival | F5-F10: choose class | [ / ]: cycle class | V: enter vehicle");
+    ImGui::TextDisabled("F2: quicksave | F3: quickload | F11: start survival");
+    ImGui::TextDisabled("F5-F10: choose class | [ / ]: cycle class | V: enter vehicle");
+    ImGui::End();
 #endif
 }

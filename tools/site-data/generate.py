@@ -25,6 +25,7 @@ from common import (
     SCHEMA_VERSION,
     SiteDataError,
     canonical_json_bytes,
+    collect_document_sources as _collect_document_sources,
     extract_excerpt,
     extract_headings,
     extract_title,
@@ -57,10 +58,14 @@ TOOLS_ROOT = Path(__file__).resolve().parents[1]
 if str(TOOLS_ROOT) not in sys.path:
     sys.path.insert(0, str(TOOLS_ROOT))
 import docs_contract  # noqa: E402
+from validate_docs_links import heading_ids, validate_docs_links, validate_docs_routes  # noqa: E402
 
 
 SOURCE_EXTENSIONS = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".m", ".mm"}
 LARGE_DOCUMENT_BYTES = 240_000
+# An inline Markdown link or image. The label may hold one nested link, as in a
+# badge ``[![alt](image)](target)``; the plain form cannot see that outer target.
+MARKDOWN_LINK = re.compile(r"(!?\[(?:[^\[\]]|\[[^\]]*\])*\]\()([^\s)]+)([^)]*\))")
 API_GENERATION_TIMEOUT_SECONDS = 240
 # Nine declared generators, each bounded to 300 s by docs/update-all-docs.sh.
 DOC_HEALTH_TIMEOUT_SECONDS = 1800
@@ -134,19 +139,21 @@ def regenerate_api_docs(source_commit: str, committed_at: str) -> None:
     part of publication and fail closed if it cannot produce the corpus.
     """
 
-    script = REPO_ROOT / "docs" / "generate-api-docs.sh"
+    # This is also the producer used by docs/generate-api-docs.sh. Calling the
+    # Python entry point keeps publication portable on hosts without Bash.
+    script = REPO_ROOT / "tools" / "docs_contract.py"
     try:
         docs_contract.assert_contained(script, REPO_ROOT, label="API documentation generator")
         docs_contract.regular_identity(script, label="API documentation generator")
     except docs_contract.ContractError as error:
-        raise SiteDataError("missing or unsafe API documentation generator: docs/generate-api-docs.sh") from error
+        raise SiteDataError("missing or unsafe API documentation generator: tools/docs_contract.py") from error
     if not script.is_file() or script.is_symlink():
-        raise SiteDataError("missing API documentation generator: docs/generate-api-docs.sh")
+        raise SiteDataError("missing API documentation generator: tools/docs_contract.py")
 
     api_root = REPO_ROOT / "docs" / "api"
     environment = api_generation_environment(source_commit, committed_at, api_root)
     result = run_bounded_process(
-        [trusted_bash(), str(script), "generate"],
+        [sys.executable, str(script), "generate-api", "--output", str(api_root)],
         cwd=REPO_ROOT,
         environment=environment,
         timeout=API_GENERATION_TIMEOUT_SECONDS,
@@ -305,8 +312,10 @@ def collect_metrics(
     panel_path = REPO_ROOT / "SparkEditor" / "Source" / "Core" / "EditorPanelFactory.cpp"
     panel_content = panel_path.read_text(encoding="utf-8", errors="ignore")
     editor_panels = len(re.findall(r"\btryRegister\s*\(\s*\"", panel_content))
+    panel_root = REPO_ROOT / "SparkEditor" / "Source" / "Panels"
+    editor_panel_headers = sum(path.name.endswith("Panel.h") for path in tracked_files(panel_root, {".h"}))
 
-    palette_path = REPO_ROOT / "SparkEngine" / "Source" / "Engine" / "Scripting" / "VisualScriptCompiler.cpp"
+    palette_path = REPO_ROOT / "SparkEngine" / "Source" / "Engine" / "Scripting" / "VisualScriptNodePalette.cpp"
     palette_content = palette_path.read_text(encoding="utf-8", errors="ignore")
     palette_match = re.search(r"\bkPalette\s*=\s*\{(?P<body>.*?)\};", palette_content, flags=re.DOTALL)
     visual_nodes = len(re.findall(r"\{\s*ScriptNodeType::", palette_match.group("body") if palette_match else ""))
@@ -367,13 +376,16 @@ def collect_metrics(
     return [
         metric("code.totalLines", "C/C++ physical lines", inventory["total_lines"], code_evidence, "lines"),
         metric("code.files", "C/C++ source files", inventory["file_count"], code_evidence, "files"),
+        metric("editor.panelHeaders", "Editor panel implementation headers", editor_panel_headers,
+               source_evidence("SparkEditor/Source/Panels", "Tracked *Panel.h headers used by the architecture flowchart"),
+               "headers"),
         metric("tests.definitions", "SparkTests TEST and TEST_F definitions", inventory["test_definitions"], code_evidence, "tests"),
         metric("tests.files", "Source files defining SparkTests cases", inventory["test_files"], code_evidence, "files"),
         *execution_metrics,
         metric("editor.panels", "Registered editor panels", editor_panels, source_evidence("SparkEditor/Source/Core/EditorPanelFactory.cpp", "Editor panel registrations"), "panels"),
         metric("shaders.hlsl", "HLSL shader files", hlsl, source_evidence("Shaders/HLSL", "HLSL source tree"), "files"),
         metric("shaders.glsl", "GLSL shader files", glsl, source_evidence("Shaders/GLSL", "GLSL source tree"), "files"),
-        metric("visualScript.nodes", "Visual-script palette nodes", visual_nodes, source_evidence("SparkEngine/Source/Engine/Scripting/VisualScriptCompiler.cpp", "Node palette"), "nodes"),
+        metric("visualScript.nodes", "Visual-script palette nodes", visual_nodes, source_evidence("SparkEngine/Source/Engine/Scripting/VisualScriptNodePalette.cpp", "Node palette"), "nodes"),
         metric("networking.lines", "Networking and online-services lines", networking_lines, source_evidence("SparkEngine/Source/Engine/Networking", "Networking source tree"), "lines"),
         metric("modules.discovered", "CMake-discovered game modules", len(modules), source_evidence("GameModules", "Module directories with CMakeLists.txt"), "modules"),
         metric("module.fps.files", "FPS module source files", fps["files"], source_evidence(fps["sourcePath"], "FPS module source"), "files"),
@@ -456,28 +468,7 @@ def classify(source_path: str, catalog: dict[str, Any]) -> tuple[str, str, str]:
 
 
 def collect_document_sources(catalog: dict[str, Any]) -> list[Path]:
-    include = catalog["include"]
-    candidates: set[Path] = set()
-    for value in include.get("rootDocuments", []):
-        path = REPO_ROOT / value
-        if path.is_file():
-            candidates.add(path)
-    for value in include.get("recursiveMarkdownRoots", []):
-        root = REPO_ROOT / value
-        if root.is_file() and root.suffix.lower() == ".md":
-            candidates.add(root)
-        elif root.is_dir():
-            candidates.update(path for path in root.rglob("*.md") if path.is_file())
-
-    excluded_paths = set(catalog.get("excludePaths", []))
-    excluded_prefixes = tuple(catalog.get("excludePrefixes", []))
-    result = []
-    for path in candidates:
-        source_path = path.relative_to(REPO_ROOT).as_posix()
-        if source_path in excluded_paths or source_path.startswith(excluded_prefixes):
-            continue
-        result.append(path)
-    return sorted(result)
+    return _collect_document_sources(catalog, REPO_ROOT)
 
 
 def normalize_html(markdown: str) -> str:
@@ -579,6 +570,33 @@ def split_large_document(document: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
         children.append(child)
+
+    # A "#anchor" link in one section may name a heading that is now on another
+    # page, so it would lead nowhere; point it at the page that owns the heading.
+    # A section's own "##" heading became that page's title, so its links go to
+    # the top of the page.
+    owners: dict[str, str] = {}
+    for child, piece in zip(children, pieces[1:]):
+        # Each piece starts at its "##" heading (the split is a lookahead on it).
+        section_ids = heading_ids(piece.splitlines()[0])
+        for identifier in heading_ids(piece):
+            owners.setdefault(identifier, child["slug"] if identifier in section_ids else f"{child['slug']}#{identifier}")
+
+    def retarget(content: str) -> str:
+        own = heading_ids(content)
+
+        def replace(match: re.Match[str]) -> str:
+            prefix, target, suffix = match.groups()
+            anchor = unquote(target[1:]) if target.startswith("#") else None
+            if anchor is None or anchor in own or anchor not in owners:
+                return match.group(0)
+            return f"{prefix}/docs/{owners[anchor]}{suffix}"
+
+        return MARKDOWN_LINK.sub(replace, content)
+
+    intro = retarget(intro)
+    for child in children:
+        child["content"] = retarget(child["content"])
     links = "\n".join(f"- [{child['title'].removeprefix(document['title'] + ' — ')}](/docs/{child['slug']})" for child in children)
     parent = dict(document)
     parent["content"] = (
@@ -802,7 +820,10 @@ def build_documents(
             return f"{prefix}{replacement}{suffix}"
 
         copy = dict(document)
-        copy["content"] = pattern.sub(replace_link, content)
+        # The plain pass rewrites every link whose label has no brackets,
+        # including an image nested in a badge; MARKDOWN_LINK then reaches the
+        # badge's outer target. rewrite_target leaves a rewritten target as is.
+        copy["content"] = MARKDOWN_LINK.sub(replace_link, pattern.sub(replace_link, content))
         rewritten.extend(split_large_document(copy))
 
     seen: dict[str, str] = {}
@@ -1030,6 +1051,20 @@ def generate(args: argparse.Namespace) -> dict[str, Any]:
 
     regenerate_api_docs(source["commit"], source["committedAt"])
 
+    # A fresh checkout has no docs/api until the producer above completes.
+    # Validate its exact-commit manifest and every authored link before touching
+    # an existing publication. Direct callers get the same gate as the CI path.
+    docs_errors = validate_docs_routes(contract["docsCatalog"])
+    docs_errors.extend(validate_docs_links(
+        contract["docsCatalog"], generated_root=REPO_ROOT / "docs" / "api", source_sha=source["commit"]
+    ))
+    if docs_errors:
+        detail = "; ".join(
+            f"{entry['source']}:{entry['line']}: {entry['target']}: {entry['error']}"
+            for entry in docs_errors[:8]
+        )
+        raise SiteDataError(f"documentation validation failed ({len(docs_errors)} errors): {detail}")
+
     output = ensure_safe_output(args.output, preserve_existing=args.preserve_existing)
     snapshot_root = output / "snapshots" / source["commit"]
     if os.path.lexists(snapshot_root):
@@ -1138,7 +1173,9 @@ def generate(args: argparse.Namespace) -> dict[str, Any]:
     readiness = contract["readiness"]
     evidence_commit = args.evidence_commit or source["commit"]
     conclusion = args.ci_conclusion or ("dirty-working-tree" if dirty else "success")
-    publication_state = "current" if conclusion == "success" and not dirty else "blocked"
+    # A local clean tree does not by itself prove a successful exact-commit CI
+    # run. Only the CI-owned evidence manifest can make a bundle current.
+    publication_state = "current" if conclusion == "success" and exact_evidence is not None and not dirty else "blocked"
     publication = {
         "state": publication_state,
         "evidenceCommit": evidence_commit,

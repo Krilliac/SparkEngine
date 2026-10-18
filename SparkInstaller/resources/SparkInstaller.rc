@@ -1,3 +1,7 @@
 // VERSIONINFO is generated from SPARK_ENGINE_VERSION by
-// cmake/SparkWindowsVersionInfo.cmake. Keep this file for non-version
-// SparkInstaller resources.
+// cmake/SparkWindowsVersionInfo.cmake. This file holds the other SparkInstaller
+// resources: the application icon (the Spark logomark from
+// Assets/Engine/Branding). CMake adds that directory to the include path, so the
+// icon is named by file name. Resource 1 is the icon the window class loads.
+
+1 ICON "sparkengine.ico"

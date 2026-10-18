@@ -28,6 +28,8 @@ namespace Spark::Gateway
         std::filesystem::path configPath;
         std::filesystem::path healthFile;
         std::filesystem::path keyFile;
+        /** When set, admission is answered by LocalFixtureAuthenticator instead of the key file. */
+        std::filesystem::path admissionFixture;
         std::filesystem::path generateKeyFile;
         std::filesystem::path stopFile;
         std::string ingressEndpoint;
@@ -44,6 +46,11 @@ namespace Spark::Gateway
 
     [[nodiscard]] GatewayParseResult ParseGatewayOptions(std::span<const std::string_view> arguments);
     [[nodiscard]] std::string_view GatewayHelpText();
+    /**
+     * [startup thread] The admission authenticator @p options select: LocalFixtureAuthenticator
+     * when admissionFixture is set (local, deterministic), otherwise KeyFileAuthenticator.
+     */
+    [[nodiscard]] std::unique_ptr<IGatewayAuthenticator> CreateGatewayAuthenticator(const GatewayOptions& options);
 
     struct GatewayHealth
     {
@@ -57,6 +64,8 @@ namespace Spark::Gateway
         uint32_t activeAreas = 0;
         uint32_t players = 0;
         size_t sessions = 0;
+        /** Guarded-authenticator fault, budget and circuit counters (zero before Start()). */
+        GatewayAuthenticatorHealth authentication;
         std::string lastError;
     };
 

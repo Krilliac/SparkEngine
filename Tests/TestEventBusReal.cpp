@@ -4,7 +4,10 @@
  */
 
 #include "TestFramework.h"
-#include "Utils/EventBus.h"
+#include <Spark/EventBus.h>
+#include "Utils/EventBus.h" // The compatibility path must refer to the same declarations.
+
+#include <string>
 
 namespace
 {
@@ -97,4 +100,19 @@ TEST(EventBusReal_TypeSegregation)
 
     EXPECT_EQ(pings, 2);
     EXPECT_EQ(pongs, 1);
+}
+
+TEST(EventBusReal_HandleCanOutliveBus)
+{
+    // This mirrors static-destruction ordering: a subscriber handle can be
+    // destroyed after its EventBus.  Its cleanup must not touch dead bus state.
+    Spark::SubscriptionHandle handle;
+    {
+        Spark::EventBus bus;
+        handle = bus.Subscribe<PhaseLL_PingEvent>([](const PhaseLL_PingEvent&) {});
+        EXPECT_TRUE(handle.IsActive());
+    }
+
+    EXPECT_NO_THROW(handle.Unsubscribe());
+    EXPECT_FALSE(handle.IsActive());
 }

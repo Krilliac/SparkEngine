@@ -12,6 +12,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <thread>
 
 namespace
 {
@@ -197,5 +198,115 @@ TEST(LoggerSinks_InstallDefaultSinksBridgesToSimpleConsole)
     if (!consoleWasInitialized)
     {
         console.Shutdown();
+    }
+}
+
+// =============================================================================
+// Flush policy — the log tail must reach the OS without Shutdown()
+// =============================================================================
+//
+// Each test reads the log through a second, independent file handle while the
+// sink still has the file open and Shutdown() has not run. Bytes visible there
+// have left the process's buffer and sit in the OS file cache, which is exactly
+// what survives TerminateProcess/_exit or a crash; bytes still in the sink's
+// buffer are invisible to the second handle and would be lost. (Observed
+// 2026-10-15: force-killed SparkEngine runs lost the last ~4-8 KB of the log.)
+
+namespace
+{
+    struct FlushPolicyLog
+    {
+        std::filesystem::path directory = MakeUniqueLogDirectory();
+        std::string path;
+
+        explicit FlushPolicyLog(bool asyncLogger)
+        {
+            auto& logger = Spark::Logger::Get();
+            logger.ClearSinks();
+            logger.Shutdown();
+            logger.Initialize(asyncLogger);
+            logger.SetGlobalLevel(Spark::LogLevel::Trace);
+
+            Spark::Logger::SinkSetup setup;
+            setup.enableStderr = false;
+            setup.file.directory = AsSinkDirectory(directory);
+            setup.file.prefix = "FlushPolicy";
+            path = logger.InstallDefaultSinks(setup);
+        }
+
+        ~FlushPolicyLog()
+        {
+            Spark::Logger::Get().ClearSinks();
+            std::error_code error;
+            std::filesystem::remove_all(directory, error);
+        }
+
+        /// What another process (or a post-mortem reader) would see right now.
+        std::string ReadFromOtherHandle() const
+        {
+            std::ifstream file(path, std::ios::binary);
+            std::ostringstream contents;
+            contents << file.rdbuf();
+            return contents.str();
+        }
+
+        bool AppearsWithin(const std::string& marker, std::chrono::milliseconds timeout) const
+        {
+            const auto deadline = std::chrono::steady_clock::now() + timeout;
+            while (std::chrono::steady_clock::now() < deadline)
+            {
+                if (ReadFromOtherHandle().find(marker) != std::string::npos)
+                {
+                    return true;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            return ReadFromOtherHandle().find(marker) != std::string::npos;
+        }
+    };
+} // namespace
+
+TEST(LoggerFlush_WarnIsOnDiskWhenLogReturns)
+{
+    ScopedLoggerBaseline loggerBaseline;
+    FlushPolicyLog log(/*asyncLogger=*/false);
+    ASSERT_FALSE(log.path.empty());
+
+    Spark::Logger::Get().Log(Spark::LogLevel::Warn, Spark::LogCategory::Core, __FILE__, __LINE__, __FUNCTION__,
+                             "flush-policy-warn-marker");
+
+    // No FlushAll(), no Shutdown(), no waiting: Warn must already be out.
+    EXPECT_STR_CONTAINS(log.ReadFromOtherHandle(), "flush-policy-warn-marker");
+}
+
+TEST(LoggerFlush_InfoReachesDiskWithinFlushIntervalWithoutShutdown)
+{
+    ScopedLoggerBaseline loggerBaseline;
+    FlushPolicyLog log(/*asyncLogger=*/false);
+    ASSERT_FALSE(log.path.empty());
+
+    Spark::Logger::Get().Log(Spark::LogLevel::Info, Spark::LogCategory::Core, __FILE__, __LINE__, __FUNCTION__,
+                             "flush-policy-info-marker");
+
+    // The process then goes quiet, as a hung or about-to-be-killed one does: no
+    // later line pushes the buffer out. Allow 20x the interval for a loaded runner.
+    EXPECT_TRUE(log.AppearsWithin("flush-policy-info-marker", Spark::Logger::kPeriodicFlushInterval * 20));
+}
+
+TEST(LoggerFlush_FlushForCrashWritesBufferedAndQueuedLines)
+{
+    ScopedLoggerBaseline loggerBaseline;
+    for (const bool asyncLogger : {false, true})
+    {
+        FlushPolicyLog log(asyncLogger);
+        ASSERT_FALSE(log.path.empty());
+
+        const std::string marker = std::string("flush-for-crash-marker-") + (asyncLogger ? "async" : "sync");
+        Spark::Logger::Get().Log(Spark::LogLevel::Debug, Spark::LogCategory::Core, __FILE__, __LINE__, __FUNCTION__,
+                                 marker);
+        Spark::Logger::Get().FlushForCrash();
+
+        // Immediately, well inside one periodic interval.
+        EXPECT_STR_CONTAINS(log.ReadFromOtherHandle(), marker);
     }
 }

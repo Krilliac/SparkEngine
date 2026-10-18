@@ -30,8 +30,8 @@ none of the hardware guidance is `stable-v1` certification.
 |---|---|---|
 | **Release candidate OS** | Windows 11 x64 (`stable-v1` target; blocked/uncertified) | Windows 11 x64 |
 | **Development floor** | Windows 10 x64 (outside the release profile) | Windows 10/11 SDK development path |
-| **CPU Architecture** | x86-64 | x86-64 with AVX2 |
-| **CPU Baseline** | x64 baseline | AVX2 only when `SPARK_NATIVE_ARCH=ON` (default OFF; distributed builds are not forced to AVX2) |
+| **CPU Architecture** | x86-64 | x86-64 |
+| **CPU Baseline** | x86-64 with SSE4.2 (`stable-v1` floor, OD-04) | AVX2 only for host-tuned `SPARK_NATIVE_ARCH=ON` builds, which are not distributable |
 | **GPU (Primary)** | D3D11 Feature Level 10.0 | D3D11 FL 11.1 |
 | **GPU (Optional)** | D3D12 FL 12.0 (Win10+) | D3D12 FL 12.0 with DXR Tier 1.1 |
 | **Compiler** | MSVC 19.36+ (VS 2022 17.6+, v143 toolset) | MSVC v143 / v145 |
@@ -48,7 +48,7 @@ a development cross-compile path outside `stable-v1` (see
 
 | Aspect | Minimum | Recommended |
 |---|---|---|
-| **OS Version** | Any distro with glibc 2.35+ | Ubuntu 24.04 LTS (CI standard) |
+| **OS Version** | Ubuntu 24.04 LTS x86-64 is the only support row (OD-10); other distributions are unsupported | Ubuntu 24.04 LTS (CI standard) |
 | **CPU Architecture** | x86-64 only (no ARM64 Linux support today) | x86-64 with SSE4.2 |
 | **Graphics implementation paths** | Vulkan 1.3; the OpenGL RHI bootstrap requests 4.5, while SDL runtime/editor hosts request 3.3 | Vulkan 1.3 development path |
 | **Software graphics route** | Mesa llvmpipe only when explicitly selected and configured; it is not a GPU requirement or automatic fallback | Native GPU for development |
@@ -64,11 +64,20 @@ wiring it into packaged headless hosts remains `HEAD-220` work. Linux headless
 execution is outside `stable-v1` and uncertified. Vulkan falls back to 1.3 from
 1.4 automatically at runtime.
 
+A Linux package for that row may need at most `GLIBC_2.39`, `GLIBCXX_3.4.33`,
+`CXXABI_1.3.15` and `GCC_14.0.0`, the versions stock Ubuntu 24.04 provides.
+`VerifyLinuxInstalledRuntime` and `VerifyLinuxPackagedRuntime` fail on any
+higher symbol-version need. Build release packages on Ubuntu 24.04 (or in a
+noble container). A build on a newer distribution links newer glibc symbol
+versions and does not load on 24.04. For example, Ubuntu 26.04 binds `libm`
+`atan2f`/`asinf`/`acosf`/`sqrtf` to `GLIBC_2.43`. See
+[Linux support evidence](../../docs/platform/LINUX-SUPPORT-EVIDENCE.md) §6.1.
+
 ### macOS
 
 | Aspect | Minimum | Recommended |
 |---|---|---|
-| **OS Version** | macOS 11 Big Sur (`CMAKE_OSX_DEPLOYMENT_TARGET=11.0`) | macOS 12+ Monterey |
+| **OS Version** | macOS 13.3 Ventura (`CMAKE_OSX_DEPLOYMENT_TARGET=13.3`) | macOS 15 Sequoia (the `macos-15` CI image) |
 | **CPU Architecture** | x86-64 or ARM64 | Apple Silicon (M1+) |
 | **CPU Baseline** | ARM NEON *or* x64 SSE4.2 | Apple Silicon M-series |
 | **GPU path** | Runtime device capability checks; no certified Metal release profile | Runtime device capability checks; no certified Metal release profile |
@@ -81,8 +90,15 @@ execution is outside `stable-v1` and uncertified. Vulkan falls back to 1.3 from
 | **CMake** | 3.25+ | 3.25+ |
 
 Hardware RT is gated with `[device supportsRaytracing]` *and*
-`@available(macOS 12.0, *)` in `MetalRayTracing.mm` — older targets fall
-back to the SDFGI software path automatically.
+`@available(macOS 12.0, *)` in `MetalRayTracing.mm`. The 13.3 deployment
+floor always satisfies the OS check, so `supportsRaytracing` is the effective
+gate; devices without it fall back to the SDFGI software path automatically.
+
+The 13.3 floor comes from C++23 `std::format` of floating-point values, which
+needs libc++ floating-point `to_chars` (shipped from macOS 13.3). The single
+canonical value is `SPARK_MACOS_MIN_VERSION` in the root `CMakeLists.txt`;
+`tools/check_macos_min_version.py` (CTest `MacOSBaseline_MinimumVersionParity`)
+fails when a workflow, this page, or a built Mach-O image disagrees with it.
 
 ## Apple Silicon vs Metal
 
@@ -93,13 +109,14 @@ These are two different things that often get conflated:
   shared between CPU, GPU, and Neural Engine. Replaced Intel x86 Macs.
 - **Metal** is Apple's *graphics API* — the analogue of DirectX or
   Vulkan. Shipped in 2014 (iOS 8, OS X 10.11), long before Apple Silicon.
-  Runs on both Intel Macs and Apple Silicon Macs.
+  Apple ships the API on both Intel and Apple Silicon hardware.
 
-You can run Metal on an Intel Mac. You can run non-Metal code on Apple
-Silicon (via OpenGL, for example). They're orthogonal. SparkEngine's source
+The API and the CPU architecture are orthogonal: Metal exists on Intel Macs,
+and non-Metal code (OpenGL, for example) exists on Apple Silicon. That is a
+statement about Apple's platform, not about SparkEngine. SparkEngine's source
 contains x64 and ARM64 Mac paths; both are experimental and outside
-`stable-v1`. Apple Silicon is the preferred development path because the Metal
-driver and GPU are co-designed.
+`stable-v1`, and owner decision OD-11 limits any future macOS row to Apple
+Silicon only (PLT-220).
 
 ## Runtime Hardware Footprint
 
@@ -114,6 +131,72 @@ game content. Assets, entities, and game logic pile on top.
 - **Physics threads:** Jolt uses the same formula, dynamically sized pool
   (`Physics/PhysicsSystem.cpp:385`).
 - **No hard cap** on frame work — scales with content.
+
+**Instruction-set floor (BLD-100 / OD-04).** The `stable-v1` CPU floor is
+x86-64 with SSE4.2 (the x86-64-v2 level: SSE4.1, SSE4.2, POPCNT). Unless
+`SPARK_NATIVE_ARCH=ON`, `cmake/SparkCpuFloor.cmake` builds vendored Jolt with
+`USE_AVX`, `USE_AVX2`, `USE_AVX512`, `USE_FMADD`, `USE_F16C`, `USE_LZCNT` and
+`USE_TZCNT` OFF. Jolt publishes its ISA flags `PUBLIC`, so before this change
+every target linking it (including `SparkEngineLib`) also compiled with
+`-mavx2 -mfma -mf16c -mlzcnt -mbmi`. Configuration now fails when any
+target or global flag selects an instruction set above the floor.
+`Tests/Tools/test_cpu_floor.py` covers this check, including the vendored Jolt
+configuration.
+
+Two further checks cover what configure-time flag checks cannot see:
+
+- **Linked-image scan.** `tools/check_isa_baseline.py` disassembles ELF or PE
+  images with `objdump`/`llvm-objdump`. It fails on any AVX (VEX/EVEX),
+  ymm/zmm, AVX-512 opmask, FMA, F16C, BMI1/BMI2, LZCNT or MOVBE instruction,
+  and on the legacy-encoded AES-NI, PCLMULQDQ, SHA-NI, GFNI, RDRAND, RDSEED
+  and ADX instructions, outside functions exempted with `--allow-symbol`,
+  which is only for CPUID-dispatched code. It also fails on the XSAVE, TSX,
+  FSGSBASE, SSE4a, 3DNow!, CLFLUSHOPT/CLWB, RDPID, WAITPKG, MOVDIRI/MOVDIR64B,
+  SERIALIZE, PKU and AMX families. The one XGETBV the engine itself runs, in
+  `Spark::Detail::ReadXcr0` after the CPUID OSXSAVE check, is exempt for XSAVE
+  only, by exact procedure name. TZCNT is reported but allowed: it
+  has the same encoding as `REP BSF`, which GCC and Clang emit at the SSE4.2
+  floor. The configure-time check also rejects the matching `-mmovbe`,
+  `-maes`, `-mpclmul`, `-msha`, `-mgfni`, `-mrdrnd`, `-mrdseed`, `-madx`,
+  `-mvaes` and `-mvpclmulqdq` flags.
+  CTest `CpuFloor_IsaBaseline` scans the built engine, editor, server and
+  game-module images. `CpuFloor_IsaBaselineChecker` proves the scanner on ELF
+  and PE fixtures built with and without the extensions.
+  **Windows images are not scanned in CTest yet.** The image scan is
+  registered for ELF and applicable Windows MSVC builds. The scanner checks an MSVC image
+  against its PDB, with reviewed exemptions for the MSVC runtime's
+  CPUID-dispatched code (see
+  [CI-Reproducible-Builds](../development/CI-Reproducible-Builds.md)). The
+  local Release images still contain libsodium's AVX2 and AES-NI variants,
+  which the MSVC build of libsodium compiles, and AVX-512 loops that MSVC's
+  auto-vectorizer adds behind a runtime `__isa_available` check. A registered
+  Windows scan therefore fails until the product findings and undecodable
+  bytes are resolved. Shipping CI invokes the scan's custom target even with
+  `BUILD_TESTS=OFF`; it requires matching PDBs and LLVM tools.
+- **Startup check.** The `SparkEngine` (Windows and POSIX), `SparkEditor` and
+  `SparkServer` entry points call
+  `Spark::DescribeStableCpuFloorFailure(Spark::DetectCpuFeatures())`
+  (`Utils/MultiISA.h`, CPUID + XGETBV) before logging, crash handling or
+  server startup. On a CPU missing SSE2/SSE3/SSSE3/SSE4.1/SSE4.2/POPCNT, the
+  entry point prints the missing features (the Windows engine and editor show a
+  message box when launched with no console) and exits with a failure code.
+  `MultiISADispatch` now picks its level from the same runtime detection, not
+  from compile-time macros. `GetDetectedLevel()` and `Console_GetReport()`
+  report what the CPU can do. A dispatcher reports the kernel it actually
+  runs through `SelectLevel()`. For example, a floor build of
+  `CpuNeuralInference` runs its SSE2 kernel on an AVX2 CPU.
+
+The startup check is best-effort. Static initializers run before `main` and
+may already use SSE4.2 instructions, so a CPU below the floor can still fault
+before the message appears. No Shipping binary has yet been run on an SSE4.2-only
+CPU or emulator.
+
+`CpuFloor_BelowFloorStartupRefused` uses Intel SDE's Penryn (below floor)
+and Nehalem (at floor) models to execute the built `SparkEngine --version`
+entry point. The required Windows VS2022 and Linux GCC Release jobs download
+SDE 10.13.1 with checked SHA-256 archives, then run this CTest. SDE is a CI
+tool and is not part of a SparkEngine package. This checks the real startup
+path for those two CPU models; it does not replace a Shipping package run.
 
 Core-count guidance below is an unverified planning estimate. `PERF-100` remains
 open; no same-commit benchmark artifact establishes a release minimum.
@@ -175,7 +258,7 @@ total-VRAM envelope.
 
 ### Editor Overhead
 
-`SparkEditor` runs the full engine plus ImGui, an inventory of 65 `*Panel.h`
+`SparkEditor` runs the full engine plus ImGui, an inventory of 64 `*Panel.h`
 classes, the asset database, and collaborative-edit sessions. Registration and
 default visibility are separate from that source-file count. No current evidence
 artifact establishes a certified editor RAM/VRAM overhead.
@@ -200,7 +283,7 @@ For CI / build machines:
 |---|---|
 | Linux CI runner | `ubuntu-24.04` (GitHub-hosted) |
 | Windows CI runner | GitHub-hosted `windows-2022` with VS 2022; not Windows 11 host certification |
-| macOS CI runner | GitHub-hosted `macos-latest`; architecture is not pinned by this repository label |
+| macOS CI runner | GitHub-hosted `macos-15` (Apple Silicon arm64 image) |
 
 CI lanes use configured compiler caches for incremental build speed. Historical
 wall-clock figures are planning data, not `stable-v1` release evidence.
@@ -212,7 +295,6 @@ graphics toggle rather than presenting it as a working build reduction:
 
 | Option | Default | Effect when OFF |
 |---|---|---|
-| `ENABLE_GRAPHICS` | ON | Currently inert: no target/source condition consumes it, so OFF does not strip the RHI (`HEAD-220`) |
 | `ENABLE_NETWORKING` | ON | Omits `ENABLE_NETWORKING` and networking libraries from `SparkEngineLib`; standalone service targets are controlled separately by `ENABLE_SERVER_PROCESSES` |
 | `ENABLE_VULKAN` | ON | Disables Vulkan discovery and omits `SPARK_VULKAN_SUPPORT`; root CMake does not separately filter Vulkan source files |
 | `ENABLE_METAL` | auto-ON on APPLE | Smaller binary on macOS if only OpenGL is wanted |

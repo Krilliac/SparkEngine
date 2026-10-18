@@ -4,10 +4,9 @@
  */
 
 #include "RPGQuestSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -21,8 +20,8 @@ namespace RPG
         m_context = context;
         RegisterDefaultQuests();
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Quest system initialized (" +
-                                                    std::to_string(m_quests.size()) + " quests)");
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[RPG] Quest system initialized (" + std::to_string(m_quests.size()) + " quests)");
         return true;
     }
 
@@ -153,7 +152,9 @@ namespace RPG
     {
         const auto* def = GetQuestDef(questId);
         if (characterId == 0 || !def || !IsQuestAvailable(characterId, questId, characterLevel))
+        {
             return false;
+        }
 
         auto& charProgress = m_progress[characterId];
 
@@ -164,8 +165,8 @@ namespace RPG
 
         charProgress[questId] = progress;
 
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG quest accepted: %s (id=%u)", def->name.c_str(), questId);
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Quest accepted: " + def->name);
+        Spark::ModuleLog::Info(m_context, "RPG quest accepted: {} (id={})", def->name.c_str(), questId);
+        Spark::ModuleLog::Info(m_context, "{}", "[RPG] Quest accepted: " + def->name);
         return true;
     }
 
@@ -173,36 +174,47 @@ namespace RPG
     {
         auto charIt = m_progress.find(characterId);
         if (charIt == m_progress.end())
+        {
             return false;
+        }
 
         auto questIt = charIt->second.find(questId);
         if (questIt == charIt->second.end())
+        {
             return false;
+        }
         if (questIt->second.state != QuestState::InProgress)
+        {
             return false;
+        }
 
         questIt->second.state = QuestState::Failed;
 
         const auto* def = GetQuestDef(questId);
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG quest abandoned: %s (id=%u)", def ? def->name.c_str() : "?",
-                       questId);
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Quest abandoned: " + (def ? def->name : "?"));
+        Spark::ModuleLog::Info(m_context, "RPG quest abandoned: {} (id={})", def ? def->name.c_str() : "?", questId);
+        Spark::ModuleLog::Info(m_context, "{}", "[RPG] Quest abandoned: " + (def ? def->name : "?"));
         return true;
     }
 
     void RPGQuestSystem::UpdateObjective(uint32_t characterId, ObjectiveType type, uint32_t targetId, int count)
     {
         if (count <= 0)
+        {
             return;
+        }
 
         auto charIt = m_progress.find(characterId);
         if (charIt == m_progress.end())
+        {
             return;
+        }
 
         for (auto& [questId, progress] : charIt->second)
         {
             if (progress.state != QuestState::InProgress)
+            {
                 continue;
+            }
 
             for (auto& obj : progress.objectives)
             {
@@ -210,11 +222,13 @@ namespace RPG
                 {
                     obj.currentCount += count;
                     if (obj.currentCount > obj.requiredCount)
+                    {
                         obj.currentCount = obj.requiredCount;
+                    }
 
                     if (obj.IsComplete())
                     {
-                        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Objective complete: " + obj.description);
+                        Spark::ModuleLog::Info(m_context, "{}", "[RPG] Objective complete: " + obj.description);
                     }
                 }
             }
@@ -225,23 +239,30 @@ namespace RPG
     {
         auto charIt = m_progress.find(characterId);
         if (charIt == m_progress.end())
+        {
             return false;
+        }
 
         auto questIt = charIt->second.find(questId);
         if (questIt == charIt->second.end())
+        {
             return false;
+        }
         if (questIt->second.state != QuestState::InProgress)
+        {
             return false;
+        }
 
         if (!AreAllObjectivesComplete(questIt->second))
+        {
             return false;
+        }
 
         questIt->second.state = QuestState::Completed;
 
         const auto* def = GetQuestDef(questId);
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "RPG quest completed: %s (id=%u)", def ? def->name.c_str() : "?",
-                       questId);
-        Spark::SimpleConsole::GetInstance().LogInfo("[RPG] Quest completed: " + (def ? def->name : "?"));
+        Spark::ModuleLog::Info(m_context, "RPG quest completed: {} (id={})", def ? def->name.c_str() : "?", questId);
+        Spark::ModuleLog::Info(m_context, "{}", "[RPG] Quest completed: " + (def ? def->name : "?"));
         return true;
     }
 
@@ -252,12 +273,16 @@ namespace RPG
         std::vector<const QuestProgress*> result;
         auto charIt = m_progress.find(characterId);
         if (charIt == m_progress.end())
+        {
             return result;
+        }
 
         for (const auto& [questId, progress] : charIt->second)
         {
             if (progress.state == QuestState::InProgress)
+            {
                 result.push_back(&progress);
+            }
         }
         return result;
     }
@@ -267,12 +292,16 @@ namespace RPG
         std::vector<const QuestProgress*> result;
         auto charIt = m_progress.find(characterId);
         if (charIt == m_progress.end())
+        {
             return result;
+        }
 
         for (const auto& [questId, progress] : charIt->second)
         {
             if (progress.state == QuestState::Completed)
+            {
                 result.push_back(&progress);
+            }
         }
         return result;
     }
@@ -281,7 +310,9 @@ namespace RPG
     {
         auto charIt = m_progress.find(characterId);
         if (charIt == m_progress.end())
+        {
             return nullptr;
+        }
 
         auto questIt = charIt->second.find(questId);
         return questIt != charIt->second.end() ? &questIt->second : nullptr;
@@ -297,17 +328,23 @@ namespace RPG
     {
         const auto* def = GetQuestDef(questId);
         if (!def)
+        {
             return false;
+        }
 
         // Level check
         if (characterLevel < def->requiredLevel)
+        {
             return false;
+        }
 
         // Prerequisite check
         if (def->prerequisiteQuestId != 0)
         {
             if (!IsQuestComplete(characterId, def->prerequisiteQuestId))
+            {
                 return false;
+            }
         }
 
         // Not already accepted or completed
@@ -320,14 +357,16 @@ namespace RPG
         for (const auto& obj : progress.objectives)
         {
             if (!obj.IsComplete())
+            {
                 return false;
+            }
         }
         return true;
     }
 
     void RPGQuestSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (ImGui::TreeNode("RPG Quest System"))
         {
             ImGui::Text("Quests: %zu", m_quests.size());
@@ -343,7 +382,9 @@ namespace RPG
                         ImGui::Text("Objectives: %zu | XP: %u | Gold: %d", quest.objectives.size(), quest.rewards.xp,
                                     quest.rewards.currency);
                         if (quest.prerequisiteQuestId > 0)
+                        {
                             ImGui::Text("Requires quest: %u", quest.prerequisiteQuestId);
+                        }
                         ImGui::TreePop();
                     }
                 }

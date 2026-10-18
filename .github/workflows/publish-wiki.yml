@@ -16,7 +16,7 @@ on:
       - "Tests/Tools/test_publish_wiki.py"
       - ".github/workflows/publish-wiki.yml"
   pull_request:
-    branches: [Working]
+    branches: [Working, 'claude/**']
     paths:
       - "wiki/**"
       - "docs/**"
@@ -64,15 +64,133 @@ jobs:
           bash docs/sync-wiki.sh check
           bash tools/check-wiki-quality.sh
           bash tools/check-wiki-nav.sh
-          python3 -m unittest discover -s Tests/Tools -p 'test_*.py' -v
           python3 tools/publish-wiki.py \
             --repository "$GITHUB_REPOSITORY" \
             --output "$RUNNER_TEMP/published-wiki"
 
+  # The whole Tests/Tools suite (3,000+ tests) no longer fits one runner's
+  # 10-minute budget, so it runs as a deterministic partition of its files.
+  # Nothing is dropped: every shard recomputes the full partition and fails
+  # unless it covers every test file exactly once, and tools-tests-complete
+  # re-checks that the files the shards actually ran are exactly the suite.
+  # Each shard runs its files in one process from the repository root with
+  # Tests/Tools importable, as `unittest discover -s Tests/Tools` does.
+  tools-tests:
+    name: Tools tests (shard ${{ matrix.shard }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The font-notice and real crypto-build tests require the pinned ImGui
+      # and libsodium sources and fail closed when either is absent.
+      - name: Initialise the font-embedding and crypto submodules
+        run: git submodule update --init --depth 1 ThirdParty/UI/imgui ThirdParty/Security/libsodium
+
+      - name: Generate exact-commit API documentation
+        # Shard 0's complete determinism test regenerates API documentation in
+        # each invocation itself. Avoid a third redundant generation while
+        # retaining both sequential health checks and the 10-minute budget.
+        if: matrix.shard != 0
+        env:
+          SPARKENGINE_DOC_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          export SPARKENGINE_DOC_SOURCE_COMMITTED_AT="$(git show -s --format=%cI HEAD)"
+          timeout 5m bash docs/generate-api-docs.sh generate
+
+      - name: Run this shard of Tests/Tools
+        env:
+          SHARD_INDEX: ${{ strategy.job-index }}
+          SHARD_TOTAL: ${{ strategy.job-total }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/tools-tests"
+          python3 - > "$RUNNER_TEMP/tools-tests/shard-$SHARD_INDEX.files" <<'PY'
+          import os
+          import pathlib
+          import sys
+
+          # Files too slow to share a runner each get one; the rest are dealt
+          # round-robin, in name order, across the remaining shards.
+          DEDICATED = (
+              "test_site_data_generation_determinism.py",
+              "test_site_data_contract.py",
+              "test_site_data_docs_parity.py",
+          )
+          files = sorted(path.name for path in pathlib.Path("Tests/Tools").glob("test_*.py"))
+          index = int(os.environ["SHARD_INDEX"])
+          total = int(os.environ["SHARD_TOTAL"])
+          missing = [name for name in DEDICATED if name not in files]
+          if missing:
+              sys.exit(f"dedicated shard files do not exist: {missing}")
+          shared = total - len(DEDICATED)
+          if shared < 1:
+              sys.exit(f"{total} shards leave none for the {len(files) - len(DEDICATED)} shared files")
+          rest = [name for name in files if name not in DEDICATED]
+          shards = [[name] for name in DEDICATED] + [rest[start::shared] for start in range(shared)]
+          assigned = sorted(name for shard in shards for name in shard)
+          if assigned != files or not all(shards):
+              sys.exit("shard partition does not cover every Tests/Tools test file exactly once")
+          print("\n".join(shards[index]))
+          PY
+          echo "Shard $SHARD_INDEX of $SHARD_TOTAL runs:"
+          cat "$RUNNER_TEMP/tools-tests/shard-$SHARD_INDEX.files"
+          mapfile -t modules < <(sed 's/\.py$//' "$RUNNER_TEMP/tools-tests/shard-$SHARD_INDEX.files")
+          PYTHONPATH="$PWD/Tests/Tools" python3 -m unittest -v "${modules[@]}" 2>&1 \
+            | tee "$RUNNER_TEMP/tools-tests/shard-$SHARD_INDEX.log"
+
+      - name: Upload shard file list
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tools-tests-shard-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/tools-tests/shard-${{ strategy.job-index }}.files
+          if-no-files-found: error
+          retention-days: 1
+
+  tools-tests-complete:
+    name: Tools tests cover the whole suite
+    needs: tools-tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Download shard file lists
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: tools-tests-shard-*
+          path: ${{ runner.temp }}/tools-tests
+          merge-multiple: true
+
+      - name: Assert the shards ran every test file exactly once
+        run: |
+          set -euo pipefail
+          (cd Tests/Tools && ls test_*.py) | LC_ALL=C sort > "$RUNNER_TEMP/expected.files"
+          cat "$RUNNER_TEMP"/tools-tests/shard-*.files | LC_ALL=C sort > "$RUNNER_TEMP/ran.files"
+          test -s "$RUNNER_TEMP/expected.files"
+          if ! diff -u "$RUNNER_TEMP/expected.files" "$RUNNER_TEMP/ran.files"; then
+            echo "Tests/Tools shards did not run every test file exactly once" >&2
+            exit 1
+          fi
+          echo "$(wc -l < "$RUNNER_TEMP/ran.files") Tests/Tools files ran across $(ls "$RUNNER_TEMP"/tools-tests/shard-*.files | wc -l) shards"
+
   publish:
     name: Publish canonical wiki source
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/Working'
-    needs: validate
+    needs: [validate, tools-tests-complete]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

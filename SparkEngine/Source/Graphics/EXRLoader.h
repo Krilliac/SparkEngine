@@ -59,13 +59,17 @@ namespace Spark::Graphics
         if (exponent <= 0)
         {
             if (exponent < -10)
+            {
                 return static_cast<uint16_t>(sign);
+            }
             mantissa |= 0x800000u;
-            const uint32_t shift = static_cast<uint32_t>(1 - exponent + 13);
+            const auto shift = static_cast<uint32_t>(1 - exponent + 13);
             return static_cast<uint16_t>(sign | (mantissa >> shift));
         }
         if (exponent >= 31)
+        {
             return static_cast<uint16_t>(sign | 0x7C00u);
+        }
 
         return static_cast<uint16_t>(sign | (static_cast<uint32_t>(exponent) << 10) | (mantissa >> 13));
     }
@@ -93,27 +97,33 @@ namespace Spark::Graphics
         {
 #if defined(SPARK_HAS_TINYEXR) && SPARK_HAS_TINYEXR
             if (!IsEXR(data, dataSize))
+            {
                 return false;
+            }
             constexpr size_t kMaxInputBytes = 16ull * 1024ull * 1024ull;
             if (dataSize > kMaxInputBytes)
+            {
                 return false;
+            }
 
             EXRVersion version{};
             if (ParseEXRVersionFromMemory(&version, data, dataSize) != TINYEXR_SUCCESS || version.tiled ||
                 version.multipart || version.non_image)
+            {
                 return false;
+            }
 
             EXRHeader header;
             InitEXRHeader(&header);
             ::EXRImage decoded;
             InitEXRImage(&decoded);
-            const char* error = nullptr;
+            // tinyexr's error strings are never used here, and ParseEXRHeaderFromMemory
+            // overwrites (leaks) its first message when a second check also fails,
+            // so no error out-parameter is passed.
             try
             {
-                if (ParseEXRHeaderFromMemory(&header, &version, data, dataSize, &error) != TINYEXR_SUCCESS)
+                if (ParseEXRHeaderFromMemory(&header, &version, data, dataSize, nullptr) != TINYEXR_SUCCESS)
                 {
-                    if (error)
-                        FreeEXRErrorMessage(error);
                     FreeEXRHeader(&header);
                     return false;
                 }
@@ -127,8 +137,6 @@ namespace Spark::Graphics
                 if (invalidDimensions || header.num_channels < 3 || header.num_channels > 4)
                 {
                     FreeEXRHeader(&header);
-                    if (error)
-                        FreeEXRErrorMessage(error);
                     return false;
                 }
 
@@ -142,15 +150,25 @@ namespace Spark::Graphics
                     const std::string_view name(header.channels[channel].name);
                     int* destination = nullptr;
                     if (name == "R")
+                    {
                         destination = &red;
+                    }
                     else if (name == "G")
+                    {
                         destination = &green;
+                    }
                     else if (name == "B")
+                    {
                         destination = &blue;
+                    }
                     else if (name == "A")
+                    {
                         destination = &alpha;
+                    }
                     else
+                    {
                         supportedChannels = false;
+                    }
 
                     if (!destination || *destination != -1 || header.channels[channel].x_sampling != 1 ||
                         header.channels[channel].y_sampling != 1 ||
@@ -170,19 +188,14 @@ namespace Spark::Graphics
                     pixelCount > kMaxWorkingBytes / bytesPerPixel)
                 {
                     FreeEXRHeader(&header);
-                    if (error)
-                        FreeEXRErrorMessage(error);
                     return false;
                 }
 
-                error = nullptr;
-                const int result = LoadEXRImageFromMemory(&decoded, &header, data, dataSize, &error);
+                const int result = LoadEXRImageFromMemory(&decoded, &header, data, dataSize, nullptr);
                 if (result != TINYEXR_SUCCESS || decoded.width != width || decoded.height != height || !decoded.images)
                 {
                     FreeEXRImage(&decoded);
                     FreeEXRHeader(&header);
-                    if (error)
-                        FreeEXRErrorMessage(error);
                     return false;
                 }
 
@@ -199,8 +212,6 @@ namespace Spark::Graphics
                 {
                     FreeEXRImage(&decoded);
                     FreeEXRHeader(&header);
-                    if (error)
-                        FreeEXRErrorMessage(error);
                     return false;
                 }
 
@@ -218,8 +229,6 @@ namespace Spark::Graphics
 
                 FreeEXRImage(&decoded);
                 FreeEXRHeader(&header);
-                if (error)
-                    FreeEXRErrorMessage(error);
                 outImage = std::move(parsed);
                 return true;
             }
@@ -227,8 +236,6 @@ namespace Spark::Graphics
             {
                 FreeEXRImage(&decoded);
                 FreeEXRHeader(&header);
-                if (error)
-                    FreeEXRErrorMessage(error);
                 return false;
             }
 #else

@@ -22,6 +22,7 @@
 #include "Engine/ECS/Components/FPSComponents.h"
 #include "Engine/ECS/Components/GameplayComponents.h"
 #include "Engine/ECS/Components/PhysicsComponents.h"
+#include "Engine/Scripting/AngelScriptEngine.h"
 #include "../../../Utils/DeferredDeletion.h"
 #include "Utils/Cooldown.h"
 #include "Utils/DebugHookManager.h"
@@ -30,6 +31,7 @@
 #include <chrono>
 #include <sstream>
 #include <cmath>
+#include <cstddef>
 
 using namespace DirectX;
 namespace Spark::ECS
@@ -292,21 +294,67 @@ namespace Spark::ECS
             source->Position = transform.position;
             audio.previousPosition = transform.position;
         }
+
+        DrainScriptAudioCues(world);
         SPARK_DEBUG_HOOK_SYSTEM(SystemPostUpdate, "ECS.Audio", 0.0);
+    }
+
+    void AudioUpdateSystem::DrainScriptAudioCues(World& world)
+    {
+        auto view = world.GetEntitiesWith<ScriptAudioCues>();
+        for (auto entity : view)
+        {
+            auto& cues = view.get<ScriptAudioCues>(entity);
+            if (cues.pending.empty())
+            {
+                continue;
+            }
+
+            // An authored AudioSourceComponent supplies the entity's mix and rolloff; otherwise play at unity.
+            const AudioSourceComponent* authored = world.GetRegistry().try_get<AudioSourceComponent>(entity);
+            const float volume = authored ? authored->volume : 1.0f;
+            const float pitch = authored ? authored->pitch : 1.0f;
+
+            for (const auto& cue : cues.pending)
+            {
+                // Check the name first: AudioEngine logs a console error for every unknown-sound request.
+                AudioSource* source = nullptr;
+                if (m_audio->GetSound(cue.soundName))
+                {
+                    source = cue.positional ? m_audio->PlaySound3D(cue.soundName, cue.position, volume, pitch, false)
+                                            : m_audio->PlaySound(cue.soundName, volume, pitch, false);
+                }
+                if (!source)
+                {
+                    // Unknown sound, no audio device, or no free voice: the request is counted, never retried.
+                    ++cues.dropped;
+                    SPARK_LOG_ONCE(Spark::LogLevel::Warn, Spark::LogCategory::Audio,
+                                   "AudioUpdateSystem: script sound '%s' on entity %u could not be played "
+                                   "(not loaded, no audio device, or no free voice).",
+                                   cue.soundName.c_str(), static_cast<uint32_t>(entity));
+                    continue;
+                }
+                if (cue.positional && authored)
+                {
+                    source->MinDistance = authored->minDistance;
+                    source->MaxDistance = authored->maxDistance;
+                }
+                ++cues.played;
+            }
+            cues.pending.clear();
+        }
     }
 
     // ============================================================================
     // LifecycleSystem
     // ============================================================================
 
-    void LifecycleSystem::Update(World& world, float deltaTime)
+    void LifecycleSystem::Update(World& world, float /*deltaTime*/)
     {
         SPARK_TRACE_ENTER(Spark::LogCategory::ECS);
-        // Two-phase death processing: collect first, then fire callbacks.
-        // This avoids iterator invalidation if a death callback destroys
-        // the entity or modifies HealthComponent on other entities.
-        // Uses persistent m_deadEntities to avoid heap allocation every frame.
-
+        // Only the latch lives here: the gameplay system that dealt the lethal damage owns the
+        // death response and the EntityKilledEvent (see the class documentation).
+        std::size_t newDeaths = 0;
         auto healthView = world.GetEntitiesWith<HealthComponent>();
         for (auto entity : healthView)
         {
@@ -314,31 +362,78 @@ namespace Spark::ECS
             if (health.isDead && !health.deathProcessed)
             {
                 health.deathProcessed = true;
-                m_deadEntities.MarkForDeletion(entity);
+                ++newDeaths;
             }
         }
 
-        if (m_deadEntities.GetPendingCount() > 0)
+        if (newDeaths > 0)
         {
-            SPARK_LOG_INFO(Spark::LogCategory::ECS, "LifecycleSystem: %zu entities died this frame",
-                           m_deadEntities.GetPendingCount());
+            SPARK_LOG_INFO(Spark::LogCategory::ECS, "LifecycleSystem: %zu entities died this frame", newDeaths);
+        }
+    }
+
+    // ============================================================================
+    // ScriptRuntimeSystem
+    // ============================================================================
+
+    void ScriptRuntimeSystem::Update(World& world, float deltaTime)
+    {
+        if (m_scriptEngine == nullptr)
+        {
+            return;
         }
 
-        if (m_onDeath)
+        AngelScriptEngine::BindWorld(&world);
+        m_scriptEngine->PruneInvalidScripts(world);
+        auto view = world.GetEntitiesWith<Script>();
+        m_entities.clear();
+        for (const EntityID entity : view)
         {
-            m_deadEntities.Flush(
-                [&](entt::entity& entity)
-                {
-                    SPARK_LOG_DEBUG(Spark::LogCategory::ECS, "LifecycleSystem: firing death callback for entity %u",
-                                    static_cast<uint32_t>(entity));
-                    m_onDeath(entity);
-                });
+            m_entities.push_back(entity);
         }
-        else
+
+        for (const EntityID entity : m_entities)
         {
-            SPARK_WARN_IF(Spark::LogCategory::ECS, !m_deadEntities.IsEmpty(),
-                          "LifecycleSystem: entities died but no death callback is registered");
-            m_deadEntities.FlushAll();
+            if (!world.GetRegistry().valid(entity))
+            {
+                continue;
+            }
+
+            Script* script = world.GetRegistry().try_get<Script>(entity);
+            if (script == nullptr || !script->enabled)
+            {
+                continue;
+            }
+
+            const uint64_t generation = m_scriptEngine->GetScriptGeneration(entity);
+            if (generation == 0)
+            {
+                continue;
+            }
+            // The VM's per-instance flag is the truth (it survives hot reload); the
+            // component mirrors it for code that reads the ECS.
+            script->started = m_scriptEngine->IsScriptStarted(entity);
+            if (!script->started)
+            {
+                // Latch before calling user code. Start can publish an event that
+                // destroys/replaces the component or attaches another instance.
+                script->started = true;
+                m_scriptEngine->CallStart(entity);
+                if (!world.GetRegistry().valid(entity) || m_scriptEngine->GetScriptGeneration(entity) != generation)
+                {
+                    continue;
+                }
+                script = world.GetRegistry().try_get<Script>(entity);
+                if (script == nullptr)
+                {
+                    continue;
+                }
+            }
+
+            if (script->enabled)
+            {
+                m_scriptEngine->CallUpdate(entity, deltaTime);
+            }
         }
     }
 

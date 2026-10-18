@@ -11,6 +11,7 @@
  */
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 namespace Terrafront
@@ -18,23 +19,67 @@ namespace Terrafront
 
 #pragma pack(push, 1)
 
-    // --- W5 onboarding (Task 4) --------------------------------------------------
+    // --- W5 onboarding (Task 4), NET-100 SCRAM-SHA-256 login ----------------------
+    //
+    // No message carries a password or a password-equivalent. Login is SCRAM
+    // (RFC 5802 / 7677; Account/TFAccountSystem.h):
+    //   C->S LoginRequest   TF_LoginStart      username
+    //   S->C LoginChallenge TF_LoginChallenge  salt, iterations, single-use server nonce
+    //   C->S LoginProof     TF_LoginProof      client nonce, echoed server nonce, ClientProof
+    //   S->C LoginReply     TF_AuthReply       result + ServerSignature (client verifies it)
+    // Registration sends a verifier the client derived locally (TF_RegisterRequest):
+    // StoredKey and ServerKey, never the password or SaltedPassword. Every message
+    // travels inside the NET-100 sealed channel (Net/TFScramWire.h builds and checks them).
 
-    struct TF_AuthRequest
+    inline constexpr size_t kTFScramNonceChars = 64; ///< NUL-terminated hex nonce buffer (24-byte nonces use 48)
+    inline constexpr size_t kTFScramSaltBytes = 64;  ///< == TFAccountSystem::kMaxScramSaltBytes
+
+    struct TF_LoginStart
     {
         char user[32]; // null-terminated username
-        char pass[64]; // null-terminated plaintext password (login-time only; never stored)
     };
-    static_assert(sizeof(TF_AuthRequest) == 96, "wire layout frozen");
+    static_assert(sizeof(TF_LoginStart) == 32, "wire layout frozen");
+
+    struct TF_LoginChallenge
+    {
+        uint8_t saltLen; // valid bytes in salt (16..64)
+        uint8_t _pad[3];
+        uint32_t iterations;                  // PBKDF2 cost the client must pay
+        uint8_t salt[kTFScramSaltBytes];      // first saltLen bytes are the salt
+        char serverNonce[kTFScramNonceChars]; // null-terminated hex, single use
+    };
+    static_assert(sizeof(TF_LoginChallenge) == 136, "wire layout frozen");
+
+    struct TF_LoginProof
+    {
+        char user[32];                        // null-terminated username (must match the challenge)
+        char clientNonce[kTFScramNonceChars]; // null-terminated hex
+        char serverNonce[kTFScramNonceChars]; // echoed from the challenge
+        uint8_t proof[32];                    // ClientProof = ClientKey XOR HMAC(StoredKey, AuthMessage)
+    };
+    static_assert(sizeof(TF_LoginProof) == 192, "wire layout frozen");
 
     struct TF_AuthReply
     {
         uint8_t ok;  // 0/1
         uint8_t err; // TFAuthErr
         uint8_t _pad[2];
-        uint64_t accountId; // 0 if !ok
+        uint64_t accountId;          // 0 if !ok
+        uint8_t serverSignature[32]; // LoginReply when ok: HMAC(ServerKey, AuthMessage); zero otherwise
     };
-    static_assert(sizeof(TF_AuthReply) == 12, "wire layout frozen");
+    static_assert(sizeof(TF_AuthReply) == 44, "wire layout frozen");
+
+    struct TF_RegisterRequest
+    {
+        char user[32]; // null-terminated username
+        uint8_t saltLen;
+        uint8_t _pad[3];
+        uint32_t iterations;
+        uint8_t salt[kTFScramSaltBytes];
+        uint8_t storedKey[32]; // SHA-256(ClientKey)
+        uint8_t serverKey[32]; // HMAC(SaltedPassword, "Server Key")
+    };
+    static_assert(sizeof(TF_RegisterRequest) == 168, "wire layout frozen");
 
     struct TF_CharBrief
     {

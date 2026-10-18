@@ -3,8 +3,10 @@
 #include "Utils/Serializer.h"
 #include "Engine/ECS/RuntimePrefab.h"
 
+#include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 // ============================================================================
 // RuntimePrefab — construction and name
@@ -132,6 +134,56 @@ TEST(RuntimePrefab_Clone_PreservesParent)
 
     auto clone = child.Clone();
     EXPECT_TRUE(clone->GetParent() == &parent);
+}
+
+// ============================================================================
+// Serialize / Deserialize header gate
+// ============================================================================
+
+TEST(RuntimePrefab_DeserializeRejectsWrongMagicAndFutureVersion)
+{
+    Spark::ECS::RuntimePrefab source("Guard");
+    source.AddComponent("Transform", {{"posX", "3"}});
+    Spark::BinaryWriter writer;
+    source.Serialize(writer);
+    const std::vector<uint8_t> good = writer.GetBuffer();
+
+    // The unmodified stream round-trips.
+    Spark::ECS::RuntimePrefab roundTrip("Placeholder");
+    Spark::BinaryReader goodReader(good);
+    std::string error = "stale diagnostic";
+    ASSERT_TRUE(roundTrip.Deserialize(goodReader, &error));
+    EXPECT_TRUE(error.empty());
+    EXPECT_TRUE(roundTrip.GetName() == "Guard");
+    ASSERT_EQ(roundTrip.GetComponents().size(), 1u);
+    EXPECT_TRUE(roundTrip.GetComponents()[0].properties.at("posX") == "3");
+
+    const auto expectRejectedAndUntouched = [](const std::vector<uint8_t>& bytes, const std::string& reason)
+    {
+        Spark::ECS::RuntimePrefab target("Kept");
+        target.AddComponent("Marker", {{"k", "v"}});
+        Spark::BinaryReader reader(bytes);
+        std::string diagnostic;
+        EXPECT_FALSE(target.Deserialize(reader, &diagnostic));
+        EXPECT_STR_CONTAINS(diagnostic, reason);
+        EXPECT_TRUE(target.GetName() == "Kept");
+        EXPECT_EQ(target.GetComponents().size(), 1u);
+        EXPECT_TRUE(target.HasComponent("Marker"));
+    };
+
+    // Byte 0 is the low byte of the little-endian magic; bytes 4..7 are the version.
+    std::vector<uint8_t> wrongMagic = good;
+    wrongMagic[0] ^= 0xFFu;
+    expectRejectedAndUntouched(wrongMagic, "expected PRFB (0x50524642)");
+
+    std::vector<uint8_t> futureVersion = good;
+    futureVersion[4] = static_cast<uint8_t>(Spark::ECS::PrefabFileHeader::kVersion + 1);
+    expectRejectedAndUntouched(futureVersion, "format version 2 is unsupported; this build reads and writes version 1");
+    expectRejectedAndUntouched(futureVersion, "Open the file with a SparkEngine build that supports its version");
+
+    std::vector<uint8_t> truncated(good.begin(), good.end() - 2);
+    expectRejectedAndUntouched(truncated, "payload is truncated or malformed");
+    expectRejectedAndUntouched(std::vector<uint8_t>(good.begin(), good.begin() + 4), "header is truncated");
 }
 
 // ============================================================================

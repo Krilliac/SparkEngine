@@ -80,6 +80,7 @@ namespace Spark::Net
             return false;
 
         m_config = config;
+
         {
             std::lock_guard<std::mutex> lock(m_stateMutex);
             m_stats = ServerStats{};
@@ -95,10 +96,13 @@ namespace Spark::Net
             return false;
         }
 
-        if (!m_config.rconPassword.empty() || m_config.rconPort != 0)
+        if (m_config.maxClients < 1 || m_config.maxClients > MAX_SERVER_CLIENTS)
         {
-            SPARK_LOG_WARN(Spark::LogCategory::Network,
-                           "rconPassword/rconPort are reserved but inactive; no remote RCON transport is enabled");
+            const std::string reason = "maxClients " + std::to_string(m_config.maxClients) + " outside [1, " +
+                                       std::to_string(MAX_SERVER_CLIENTS) + "]";
+            SPARK_LOG_ERROR(Spark::LogCategory::Network, "Refusing dedicated-server startup: %s", reason.c_str());
+            Log("ERROR: Refusing dedicated-server startup: " + reason);
+            return false;
         }
 
         if (!m_networkRuntime->Initialize())
@@ -251,6 +255,10 @@ namespace Spark::Net
             m_stats.totalBytesIn = netStats.bytesReceived;
             m_stats.totalBytesOut = netStats.bytesSent;
             m_stats.currentPlayers = playerCount;
+            m_stats.netIncomingQueueDepth = netStats.incomingQueueDepth;
+            m_stats.netOutgoingQueueDepth = netStats.outgoingQueueDepth;
+            m_stats.netIncomingQueuePeak = netStats.incomingQueuePeak;
+            m_stats.netOutgoingQueuePeak = netStats.outgoingQueuePeak;
         }
     }
 
@@ -359,8 +367,8 @@ namespace Spark::Net
 
                                               // Chat is never an administration transport. In particular, a
                                               // leading slash must never reach privileged commands. ExecuteRcon is
-                                              // a trusted in-process API until a separate authenticated
-                                              // remote-admin protocol exists.
+                                              // a trusted in-process API only: remote administration is
+                                              // permanently unavailable in stable-v1 (OD-05).
                                               NetworkMessage broadcast;
                                               broadcast.type = MessageType::ChatMessage;
                                               broadcast.channel = ChannelType::Reliable;
@@ -369,7 +377,12 @@ namespace Spark::Net
 
                                               if (m_callbacks.onChatMessage)
                                                   m_callbacks.onChatMessage(chatText);
-                                              Log("Chat: " + chatText);
+                                              // The server log also carries the administration audit trail.
+                                              // Remote text is escaped into one bounded field so a client
+                                              // cannot end its record and forge an audit line.
+                                              Log("Chat: client=" + std::to_string(msg.senderID) +
+                                                  " bytes=" + std::to_string(chatText.size()) + " text=\"" +
+                                                  EscapeRemoteTextForLog(chatText) + "\"");
                                           });
     }
 
@@ -607,6 +620,12 @@ namespace Spark::Net
         m_rconCommands.push_back({name, description, std::move(handler)});
     }
 
+    std::vector<RconCommand> DedicatedServer::GetRconCommands() const
+    {
+        std::lock_guard<std::mutex> lock(m_rconMutex);
+        return m_rconCommands;
+    }
+
     std::string DedicatedServer::ExecuteRcon(const std::string& commandLine)
     {
         std::string cmdName;
@@ -631,16 +650,38 @@ namespace Spark::Net
         // registry mutex.
         if (handler)
         {
-            std::string response = handler(args);
+            // Arguments and response bodies may contain reusable secrets. Only
+            // retain a bounded, log-safe identifier for a registered command.
+            const std::string auditName =
+                !cmdName.empty() && cmdName.size() <= 64 &&
+                        cmdName.find_first_not_of(
+                            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-") == std::string::npos
+                    ? cmdName
+                    : "<redacted>";
+            std::string response;
+            try
+            {
+                response = handler(args);
+            }
+            catch (...)
+            {
+                // The exception text may echo arguments, so it is neither
+                // logged nor returned; the attempt itself is still audited.
+                SPARK_LOG_WARN(Spark::LogCategory::Network, "RCON: command=%s disposition=failed", auditName.c_str());
+                Log("RCON: command=" + auditName + " disposition=failed");
+                return "Command failed: " + auditName;
+            }
+            // Record the audit line before host callbacks run so a throwing
+            // callback cannot erase the record of a dispatched command.
+            Log("RCON: command=" + auditName + " disposition=dispatched");
             if (m_callbacks.onRconCommand)
                 m_callbacks.onRconCommand(commandLine, response);
-            Log("RCON: " + commandLine + " -> " + response);
             return response;
         }
 
         std::string err = "Unknown command: " + cmdName;
-        SPARK_LOG_WARN(Spark::LogCategory::Network, "RCON unknown command: %s", cmdName.c_str());
-        Log("RCON: " + err);
+        SPARK_LOG_WARN(Spark::LogCategory::Network, "RCON: command=<unknown> disposition=unknown_command");
+        Log("RCON: command=<unknown> disposition=unknown_command");
         return err;
     }
 
@@ -1054,6 +1095,53 @@ namespace Spark::Net
         oss << "LAN Bcast:  " << (m_lanBroadcastActive.load(std::memory_order_acquire) ? "ON" : "OFF") << "\n";
         oss << "Admin Cmds: LOCAL API ONLY\n";
         return oss.str();
+    }
+
+    std::string DedicatedServer::EscapeRemoteTextForLog(std::string_view text)
+    {
+        static constexpr char kHexDigits[] = "0123456789ABCDEF";
+        const std::size_t copied = std::min(text.size(), kMaxLoggedRemoteTextBytes);
+
+        std::string escaped;
+        escaped.reserve(copied + 16);
+        for (std::size_t i = 0; i < copied; ++i)
+        {
+            const auto byte = static_cast<unsigned char>(text[i]);
+            switch (byte)
+            {
+            case '\\':
+                escaped += "\\\\";
+                break;
+            case '"':
+                escaped += "\\\"";
+                break;
+            case '\n':
+                escaped += "\\n";
+                break;
+            case '\r':
+                escaped += "\\r";
+                break;
+            case '\t':
+                escaped += "\\t";
+                break;
+            default:
+                if (byte < 0x20 || byte >= 0x7F)
+                {
+                    escaped += "\\x";
+                    escaped += kHexDigits[(byte >> 4) & 0x0F];
+                    escaped += kHexDigits[byte & 0x0F];
+                }
+                else
+                {
+                    escaped += static_cast<char>(byte);
+                }
+                break;
+            }
+        }
+
+        if (text.size() > copied)
+            escaped += "...[truncated]";
+        return escaped;
     }
 
     void DedicatedServer::Log(const std::string& message)

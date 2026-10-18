@@ -6,7 +6,7 @@ name: "Trusted Exact-Source CI"
 on:
   push:
     branches: [Working]
-  workflow_run:
+  workflow_run: # zizmor: ignore[dangerous-triggers] -- checks out only Working (SHA attested); reads check-run and run metadata via the API, executes no triggering-run code
     workflows: ["Build Matrix Verifier", "CodeQL Trusted Reporter"]
     types: [in_progress, completed]
   schedule:

@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Only the EditorUI thread reads or serializes the live World; a crash callback and a worker thread never traverse ECS state, allocate a recovery snapshot, or call a UI callback.
-- Recovery schema version is exactly 1. The envelope is bounded to 16 MiB, 64 nested JSON levels, 250000 JSON nodes, 50 recent operation descriptions, and a 4096-byte maximum per operation.
+- Recovery schema version is exactly 1. The envelope is bounded to 16 MiB, 64 nested JSON levels, a node limit defined in `SparkEditor/Source/Core/EditorRecoveryJson.h`, 50 recent operation descriptions, and a 4096-byte maximum per operation.
 - The envelope identifies the canonical active project root and a project-relative scene path. A record for any other root is not offered for restore.
 - Writes validate the complete JSON before atomic replacement, preserve a last-known-good .bak record, and never delete a good record after a failed temp write or malformed candidate.
 - Restore first deserializes into a fresh World. EditorUI calls SwapWorld only after that succeeds; a failed restore leaves the current World and recovery record untouched.
@@ -496,7 +496,7 @@ git commit -m "feat(editor): restore unsaved worlds explicitly"
 - Modify: docs/readiness/work-items/20-platform-runtime-editor.json
 - Modify: .github/workflows/build.yml
 
-**Consumes:** Passing Task 1 through Task 4 tests and a clean editor startup smoke.
+**Consumes:** Passing tests from Tasks 1 through 4 and a clean editor startup smoke.
 
 **Produces:** Accurate recovery documentation and exact-SHA CI evidence without prematurely closing EDT-210.
 

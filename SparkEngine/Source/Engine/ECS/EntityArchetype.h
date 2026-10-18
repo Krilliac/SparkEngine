@@ -54,6 +54,7 @@
 #pragma once
 
 #include <cstdint>
+#include <iosfwd>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -95,6 +96,24 @@ namespace Spark::ECS
         /** @brief Components that entities of this archetype should have. */
         std::vector<ComponentEntry> components;
     };
+
+    /**
+     * @brief Parse .archetype text into an archetype definition.
+     *
+     * This is the reader LoadArchetypeFromFile (EntityArchetypeLoader.h) runs on every
+     * .archetype file, kept in EntityArchetypeParse.cpp so it links without the World,
+     * console or registry. Lines are `key = value`; blank lines, `//` comments, lines without
+     * '=' and unknown keys are skipped. `component = Type: a / b / c` appends a ComponentEntry
+     * whose non-empty '/'-separated parameters become properties "p0", "p1", ...
+     *
+     * Thread affinity: none (pure function over caller-owned objects).
+     * Allocation: strings, one map node per positional parameter.
+     *
+     * @param input     Archetype text (the untrusted file contents).
+     * @param archetype Reset, then filled from @p input.
+     * @return true when the text names the archetype (a non-empty `name`).
+     */
+    bool ParseArchetypeDefinition(std::istream& input, Archetype& archetype);
 
     // =========================================================================
     // EntityArchetypeSystem

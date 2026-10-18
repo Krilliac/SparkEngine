@@ -1,0 +1,8 @@
+SPARKPREFAB 2
+name "Dup"
+components 1
+component "Tag"
+properties 2
+  "count" int 1
+  "count" int 2
+end

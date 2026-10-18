@@ -1,16 +1,48 @@
 # SparkEditor
 
-SparkEditor is a required Windows build product and authoring surface in the blocked and uncertified `stable-v1` profile. Its source inventory contains 65 `*Panel.h` classes; registration and default visibility are separate metrics. All three transform gizmos (translate, rotate, scale) now apply to `World` entities through one `CommandHistory` entry per drag, and World-document create/delete/duplicate/reparent/rename/transform/inspector edits are command-backed; `EDT-210` remains open for the asset browse/drag/assign path, the author-to-installed-runtime round trip, and the still-unwired crash-recovery pipeline. Collaboration, visual scripting, plugin breadth, and non-Windows editor paths remain experimental or outside the profile.
+SparkEditor is a required Windows build product and authoring surface in the blocked and uncertified `stable-v1` profile. Its source inventory contains 64 `*Panel.h` classes; registration and default visibility are separate metrics. All three transform gizmos (translate, rotate, scale) now apply to `World` entities through one `CommandHistory` entry per drag, and World-document create/delete/duplicate/reparent/rename/transform/inspector edits are command-backed; `EDT-210` remains open for the asset browse/drag/assign path, the author-to-installed-runtime round trip, and the still-unwired crash-recovery pipeline. Collaboration, visual scripting, plugin breadth, and non-Windows editor paths remain experimental or outside the profile.
 
 ![SparkEditor default layout](../../docs/screenshots/editor-overview.png)
 
 *SparkEditor layout preview — Hierarchy, Scene View, Inspector, Asset Browser, and Console panels shown with the legacy Spark Professional palette.*
 
-### Welcome Screen
+### Start Page
 
-On first launch, a welcome screen introduces the core panels and offers quick actions:
+On first launch the editor opens a **Start** tab in the centre dock node (it is
+never shown in test mode). It replaces the old modal welcome screen and offers:
 
-![Welcome screen](../../docs/screenshots/editor-welcome.png)
+- **Open Scene...** (the default action), **New Scene**, **Open Project Folder**
+  and **Reset workspace layout** (an explicit reset; the editor no longer resets
+  the layout silently);
+- **Recent scenes**, the last ten scenes you opened or saved, newest first;
+- a keyboard-shortcut sheet;
+- **Show at startup**, saved with your preferences.
+
+Esc closes the tab; **Help > Welcome...** or **View > Start Page** reopens it.
+
+![Start page](../../docs/screenshots/editor-welcome.png)
+
+### Shell at a Glance
+
+- **Menu bar:** File, Edit, View, GameObject, Window, FPS Tools, Build and Help
+  (plus plugin menus).
+- **View menu:** **Appearance...**, **UI Scale** (Increase, Decrease, Reset to
+  100%), **Status Bar**, **Start Page** and **Command Palette** (Ctrl+P).
+- **Toolbar:** Move/Rotate/Scale and World/Local are segmented controls (W, E, R
+  switch tools), the play controls sit in the centre, then snapping and the
+  layout menu.
+- **Status bar:** a bar along the bottom of the window. It shows EDIT, or
+  PREVIEW with the whole bar in the ember accent while a play preview or a
+  launched game runs; connection, project and scene (the scene name gains a
+  `*` and a warning tint while it has unsaved changes); tool, object and selection
+  counts; FPS and frame time (amber below 30 FPS, red below 15); the
+  notification bell; and the UI scale (click it to reset). Hide it from
+  **View > Status Bar**.
+- **Notifications:** toasts stack upward from the bottom-right corner, above the
+  status bar. Each has a severity icon and word: Info and Success stay 4 seconds,
+  Warning 8 seconds, and Error until you dismiss it. Hovering a toast or giving
+  it keyboard focus pauses it; at most four are on screen, and the bell keeps
+  the last 50 for review.
 
 ### Window Menu — All Available Panels
 
@@ -166,6 +198,13 @@ The generated inventory below tracks source `*Panel.h` headers rather than a fix
 - [Component](../subsystems/Entity-Component-System.md) editing with type-appropriate widgets
 - Material assignment and configuration
 - Component reflection via `ComponentReflection.h`
+- Asset drops onto World entities: dragging a mesh or material from the Asset
+  Browser onto `MeshRenderer`'s Mesh Path or Material Path field validates the
+  `Assets/...` reference against that slot's kind (wrong kind and path traversal
+  are refused), flushes any field edit still being typed, and records one
+  "Assign Mesh Asset" / "Assign Material Asset" undo step
+  (`Panels/InspectorWorldAssetDrop.h`). The assignment is saved with the
+  reflected scene. Regression coverage: `Tests/TestEditorAssetDropWorldReal.cpp`.
 
 ### Game Viewport
 
@@ -249,7 +288,7 @@ messages are no longer mangled, and commit subjects no longer carry a trailing q
 - Export logs to txt or csv
 - Configurable scroll behavior (auto-scroll, pause on hover)
 
-**Source:** `SparkEditor/Source/Panels/ConsolePanel.cpp` (821 lines)
+**Source:** `SparkEditor/Source/Panels/ConsolePanel.cpp`
 
 ### Scene View
 
@@ -261,19 +300,30 @@ messages are no longer mangled, and commit subjects no longer carry a trailing q
 - Translate/rotate/scale gizmo rendering and interaction for selected entities (Windows path)
 - Click-to-select entities via raycasting
 
-**Source:** `SparkEditor/Source/Panels/SceneViewPanel.cpp` (404 lines)
+**Source:** `SparkEditor/Source/Panels/SceneViewPanel.cpp`
 
-### Play Mode Toolbar
+### State Preview Toolbar
 
-Transport controls for play-in-editor (PIE) sessions.
+Transport controls for the editor's explicitly labelled state preview. This is
+**not** an in-editor game session: `PlayModeManager::Update` advances local
+time and statistics counters, but the editor does not tick the game's ECS,
+physics, AI, or scripting systems through this control. The subsystem toggles
+affect those counters, not live gameplay. The authored scene remains a
+preview. The prominent toolbar button and F5/F6 shortcuts open **Play Control**
+instead of entering this preview, so the normal play affordance routes to the
+verified out-of-process workflow.
 
-- Play, Pause, Stop, and Step-Frame buttons
+To test actual gameplay, select a module and use the separate **Play Control**
+panel's Launch Game action, which starts SparkEngine in another process. That
+workflow requires its own installed-package validation.
+
+- Explicit state-preview, Pause, Stop, and Step-Frame buttons
 - Time-scale slider (0.1x to 10x)
 - Per-subsystem toggle (physics, AI, audio, particles)
 - Camera mode switching (editor camera vs. game camera)
-- Frame statistics overlay during play
+- State-machine frame statistics overlay (not measured gameplay-system work)
 
-**Source:** `SparkEditor/Source/Panels/PlayModeToolbarPanel.cpp` (644 lines)
+**Source:** `SparkEditor/Source/Panels/PlayModeToolbarPanel.cpp`
 
 ### Build & Cook Panel
 
@@ -285,7 +335,7 @@ Build configuration and packaging pipeline.
 - Output directory configuration
 - Build log with error/warning highlights
 
-**Source:** `SparkEditor/Source/Panels/BuildCookPanel.cpp` (591 lines)
+**Source:** `SparkEditor/Source/Panels/BuildCookPanel.cpp`
 
 ### Workflow Panel
 
@@ -329,7 +379,7 @@ Real-time [EventBus](../subsystems/Event-System.md) inspector for debugging even
 - Event payload inspection
 - Pause/resume event capture
 
-**Source:** `SparkEditor/Source/Panels/EventMonitorPanel.cpp` (97 lines)
+**Source:** `SparkEditor/Source/Panels/EventMonitorPanel.cpp`
 
 ### Dialogue Editor Panel
 
@@ -340,7 +390,7 @@ Visual [dialogue tree](../subsystems/Dialogue-System.md) authoring tool.
 - Branching condition configuration
 - Preview dialogue flow in-editor
 
-**Source:** `SparkEditor/Source/Panels/DialogueEditorPanel.cpp` (175 lines)
+**Source:** `SparkEditor/Source/Panels/DialogueEditorPanel.cpp`
 
 ### FPS Tools Panel
 
@@ -352,7 +402,7 @@ Specialized tools for first-person shooter level design and balancing.
 - Combat simulation for balance testing
 - Level design helpers (cover analysis, sight lines)
 
-**Source:** `SparkEditor/Source/Panels/FPSToolsPanel.cpp` (630 lines)
+**Source:** `SparkEditor/Source/Panels/FPSToolsPanel.cpp`
 
 ### Scene Statistics Panel
 
@@ -399,7 +449,7 @@ Create, edit, and manage [prefab](../subsystems/Scene-Management.md) assets.
 - Create prefab from selected entities
 - Apply prefab changes to all instances
 
-**Source:** `SparkEditor/Source/Panels/PrefabEditorPanel.cpp` (393 lines)
+**Source:** `SparkEditor/Source/Panels/PrefabEditorPanel.cpp`
 
 ### Project Browser Panel
 
@@ -410,7 +460,7 @@ Project-level hub for opening, creating, and managing projects.
 - Existing project browser with folder navigation
 - Project settings quick-access
 
-**Source:** `SparkEditor/Source/Panels/ProjectBrowserPanel.cpp` (540 lines)
+**Source:** `SparkEditor/Source/Panels/ProjectBrowserPanel.cpp`
 
 ### Particle Editor Panel
 
@@ -422,7 +472,7 @@ Visual [particle system](../subsystems/Rendering-and-Graphics.md) authoring.
 - Physics integration (gravity, wind, collision)
 - Live preview in viewport
 
-**Source:** `SparkEditor/Source/Panels/ParticleEditorPanel.cpp` (147 lines)
+**Source:** `SparkEditor/Source/Panels/ParticleEditorPanel.cpp`
 
 ### Post-Processing (Inspector)
 
@@ -440,7 +490,7 @@ String table editor for [multi-language support](../subsystems/Localization.md).
 - Missing translation highlighting
 - Import/export CSV for translator workflows
 
-**Source:** `SparkEditor/Source/Panels/LocalizationPanel.cpp` (149 lines)
+**Source:** `SparkEditor/Source/Panels/LocalizationPanel.cpp`
 
 ### Save System Panel
 
@@ -474,7 +524,7 @@ the live lattice.
 - Tension parameter adjustment
 - Visual preview in scene view
 
-**Source:** `SparkEditor/Source/Panels/SplineEditorPanel.cpp` (140 lines)
+**Source:** `SparkEditor/Source/Panels/SplineEditorPanel.cpp`
 
 ### Weather & Fog Panel
 
@@ -497,7 +547,7 @@ Visual timeline of the [undo/redo](#undoredo-system) command stack.
 - Current position indicator
 - Saved state marker
 
-**Source:** `SparkEditor/Source/Panels/UndoHistoryPanel.cpp` (161 lines)
+**Source:** `SparkEditor/Source/Panels/UndoHistoryPanel.cpp`
 
 ### AI Editor Panel
 
@@ -508,7 +558,7 @@ Visual timeline of the [undo/redo](#undoredo-system) command stack.
 - Agent inspection with live blackboard values
 - Tree validation and error highlighting
 
-**Source:** `SparkEditor/Source/Panels/AIEditorPanel.cpp` (201 lines)
+**Source:** `SparkEditor/Source/Panels/AIEditorPanel.cpp`
 
 ### AI Debug Panel
 
@@ -521,7 +571,7 @@ Real-time [AI agent](../subsystems/AI-and-Navigation.md) runtime inspector for p
 - AI system statistics (agent counts by state, targets)
 - State filtering and configurable refresh rate
 
-**Source:** `SparkEditor/Source/Panels/AIDebugPanel.cpp` (290 lines)
+**Source:** `SparkEditor/Source/Panels/AIDebugPanel.cpp`
 
 ### 2D Panels
 
@@ -534,7 +584,7 @@ Real-time [AI agent](../subsystems/AI-and-Navigation.md) runtime inspector for p
 - Debug visualization: AABBs, contacts, grid
 - Interactive raycast testing tool
 
-**Source:** `SparkEditor/Source/Panels/Physics2DPanel.cpp` (308 lines)
+**Source:** `SparkEditor/Source/Panels/Physics2DPanel.cpp`
 
 #### Sprite Editor Panel
 
@@ -545,7 +595,7 @@ Real-time [AI agent](../subsystems/AI-and-Navigation.md) runtime inspector for p
 - Sorting layer and order assignment
 - Color tint and flip controls
 
-**Source:** `SparkEditor/Source/Panels/SpriteEditorPanel.cpp` (329 lines)
+**Source:** `SparkEditor/Source/Panels/SpriteEditorPanel.cpp`
 
 #### Sprite Animation Editor Panel
 
@@ -556,7 +606,7 @@ Real-time [AI agent](../subsystems/AI-and-Navigation.md) runtime inspector for p
 - Preview with play/pause/step controls
 - Onion skinning for animation reference
 
-**Source:** `SparkEditor/Source/Panels/SpriteAnimationEditorPanel.cpp` (534 lines)
+**Source:** `SparkEditor/Source/Panels/SpriteAnimationEditorPanel.cpp`
 
 #### Tilemap Editor Panel
 
@@ -568,7 +618,7 @@ Real-time [AI agent](../subsystems/AI-and-Navigation.md) runtime inspector for p
 - Zoom and pan viewport
 - Panel-local undo/redo commands; this does not establish complete editor-wide coverage
 
-**Source:** `SparkEditor/Source/Panels/TilemapEditorPanel.cpp` (540 lines)
+**Source:** `SparkEditor/Source/Panels/TilemapEditorPanel.cpp`
 
 ### Game View Panel
 
@@ -576,6 +626,7 @@ Game viewport with a **simulated** FPS HUD preview.
 
 - The HUD overlay (crosshair, health/armor bars, ammo, minimap, kill feed, scoreboard) is generated by the editor and labelled on screen as `SIMULATED HUD - not game data`; it is not connected to `SparkGameFPS` state
 - The Game View fly camera no longer moves the scene's authored camera
+- F5/F6 open Play Control. Select a module and use Launch Game for a real game process.
 
 **Source:** `SparkEditor/Source/Panels/GameViewPanel.cpp`
 
@@ -633,11 +684,42 @@ Operations use `ExecuteCommand()` and implement `EditorCommand::Execute()` / `Un
 
 ## Theme System
 
-Select a palette from **Help > Themes**; it applies immediately to ImGui widgets,
-the toolbar, the status bar, and notification toasts. **Ember Studio** is the startup default.
+The editor's look comes from the shared `SparkUI` token library (the "Ember
+Signal" design), which also styles SparkLauncher, the SparkInstaller GUI and the
+in-game overlay. `EditorTheme` is the editor's adapter over those tokens.
+
+### Appearance Window
+
+Open **View > Appearance...** (or **Help > Themes...**). Changes apply
+immediately and are saved per user:
+
+| Setting | Choices |
+|---------|---------|
+| Palette | Ember Studio (default), Cobalt Forge, Graphite Signal, plus registered or imported custom themes |
+| Appearance | Dark, Light, High Contrast, or Match Windows (follows the Windows app theme and high-contrast setting) |
+| Density | Standard (25 px controls at 100 %) or Compact (21 px) |
+| UI scale | Auto (the monitor's display scale) or 75-200 % in 12.5 % steps |
+| Accessibility and workspace | Always show keyboard focus, Reduce motion (turns off every fade and pulse), Show status bar, Show Start page at startup |
+
+Custom and imported palettes are applied exactly as written and show a live
+contrast-audit badge; the built-in palettes pass that audit by construction.
+**Reset to defaults** restores every setting.
+
+**UI scale shortcuts:** Ctrl+= (or keypad +) and Ctrl+- (or keypad -) step
+the scale by 12.5 %; Ctrl+0 returns to Auto. They do nothing while a text
+field has focus. The scale is also in **View > UI Scale** and on the status bar.
+On Windows the editor is Per-Monitor-V2 DPI aware, so it rescales when you move
+it to a monitor with another scale; neither scaling nor a palette change
+rebuilds the font atlas.
+
+Preferences are stored in `editor-preferences.ini` in the per-user editor data
+directory: palette, appearance, UI scale, density, the accessibility toggles,
+the last layout and the recent scenes. The reader is bounded (64 KiB, a required
+version header, known keys only, clamped numbers), so a damaged file is
+ignored with a console warning and the defaults are used.
+
 Use `SparkEditor.exe --theme "Cobalt Forge"` (or another exact name below) to
-override the startup palette. Menu selections currently apply for the running
-session; they are not saved as a startup preference.
+override the palette for one session; the saved preference is left alone.
 
 The `EditorTheme` class (`Core/EditorTheme.h`) registers these built-in themes:
 
@@ -646,8 +728,11 @@ The `EditorTheme` class (`Core/EditorTheme.h`) registers these built-in themes:
 | Ember Studio | Warm charcoal, ember accent, cyan data highlights (default) |
 | Cobalt Forge | Cool slate, cyan accent, violet data highlights |
 | Graphite Signal | Neutral graphite, silver accent, mint data highlights |
-| Professional Light | Light theme for well-lit environments |
-| High Contrast | Accessibility-focused high-contrast theme |
+| Professional Light | Ember Studio on light surfaces (the Light appearance) |
+| High Contrast | Ember Studio at 7:1 text contrast with a yellow focus ring (the High Contrast appearance) |
+
+Choosing Professional Light or High Contrast as a palette is saved as Ember
+Studio with the Light or High Contrast appearance.
 
 Retired built-in names remain accepted as compatibility aliases without extra
 picker entries: Spark Professional, Spark Ember, and Orange Accent resolve to
@@ -681,9 +766,13 @@ EditorTheme::CreateBlendedTheme("Unity Pro", "Unreal Pro", 0.5f, "HybridTheme");
 ThemeCustomizer::ExportTheme(theme, "MyTheme.json");
 ThemeCustomizer::ImportTheme("MyTheme.json", theme);
 
-// Live editing
+// Open View > Appearance
 ThemeCustomizer::ShowThemeEditor();
 ```
+
+`ExportTheme` writes a versioned theme document that keeps every colour, metric
+and flag, and `ImportTheme` reads it back through the bounded
+`EditorThemeDocument` parser (fuzzed as `SparkFuzzEditorThemeImport`).
 
 ## Layout Management
 
@@ -714,6 +803,24 @@ The editor uses ImGui's docking branch for a fully customizable workspace:
 - Create floating windows
 - Save and load layout configurations
 - Reset to default layout
+
+Layouts are managed from two places:
+
+- **Window menu:** **Reset Layout**, **Save Layout** (saves "Custom Layout"),
+  **Save Layout As...** (prompts for a name), **Load Layout** and **Delete Layout**
+  (each lists the saved layouts).
+- **Toolbar layout menu** (right end of the toolbar): Default, the saved layouts,
+  **Save Layout As...**, **Delete...** (asks for confirmation) and **Reset**.
+
+Layout names are validated before they become file names. The Start page's
+**Reset workspace layout** rebuilds the default dock tree.
+
+> **One-time layout shift (Ember Signal):** the status bar is now a viewport side
+> bar, so the dock area ends above it instead of running underneath it. Layouts
+> saved by an earlier editor load with the bottom dock node about 26 px shorter
+> at 100 % UI scale; nothing is hidden behind the status bar any more. Save the
+> layout again to keep the new geometry, or hide the status bar from
+> **View > Status Bar** to get the space back.
 
 ## Plugin System
 
@@ -806,11 +913,16 @@ leaves a dump but does not offer scene recovery.
 
 ### Theme colors look wrong
 
-1. Re-select the palette from **Help > Themes** and check the selected menu item.
+1. Open **View > Appearance...**, check the palette and appearance, or use
+   **Reset to defaults**. A custom or imported palette that fails the contrast
+   audit shows a warning badge there.
 2. For missing fonts or icons, check the startup log from `EditorFonts::LoadFonts()`
    and the packaged `EditorAssets/Fonts` directory beside the executable.
-   Fonts are loaded at startup; changing the palette does not reload the font atlas.
-3. Report any panel that retains a fixed color across palettes; custom drawing
+   Fonts are loaded at startup; changing the palette or the UI scale does not
+   reload the font atlas.
+3. If text is too small or too large, press Ctrl+0 to return to Auto scale, or
+   pick a fixed scale in **View > Appearance...**.
+4. Report any panel that retains a fixed color across palettes; custom drawing
    should use the active theme's semantic colors or ImGui style colors.
 
 ### Time of Day

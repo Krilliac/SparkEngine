@@ -1,0 +1,15 @@
+// Brick wall, every key the reader knows
+name = Brick_01
+blendMode = AlphaTest
+metallic = 0.0
+roughness = 0.8
+normalScale = 1.25
+occlusionStrength = 0.9
+emissiveFactor = 0.0
+alphaCutoff = 0.33
+albedoTexture = textures/brick_albedo.dds
+normalTexture = textures/brick_normal.dds
+metallicTexture = textures/brick_metal.dds
+roughnessTexture = textures/brick_rough.dds
+emissiveTexture = textures/brick_emissive.dds
+occlusionTexture = textures/brick_ao.dds

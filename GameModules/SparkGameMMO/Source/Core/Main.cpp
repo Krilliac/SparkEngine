@@ -24,18 +24,22 @@
 #include "Character/MMOCharacterSystem.h"
 #include "UI/MMOLoginUI.h"
 #include "Gameplay/MMOGameplaySession.h"
+#include "Session/MMOSessionGate.h"
 #include "MMOEngineSystems.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
-#include "Utils/InvalidStateDetector.h"
+#include "Utils/SecureMemory.h"
 #include "Engine/ECS/Components.h"
 #include "Engine/ECS/Components/GameplayComponents.h"
 #include "Engine/ECS/Components/NetworkComponents.h"
 
+#include <Spark/IStateValidation.h>
 #include <Spark/ModuleDllMain.h>
+#include <Spark/ModuleLog.h>
 
 #include <charconv>
 #include <cmath>
+#include <algorithm>
 
 namespace
 {
@@ -71,6 +75,14 @@ namespace
         {
             return false;
         }
+    }
+
+    MMO::WorldSaveData CaptureWorld(const MMO::MMOGuildSystem& guilds)
+    {
+        MMO::WorldSaveData world;
+        world.guilds = guilds.CaptureGuilds();
+        world.nextGuildId = guilds.GetNextGuildId();
+        return world;
     }
 } // namespace
 
@@ -218,6 +230,21 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
         console.LogWarning("[MMO] Persistence system unavailable (non-fatal)");
         m_persistenceSystem.reset();
     }
+    else
+    {
+        // Guilds come back before anything can change them. A world store that
+        // does not load or validate disables persistence for this run, so no
+        // save overwrites records an operator still has to repair.
+        MMO::WorldSaveData world;
+        std::string error = "stored world records are unreadable";
+        if (!m_persistenceSystem->LoadWorld(world) ||
+            !m_guildSystem->RestoreGuilds(std::move(world.guilds), world.nextGuildId, &error))
+        {
+            console.LogError("[MMO] World state not restored (" + error + "); persistence disabled for this run");
+            m_persistenceSystem->Shutdown();
+            m_persistenceSystem.reset();
+        }
+    }
 
     m_accountSystem = std::make_unique<MMO::MMOAccountSystem>();
     if (!m_accountSystem->Initialize(context))
@@ -230,6 +257,24 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
     {
         return failLoad("[MMO] Failed to initialize character system");
     }
+    m_characterSystem->SetPersistence(m_persistenceSystem.get());
+
+#ifdef ENABLE_NETWORKING
+    if (auto* network = context->GetNetwork())
+    {
+        m_sessionGate = std::make_unique<MMO::MMOSessionGate>();
+        if (!m_sessionGate->Initialize(*network, *m_accountSystem, *m_characterSystem, *m_playerSystem))
+        {
+            return failLoad("[MMO] Failed to initialize session gate");
+        }
+        m_playerSystem->SetSessionGate(m_sessionGate.get());
+        m_worldSetup->SetSessionGateRequired(true);
+        if (context->IsHeadless())
+        {
+            m_networkStartPending = true;
+        }
+    }
+#endif
 
     m_loginUI = std::make_unique<MMO::MMOLoginUI>();
     if (!m_loginUI->Initialize(context, m_accountSystem.get(), m_characterSystem.get()))
@@ -245,6 +290,12 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
             MMO::CharacterSaveData saved;
             if (m_persistenceSystem && m_persistenceSystem->LoadCharacter(characterId, saved) && !saved.name.empty())
             {
+                if (saved.accountId != 0 && saved.accountId != accountId)
+                {
+                    Spark::SimpleConsole::GetInstance().LogError("[MMO] Character " + std::to_string(characterId) +
+                                                                 " belongs to another account");
+                    return;
+                }
                 // Legacy records did not persist accountId; the authenticated
                 // login flow is authoritative for ownership during migration.
                 saved.accountId = accountId;
@@ -273,22 +324,6 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
 
     RegisterConsoleCommands();
 
-#ifdef ENABLE_NETWORKING
-    // In headless/dedicated mode, start the network server automatically
-    if (context->IsHeadless())
-    {
-        constexpr uint16_t MMO_SERVER_PORT = 27015;
-        if (m_worldSetup->StartNetworkServer(MMO_SERVER_PORT))
-        {
-            console.LogInfo("[MMO] Dedicated server listening on port " + std::to_string(MMO_SERVER_PORT));
-        }
-        else
-        {
-            console.LogError("[MMO] Failed to start network server on port " + std::to_string(MMO_SERVER_PORT));
-        }
-    }
-#endif
-
     RegisterStateValidationRules();
 
     m_initialized = true;
@@ -307,39 +342,47 @@ bool SparkGameMMOModule::OnLoad(Spark::IEngineContext* context)
 
 void SparkGameMMOModule::RegisterStateValidationRules()
 {
-    auto& stateDetector = Spark::InvalidStateDetector::GetInstance();
-    stateDetector.RemoveRulesByCategory("MMO");
-    stateDetector.AddRule({"MMO.DeadWithNetwork", "MMO", Spark::StateViolationSeverity::Error, true,
-                           [](World& w, std::vector<Spark::StateViolation>& out)
-                           {
-                               for (auto entity : w.GetEntitiesWith<HealthComponent, NetworkIdentity>())
-                               {
-                                   auto* h = w.GetComponent<HealthComponent>(entity);
-                                   auto* ni = w.GetComponent<NetworkIdentity>(entity);
-                                   if (h && ni && h->isDead && !h->deathProcessed && ni->isLocalAuthority)
-                                   {
-                                       out.push_back({"MMO.DeadWithNetwork", static_cast<uint32_t>(entity),
-                                                      "Local-authority entity dead but deathProcessed=false",
-                                                      Spark::StateViolationSeverity::Error});
-                                   }
-                               }
-                           }});
-
-    stateDetector.AddRule({"MMO.HealthOverMax", "MMO", Spark::StateViolationSeverity::Warning, true,
-                           [](World& w, std::vector<Spark::StateViolation>& out)
-                           {
-                               for (auto entity : w.GetEntitiesWith<HealthComponent>())
-                               {
-                                   auto* h = w.GetComponent<HealthComponent>(entity);
-                                   if (h && !h->isDead && h->health > h->maxHealth * 1.01f)
-                                   {
-                                       out.push_back({"MMO.HealthOverMax", static_cast<uint32_t>(entity),
-                                                      "health=" + std::to_string(h->health) +
-                                                          " exceeds maxHealth=" + std::to_string(h->maxHealth),
-                                                      Spark::StateViolationSeverity::Warning});
-                                   }
-                               }
-                           }});
+    Spark::IStateValidation* stateRules = m_context->GetStateValidation();
+    if (stateRules)
+    {
+        stateRules->RemoveRulesByCategory("MMO");
+    }
+    const bool stateRulesRegistered =
+        stateRules != nullptr &&
+        stateRules->AddRule("MMO.DeadWithNetwork", "MMO", Spark::StateViolationSeverity::Error,
+                            [](World& w, std::vector<Spark::StateViolation>& out)
+                            {
+                                for (auto entity : w.GetEntitiesWith<HealthComponent, NetworkIdentity>())
+                                {
+                                    auto* h = w.GetComponent<HealthComponent>(entity);
+                                    auto* ni = w.GetComponent<NetworkIdentity>(entity);
+                                    if (h && ni && h->isDead && !h->deathProcessed && ni->isLocalAuthority)
+                                    {
+                                        out.push_back({"MMO.DeadWithNetwork", static_cast<uint32_t>(entity),
+                                                       "Local-authority entity dead but deathProcessed=false",
+                                                       Spark::StateViolationSeverity::Error});
+                                    }
+                                }
+                            }) &&
+        stateRules->AddRule("MMO.HealthOverMax", "MMO", Spark::StateViolationSeverity::Warning,
+                            [](World& w, std::vector<Spark::StateViolation>& out)
+                            {
+                                for (auto entity : w.GetEntitiesWith<HealthComponent>())
+                                {
+                                    auto* h = w.GetComponent<HealthComponent>(entity);
+                                    if (h && !h->isDead && h->health > h->maxHealth * 1.01f)
+                                    {
+                                        out.push_back({"MMO.HealthOverMax", static_cast<uint32_t>(entity),
+                                                       "health=" + std::to_string(h->health) +
+                                                           " exceeds maxHealth=" + std::to_string(h->maxHealth),
+                                                       Spark::StateViolationSeverity::Warning});
+                                    }
+                                }
+                            });
+    if (!stateRulesRegistered)
+    {
+        Spark::ModuleLog::Warn(m_context, "[MMO] Host refused the MMO state-validation rules");
+    }
     m_stateRulesRegistered = true;
 }
 
@@ -352,15 +395,25 @@ void SparkGameMMOModule::OnUnload()
     auto& console = Spark::SimpleConsole::GetInstance();
     console.LogInfo("[MMO] Unloading Spark MMO module...");
 
-    if (m_gameplaySession && m_persistenceSystem)
+    if (m_persistenceSystem)
     {
-        const auto save = m_gameplaySession->BuildSaveData();
-        if (save.accountId != 0 && save.characterId != 0)
-            m_persistenceSystem->SaveCharacterSync(save);
+        if (m_gameplaySession)
+        {
+            const auto save = m_gameplaySession->BuildSaveData();
+            if (save.accountId != 0 && save.characterId != 0)
+                m_persistenceSystem->SaveCharacterSync(save);
+        }
+        if (m_guildSystem)
+        {
+            m_persistenceSystem->SaveWorldSync(CaptureWorld(*m_guildSystem));
+        }
     }
 
     UnregisterConsoleCommands();
-    Spark::InvalidStateDetector::GetInstance().RemoveRulesByCategory("MMO");
+    if (Spark::IStateValidation* stateRules = m_context ? m_context->GetStateValidation() : nullptr)
+    {
+        stateRules->RemoveRulesByCategory("MMO");
+    }
     m_stateRulesRegistered = false;
     ShutdownSystems();
 
@@ -373,6 +426,19 @@ void SparkGameMMOModule::OnUnload()
 
 void SparkGameMMOModule::ShutdownSystems()
 {
+#ifdef ENABLE_NETWORKING
+    if (m_sessionGate)
+    {
+        if (m_playerSystem)
+        {
+            m_playerSystem->SetSessionGate(nullptr);
+        }
+        m_sessionGate->Shutdown();
+        m_sessionGate.reset();
+    }
+    m_networkStartPending = false;
+#endif
+
     if (m_engineSystems)
     {
         m_engineSystems->Shutdown();
@@ -485,6 +551,20 @@ void SparkGameMMOModule::OnUpdate(float deltaTime)
         m_engineSystems->Update(deltaTime);
 
 #ifdef ENABLE_NETWORKING
+    if (m_networkStartPending && m_context && m_context->GetNetwork())
+    {
+        if (m_worldSetup->StartNetworkServer(27015))
+        {
+            m_networkStartPending = false;
+        }
+    }
+    if (m_sessionGate)
+    {
+        m_sessionGate->Update(deltaTime);
+    }
+#endif
+
+#ifdef ENABLE_NETWORKING
     // Drive the network server tick (processes socket I/O, bridges to WorldServer)
     m_worldSetup->ServerTick(deltaTime);
 #endif
@@ -512,6 +592,7 @@ void SparkGameMMOModule::OnUpdate(float deltaTime)
             const auto save = m_gameplaySession->BuildSaveData();
             if (save.accountId != 0 && save.characterId != 0)
                 m_persistenceSystem->SaveCharacterAsync(save);
+            m_persistenceSystem->SaveWorldAsync(CaptureWorld(*m_guildSystem));
             m_persistenceSystem->ResetAutoSaveTimer();
         }
     }
@@ -771,28 +852,75 @@ void SparkGameMMOModule::RegisterConsoleCommands()
                                 return m_persistenceSystem->GetStatusString();
                             });
 
-    console.RegisterSensitiveCommand("mmo_register",
-                                     [this](const std::vector<std::string>& args) -> std::string
-                                     {
-                                         if (args.size() < 2)
-                                             return "Usage: mmo_register <username> <password>";
-                                         auto result = m_accountSystem->Register(args[0], args[1]);
-                                         return result.success
-                                                    ? "Account created (ID " + std::to_string(result.accountId) + ")"
-                                                    : "Error: " + result.errorMessage;
-                                     });
+    console.RegisterSensitiveCommand(
+        "mmo_register",
+        [this](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.size() < 2)
+            {
+                return "Usage: mmo_register <username> <password>";
+            }
+#ifdef ENABLE_NETWORKING
+            if (m_sessionGate && m_context && m_context->GetNetwork() &&
+                m_context->GetNetwork()->GetRole() == Spark::Net::NetworkRole::Client)
+            {
+                MMO::SessionGateWire::Packet packet;
+                packet.operation = MMO::SessionGateWire::Operation::Register;
+                if (args[0].size() >= packet.username.size() || args[1].size() >= packet.password.size())
+                {
+                    return "Username or password too long";
+                }
+                const auto usernameLength = (std::min)(args[0].size(), packet.username.size() - 1);
+                const auto passwordLength = (std::min)(args[1].size(), packet.password.size() - 1);
+                std::copy_n(args[0].data(), usernameLength, packet.username.data());
+                std::copy_n(args[1].data(), passwordLength, packet.password.data());
+                const bool sent = m_sessionGate->Send(packet);
+                Spark::SecureErase(packet.password.data(), packet.password.size());
+                return sent ? "Registration sent" : "Registration unavailable";
+            }
+#endif
+            auto result = m_accountSystem->Register(args[0], args[1]);
+            return result.success ? "Account created (ID " + std::to_string(result.accountId) + ")"
+                                  : "Error: " + result.errorMessage;
+        });
 
-    console.RegisterSensitiveCommand("mmo_login",
-                                     [this](const std::vector<std::string>& args) -> std::string
-                                     {
-                                         if (args.size() < 2)
-                                             return "Usage: mmo_login <username> <password>";
-                                         auto result = m_accountSystem->Login(args[0], args[1]);
-                                         return result.success ? "Logged in" : "Error: " + result.errorMessage;
-                                     });
+    console.RegisterSensitiveCommand(
+        "mmo_login",
+        [this](const std::vector<std::string>& args) -> std::string
+        {
+            if (args.size() < 2)
+            {
+                return "Usage: mmo_login <username> <password>";
+            }
+#ifdef ENABLE_NETWORKING
+            if (m_sessionGate && m_context && m_context->GetNetwork() &&
+                m_context->GetNetwork()->GetRole() == Spark::Net::NetworkRole::Client)
+            {
+                MMO::SessionGateWire::Packet packet;
+                packet.operation = MMO::SessionGateWire::Operation::Login;
+                if (args[0].size() >= packet.username.size() || args[1].size() >= packet.password.size())
+                {
+                    return "Username or password too long";
+                }
+                const auto usernameLength = (std::min)(args[0].size(), packet.username.size() - 1);
+                const auto passwordLength = (std::min)(args[1].size(), packet.password.size() - 1);
+                std::copy_n(args[0].data(), usernameLength, packet.username.data());
+                std::copy_n(args[1].data(), passwordLength, packet.password.data());
+                const bool sent = m_sessionGate->Send(packet);
+                Spark::SecureErase(packet.password.data(), packet.password.size());
+                return sent ? "Login sent" : "Login unavailable";
+            }
+#endif
+            auto result = m_accountSystem->Login(args[0], args[1]);
+            return result.success ? "Logged in" : "Error: " + result.errorMessage;
+        });
 
     console.RegisterCommand("mmo_online", [this](const std::vector<std::string>&) -> std::string
                             { return m_accountSystem->GetOnlineListString(); });
+
+#ifdef ENABLE_NETWORKING
+    RegisterSessionConsoleCommands();
+#endif
 
     console.RegisterCommand(
         "mmo_abilities", [this](const std::vector<std::string>&) -> std::string
@@ -832,6 +960,8 @@ void SparkGameMMOModule::RegisterConsoleCommands()
                                        "  mmo_damage <amount> | mmo_respawn\n"
                                        "  mmo_chat <channel> <message> | mmo_guilds | mmo_auctions\n"
                                        "  mmo_register <user> <password> | mmo_login <user> <password>\n"
+                                       "  mmo_session_create <name> <race> <class> | mmo_session_enter <character-id>\n"
+                                       "  mmo_session_interact <character-id> | mmo_session_status\n"
                                        "  mmo_online | mmo_characters <account-id> | mmo_db_status";
                             });
 
@@ -845,12 +975,14 @@ void SparkGameMMOModule::UnregisterConsoleCommands()
 
     auto& console = Spark::SimpleConsole::GetInstance();
     constexpr const char* commandNames[]{
-        "mmo_status",    "mmo_play",        "mmo_restart",       "mmo_travel",       "mmo_gather",  "mmo_craft",
-        "mmo_use",       "mmo_boss_attack", "mmo_dungeon_enter", "mmo_dungeon_boss", "mmo_damage",  "mmo_respawn",
-        "mmo_inventory", "mmo_chat",        "mmo_areas",         "mmo_players",      "mmo_guilds",  "mmo_guild_create",
-        "mmo_auctions",  "mmo_dungeons",    "mmo_bosses",        "mmo_boss_spawn",   "mmo_recipes", "mmo_db_status",
-        "mmo_register",  "mmo_login",       "mmo_online",        "mmo_abilities",    "mmo_weather", "mmo_cinematic",
-        "mmo_locale",    "mmo_characters",  "mmo_help",
+        "mmo_status",         "mmo_play",       "mmo_restart",        "mmo_travel",        "mmo_gather",
+        "mmo_craft",          "mmo_use",        "mmo_boss_attack",    "mmo_dungeon_enter", "mmo_dungeon_boss",
+        "mmo_damage",         "mmo_respawn",    "mmo_inventory",      "mmo_chat",          "mmo_areas",
+        "mmo_players",        "mmo_guilds",     "mmo_guild_create",   "mmo_auctions",      "mmo_dungeons",
+        "mmo_bosses",         "mmo_boss_spawn", "mmo_recipes",        "mmo_db_status",     "mmo_register",
+        "mmo_login",          "mmo_online",     "mmo_session_create", "mmo_session_enter", "mmo_session_interact",
+        "mmo_session_status", "mmo_abilities",  "mmo_weather",        "mmo_cinematic",     "mmo_locale",
+        "mmo_characters",     "mmo_help",
     };
     for (const char* commandName : commandNames)
         console.UnregisterCommand(commandName);

@@ -1,5 +1,16 @@
 cmake_minimum_required(VERSION 3.25)
 
+# Strict parser and runner for the production source-host headless NullRHI
+# lifecycle records (SPARK_MODULE_READY, SPARK_HEADLESS_RHI,
+# SPARK_HEADLESS_LIFECYCLE). RunHeadlessWindows and RunHeadlessLinux emit the
+# identical record grammar, so NullRHI_Windows_FPSLifecycle and
+# NullRHI_Linux_FPSLifecycle share this one acceptance contract.
+#
+# The teardown-time record SPARK_HEADLESS_SHUTDOWN ms=<N> is optional here
+# (captures from hosts that predate it stay valid) but, when present, must be
+# well formed, unique and follow the lifecycle record. Its budget is enforced by
+# Tests/PackageSmoke/run_headless_boot_loop.py.
+
 function(_spark_validate_headless_nullrhi_result child_result child_stdout child_stderr out_ok out_reason)
     set(_ok TRUE)
     set(_reason "")
@@ -26,21 +37,37 @@ function(_spark_validate_headless_nullrhi_result child_result child_stdout child
         set(_module_ready_records)
         set(_rhi_records)
         set(_lifecycle_records)
+        set(_shutdown_records)
+        set(_shutdown_mentions)
+        set(_marker_order)
         foreach(_line IN LISTS _lines)
             if(_line MATCHES "^SPARK_MODULE_READY count=[0-9]+$")
                 list(APPEND _module_ready_records "${_line}")
+                list(APPEND _marker_order "1")
             elseif(_line MATCHES
                    "^SPARK_HEADLESS_RHI backend=null initialized=[0-9]+ frames=[0-9]+ shutdown=[0-9]+$")
                 list(APPEND _rhi_records "${_line}")
+                list(APPEND _marker_order "2")
             elseif(_line MATCHES
                    "^SPARK_HEADLESS_LIFECYCLE initialized=[0-9]+ updated=[0-9]+ fixed=[0-9]+ rendered=[0-9]+ unloaded=[0-9]+ faults=[0-9]+$")
                 list(APPEND _lifecycle_records "${_line}")
+                list(APPEND _marker_order "3")
+            elseif(_line MATCHES "^SPARK_HEADLESS_SHUTDOWN ms=(0|[1-9][0-9]*)$")
+                list(APPEND _shutdown_records "${_line}")
+                list(APPEND _marker_order "4")
+            endif()
+            if(_line MATCHES "SPARK_HEADLESS_SHUTDOWN")
+                list(APPEND _shutdown_mentions "${_line}")
             endif()
         endforeach()
+
+        string(REPLACE ";" "" _marker_order_text "${_marker_order}")
 
         list(LENGTH _module_ready_records _module_ready_count)
         list(LENGTH _rhi_records _rhi_record_count)
         list(LENGTH _lifecycle_records _lifecycle_record_count)
+        list(LENGTH _shutdown_records _shutdown_record_count)
+        list(LENGTH _shutdown_mentions _shutdown_mention_count)
         if(_ok AND NOT _module_ready_count EQUAL 1)
             set(_ok FALSE)
             set(_reason "found ${_module_ready_count} standalone module-ready records, expected exactly 1")
@@ -50,6 +77,11 @@ function(_spark_validate_headless_nullrhi_result child_result child_stdout child
         elseif(_ok AND NOT _lifecycle_record_count EQUAL 1)
             set(_ok FALSE)
             set(_reason "found ${_lifecycle_record_count} standalone headless lifecycle records, expected exactly 1")
+        elseif(_ok AND (_shutdown_record_count GREATER 1 OR
+                        NOT _shutdown_mention_count EQUAL _shutdown_record_count))
+            set(_ok FALSE)
+            set(_reason "found ${_shutdown_record_count} standalone shutdown-time records in "
+                        "${_shutdown_mention_count} mentions, expected at most 1 well-formed record")
         elseif(_ok)
             list(GET _module_ready_records 0 _module_ready)
             list(GET _rhi_records 0 _rhi)
@@ -77,7 +109,10 @@ function(_spark_validate_headless_nullrhi_result child_result child_stdout child
             string(REGEX MATCH "faults=([0-9]+)" _unused "${_lifecycle}")
             set(_faults "${CMAKE_MATCH_1}")
 
-            if(NOT "${_module_count}" STREQUAL "1")
+            if(NOT "${_marker_order_text}" STREQUAL "123" AND NOT "${_marker_order_text}" STREQUAL "1234")
+                set(_ok FALSE)
+                set(_reason "headless lifecycle markers were not emitted once in ready/rhi/lifecycle[/shutdown] order")
+            elseif(NOT "${_module_count}" STREQUAL "1")
                 set(_ok FALSE)
                 set(_reason "initialized module count was ${_module_count}, expected exactly 1")
             elseif(NOT "${_rhi_initialized}" STREQUAL "1")
@@ -115,6 +150,13 @@ function(_spark_validate_headless_nullrhi_result child_result child_stdout child
     set(${out_reason} "${_reason}" PARENT_SCOPE)
 endfunction()
 
+# Allow other executable-level smoke tests to reuse the exact standalone
+# marker parser without re-launching the production host or duplicating its
+# acceptance semantics.
+if(SPARK_HEADLESS_NULLRHI_PARSER_ONLY)
+    return()
+endif()
+
 if(SPARK_HEADLESS_NULLRHI_PARSER_SELF_TEST)
     function(_spark_expect_headless_case name result stdout stderr expected_ok)
         _spark_validate_headless_nullrhi_result("${result}" "${stdout}" "${stderr}" _actual_ok _reason)
@@ -149,6 +191,7 @@ if(SPARK_HEADLESS_NULLRHI_PARSER_SELF_TEST)
         "${_ready}SPARK_HEADLESS_RHI backend=null initialized=1 frames=8 shutdown=0\n${_lifecycle}" "" FALSE)
     _spark_expect_headless_case(missing-lifecycle 0 "${_ready}${_rhi}" "" FALSE)
     _spark_expect_headless_case(duplicate-lifecycle 0 "${_valid}${_lifecycle}" "" FALSE)
+    _spark_expect_headless_case(out-of-order-markers 0 "${_ready}${_lifecycle}${_rhi}" "" FALSE)
     _spark_expect_headless_case(wrong-initialized 0
         "${_ready}${_rhi}SPARK_HEADLESS_LIFECYCLE initialized=2 updated=8 fixed=7 rendered=0 unloaded=1 faults=0\n"
         "" FALSE)
@@ -167,9 +210,23 @@ if(SPARK_HEADLESS_NULLRHI_PARSER_SELF_TEST)
     _spark_expect_headless_case(nonzero-faults 0
         "${_ready}${_rhi}SPARK_HEADLESS_LIFECYCLE initialized=1 updated=8 fixed=7 rendered=0 unloaded=1 faults=1\n"
         "" FALSE)
+    set(_shutdown "SPARK_HEADLESS_SHUTDOWN ms=42
+")
+    _spark_expect_headless_case(valid-with-shutdown 0 "${_valid}${_shutdown}" "" TRUE)
+    _spark_expect_headless_case(valid-with-shutdown-and-resources 0
+        "${_valid}SPARK_HEADLESS_NULLRHI_RESOURCES live=0
+${_shutdown}" "" TRUE)
+    _spark_expect_headless_case(duplicate-shutdown 0 "${_valid}${_shutdown}${_shutdown}" "" FALSE)
+    _spark_expect_headless_case(shutdown-before-lifecycle 0 "${_ready}${_rhi}${_shutdown}${_lifecycle}" "" FALSE)
+    _spark_expect_headless_case(malformed-shutdown-leading-zero 0
+        "${_valid}SPARK_HEADLESS_SHUTDOWN ms=042
+" "" FALSE)
+    _spark_expect_headless_case(malformed-shutdown-unit 0 "${_valid}SPARK_HEADLESS_SHUTDOWN s=1
+" "" FALSE)
+    _spark_expect_headless_case(logger-only-shutdown 0 "${_valid}[info] ${_shutdown}" "" FALSE)
     _spark_expect_headless_case(d3d11-device 0
         "SPARK_D3D11_DEVICE driver=warp certification=software-only\n${_valid}" "" FALSE)
-    message(STATUS "SparkGameFPS Windows NullRHI source-headless parser contract passed")
+    message(STATUS "SparkGameFPS NullRHI source-headless parser contract passed")
     return()
 endif()
 
@@ -180,7 +237,7 @@ foreach(_required SPARK_ENGINE_EXECUTABLE SPARK_GAME_MODULE SPARK_WORKING_DIRECT
 endforeach()
 
 if(NOT SPARK_RHI_BACKEND STREQUAL "null")
-    message(FATAL_ERROR "The Windows source-headless lifecycle gate requires SPARK_RHI_BACKEND=null")
+    message(FATAL_ERROR "The source-headless NullRHI lifecycle gate requires SPARK_RHI_BACKEND=null")
 endif()
 if(NOT EXISTS "${SPARK_ENGINE_EXECUTABLE}")
     message(FATAL_ERROR "SparkEngine executable is missing: ${SPARK_ENGINE_EXECUTABLE}")
@@ -213,9 +270,9 @@ execute_process(
 _spark_validate_headless_nullrhi_result("${_result}" "${_stdout}" "${_stderr}" _ok _reason)
 if(NOT _ok)
     message(FATAL_ERROR
-        "SparkGameFPS Windows NullRHI source-headless evidence failed: ${_reason}.\n"
+        "SparkGameFPS NullRHI source-headless evidence failed (${CMAKE_HOST_SYSTEM_NAME} host): ${_reason}.\n"
         "stdout:\n${_stdout}\n"
         "stderr:\n${_stderr}")
 endif()
 
-message(STATUS "SparkGameFPS Windows NullRHI source-headless lifecycle completed with exact evidence")
+message(STATUS "SparkGameFPS NullRHI source-headless lifecycle completed with exact evidence (${CMAKE_HOST_SYSTEM_NAME} host)")

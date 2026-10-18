@@ -175,6 +175,33 @@ Linux equivalents use the same flags (`build/linux-gcc-release/bin/SparkEngine`)
 run on Linux via `tools/wine-run.sh <exe>` (CI does `tools/wine-run.sh build/bin/SparkTests.exe`).
 Note: the directory is `tools/` (lowercase) in the git index; Windows displays it as `Tools`.
 
+### GPU-less hosts: the Windows engine and editor on CPU rendering (OD-30)
+
+The MinGW + Wine path exists so dedicated servers and agents without a GPU can compile, run and
+drive the real D3D11 engine and editor (owner decision OD-30). Verified 2026-10-01 on WSL Ubuntu,
+Wine 10.0, under Xvfb, where Mesa reports `llvmpipe` (`Accelerated: no`):
+
+```bash
+cmake --preset linux-mingw-release -DBUILD_TESTS=ON -DENABLE_EDITOR=ON
+cmake --build build/linux-mingw-release -j6
+cd build/linux-mingw-release/bin
+export WINEPREFIX=$HOME/.wine-spark WINEDEBUG=-all WINEDLLOVERRIDES="mscoree,mshtml="
+xvfb-run -a -s "-screen 0 1280x720x24" wine SparkEngine.exe -game libSparkGameFPS.dll \
+    -require-game -test-frames 120 -threads 1 -no-subprocess
+xvfb-run -a -s "-screen 0 1280x720x24" wine SparkEditor.exe --test-frames 120
+```
+
+Proof is the log, not the exit code: the engine prints `FPS scene identity: authored scene "FPS Arena"`
+and `SPARK_MODULE_LIFECYCLE module=SparkGameFPS ... render=120 ... faults=0`; the editor prints
+`[TEST] Frame limit reached (120 frames). Exiting.`. Both exit 0.
+
+- MinGW names module DLLs `libSparkGame<Name>.dll`.
+- That run is WineD3D on llvmpipe. CI's `build-linux-mingw-wine` job instead installs the hash-pinned
+  DXVK 2.5.3 (`bash tools/setup-mingw-wine.sh --dxvk-only`, D3D11 on Lavapipe) and runs
+  `python3 .github/scripts/mingw-wine-smoke.py engine|editor|tests`.
+- Known Wine limit: the `SSAOTemporal` post-process shader fails to compile (`E5032: Unable to unroll
+  loop`); frames still render without it.
+
 ## Smoke tests
 
 A smoke test = bounded run + exit code + log evidence. Minimal recipes:

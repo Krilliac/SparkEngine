@@ -1,12 +1,46 @@
 # TERRAFRONT Multi-Continent Hosting — Design + Current State
 
-**Status:** the redirect handshake is shipped
-and server-authoritative, but production multi-continent hosting is **not yet
-complete**. Global account, outfit, and social JSON stores deliberately take
-lifetime-exclusive authority locks. Two servers cannot safely share one
-`TF_SAVE_ROOT` until those stores move behind a transactional coordinator or
-multi-process database. Do not present the hop button as proof that shared
-character state works across live continent processes.
+**Current status (TF-120): partial fenced handoff integration, not completed multi-continent travel.**
+
+OD-16 makes the fenced SparkGateway/SparkServer handoff the production path and retires the reconnect
+design below as a production path. The reconnect redirect (`TFServerSim::HandleContinentHopRequest`)
+still answers until the fenced path reaches clients (gateway admission, client routing and scene
+replacement are unfinished); it is not a supported way to move a character between live continents.
+`SparkServer` connects authenticated area-control phases to `TFHandoffParticipant` through a game-thread
+dispatcher; the module attaches its participant by publishing `AreaHandoffParticipantChanged` on the
+host EventBus. TFDatabase schema v5 reserves a character on its source, commits ownership on its
+destination, and retains a versioned pawn checkpoint and the reservation's gateway epoch for retries.
+A reserved character cannot be released, claimed elsewhere or written, so the redirect cannot take it
+mid-handoff. Duplicate, reordered, lost-request and lost-reply cases are registered under
+`TerrafrontMigration_*`; local runs are not exact-commit CI evidence.
+
+Operators must explicitly map the gateway's assigned area IDs through `gatewayAreaId` in their
+`continents.json`. The destination must already have an authenticated connection for the same account
+and player ID. Automatic gateway admission/client routing and client scene/collision replacement remain
+unfinished. The checkpoint covers an alive, unseated sanctuary pawn's pose, velocity, health, shield and
+input sequence, plus separately committed character progression/meta. It is not a complete serialization
+of every transient gameplay system. The authority adapters in the focused tests are test doubles;
+headless gameplay, real Jolt collision and rendered travel still require integration evidence.
+
+Physical continuity (TF-120). Each continent authority simulates its own analytic ground
+(`World/TFTerrainModel.h`, parameters from that continent's scene), and only the Sanctuary Haven pad
+(inside `kTFSanctuaryPlateauRadius`) is the same ground everywhere; the rest of the sanctuary rectangle
+differs by meters between Cindral Wastes and Veyra Highlands. A checkpoint is therefore carried only from
+the pad (`TFHandoff_CanCarry` in `Net/TFHandoffContinuity.h`, applied by both capture and install), and
+a destination whose own scene terrain failed to load refuses to install. `TerrafrontMigration_Travel`
+runs a peer SparkTests process as the Cindral Wastes authority: it runs and jumps a pawn on the real
+terrain and reserves it through the production participant, and the Veyra Highlands side installs it and
+continues the jump tick for tick like the source would have. Pawn stores are test doubles there, Jolt
+bodies are not built, and client presentation after a hop remains the fail-closed refusal below.
+
+Shared-root hosting also retains the existing global outfit/social authority-lock limitation. This lane
+has not made two complete TERRAFRONT processes on one root a supported deployment. The existing
+provisional soak budgets remain unchanged; the full-capacity lost-delivery test is a state-transfer
+correctness check, not a budget, server-time, network-throughput or RSS measurement. See
+[`Area Server Architecture`](../wiki/subsystems/Area-Server-Architecture.md) for the new wiring.
+
+The sections below preserve the **historical reconnect proposal and its implementation notes**. Their
+redirect/shipped statements are superseded by OD-16 and the current status above.
 
 ## 1. The question
 
@@ -167,9 +201,27 @@ Read the full chain: `TFServerSim::EnsureAuthorityDatabaseOpen()` →
   Without a shared account store, "travel to Veyra Highlands" logs the
   player into a brand-new, empty account on that server — no characters, no
   progress, indistinguishable from playing on an unrelated server. However,
-  the current global JSON stores use lifetime-exclusive authority locks. A
-  second live authority pointed at the same root fails closed during startup
-  rather than risking last-writer-wins corruption. Territory and session
+  only `terrafront.db` is transaction-scoped today. `TFDatabase` takes its
+  `<file>.lock` per call, not per process: each call reloads the committed
+  file, applies the change to it, writes it atomically, and releases the lock.
+  Creates, deletes and login touches are re-applied to the fresh state.
+  Absolute character writes (progress/meta) are checked against the row
+  revision this process acquired at enter-world (`AcquireCharacter`), and a
+  row changed by another authority is rejected with `Conflict` instead of
+  being overwritten. The meta/progress sweep (`TFPlayerMetaStore::
+  PersistAllDirty`) drops a conflicted row and commits the rest, so one stale
+  character never blocks other players' saves: a conflicted row parked after a
+  failed disconnect flush is discarded with an error (the character now lives
+  on the authority that wrote it), and a conflicted in-world row stays dirty
+  and keeps failing the save (two authorities hold the character). A parked
+  row whose player re-enters this continent is re-adopted only if the
+  committed row revision still matches its baseline; otherwise it is
+  discarded the same way.
+  `Tests/TestTF120SharedSaveRoot.cpp` covers two instances, the conflicted
+  sweep, spawned peer processes, and a peer killed mid-transaction. `outfits.json` and the
+  social store still use lifetime-exclusive locks, so a second live authority
+  pointed at the same root still fails closed during startup rather than
+  risking last-writer-wins corruption. Territory and session
   progression are now isolated as `terrafront_territory.<continent-key>.json`
   and `terrafront_state.<continent-key>.json`; each document repeats and
   validates its stable continent key. Legacy territory migrates only when its
@@ -246,7 +298,7 @@ This is safe to ship with zero risk to the single-continent path (every new
 branch is gated behind `host`/`port` being configured on the SERVER side,
 which is never true today) and exposes the redirect plumbing for isolated-root
 testing. It does not make two shared-state continent authorities
-production-ready; §2.3 remains a hard prerequisite.
+safe to run in production; §2.3 remains a hard prerequisite.
 
 ## 4. Known gaps (found during investigation, NOT fixed by this lane)
 
@@ -255,10 +307,13 @@ These live in files this lane doesn't own (contended or simply out of the
 this up next:
 
 1. **Multi-process global persistence** — root selection is centralized and
-   world/session state is continent-qualified. Global JSON stores are protected
-   by lifetime-exclusive locks, so unsafe concurrent writers fail closed. A
-   transactional coordinator/database remains required before two continent
-   authorities may share accounts, outfits, and social state.
+   world/session state is continent-qualified. The account/character store is
+   transaction-scoped with per-row revision checks (TF-120). The outfit and
+   social stores are still protected by lifetime-exclusive locks, so unsafe
+   concurrent writers fail closed. Their rank/membership policy runs against
+   an in-memory snapshot and needs the same per-call reload-and-revalidate
+   treatment before two continent authorities may share outfits and social
+   state.
 
 2. **PARTIALLY FIXED (follow-up pass).** `TFClientNet::Disconnect()` doesn't
    touch the socket. It resets TF-level client state (`m_connected`,
@@ -285,6 +340,25 @@ this up next:
    wants the client's *visuals* to follow the hop, not just its network
    session, and is a much larger change (co-owned by the scene-load path,
    `LoadSceneAndTerrain`/`LoadSanctuaryScene`) than this pass's scope.
+
+   **Fail-closed guard (TF-120).** Until that reload exists, a client never
+   enters a world it did not load. `TFServerSim::SendWorldWelcome` first sends
+   `TFMsg::ContinentIdentity` (`0x5490`, S->C reliable,
+   `TF_ContinentIdentity{char key[64]}`, the new `0x5490-0x5493` block in
+   `Net/TFNetProtocolIds.h`) with the hosted continent's `continents.json`
+   key. `TFClientNet::OnContinentIdentity` compares it with the continent it
+   loaded at boot. On a mismatch it logs
+   `[TF] server hosts continent '<server>' but this client loaded '<local>'; restart with TF_CONTINENT=<server>`
+   and disconnects (`TFClientNet::Disconnect` plus `NetworkManager::Disconnect`),
+   and the connection's lifecycle change drops the `TF_WorldWelcome` queued
+   behind it, so the client neither enters the world nor spawns. A server that
+   never sends the message leaves the client unguarded. The frozen
+   `TF_WorldWelcome` and `TF_ContinentInfo` layouts are unchanged. A hop to
+   another continent therefore now ends at a refusal instead of a pawn on the
+   wrong lattice, and the player must restart the client with the right
+   `TF_CONTINENT`. The multi-client harness proves it with
+   `TerrafrontMultiClient_ContinentMismatchRefused` (`continent_mismatch`, opt-in
+   with `SPARK_ENABLE_TERRAFRONT_MULTICLIENT_TESTS`).
 
 3. **FIXED (follow-up pass).** `TFLoginFlow`'s state machine previously did
    not reset on disconnect: `TFFlowState m_state` only advanced via the

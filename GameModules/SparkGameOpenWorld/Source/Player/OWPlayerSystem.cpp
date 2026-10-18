@@ -4,10 +4,9 @@
  */
 
 #include "OWPlayerSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -37,15 +36,17 @@ namespace OpenWorld
         UnlockFastTravel({1, "Meadow Campfire", 0.0f, 5.0f, 0.0f, 1});
 
         m_initialized = true;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Open world player system initialized");
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Player system initialized");
+        Spark::ModuleLog::Info(m_context, "Open world player system initialized");
+        Spark::ModuleLog::Info(m_context, "[OpenWorld] Player system initialized");
         return true;
     }
 
     void OWPlayerSystem::Update(float deltaTime)
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         m_survivalTickTimer += deltaTime;
         if (m_survivalTickTimer >= 1.0f)
@@ -58,14 +59,18 @@ namespace OpenWorld
     void OWPlayerSystem::FixedUpdate(float fixedDeltaTime)
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         // Stamina recovery/drain
         if (m_worldState.isSprinting)
         {
             m_survival.stamina = std::max(0.0f, m_survival.stamina - 15.0f * fixedDeltaTime);
             if (m_survival.stamina <= 0.0f)
+            {
                 m_worldState.isSprinting = false;
+            }
         }
         else
         {
@@ -76,7 +81,9 @@ namespace OpenWorld
     void OWPlayerSystem::Shutdown()
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         m_fastTravelPoints.clear();
         m_unlockedPointIds.clear();
@@ -115,21 +122,31 @@ namespace OpenWorld
     {
         // Starvation damage
         if (m_survival.hunger <= 0.0f)
+        {
             m_survival.health = std::max(0.0f, m_survival.health - 2.0f * deltaTime);
+        }
 
         // Dehydration damage
         if (m_survival.thirst <= 0.0f)
+        {
             m_survival.health = std::max(0.0f, m_survival.health - 3.0f * deltaTime);
+        }
 
         // Temperature extremes
         if (m_survival.temperature < 0.0f)
+        {
             m_survival.health = std::max(0.0f, m_survival.health - 1.5f * deltaTime);
+        }
         else if (m_survival.temperature > 45.0f)
+        {
             m_survival.health = std::max(0.0f, m_survival.health - 1.5f * deltaTime);
+        }
 
         // Passive health regen when well-fed and hydrated
         if (m_survival.hunger > 50.0f && m_survival.thirst > 50.0f)
+        {
             m_survival.health = std::min(m_survival.maxHealth, m_survival.health + 1.0f * deltaTime);
+        }
     }
 
     void OWPlayerSystem::Eat(float nutritionValue)
@@ -163,38 +180,62 @@ namespace OpenWorld
     {
         m_worldState.yaw = std::fmod(yaw, 360.0f);
         if (m_worldState.yaw < 0.0f)
+        {
             m_worldState.yaw += 360.0f;
+        }
+    }
+
+    void OWPlayerSystem::SetLocomotion(float speed, bool sprinting)
+    {
+        m_worldState.speed = std::max(0.0f, speed);
+        m_worldState.isSprinting = sprinting;
     }
 
     std::string OWPlayerSystem::GetCompassDirection() const
     {
         float y = m_worldState.yaw;
         if (y >= 337.5f || y < 22.5f)
+        {
             return "N";
+        }
         if (y < 67.5f)
+        {
             return "NE";
+        }
         if (y < 112.5f)
+        {
             return "E";
+        }
         if (y < 157.5f)
+        {
             return "SE";
+        }
         if (y < 202.5f)
+        {
             return "S";
+        }
         if (y < 247.5f)
+        {
             return "SW";
+        }
         if (y < 292.5f)
+        {
             return "W";
+        }
         return "NW";
     }
 
     void OWPlayerSystem::UnlockFastTravel(const FastTravelPoint& point)
     {
         if (m_unlockedPointIds.count(point.pointId))
+        {
             return;
+        }
 
         m_fastTravelPoints.push_back(point);
         m_unlockedPointIds.insert(point.pointId);
 
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Fast travel unlocked: " + point.name);
+        Spark::ModuleLog::Info(m_context, "{}", "[OpenWorld] Fast travel unlocked: " + point.name);
     }
 
     bool OWPlayerSystem::FastTravelTo(uint32_t pointId)
@@ -205,7 +246,7 @@ namespace OpenWorld
             {
                 SetPosition(pt.x, pt.y, pt.z);
                 m_worldState.currentRegionId = pt.regionId;
-                Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Fast traveled to " + pt.name);
+                Spark::ModuleLog::Info(m_context, "{}", "[OpenWorld] Fast traveled to " + pt.name);
                 return true;
             }
         }
@@ -222,7 +263,9 @@ namespace OpenWorld
         auto fail = [&](const char* message)
         {
             if (error)
+            {
                 *error = message;
+            }
             return false;
         };
         auto finite = [](float value) { return std::isfinite(value); };
@@ -234,18 +277,26 @@ namespace OpenWorld
             s.maxStamina <= 0.0f || s.maxStamina > 100000.0f || s.stamina < 0.0f || s.stamina > s.maxStamina ||
             s.hunger < 0.0f || s.hunger > 100.0f || s.thirst < 0.0f || s.thirst > 100.0f || s.temperature < -100.0f ||
             s.temperature > 100.0f || s.warmth < 0.0f || s.warmth > 1.0f)
+        {
             return fail("invalid player survival state");
+        }
 
         const auto& world = state.world;
         if (!finite(world.posX) || !finite(world.posY) || !finite(world.posZ) || !finite(world.yaw) ||
             !finite(world.speed) || std::abs(world.posX) > 100000000.0f || std::abs(world.posY) > 100000000.0f ||
             std::abs(world.posZ) > 100000000.0f || world.yaw < 0.0f || world.yaw >= 360.0f || world.speed < 0.0f ||
             world.speed > 10000.0f || world.currentRegionId > 8)
+        {
             return fail("invalid player world state");
+        }
         if (!finite(state.survivalTickTimer) || state.survivalTickTimer < 0.0f || state.survivalTickTimer > 60.0f)
+        {
             return fail("invalid survival tick timer");
+        }
         if (state.fastTravelPoints.size() > 256)
+        {
             return fail("too many fast travel points");
+        }
 
         std::unordered_set<uint32_t> ids;
         bool hasStartingPoint = false;
@@ -254,11 +305,15 @@ namespace OpenWorld
             if (point.pointId == 0 || !ids.insert(point.pointId).second || point.name.empty() ||
                 point.name.size() > 128 || !finite(point.x) || !finite(point.y) || !finite(point.z) ||
                 point.regionId == 0 || point.regionId > 8)
+            {
                 return fail("invalid fast travel point");
+            }
             hasStartingPoint = hasStartingPoint || point.pointId == 1;
         }
         if (!hasStartingPoint)
+        {
             return fail("starting fast travel point is missing");
+        }
 
         m_survival = state.survival;
         m_worldState = state.world;
@@ -287,9 +342,11 @@ namespace OpenWorld
 
     void OWPlayerSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Open World Player"))
+        {
             return;
+        }
 
         ImGui::Text("Position: (%.1f, %.1f, %.1f)", m_worldState.posX, m_worldState.posY, m_worldState.posZ);
         ImGui::Text("Facing: %s (%.0f deg)", GetCompassDirection().c_str(), m_worldState.yaw);

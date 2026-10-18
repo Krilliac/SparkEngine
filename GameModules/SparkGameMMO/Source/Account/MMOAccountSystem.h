@@ -145,13 +145,23 @@ namespace MMO
         std::string GetAccountInfoString(uint32_t accountId) const;
         std::string GetOnlineListString() const;
 
+#ifdef SPARK_TEST_MMO_AUTH_VERIFIER
+        /// Test-only seam for observing that Login performs one verification on every path.
+        using PasswordVerifier = bool (*)(std::string_view password, std::string_view encodedHash);
+        void SetPasswordVerifier(PasswordVerifier verifier);
+#endif
+
       private:
         static std::string GenerateSessionToken();
         static uint64_t GetTimestamp();
         void CleanExpiredSessions();
         void CleanExpiredBans();
+        bool VerifyPassword(std::string_view password, std::string_view encodedHash) const;
 
         Spark::IEngineContext* m_context{nullptr};
+#ifdef SPARK_TEST_MMO_AUTH_VERIFIER
+        PasswordVerifier m_passwordVerifier{nullptr};
+#endif
         std::unordered_map<uint32_t, AccountData> m_accounts;
         std::unordered_map<std::string, SessionData> m_sessions;
         mutable std::recursive_mutex m_mutex;

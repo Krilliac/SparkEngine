@@ -7,6 +7,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <limits>
 #include <sstream>
 #include <utility>
 
@@ -53,12 +55,26 @@ namespace Spark
 
     void ProgressionSystem::AwardXP(int amount, const std::string& source)
     {
-        if (m_level >= m_maxLevel)
+        if (m_level >= m_maxLevel || amount <= 0)
             return;
 
-        int modified = static_cast<int>(amount * m_currentBonuses.xpMultiplier);
+        // Scale in 64-bit integers and saturate before narrowing: the old float product could round
+        // float(INT_MAX) up to 2^31, and casting that back to int is undefined, as is overflowing the
+        // running total. The bonus is a whole percentage, so the integer product is exact; widening the
+        // float multiplier instead would turn 1.02f into 1.01999998 and truncate 500 XP to 509.
+        const int baseAmount = std::min(amount, MAX_SINGLE_AWARD);
+        constexpr int64_t kMaxXP = std::numeric_limits<int>::max();
+        const int64_t scaled = static_cast<int64_t>(baseAmount) * (100 + XPBonusPercent()) / 100;
+        const int64_t current = std::max<int64_t>(m_currentXP, 0);
+        const int64_t headroom = kMaxXP - current;
+        const int modified = static_cast<int>(std::min(scaled, headroom));
+        if (modified <= 0)
+        {
+            return;
+        }
+
         if (m_callbacks.onXPAwarded)
-            m_callbacks.onXPAwarded(amount, source, modified);
+            m_callbacks.onXPAwarded(baseAmount, source, modified);
         m_currentXP += modified;
 
         if (m_callbacks.onXPGained)
@@ -145,7 +161,7 @@ namespace Spark
         m_currentBonuses.shieldRegenBonus = (m_level - 1) * 0.5f;
         m_currentBonuses.energyRegenBonus = (m_level - 1) * 0.3f;
         m_currentBonuses.cooldownReduction = std::min((m_level - 1) * 0.01f, 0.3f); // Cap at 30%
-        m_currentBonuses.xpMultiplier = 1.0f + (m_level - 1) * 0.01f;
+        m_currentBonuses.xpMultiplier = static_cast<float>(100 + XPBonusPercent()) / 100.0f;
     }
 
     void ProgressionSystem::BuildUnlockTable()

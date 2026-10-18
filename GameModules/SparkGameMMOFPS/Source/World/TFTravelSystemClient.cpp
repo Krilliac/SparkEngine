@@ -160,6 +160,34 @@ namespace Terrafront
         return false; // unregistered mapId
     }
 
+    bool TFTravelSystem::LookupHandoffContinent(uint32_t areaId, std::string& key) const
+    {
+        const ContinentMeta* found = nullptr;
+        for (const ContinentMeta& continent : m_continentList)
+        {
+            if (areaId != 0 && continent.gatewayAreaId == areaId)
+            {
+                if (found != nullptr || continent.key.empty())
+                {
+                    return false;
+                }
+                found = &continent;
+            }
+        }
+        if (found == nullptr)
+        {
+            return false;
+        }
+        key = found->key;
+        return true;
+    }
+
+    void TFTravelSystem::ServerAdoptHandoff(PlayerId player)
+    {
+        m_pendingPlace.erase(player);
+        m_mapOf[player] = kTFMapSanctuary;
+    }
+
     void TFTravelSystem::ApplyPendingContinentHop()
     {
         const std::string name = m_hopRequestName.empty() ? std::string("that continent") : m_hopRequestName;

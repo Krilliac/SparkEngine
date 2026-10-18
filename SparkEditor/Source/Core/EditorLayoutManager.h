@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -158,23 +159,41 @@ namespace SparkEditor
         // Layout save / load
         // =====================================================================
 
+        /// The only `"version"` this build reads and writes. A file without one is the legacy
+        /// dialect, which is identical to version 1.
+        static constexpr int kLayoutFormatVersion = 1;
+
         /**
          * @brief Save the current panel state as a named layout to disk.
+         *
+         * The file is replaced atomically (written to `<name>.json.tmp`, then renamed), so a
+         * failed or interrupted save leaves the previous layout file intact. No `.bak` is kept:
+         * a layout can be recreated, and the atomic replace already keeps the last good file.
+         *
          * @param name         Layout name (used as filename: <dir>/<name>.json)
          * @param description  Optional human-readable description stored in the file.
-         * @return true on successful file write.
+         * @return true on successful file write; on failure GetLastError() says why.
          */
         bool SaveCurrentLayout(const std::string& name, const std::string& description = "");
 
         /**
          * @brief Load a layout from disk and apply it to the current panel state.
-         * Panels that are in the file but not registered are ignored; panels
-         * that are registered but missing from the file keep their current
-         * state.
+         *
+         * The whole file is parsed before anything is applied, so a damaged, truncated or
+         * newer-version file leaves every panel unchanged. Panels that are in the file but not
+         * registered are ignored; panels that are registered but missing from the file keep
+         * their current state. Loading never writes the file.
+         *
          * @param name  Layout name (looked up as <dir>/<name>.json)
-         * @return true on successful file read and parse.
+         * @return true on successful file read and parse; on failure GetLastError() says why.
          */
         bool LoadLayout(const std::string& name);
+
+        /**
+         * @brief Actionable reason the last SaveCurrentLayout, LoadLayout or DeleteLayout failed; empty after a
+         *        success.
+         */
+        const std::string& GetLastError() const { return m_lastError; }
 
         /**
          * @brief Alias for LoadLayout; kept for symmetry with the previous API.
@@ -182,10 +201,31 @@ namespace SparkEditor
         bool ApplyLayout(const std::string& name) { return LoadLayout(name); }
 
         /**
-         * @brief Delete a saved layout file.
-         * @return true if the file existed and was removed.
+         * @brief Delete a saved layout and its editor companions.
+         *
+         * Removes `<name>.json`, and the `<name>.ini` / `<name>.ini.meta` dock-tree files the editor
+         * writes beside it. Deleting the current layout resets GetCurrentLayoutName() to "Default".
+         *
+         * @return true if the layout existed and was removed; on failure GetLastError() says why.
          */
         bool DeleteLayout(const std::string& name);
+
+        /**
+         * @brief True when a saved layout named @p name exists on disk.
+         */
+        bool HasLayout(const std::string& name) const;
+
+        /// Longest layout name accepted; keeps `<dir>/<name>.ini.meta` well inside MAX_PATH.
+        static constexpr std::size_t kMaxLayoutNameLength = 64;
+
+        /**
+         * @brief Whether @p name can be used as a layout file name on every supported platform.
+         *
+         * Rejects empty names, "." and "..", names longer than kMaxLayoutNameLength, control
+         * characters, path separators, the Windows-forbidden characters `<>:"|?*`, a leading
+         * space, a trailing dot or space, and reserved device names such as CON or COM1.
+         */
+        static bool IsValidLayoutName(const std::string& name);
 
         /**
          * @brief Restore all panels to the configuration they had when first
@@ -218,8 +258,9 @@ namespace SparkEditor
 
       private:
         // Serialization helpers implemented in the .cpp
-        bool WriteLayoutFile(const std::string& path, const std::string& name, const std::string& description) const;
-        bool ReadLayoutFile(const std::string& path, std::string& outDescription);
+        bool WriteLayoutFile(const std::string& path, const std::string& name, const std::string& description,
+                             std::string& error) const;
+        bool ReadLayoutFile(const std::string& path);
         std::string LayoutFilePath(const std::string& name) const;
         static std::string EscapeJsonString(const std::string& s);
 
@@ -228,6 +269,7 @@ namespace SparkEditor
         std::vector<std::string> m_panelOrder;                   ///< Insertion order of m_panels
         std::string m_layoutDirectory = "Layouts";
         std::string m_currentLayoutName = "Default";
+        std::string m_lastError;
         bool m_initialized = false;
     };
 

@@ -514,7 +514,8 @@ function assertNoMutation(result) {
 }
 
 function testWorkflowShape() {
-    const scanner = fs.readFileSync(path.join(__dirname, '..', 'workflows', 'codeql.yml'), 'utf8');
+    const scanner = fs.readFileSync(path.join(__dirname, '..', 'workflows', 'codeql.yml'), 'utf8')
+        .replace(/\r\n/g, '\n');
     const reporter = fs.readFileSync(path.join(__dirname, '..', 'workflows', 'codeql-report.yml'), 'utf8');
     const combined = `${scanner}\n${reporter}`;
     const actionUses = [...combined.matchAll(/^\s*uses:\s*([^\s#]+)/gm)].map(match => match[1]);
@@ -541,6 +542,15 @@ function testWorkflowShape() {
     assert(!scanner.includes('config-file:'));
     assert(scanner.includes('archive: false'));
     assert(scanner.includes('name: Bind raw CodeQL SARIF to exact source attempt'));
+    assert(scanner.includes(
+        '    - name: Bind raw CodeQL SARIF to exact source attempt\n' +
+        '      if: always()\n' +
+        '      uses: actions/github-script@',
+    ), 'raw SARIF binding must run after a failed CodeQL upload attempt');
+    assert(scanner.includes("const stat = fs.lstatSync(source);"),
+        'raw SARIF binding must inspect the exact source file');
+    assert(scanner.includes("if (!stat.isFile() || stat.isSymbolicLink() || fs.existsSync(target))"),
+        'raw SARIF binding must remain fail-closed for missing or unsafe files');
     assert.strictEqual((scanner.match(/codeql-\$\{\{ matrix\.language \}\}-attempt-\$\{\{ github\.run_attempt \}\}\.sarif/g) || []).length, 2,
         'the trusted rename and direct upload must use the same exact-attempt SARIF file name');
     assert(scanner.includes('output: ${{ runner.temp }}/codeql-sarif'));
@@ -718,6 +728,19 @@ async function main() {
             description: `Trusted exact-source aggregate is awaiting both reporters for ${SOURCE_HEAD_SHA.slice(0, 12)}.`,
             context: 'Trusted Exact-Source CI / Aggregate'
         });
+
+        const queuedRunningData = fixture();
+        queuedRunningData.event.action = 'in_progress';
+        queuedRunningData.event.workflow_run.status = 'in_progress';
+        queuedRunningData.event.workflow_run.conclusion = null;
+        queuedRunningData.run.status = 'queued';
+        queuedRunningData.run.conclusion = null;
+        queuedRunningData.workflowRuns = [clone(queuedRunningData.run)];
+        const queuedRunningPending = await runPending(root, queuedRunningData);
+        assert.strictEqual(queuedRunningPending.observed.failed.length, 0,
+            'an in-progress event may race the API while the source run is still queued');
+        assert.strictEqual(queuedRunningPending.observed.commitStatuses.length, 2,
+            'a queued source run must still publish the pending CodeQL statuses');
 
         const runningData = fixture();
         runningData.event.action = 'in_progress';

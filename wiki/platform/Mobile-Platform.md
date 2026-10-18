@@ -1,6 +1,8 @@
 # Mobile Platform
 
-SparkEngine provides a mobile platform abstraction for iOS and Android, handling touch input, gesture recognition, GPU quality presets, battery-aware performance scaling, and screen orientation management.
+> **Status: framework only.** Mobile platforms are unsupported and deferred from stable-v1 (OD-12, PLT-230). There is no iOS or Android platform layer, build pipeline, store package or device test in this repository.
+
+`MobilePlatform` is a platform-neutral framework for touch input, gesture recognition, GPU quality presets, battery-aware performance scaling and screen orientation management. It is the input-side groundwork a future iOS or Android platform layer would feed; no such layer exists yet.
 
 **Source:** `SparkEngine/Source/Engine/Mobile/MobilePlatform.h`, `SparkEngine/Source/Engine/Mobile/MobilePlatform.cpp`
 
@@ -666,15 +668,17 @@ void LayoutMobileUI(const MobilePlatform& mobile)
 
 ## Platform-Specific Notes
 
+These notes describe how a future native layer is expected to feed the framework. None of this integration is implemented; mobile remains unsupported (OD-12, PLT-230).
+
 ### iOS
 
-- Touch events arrive via `UITouch` in the `UIView` responder chain. The platform layer converts these to `TouchEvent` structs and calls `ProcessTouchEvent()`.
+- Touch events would arrive via `UITouch` in the `UIView` responder chain. The planned platform layer converts these to `TouchEvent` structs and calls `ProcessTouchEvent()`.
 - `GetBatteryLevel()` maps to `UIDevice.current.batteryLevel`.
 - `GetSafeArea()` maps to `UIView.safeAreaInsets`.
 
 ### Android
 
-- Touch events arrive via `MotionEvent` in the `Activity` or `SurfaceView`. The platform layer converts action types (`ACTION_DOWN`, `ACTION_MOVE`, `ACTION_UP`, `ACTION_CANCEL`) to `TouchEventType`.
+- Touch events would arrive via `MotionEvent` in the `Activity` or `SurfaceView`. The planned platform layer converts action types (`ACTION_DOWN`, `ACTION_MOVE`, `ACTION_UP`, `ACTION_CANCEL`) to `TouchEventType`.
 - `GetBatteryLevel()` reads from `BatteryManager`.
 - `GetSafeArea()` uses `WindowInsets` API (API level 28+) for display cutout insets.
 

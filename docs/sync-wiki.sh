@@ -63,7 +63,11 @@ update_auto_section() {
     local tmpfile
     tmpfile=$(mktemp)
 
-    awk -v start="$start_marker" -v end="$end_marker" -v body="$content" '
+    # BSD awk rejects literal newlines in -v assignments. Read the complete
+    # body from the environment so multiline sections also retain literal
+    # backslashes instead of being interpreted as awk string escapes.
+    SPARK_WIKI_SECTION_BODY="$content" awk -v start="$start_marker" -v end="$end_marker" '
+        BEGIN { body=ENVIRON["SPARK_WIKI_SECTION_BODY"] }
         $0 ~ start { print; print body; skip=1; next }
         $0 ~ end   { skip=0 }
         !skip       { print }
@@ -97,8 +101,9 @@ collect_inventory() {
         [ -z "$cfile" ] && continue
         local rel="${cfile#$PROJECT_ROOT/}"
         local structs
+        # Strip CRLF carriage returns before using names as table sort keys.
         structs=$(grep -E '^\s*struct\s+[A-Z][A-Za-z0-9]+' "$cfile" 2>/dev/null | \
-            sed 's/.*struct\s\+//' | sed 's/[:{; ].*//' | tr -d ' ' | sort)
+            sed 's/.*struct\s\+//' | sed 's/[:{; ].*//' | tr -d ' \r' | sort)
         [ -z "$structs" ] && continue
         while IFS= read -r s; do
             [ -z "$s" ] && continue
@@ -114,7 +119,7 @@ collect_inventory() {
         local rel="${sfile#$PROJECT_ROOT/}"
         local classes
         classes=$(grep -E '^\s*class\s+[A-Z][A-Za-z0-9]*System' "$sfile" 2>/dev/null | \
-            sed 's/.*class\s\+//' | sed 's/[:{; ].*//' | tr -d ' ' | sort)
+            sed 's/.*class\s\+//' | sed 's/[:{; ].*//' | tr -d ' \r' | sort)
         [ -z "$classes" ] && continue
         while IFS= read -r c; do
             [ -z "$c" ] && continue
@@ -139,7 +144,7 @@ collect_inventory() {
     TEST_DEFINITION_COUNT=0
     TEST_FILES=""
     find "$PROJECT_ROOT/Tests" -type f \( -name 'Test*.cpp' -o -name 'Test*.mm' \) \
-        ! -name 'TestMain.cpp' ! -name 'TestFramework*' 2>/dev/null | sort > "$tmpfile"
+        ! -name 'TestFramework*' 2>/dev/null | sort > "$tmpfile"
     while IFS= read -r tfile; do
         [ -z "$tfile" ] && continue
         local tname
@@ -240,7 +245,7 @@ sync_testing_page() {
     test_content="*${TEST_FILE_COUNT} test-bearing \`.cpp\`/\`.mm\` files, ${TEST_DEFINITION_COUNT} source-level test definitions*\n\n"
     test_content+="| Test File | Test Definitions |\n|-----------|------------------|\n"
     test_content+=$(find "$PROJECT_ROOT/Tests" -type f \( -name 'Test*.cpp' -o -name 'Test*.mm' \) \
-        ! -name 'TestMain.cpp' ! -name 'TestFramework*' 2>/dev/null | \
+        ! -name 'TestFramework*' 2>/dev/null | \
         sort | while IFS= read -r tfile; do
             local tname
             tname=$(basename "$tfile")

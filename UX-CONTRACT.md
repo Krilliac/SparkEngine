@@ -1,6 +1,6 @@
 # UX Contract
 
-This contract records durable decisions for the shared SparkEditor workspace shell.  It covers dockspace startup and reset, the menu and toolbar chrome, the status bar, semantic notifications, and the shipped theme picker.  It does not certify individual authoring panels, runtime game UX, asset import workflows, or unreleased editor commands.
+This contract records durable decisions for the shared SparkEditor workspace shell.  It covers dockspace startup and reset, named layouts, the menu and toolbar chrome, the status bar, semantic notifications, the Start page, the command palette, and the View > Appearance window.  It does not certify individual authoring panels, runtime game UX, asset import workflows, or unreleased editor commands.
 
 ## Product context
 
@@ -17,7 +17,8 @@ This contract records durable decisions for the shared SparkEditor workspace she
 | Domain / scope | Authoritative source | Source type | Reviewed date |
 |---|---|---|---|
 | Workspace visual and interaction rules | `DESIGN.md` | Product design authority | 2026-09-08 |
-| Shared editor-shell implementation ownership | `SparkEditor/Source/Core/EditorUI.cpp`, `EditorMenuBar.cpp`, `EditorDockLayout.h`, `EditorNotificationManager.cpp` | Runtime implementation | 2026-09-08 |
+| Shared editor-shell implementation ownership | `SparkEditor/Source/Core/EditorUI.cpp`, `EditorMenuBar.cpp`, `EditorDockLayout.h`, `EditorNotificationManager.cpp`, `EditorAppearanceWindow.cpp`, `EditorStartPage.cpp`, `EditorLayoutManager.cpp` | Runtime implementation | 2026-10-14 |
+| Ember Signal tokens, metrics and widgets | `SparkUI/` (`Spark::Ui` roles, `Px`/`Em` metrics, kit widgets) | Shared design system | 2026-10-14 |
 | Docking persistence | `DESIGN.md` and Dear ImGui saved dock-tree behavior | Workspace-state policy | 2026-09-08 |
 | Permission model | Not applicable: this scope has no account/role UI | N/A | 2026-09-08 |
 | Deletion, retention, billing, and legal copy | Not applicable: no such workflow is changed by this shell slice | N/A | 2026-09-08 |
@@ -26,10 +27,10 @@ This contract records durable decisions for the shared SparkEditor workspace she
 
 - Project `DESIGN.md`: `DESIGN.md` is the maintained design-context source.
 - Token ownership model: existing runtime canonical; this contract does not duplicate palette values.
-- Runtime design-system/token source: `EditorTheme.cpp` and `EditorThemeData`.
-- Mapping/export/adapters: `EditorTheme::GetCurrentThemeData()` is consumed directly by notifications, toolbar controls, and status rendering.
+- Runtime design-system/token source: `EditorTheme.cpp` and `EditorThemeData`, published to the shell through the `SparkUI` role table.
+- Mapping/export/adapters: shell chrome (toasts, toolbar, status bar, Start page, command palette, Appearance window) reads `Spark::Ui::Col(Role)` and sizes through `Spark::Ui::Px`/`Em`, so palette, appearance, density and UI scale apply without per-surface colors or pixel literals.  `tools/ui/check_ui_literals.py` ratchets raw literals per lane (L2 baseline 0).
 - Token drift gate: source compilation plus the existing theme inventory/source tests; visual changes require a live five-theme smoke before binary sign-off.
-- Supported themes: Ember Studio, Cobalt Forge, Graphite Signal, Professional Light, and High Contrast.  Compatibility aliases are not additional picker entries.
+- Supported themes: three palette families (Ember Studio, Cobalt Forge, Graphite Signal), each in Dark, Light or High Contrast appearance, or Match Windows.  Professional Light and High Contrast load as Ember Studio in the Light and High Contrast appearances.  Compatibility aliases are not additional picker entries.
 - Design-context owner/review policy: preserve the `DESIGN.md` ownership map; use shared semantic tokens rather than panel-local colors or new themes.
 
 ## Canonical UI Map
@@ -37,11 +38,14 @@ This contract records durable decisions for the shared SparkEditor workspace she
 | Capability | Canonical owner | Source of truth | Allowed variants | Verification |
 |---|---|---|---|---|
 | Workspace docking | `EditorUI` + `EditorDockLayout` | Saved ImGui dock tree; `DESIGN.md` | Seed only a new/empty tree; explicit destructive reset | `Gated_EditorDockLayout_PreservesExistingTreeUntilExplicitReset` |
-| Theme picker | `EditorTheme` + preferences UI | `EditorThemeData`; `DESIGN.md` | Exactly the five shipped themes; compatibility aliases stay hidden | Existing theme inventory tests; source review; live five-theme smoke |
+| Appearance window (View > Appearance; Help > Themes... alias) | `EditorAppearanceWindow` + `EditorPreferences` | Persisted preferences file; `EditorThemeData` | Palette family; Dark / Light / High Contrast / Match Windows; density; UI scale Auto or 75-200 % in 12.5 % steps; always-visible keyboard focus; reduce motion; status bar toggle; contrast-audit badge | Existing theme inventory tests; source review; live palette x appearance smoke |
+| Named layouts | `EditorLayoutManager` + toolbar Layout dropdown | `<name>.ini` dock tree plus `.ini.meta` | Default, saved layouts, Save Layout As..., Delete... (confirmed), Reset | `EditorLayoutManager_*` SparkTests |
+| Start page | `EditorStartPage` | Preferences (`showStartPage`, recent scenes) | Dockable tab in the centre node; first run or while Show at startup is on; never in test mode | Source review; live first-run smoke |
+| Command palette | `CommandPalette` | `EditorCommandRegistry` | Scrim-backed overlay; category badge, name, key hint | Source review; live smoke |
 | Menu command availability | `EditorMenuBar` | Real command integration state | Enabled implementation or disabled item with hover explanation | Source search; Release editor source compile |
 | Toolbar passive hover | `EditorMenuBar` + `EditorThemeData` | `buttonHovered` token | Theme-derived passive hover; semantic active action colors | Release editor source compile; live theme smoke |
-| Status context | `EditorUI` | Measured ImGui content geometry | Full value, icon fallback with hover value, or omitted low-priority context | Release editor source compile; live narrow-width smoke |
-| Toast | `EditorNotificationManager` | Shared semantic notification manager | success, info, warning, error; viewport-bounded wrapping stack | `Gated_EditorNotificationManager_WrapsLongMessagesWithoutOverlappingStack` |
+| Status bar | `EditorUI` | Viewport side bar reserved before the dockspace | PREVIEW or EDIT state; connection, project, scene chips; tool/object/selection counts; FPS and ms; notification bell; UI scale % | Release editor source compile; live narrow-width smoke |
+| Toast | `EditorNotificationManager` | `NotificationSeverity` + `Notify()` | success, info, warning, error; bottom-right wrapping stack; at most 4 visible; 50-entry history | `Gated_EditorNotificationManager_WrapsLongMessagesWithoutOverlappingStack` |
 
 No web form, select/listbox, date picker, CRUD, table, browser scrollbar, or native browser dialog capability is introduced by this native editor-shell scope.
 
@@ -51,9 +55,10 @@ No web form, select/listbox, date picker, CRUD, table, browser scrollbar, or nat
 |---|---|---|---|---|---|---|---|
 | Enabled menu command | Semantic theme item | Existing menu hover treatment | Existing keyboard/menu focus behavior | Executes its real command | N/A | Existing command-specific state | Real command reports through its owner |
 | Unavailable menu command | Visibly disabled | Descriptive reason via tooltip | Nonactivatable | Never executes | Explanation names the unavailable capability or supported destination | N/A | No false-success toast |
-| Toolbar action | Theme `button` token | Theme `buttonHovered` token | Existing ImGui focus behavior | Semantic action color | Existing action-specific policy | Existing play/build owner | Existing action-specific feedback |
-| Status context | Full label when it fits | Full value available on fallback icon | Not an action | Current document/connection state | N/A | Live metrics can update | Connection state is semantic success/error color |
-| Toast | 56 px minimum, wrapped shared window | N/A | Not interactive in this slice | Semantic accent stripe/icon | N/A | Stack by actual preceding height | Error type uses shared error semantics |
+| Toolbar action | Segmented controls for tool and space; accent-filled Play Control button; Snap icon button with a Mono step field | Shared hover role | ImGui keyboard focus; always visible when the preference is on | Selected segment uses the accent role | Snap step field disabled while snapping is off | Preview chip while the play session runs | Existing action-specific feedback |
+| Status bar | Chips and Mono metrics on the side bar | Tooltips carry frame number, asset count and full chip values | Bell and scale % are buttons | Bell opens notification history; scale % resets to Auto | N/A | Live metrics update every frame | FPS below 30 uses warning, below 15 uses error |
+| Toast | Severity glyph and word, clock, wrapped title and body | Hover pauses the countdown | Focus pauses the countdown; Dismiss button | Dismiss removes the toast | N/A | Info/Success 4 s, Warning 8 s; fade only when Reduce motion is off | Error persists until dismissed |
+| Appearance window | Current preferences selected | Swatches and audit failures in tooltips | Keyboard-operable radios, combo, checkboxes | Each change applies and saves immediately | N/A | N/A | Audit badge reports failing token pairs |
 
 ## Dataset navigation
 
@@ -66,8 +71,12 @@ Not applicable to this shell change.  Asset Browser and other data-heavy panels 
 | Seed first workspace | New or empty dock tree | None | Default dock layout | Usable initial panel arrangement | Preserve saved tree instead when one exists | Existing dockspace focus | `EditorDockLayout.h` |
 | Reset workspace layout | Explicit Reset to Default Layout | Next frame rebuild request | Default dock layout | Layout changes only after explicit request | Retry explicit reset; no startup reset side effect | Existing dockspace focus | `EditorUI.cpp` |
 | Request unavailable menu command | Hover the disabled command | None | No state transition | Tooltip explains availability | Use the named supported destination when one exists | Menu remains open under normal ImGui behavior | `EditorMenuBar.cpp` |
-| Publish editor feedback | Shared owner calls notification manager | Existing lifetime handling | Top-right viewport stack | Semantic wrapped toast | Later feedback remains visible below actual toast height | No focus steal | `EditorNotificationManager.cpp` |
-| Change theme | Existing theme picker action | Existing theme application | Current workspace | Shared token update | Re-select any shipped theme | Existing editor focus | `EditorTheme.cpp` |
+| Publish editor feedback | Shared owner calls `Notify()` or `ShowNotification()` | Severity-default lifetime | Bottom-right viewport stack | Semantic wrapped toast, also kept in history | Older feedback stays readable in the status bar history | No focus steal | `EditorNotificationManager.cpp` |
+| Change appearance | View > Appearance, Help > Themes..., or palette commands | None | Current workspace | Shared token update and saved preferences | Reset to defaults (keeps recent scenes and last layout) | Appearance window keeps focus; Esc closes | `EditorAppearanceWindow.cpp` |
+| Change UI scale | Ctrl+= / Ctrl+- / Ctrl+0, View > UI Scale, or status bar scale % | None | Current workspace | Fonts and metrics rebuild at the new scale | Ctrl+0 returns to Auto (DPI only) | Unchanged | `EditorUI.cpp` |
+| Save layout as | Toolbar Layout > Save Layout As... or Window menu | Modal with name validation | Named layout listed in the dropdown | Success toast | Invalid names are explained inline; existing names require Replace | Modal returns focus to the workspace | `EditorLayoutManager.cpp` |
+| Delete layout | Toolbar Layout > Delete... | Destructive confirmation (Cancel default) | Layout and its companions removed | Success toast | Failure toast names the reason | Workspace | `EditorLayoutManager.cpp` |
+| Open from Start page | Start page action or recent scene | Existing unsaved-changes transition | Scene, new scene, project folder, or reset layout | Existing scene-load feedback | Missing recent scene reports through the scene loader | Start page closes on Esc | `EditorStartPage.cpp` |
 
 ## Navigation and responsive behavior
 
@@ -76,14 +85,15 @@ Not applicable to this shell change.  Asset Browser and other data-heavy panels 
 - Breadcrumb/tab/route-state policy: docked panel state is preserved by the existing ImGui layout state.
 - Sidebar/drawer/bottom-sheet transformation: not applicable; panels remain dockable desktop windows.
 - Responsive table strategy: not applicable in this shell scope.
-- Truncation/full-value access: status text is measured first.  Long project or scene labels fall back to an icon with a hover tooltip; lower-priority tool/selection text is omitted before metrics are allowed to overlap.
-- Focus restoration and sticky-obstruction policy: the shell change adds no focus-stealing overlay; notifications do not steal focus.
+- Truncation/full-value access: the status bar is a two-column table, so metrics keep their column; chip values that do not fit remain available in tooltips.
+- UI scale: every shell measurement goes through `Spark::Ui::Px`/`Em`; the default dock layout is built with `Spark::Ui::Scale()`.
+- Focus restoration and sticky-obstruction policy: notifications and the Start page do not steal focus from an active edit; the command palette and layout dialogs are the only focus-taking overlays and close on Esc.
 
 ## Overlays and feedback
 
 - Dialog primitive: existing app-owned Dear ImGui dialogs remain the owner; no native browser dialog is introduced.
-- Destructive confirmation levels: unchanged and outside this shell slice.
-- Toast placement/duration/deduplication: the shared manager owns semantic toasts in the main viewport's top-right work area.  This change establishes viewport-bounded width, wrapped height, and actual-height stacking; it does not change the manager's existing lifetime or deduplication policy.
+- Destructive confirmation levels: deleting a named layout uses `Spark::Ui::ConfirmDestructive` (Cancel has default focus, Esc cancels).
+- Toast placement/duration/deduplication: toasts stack upward from the bottom-right work area, at most four visible.  Info and Success last 4 s, Warning 8 s, Error persists; hover or focus pauses the countdown; fading is skipped when Reduce motion is on.  The last 50 entries stay in the status bar history.
 - Alert/banner scope and persistence: unchanged.
 - Tooltip delay/dismissal: existing ImGui behavior; unavailable commands and compressed status icons use descriptive tooltips.
 - Unsaved-changes behavior: unchanged; reset-layout changes only dock geometry and remains explicit.
@@ -109,15 +119,15 @@ No form validation surface is modified.  Browser `noValidate`, first-invalid foc
 
 - Migration ledger location: the release readiness ledger remains authoritative for broader editor gaps.
 - Canonical primitives and owners: the Canonical UI Map above.
-- Current risk-prioritized slice: shared shell feedback, saved docking preservation, and theme-semantic toolbar behavior.
+- Current risk-prioritized slice: Ember Signal shell (Appearance window, Start page replacing the welcome modal, side-bar status bar, toasts with history, named layouts, scale shortcuts) on top of saved docking preservation.
 - Rollout/rollback: these changes are source-local and reversible by a normal commit revert; no persistent data migration is added.
 
 ## Verification
 
 - Required static commands: `git diff --check`; the focused SparkTests below; Release editor source compile; frontend contract audit in strict mode.
-- Browser/device/locale matrix: not applicable to this native editor shell.  A desktop live smoke covers all five themes, disabled-command hover help, long stacked toasts, saved docking, and narrow status rendering.
+- Browser/device/locale matrix: not applicable to this native editor shell.  A desktop live smoke covers each palette in each appearance, UI scale 75 % and 200 %, disabled-command hover help, long stacked toasts, saved and named layouts, the Start page, and narrow status rendering.  `tools/test-editor-live.py --ui-scale` keeps its click targets aligned at non-default scales.
 - Accessibility checks: compile-time/token review plus live keyboard/High Contrast smoke before binary sign-off.
 - Canonical sibling flow used for comparison: existing `DESIGN.md` ownership and shared `EditorThemeData`/`EditorNotificationManager` behavior.
-- Component-state coverage: `Gated_EditorDockLayout_ToolbarUsesContentHeightAndKeepsPanelsSeparate`; `Gated_EditorDockLayout_PreservesExistingTreeUntilExplicitReset`; `Gated_EditorNotificationManager_WrapsLongMessagesWithoutOverlappingStack`.
-- Current source evidence: the dock tests passed (2 tests, 24 assertions); the notification test passed (1 test, 4 assertions); `SparkEngine.vcxproj /t:ClCompile /p:Configuration=Release /m:2` completed successfully after this change.
-- Remaining binary evidence: SparkEditor is already open, so its executable was intentionally not relinked.  Close and rebuild it before the live smoke; source-level verification does not substitute for that binary-level check.
+- Component-state coverage: `Gated_EditorDockLayout_ToolbarUsesContentHeightAndKeepsPanelsSeparate`; `Gated_EditorDockLayout_PreservesExistingTreeUntilExplicitReset`; `Gated_EditorNotificationManager_WrapsLongMessagesWithoutOverlappingStack`; `EditorLayoutManager_SaveAsCreatesNamedLayoutAndListsIt`; `EditorLayoutManager_SaveAsRejectsInvalidNamesWithReason`; `EditorLayoutManager_DeleteRemovesDockTreeCompanions`; `EditorLayoutManager_DeleteCurrentLayoutResetsCurrentName`.
+- Current source evidence (2026-10-14, Ember Signal wave 3): clang-format clean, literal ratchet at 0 for the shell lane, play-truth and world-mutation source pins pass.  No build or test run was made for this revision.
+- Remaining binary evidence: the SparkEditor and SparkTests builds, the focused tests above, and the live smoke are still required; source-level verification does not substitute for them.

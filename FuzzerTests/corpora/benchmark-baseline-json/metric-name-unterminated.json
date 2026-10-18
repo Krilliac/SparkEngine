@@ -1,0 +1,11 @@
+{
+  "baselines": [
+    {
+      "scenario": "alpha",
+      "metrics": {
+        "unterminated: 1
+      },
+      "tolerance": 5.0
+    }
+  ]
+}

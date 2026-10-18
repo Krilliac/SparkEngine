@@ -17,6 +17,9 @@
 #include <queue>
 #include "Utils/LogMacros.h"
 
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
+
 namespace SparkEditor
 {
 
@@ -44,10 +47,8 @@ namespace SparkEditor
             if (m_inspectedObjectID == INVALID_OBJECT_ID)
             {
                 float avail = ImGui::GetContentRegionAvail().y;
-                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + avail * 0.4f);
-                float textWidth = ImGui::CalcTextSize(ICON_FA_TH " Select a tilemap entity to edit").x;
-                ImGui::SetCursorPosX((ImGui::GetWindowWidth() - textWidth) * 0.5f);
-                ImGui::TextColored(ImVec4(0.55f, 0.58f, 0.62f, 1.0f), ICON_FA_TH " Select a tilemap entity to edit");
+                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + avail * 0.3f);
+                Spark::Ui::EmptyState(ICON_FA_TH, "Select a tilemap entity to edit");
             }
             else
             {
@@ -56,7 +57,7 @@ namespace SparkEditor
 
                 // Split layout: tile palette on left, map canvas on right
                 float panelWidth = ImGui::GetContentRegionAvail().x;
-                float paletteWidth = (std::min)(panelWidth * 0.25f, 200.0f);
+                float paletteWidth = (std::min)(panelWidth * 0.25f, Spark::Ui::Px(200.0f));
 
                 ImGui::BeginChild("TilePalette", ImVec2(paletteWidth, 0), true);
                 RenderTilePalette();
@@ -68,8 +69,9 @@ namespace SparkEditor
                 RenderMapCanvas();
                 ImGui::EndChild();
             }
-            EndPanel();
         }
+        // ImGui::Begin was called even when BeginPanel() reports a collapsed or hidden-tab window.
+        EndPanel();
     }
 
     void TilemapEditorPanel::Shutdown()
@@ -82,15 +84,8 @@ namespace SparkEditor
         // Tool selection
         auto toolButton = [this](const char* icon, TileTool tool, const char* tooltip)
         {
-            bool selected = (m_currentTool == tool);
-            if (selected)
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.5f, 0.8f, 1.0f));
-            if (ImGui::Button(icon))
+            if (Spark::Ui::IconButton(tooltip, icon, tooltip, m_currentTool == tool))
                 m_currentTool = tool;
-            if (selected)
-                ImGui::PopStyleColor();
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("%s", tooltip);
         };
 
         toolButton(ICON_FA_PAINT_BRUSH, TileTool::Paint, "Paint (B)");
@@ -105,15 +100,13 @@ namespace SparkEditor
         ImGui::SameLine();
         toolButton(ICON_FA_SHIELD_ALT, TileTool::CollisionPaint, "Collision Paint (C)");
 
-        ImGui::SameLine();
-        ImGui::Spacing();
-        ImGui::SameLine();
+        Spark::Ui::ToolbarSeparator();
 
         // Zoom
-        if (ImGui::Button(ICON_FA_SEARCH_PLUS))
+        if (Spark::Ui::IconButton("ZoomIn", ICON_FA_SEARCH_PLUS, "Zoom in"))
             m_canvasZoom *= 1.25f;
         ImGui::SameLine();
-        if (ImGui::Button(ICON_FA_SEARCH_MINUS))
+        if (Spark::Ui::IconButton("ZoomOut", ICON_FA_SEARCH_MINUS, "Zoom out"))
             m_canvasZoom *= 0.8f;
         m_canvasZoom = std::clamp(m_canvasZoom, 0.25f, 8.0f);
 
@@ -123,9 +116,7 @@ namespace SparkEditor
         ImGui::Checkbox("Collision", &m_showCollision);
 
         // Undo/Redo
-        ImGui::SameLine();
-        ImGui::Spacing();
-        ImGui::SameLine();
+        Spark::Ui::ToolbarSeparator();
         {
             bool canUndo = !m_undoStack.empty();
             if (!canUndo)
@@ -153,8 +144,7 @@ namespace SparkEditor
 
     void TilemapEditorPanel::RenderTilePalette()
     {
-        ImGui::Text(ICON_FA_PALETTE " Tile Palette");
-        ImGui::Separator();
+        Spark::Ui::SubHeader(ICON_FA_PALETTE " Tile Palette");
 
         // Tileset properties
         static int tilesetCols = 8;
@@ -163,13 +153,16 @@ namespace SparkEditor
         ImGui::DragInt("Rows", &tilesetRows, 0.1f, 1, 64);
 
         ImGui::Spacing();
-        ImGui::Text("Selected: %d", m_selectedTileID);
+        Spark::Ui::KeyValue("Selected:", "%d", m_selectedTileID);
 
         ImGui::Separator();
 
         // Draw tile palette grid
         float availW = ImGui::GetContentRegionAvail().x;
-        float tileSize = (std::max)(availW / static_cast<float>(tilesetCols), 16.0f);
+        float tileSize = (std::max)(availW / static_cast<float>(tilesetCols), Spark::Ui::Px(16.0f));
+        const ImU32 selectionCol = Spark::Ui::Col(Spark::Ui::Role::AccentText);
+        const ImU32 gridCol = Spark::Ui::Col(Spark::Ui::Role::BorderSubtle);
+        const float selectionThickness = Spark::Ui::Px(2.0f);
 
         ImVec2 canvasPos = ImGui::GetCursorScreenPos();
         ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -192,13 +185,12 @@ namespace SparkEditor
                 // Highlight selected
                 if (tileID == m_selectedTileID)
                 {
-                    drawList->AddRect(ImVec2(px - 1, py - 1), ImVec2(px + tileSize, py + tileSize),
-                                      IM_COL32(255, 255, 0, 255), 0.0f, 0, 2.0f);
+                    drawList->AddRect(ImVec2(px - 1, py - 1), ImVec2(px + tileSize, py + tileSize), selectionCol, 0.0f,
+                                      0, selectionThickness);
                 }
 
                 // Grid lines
-                drawList->AddRect(ImVec2(px, py), ImVec2(px + tileSize - 1, py + tileSize - 1),
-                                  IM_COL32(50, 50, 50, 100));
+                drawList->AddRect(ImVec2(px, py), ImVec2(px + tileSize - 1, py + tileSize - 1), gridCol);
             }
         }
 
@@ -219,6 +211,7 @@ namespace SparkEditor
 
         ImGui::Spacing();
         RenderMapProperties();
+        RenderAutoTileSettings();
     }
 
     void TilemapEditorPanel::PushUndoSnapshot(const std::vector<int32_t>& tiles, const std::vector<bool>& collision,
@@ -250,9 +243,14 @@ namespace SparkEditor
     {
         EnsureMapData();
 
-        float tileSize = 16.0f * m_canvasZoom;
+        float tileSize = Spark::Ui::Px(16.0f) * m_canvasZoom;
         float canvasW = m_mapWidth * tileSize;
         float canvasH = m_mapHeight * tileSize;
+        const ImU32 gridCol = Spark::Ui::Col(Spark::Ui::Role::BorderSubtle);
+        const ImU32 collisionFill = Spark::Ui::Col(Spark::Ui::Role::ErrorText, 0.3f);
+        const ImU32 collisionEdge = Spark::Ui::Col(Spark::Ui::Role::ErrorText, 0.8f);
+        const float collisionInset = Spark::Ui::Px(2.0f);
+        const float collisionEdgeInset = Spark::Ui::Px(1.0f);
 
         ImVec2 canvasPos = ImGui::GetCursorScreenPos();
         canvasPos.x += m_canvasPanX;
@@ -279,25 +277,27 @@ namespace SparkEditor
                 // Grid
                 if (m_showGrid)
                 {
-                    drawList->AddRect(ImVec2(px, py), ImVec2(px + tileSize, py + tileSize), IM_COL32(80, 80, 80, 100));
+                    drawList->AddRect(ImVec2(px, py), ImVec2(px + tileSize, py + tileSize), gridCol);
                 }
 
                 // Collision overlay
                 if (m_showCollision && m_collision[static_cast<size_t>(y) * m_mapWidth + x])
                 {
-                    drawList->AddRectFilled(ImVec2(px + 2, py + 2), ImVec2(px + tileSize - 2, py + tileSize - 2),
-                                            IM_COL32(255, 0, 0, 80));
-                    drawList->AddRect(ImVec2(px + 1, py + 1), ImVec2(px + tileSize - 1, py + tileSize - 1),
-                                      IM_COL32(255, 0, 0, 200));
+                    drawList->AddRectFilled(ImVec2(px + collisionInset, py + collisionInset),
+                                            ImVec2(px + tileSize - collisionInset, py + tileSize - collisionInset),
+                                            collisionFill);
+                    drawList->AddRect(ImVec2(px + collisionEdgeInset, py + collisionEdgeInset),
+                                      ImVec2(px + tileSize - collisionEdgeInset, py + tileSize - collisionEdgeInset),
+                                      collisionEdge);
                 }
             }
         }
 
         // Map border
-        drawList->AddRect(canvasPos, ImVec2(canvasPos.x + canvasW, canvasPos.y + canvasH), IM_COL32(255, 255, 255, 150),
-                          0.0f, 0, 2.0f);
+        drawList->AddRect(canvasPos, ImVec2(canvasPos.x + canvasW, canvasPos.y + canvasH),
+                          Spark::Ui::Col(Spark::Ui::Role::BorderStrong), 0.0f, 0, Spark::Ui::Px(2.0f));
 
-        ImGui::Dummy(ImVec2(canvasW + 20, canvasH + 20));
+        ImGui::Dummy(ImVec2(canvasW + Spark::Ui::Px(20.0f), canvasH + Spark::Ui::Px(20.0f)));
 
         // Handle painting
         if (ImGui::IsItemHovered())
@@ -311,8 +311,8 @@ namespace SparkEditor
             {
                 float hx = canvasPos.x + tileX * tileSize;
                 float hy = canvasPos.y + tileY * tileSize;
-                drawList->AddRect(ImVec2(hx, hy), ImVec2(hx + tileSize, hy + tileSize), IM_COL32(255, 255, 0, 200),
-                                  0.0f, 0, 2.0f);
+                drawList->AddRect(ImVec2(hx, hy), ImVec2(hx + tileSize, hy + tileSize),
+                                  Spark::Ui::Col(Spark::Ui::Role::AccentText, 0.8f), 0.0f, 0, Spark::Ui::Px(2.0f));
 
                 if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
                 {
@@ -391,30 +391,35 @@ namespace SparkEditor
         }
 
         // Status bar
-        ImGui::Text("Map: %dx%d | Zoom: %.1fx | Tool: %s | Tile: %d", m_mapWidth, m_mapHeight, m_canvasZoom,
-                    m_currentTool == TileTool::Paint            ? "Paint"
-                    : m_currentTool == TileTool::Erase          ? "Erase"
-                    : m_currentTool == TileTool::Fill           ? "Fill"
-                    : m_currentTool == TileTool::Rectangle      ? "Rectangle"
-                    : m_currentTool == TileTool::Eyedropper     ? "Eyedropper"
-                    : m_currentTool == TileTool::CollisionPaint ? "Collision"
-                                                                : "Unknown",
-                    m_selectedTileID);
+        Spark::Ui::SecondaryText("Map: %dx%d | Zoom: %.1fx | Tool: %s | Tile: %d", m_mapWidth, m_mapHeight,
+                                 m_canvasZoom,
+                                 m_currentTool == TileTool::Paint            ? "Paint"
+                                 : m_currentTool == TileTool::Erase          ? "Erase"
+                                 : m_currentTool == TileTool::Fill           ? "Fill"
+                                 : m_currentTool == TileTool::Rectangle      ? "Rectangle"
+                                 : m_currentTool == TileTool::Eyedropper     ? "Eyedropper"
+                                 : m_currentTool == TileTool::CollisionPaint ? "Collision"
+                                                                             : "Unknown",
+                                 m_selectedTileID);
     }
 
     void TilemapEditorPanel::RenderMapProperties()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_COGS " Map Properties"))
+        if (Spark::Ui::SectionHeader("Map Properties", ICON_FA_COGS, false))
         {
             static int newWidth = 20;
             static int newHeight = 15;
             ImGui::DragInt("Width", &newWidth, 0.1f, 1, 256);
             ImGui::DragInt("Height", &newHeight, 0.1f, 1, 256);
 
+            const bool sizeChanged = newWidth != m_mapWidth || newHeight != m_mapHeight;
+            ImGui::BeginDisabled(!sizeChanged);
             if (ImGui::Button("Resize Map"))
             {
-                // Would resize actual tilemap data
+                ResizeMap(newWidth, newHeight);
             }
+            ImGui::EndDisabled();
+            ImGui::SetItemTooltip("Keeps the overlapping tiles; Undo restores the previous size.");
 
             ImGui::Spacing();
 
@@ -434,29 +439,45 @@ namespace SparkEditor
         }
     }
 
-    void TilemapEditorPanel::RenderCollisionOverlay()
+    void TilemapEditorPanel::ResizeMap(int width, int height)
     {
-        // Collision overlay rendering is handled in RenderMapCanvas
+        width = std::clamp(width, 1, 256);
+        height = std::clamp(height, 1, 256);
+        if (width == m_mapWidth && height == m_mapHeight)
+            return;
+
+        EnsureMapData();
+        PushUndoSnapshot(m_tiles, m_collision, m_mapWidth, m_mapHeight);
+
+        std::vector<int32_t> tiles(static_cast<size_t>(width) * height, 0);
+        std::vector<bool> collision(static_cast<size_t>(width) * height, false);
+        const int keepWidth = (std::min)(width, m_mapWidth);
+        const int keepHeight = (std::min)(height, m_mapHeight);
+        for (int y = 0; y < keepHeight; ++y)
+        {
+            for (int x = 0; x < keepWidth; ++x)
+            {
+                const size_t from = static_cast<size_t>(y) * m_mapWidth + x;
+                const size_t to = static_cast<size_t>(y) * width + x;
+                tiles[to] = m_tiles[from];
+                collision[to] = m_collision[from];
+            }
+        }
+
+        m_tiles = std::move(tiles);
+        m_collision = std::move(collision);
+        m_mapWidth = width;
+        m_mapHeight = height;
+        SPARK_LOG_DEBUG(Spark::LogCategory::Editor, "TilemapEditorPanel: resized map to %dx%d", width, height);
     }
 
     void TilemapEditorPanel::RenderAutoTileSettings()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_MAGIC " Auto-Tile Rules"))
+        if (Spark::Ui::SectionHeader("Auto-Tile Rules", ICON_FA_MAGIC, false))
         {
-            ImGui::Text("Auto-tiling automatically selects tile variants");
-            ImGui::Text("based on neighboring tiles (Wang tiles / bitmask).");
-            ImGui::Spacing();
-
-            static bool autoTileEnabled = false;
-            ImGui::Checkbox("Enable Auto-Tiling", &autoTileEnabled);
-
-            if (autoTileEnabled)
-            {
-                ImGui::Text("Bitmask Mode:");
-                static int bitmaskMode = 0;
-                ImGui::RadioButton("4-bit (simple)", &bitmaskMode, 0);
-                ImGui::RadioButton("8-bit (full)", &bitmaskMode, 1);
-            }
+            Spark::Ui::UnavailableFeature("Auto-tiling",
+                                          "Tile variants are not chosen from neighbouring tiles yet "
+                                          "(Wang tiles / bitmask); painted tiles are placed as selected.");
         }
     }
 

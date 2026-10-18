@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from fs_security import FilesystemPolicyError, SecureRoot
-from secret_policy import scan_json_values, scan_payload
+from secret_policy import JsonScanLimitError, scan_json_values, scan_payload
 from ops_strict_json import StrictJsonError, loads_strict
 
 
@@ -159,8 +159,11 @@ class TelemetrySpoolValidator:
         if sequenced_events == len(events) and len(sequences) == len(events):
             if any(current <= previous for previous, current in zip(sequences, sequences[1:])):
                 self._error("batch-sequence", f"{source}: sequence values must be strictly increasing")
-        for finding in scan_json_values(events, location=source):
-            self._error("secret-in-event", f"{finding.location}: reusable secret matches {finding.rule}")
+        try:
+            for finding in scan_json_values(events, location=source):
+                self._error("secret-in-event", f"{finding.location}: reusable secret matches {finding.rule}")
+        except JsonScanLimitError as exc:
+            self._error("secret-in-event", f"batch cannot receive complete secret inspection: {exc}")
         raw = scan_payload(data, location=source, suffix=".json")
         for finding in raw.findings:
             self._error("secret-in-event", f"{finding.location}: reusable secret matches {finding.rule}")

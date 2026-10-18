@@ -62,7 +62,7 @@ namespace Spark::Daemon
             return Unexpected<std::string>("DaemonClient: pipe endpoint is empty");
         const std::wstring pipeName = NormalizePipeName(socketPath);
         if (pipeName.empty())
-            return Unexpected<std::string>("DaemonClient: pipe endpoint is not valid UTF-8");
+            return Unexpected<std::string>("DaemonClient: pipe endpoint is not valid UTF-8 or cannot be resolved");
 
         {
             std::lock_guard lock(m_mutex);
@@ -84,8 +84,11 @@ namespace Spark::Daemon
         DWORD connectError = ERROR_SUCCESS;
         while (pipe == INVALID_HANDLE_VALUE)
         {
+            // SECURITY_IDENTIFICATION: the server may learn who we are but can
+            // never act as us. Without SQOS the default is SecurityImpersonation,
+            // which hands our token to whoever created the pipe name first.
             pipe = ::CreateFileW(pipeName.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
-                                 FILE_ATTRIBUTE_NORMAL, nullptr);
+                                 FILE_ATTRIBUTE_NORMAL | SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION, nullptr);
             if (pipe != INVALID_HANDLE_VALUE)
                 break;
 
@@ -124,6 +127,15 @@ namespace Spark::Daemon
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(2));
             }
+        }
+
+        // Named pipes are machine-global: another local account can create this
+        // name before our daemon does. Refuse any server that is not running as
+        // the current user before a single request or response crosses the pipe.
+        if (!IsPipeServerCurrentUser(pipe))
+        {
+            ::CloseHandle(pipe);
+            return Unexpected<std::string>("DaemonClient: pipe server is not owned by the current user");
         }
 
         DWORD mode = PIPE_READMODE_BYTE | PIPE_NOWAIT;

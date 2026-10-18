@@ -47,8 +47,8 @@
  * the exact precedent of TFRepProtocol.h (0x54F0) / TFFireFxProtocol.h
  * (0x54F4). S->C only: TF_WeatherState heartbeat every kWeatherSyncSec
  * (unreliable) + one reliable send on every phase transition. Pure clients
- * self-register the handler via the TFSocialSystem poll pattern (no-op
- * replacement on release so no dangling `this` survives the module DLL).
+ * self-register the handler via the TFSocialSystem poll pattern and remove it
+ * (UnregisterHandler) on release, so no callback survives the module DLL.
  *
  * Singleton for the same reason as TFGroundFx: single producer per concern,
  * one-line wiring, no TFGameContext (frozen header) or Main.cpp changes.

@@ -5,7 +5,8 @@
  * @brief Console commands for material inspection, listing, creation, deletion, and validation.
  *
  * Covers read-only queries (list, info, dump, validate, variants, texture types),
- * lifecycle operations (reload, create variant, export, import, garbage collect, clear cache).
+ * lifecycle operations (create variant, garbage collect, clear sampler cache). The material
+ * system has no file import/export or reload path; materials are created in memory.
  * Editing/property-modification commands live in MaterialConsoleEdit.cpp.
  */
 
@@ -67,34 +68,6 @@ std::string MaterialSystem::Console_GetMaterialInfo(const std::string& materialN
     return "Material not found: " + materialName;
 }
 
-bool MaterialSystem::Console_ReloadMaterial(const std::string& materialName)
-{
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Reloading material: %s", materialName.c_str());
-    auto it = m_materials.find(materialName);
-    if (it != m_materials.end())
-    {
-        if (it->second->LoadFromFile(materialName, m_device))
-        {
-            Spark::SimpleConsole::GetInstance().LogSuccess("Reloaded material: " + materialName);
-            return true;
-        }
-        else
-        {
-            Spark::SimpleConsole::GetInstance().LogError("Failed to reload material: " + materialName);
-        }
-    }
-    else
-    {
-        Spark::SimpleConsole::GetInstance().LogError("Material not found: " + materialName);
-    }
-    return false;
-}
-
-int MaterialSystem::Console_ReloadAllMaterials()
-{
-    return ReloadAllMaterials();
-}
-
 bool MaterialSystem::Console_CreateVariant(const std::string& materialName, const std::string& variantName,
                                            const std::vector<std::string>& defines)
 {
@@ -112,17 +85,13 @@ bool MaterialSystem::Console_CreateVariant(const std::string& materialName, cons
 
 void MaterialSystem::Console_ClearCache()
 {
-    size_t textureCount = m_textureCache.size();
     size_t samplerCount = m_samplerCache.size();
 
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Clearing material cache: %zu textures, %zu samplers", textureCount,
-                   samplerCount);
+    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Clearing material sampler cache: %zu samplers", samplerCount);
 
-    m_textureCache.clear();
     m_samplerCache.clear();
 
-    Spark::SimpleConsole::GetInstance().LogSuccess("Cleared cache: " + std::to_string(textureCount) + " textures, " +
-                                                   std::to_string(samplerCount) + " samplers");
+    Spark::SimpleConsole::GetInstance().LogSuccess("Cleared cache: " + std::to_string(samplerCount) + " samplers");
 }
 
 void MaterialSystem::Console_GarbageCollect()
@@ -517,52 +486,6 @@ std::string MaterialSystem::Console_DumpMaterialDetails(const std::string& mater
     return ss.str();
 }
 
-bool MaterialSystem::Console_ExportMaterial(const std::string& materialName, const std::string& filePath)
-{
-    auto material = GetMaterial(materialName);
-    if (!material || material == m_defaultMaterial)
-    {
-        SPARK_LOG_WARN(Spark::LogCategory::Graphics, "Cannot export: material '%s' not found", materialName.c_str());
-        Spark::SimpleConsole::GetInstance().LogError("Material not found: " + materialName);
-        return false;
-    }
-
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Exporting material '%s' to '%s'", materialName.c_str(),
-                   filePath.c_str());
-    if (material->SaveToFile(filePath))
-    {
-        Spark::SimpleConsole::GetInstance().LogSuccess("Exported material '" + materialName + "' to: " + filePath);
-        return true;
-    }
-    else
-    {
-        Spark::SimpleConsole::GetInstance().LogError("Failed to export material: " + materialName);
-        return false;
-    }
-}
-
-bool MaterialSystem::Console_ImportMaterial(const std::string& filePath)
-{
-    SPARK_LOG_INFO(Spark::LogCategory::Graphics, "Importing material from: %s", filePath.c_str());
-    if (!std::filesystem::exists(filePath))
-    {
-        Spark::SimpleConsole::GetInstance().LogError("File not found: " + filePath);
-        return false;
-    }
-
-    auto material = LoadMaterial(filePath);
-    if (material && material != m_errorMaterial)
-    {
-        Spark::SimpleConsole::GetInstance().LogSuccess("Imported material from: " + filePath);
-        return true;
-    }
-    else
-    {
-        Spark::SimpleConsole::GetInstance().LogError("Failed to import material from: " + filePath);
-        return false;
-    }
-}
-
 std::string MaterialSystem::Console_ListTextureTypes() const
 {
     std::stringstream ss;
@@ -637,8 +560,6 @@ MaterialSystem::MaterialMetrics MaterialSystem::Console_GetMetrics() const
     std::lock_guard<std::mutex> lock(m_metricsMutex);
     MaterialMetrics metrics = m_metrics;
     metrics.loadedMaterials = static_cast<int>(m_materials.size());
-    metrics.textureCount = static_cast<int>(m_textureCache.size());
-    metrics.hotReloadEnabled = m_hotReloadEnabled;
 
     // Count total variants across all materials
     int totalVariants = 0;
@@ -692,24 +613,6 @@ std::string MaterialSystem::Console_GetMaterialInfo(const std::string& materialN
     return mat->GetDetailedInfo();
 }
 
-bool MaterialSystem::Console_ReloadMaterial(const std::string& materialName)
-{
-    auto mat = GetMaterial(materialName);
-    if (!mat)
-    {
-        fprintf(stderr, "[MaterialSystem] Cannot reload: material '%s' not found\n", materialName.c_str());
-        return false;
-    }
-    // On Linux, no GPU resources to reload
-    fprintf(stderr, "[MaterialSystem] Material '%s' marked for reload (no-op on Linux)\n", materialName.c_str());
-    return true;
-}
-
-int MaterialSystem::Console_ReloadAllMaterials()
-{
-    return ReloadAllMaterials();
-}
-
 bool MaterialSystem::Console_CreateVariant(const std::string& materialName, const std::string& variantName,
                                            const std::vector<std::string>& defines)
 {
@@ -725,11 +628,9 @@ bool MaterialSystem::Console_CreateVariant(const std::string& materialName, cons
 
 void MaterialSystem::Console_ClearCache()
 {
-    size_t texCount = m_textureCache.size();
     size_t sampCount = m_samplerCache.size();
-    m_textureCache.clear();
     m_samplerCache.clear();
-    fprintf(stderr, "[MaterialSystem] Cache cleared: %zu textures, %zu samplers removed\n", texCount, sampCount);
+    fprintf(stderr, "[MaterialSystem] Cache cleared: %zu samplers removed\n", sampCount);
     UpdateMetrics();
 }
 
@@ -795,31 +696,8 @@ std::string MaterialSystem::Console_DumpMaterialDetails(const std::string& mater
     ss << "\n--- System Info ---\n";
     auto matIt = m_materials.find(materialName);
     ss << "  Ref count:     " << (matIt != m_materials.end() ? matIt->second.use_count() : 0) << "\n";
-    ss << "  Hot reload:    " << (m_hotReloadEnabled ? "enabled" : "disabled") << "\n";
     ss << "  Platform:      Linux (CPU-side only)\n";
     return ss.str();
-}
-
-bool MaterialSystem::Console_ExportMaterial(const std::string& materialName, const std::string& filePath)
-{
-    auto mat = GetMaterial(materialName);
-    if (!mat)
-    {
-        fprintf(stderr, "[MaterialSystem] Cannot export: material '%s' not found\n", materialName.c_str());
-        return false;
-    }
-    bool result = mat->SaveToFile(filePath);
-    if (result)
-    {
-        fprintf(stderr, "[MaterialSystem] Exported material '%s' to '%s'\n", materialName.c_str(), filePath.c_str());
-    }
-    return result;
-}
-
-bool MaterialSystem::Console_ImportMaterial(const std::string& filePath)
-{
-    auto mat = LoadMaterial(filePath);
-    return mat != nullptr;
 }
 
 std::string MaterialSystem::Console_ListTextureTypes() const

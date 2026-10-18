@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "lane": "TD",
+  "description": "Theme document: ImGui-free import/export format and its fuzz harness (no ImGui literals).",
+  "allowlisted_tables": {},
+  "total": 0,
+  "files": {
+    "FuzzerTests/FuzzEditorThemeImportProduction.cpp": 0,
+    "SparkEditor/Source/Core/EditorThemeDocument.cpp": 0,
+    "SparkEditor/Source/Core/EditorThemeDocument.h": 0
+  }
+}

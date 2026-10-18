@@ -1,12 +1,33 @@
 # Networking
 
-SparkEngine includes an **experimental, unauthenticated** UDP networking system for local multiplayer development, with entity replication, client-side prediction, lag compensation, pluggable transports, and dedicated server support. The security helper classes are prototypes and are not integrated into the active `NetworkManager` wire path strongly enough to support confidentiality or peer-authentication claims.
+SparkEngine includes an **experimental** UDP networking system for multiplayer development, with entity replication, client-side prediction, lag compensation, pluggable transports, and dedicated server support. Since protocol version 2 (NET-100) the active `NetworkManager` wire path authenticates the server with a signed X25519 handshake and seals every post-handshake datagram with ChaCha20-Poly1305 (libsodium); it has not had an independent cryptographic review, and players are authenticated by game code inside the channel, not by the transport.
 
 **Source:** `SparkEngine/Source/Engine/Networking/`
 
-> **Note:** Networking is enabled by default (`ENABLE_NETWORKING=ON`). First-party endpoints bind to IPv4 loopback by default. Isolated LAN development requires canonical CIDR through `SPARK_NETWORK_BIND_ADDRESS` or `Network.bind_address` (for example `192.168.1.20/24`). The prefix must keep the complete subnet inside RFC1918 space; the exact network and directed-broadcast addresses are rejected, and peers are restricted to concrete hosts in that same subnet. Wildcard, public, documentation/test, multicast, limited-broadcast, CGNAT, IPv4-mapped IPv6, missing-prefix, and alternate textual forms are rejected before socket creation. The captured policy is threaded through gameplay, discovery, collaboration, and live-editor socket lifecycles and filters peer endpoints before packet parsing and every send/retry boundary. Gateway-managed area processes require loopback and reject a conflicting LAN bind. This boundary does not add authentication or encryption, so NET-100 and release gates remain blocked pending reviewed AEAD transport. When networking is disabled via `-DENABLE_NETWORKING=OFF`, a minimal `NetworkManagerStub` is compiled so the rest of the engine links without errors.
+> **Note:** Networking is enabled by default (`ENABLE_NETWORKING=ON`). First-party endpoints bind to IPv4 loopback by default. Isolated LAN development requires canonical CIDR through `SPARK_NETWORK_BIND_ADDRESS` or `Network.bind_address` (for example `192.168.1.20/24`). The prefix must keep the complete subnet inside RFC1918 space; the exact network and directed-broadcast addresses are rejected, and peers are restricted to concrete hosts in that same subnet. Wildcard, public, documentation/test, multicast, limited-broadcast, CGNAT, IPv4-mapped IPv6, missing-prefix, and alternate textual forms are rejected before socket creation. The captured policy is threaded through gameplay, discovery, collaboration, and live-editor socket lifecycles and filters peer endpoints before packet parsing and every send/retry boundary. Gateway-managed area processes require loopback and reject a conflicting LAN bind. This boundary is containment; authentication and encryption come from the NET-100 secure transport described under [SecureChannel](#networkencryption-advanced), which still awaits independent review. When networking is disabled via `-DENABLE_NETWORKING=OFF`, a minimal `NetworkManagerStub` is compiled so the rest of the engine links without errors.
 
 `NetworkMessage::localOnly` is process-local ownership metadata and is never encoded in the wire format. TERRAFRONT login and registration requests always set it together with the sensitive-payload erasure marker. `NetworkManager` rechecks the exact destination while holding its API lock at queueing, delayed release, and retransmission boundaries; a non-loopback destination rejects and erases the credential-bearing state before transmission. Selecting a private-LAN bind does not enable remote credential onboarding.
+
+## MMO authenticated session slice
+
+SparkGameMMO's module-owned `MMOSessionGate` handles account authentication, owned character creation,
+world entry, server-timed movement, and nearby greeting interactions over `NetworkManager`'s secure transport.
+Login reuses the gateway's guarded authenticator and `MMOAccountSystem` password hashing. Transport connection
+does not grant gameplay authority: every world command checks the connection's authenticated account and
+character ownership. The gated module refuses the older client-position upload path.
+
+`SparkServer` installs the network service before loading game modules. The MMO module adopts a host-owned
+listener or starts its own shared-headless listener on its first update, and unregisters its session handlers
+before destroying account/player services. Network clients use the `mmo_session_*` console commands;
+the login UI remains an offline showcase. This small-area slice does not supply persistent accounts,
+cross-area handoff, or collision-complete movement.
+
+The gate's network handlers may run on the `DedicatedServer` tick thread inside `SparkServer`, so they only
+copy datagrams into a bounded inbox that the module drains on the game thread.
+
+`MMOIntegratedWorld_TwoClientSessionGate` runs the real server/two-client process scenario, including
+bad-credential and foreign-character refusals and peer-observed movement/interactions. It is local evidence,
+not exact-commit CI. See the [module guide](../../GameModules/SparkGameMMO/README.md).
 
 ## Architecture
 
@@ -24,11 +45,11 @@ The networking subsystem is composed of several layered modules that work togeth
 │   (message routing, entity replication, connection management)     │
 ├────────────────────────────────────────────────────────────────────┤
 │  ClientPrediction  │  LagCompensator  │  NetworkSecurity           │
-│  (input buffering, │  (history buffer, │  (toy XOR/token helpers,  │
-│   reconciliation)  │   hitbox rewind)  │   rate limiting)          │
+│  (input buffering, │  (history buffer, │  (single-use connection   │
+│   reconciliation)  │   hitbox rewind)  │   tokens)                 │
 ├────────────────────┴─────────────────┬┴───────────────────────────┤
 │                     NetworkStack                                   │
-│      (transport + optional prototype transform helper)             │
+│         (transport selection + connection-token registry)          │
 ├────────────────────────────────────────────────────────────────────┤
 │                     ITransport (abstract)                          │
 │        ┌───────────────────┬───────────────────────┐              │
@@ -47,9 +68,11 @@ The networking subsystem is composed of several layered modules that work togeth
 | `UDPTransport.h` | Concrete UDP socket transport (default) |
 | `SteamTransport.h` | Stub transport for future Steam Networking Sockets |
 | `ClientPrediction.h` | Client-side prediction and server reconciliation |
-| `NetworkSecurity.h` | Isolated repeating-key XOR and token-lifecycle prototypes; not security |
-| `NetworkEncryption.h` | Legacy XOR/FNV packet-format prototype plus rate limiter |
-| `NetworkIntegration.h` | `NetworkStack` -- transport plus optional prototype transform helper |
+| `NetworkSecurity.h` | Single-use, expiring CSPRNG connection-token registry; not encryption or peer authentication |
+| `NetworkEncryption.h` | libsodium-backed RFC 8439 ChaCha20-Poly1305 `SecureChannel` (seals every post-handshake `NetworkManager` datagram; not independently reviewed) plus rate limiter |
+| `SecureHandshake.h` | Signed-ephemeral X25519 key agreement carried in `Connect` / `ConnectAccepted` |
+| `NetworkTrustStore.h` | Server identity file, client `ServerTrust` (pinned or trust-on-first-use `known_hosts`), `NetworkSecurityConfig` |
+| `NetworkIntegration.h` | `NetworkStack` -- transport selection plus connection-token registry |
 | `DedicatedServer.h` | Headless server: tick loop, local admin commands, map rotation, LAN broadcast |
 | `AreaServer.h` | Per-area server process for scalable multiplayer worlds |
 | `WorldServer.h` | Central coordinator for area-based multiplayer architecture |
@@ -445,9 +468,9 @@ The default transport uses platform BSD/Winsock UDP sockets:
 
 A placeholder for future Steam Networking Sockets integration. Currently all methods return failure. When the Steamworks SDK is linked, this will use `ISteamNetworkingSockets` for relay-based, NAT-traversing packet I/O.
 
-## NetworkStack -- Transport + Prototype Transform
+## NetworkStack -- Transport + Connection Tokens
 
-The `NetworkStack` class combines transport selection with an optional legacy XOR transform. It is not the active `NetworkManager` wire path and is not a security layer:
+The `NetworkStack` class combines transport selection with a connection-token registry. It is not the active `NetworkManager` wire path and applies no packet encryption:
 
 ```cpp
 struct NetworkStackConfig
@@ -457,7 +480,6 @@ struct NetworkStackConfig
     TransportType transport = TransportType::UDP;
     std::string serverAddress = "127.0.0.1";
     uint16_t serverPort = 27015;
-    bool enableEncryption = false; // Legacy name: toy XOR obfuscation only
 };
 ```
 
@@ -465,64 +487,83 @@ struct NetworkStackConfig
 NetworkStack stack;
 NetworkStackConfig config;
 config.transport = NetworkStackConfig::TransportType::UDP;
-config.enableEncryption = false;
 stack.Initialize(config);
 
-// Legacy Encrypt/Decrypt API names apply/reverse XOR only.
-auto obfuscated = stack.Encrypt(rawPayload);
-auto restored = stack.Decrypt(obfuscated);
+NetworkSecurity::Token token{};
+if (stack.GenerateConnectionToken(token)) // false on CSPRNG failure or before Initialize()
+{
+    bool accepted = stack.ValidateToken(token); // single use; false before Initialize()
+}
 
-// Access underlying layers
 ITransport* transport = stack.GetTransport();
-NetworkSecurity* security = stack.GetSecurity();
 ```
 
-## Security-Shaped Prototypes
+## Connection Tokens and Transport Cryptography
 
-### NetworkSecurity
+### NetworkSecurity (connection-token registry)
 
-Provides experimental XOR-based obfuscation and token utilities for callers that explicitly integrate them. These helpers do not authenticate or encrypt the active `NetworkManager` UDP path:
+Issues single-use connection tokens and matches them. Tokens come from `NetworkEncryption`'s `GenerateConnectionToken()` (OS CSPRNG) and are compared with its constant-time `ValidateToken()`. Both fail closed: a CSPRNG failure issues and records nothing, and unknown, reused, or expired tokens are rejected. A token only proves that a peer echoed a value this process issued; it does not authenticate or encrypt the UDP connection.
 
 ```cpp
-static constexpr size_t SECURITY_KEY_SIZE = 32;          // XOR state bytes
-static constexpr size_t CONNECTION_TOKEN_SIZE = 16;     // prototype token bytes
 static constexpr float CONNECTION_TOKEN_LIFETIME = 30.0f; // 30 second expiry
+using Token = ConnectionToken;                            // TOKEN_SIZE (16) bytes
 ```
 
 | Method | Description |
 |--------|-------------|
-| `PacketEncrypt(data, size, key)` | Apply repeating-key XOR in-place (legacy name) |
-| `PacketDecrypt(data, size, key)` | Reverse repeating-key XOR (legacy name) |
-| `Encrypt(plaintext, key)` | Return an XOR-obfuscated copy |
-| `Decrypt(ciphertext, key)` | Reverse the XOR transform |
-| `GenerateConnectionToken()` | Generate and retain prototype token bytes |
-| `ValidateConnectionToken(token)` | Match and consume bytes in the local pending set |
-| `GenerateKey(outKey)` | Generate non-cryptographic prototype state |
-| `SetEncryptionEnabled(bool)` | Toggle the legacy prototype helper |
+| `GenerateConnectionToken(outToken)` | Issue and record a CSPRNG token; returns false (token zeroed) on CSPRNG failure |
+| `ValidateConnectionToken(token)` | Constant-time match against pending tokens; consumes the token on success |
 
-> **Warning:** XOR/FNV is not encryption, authentication, or attacker-resistant integrity. A remotely reachable production design requires separately integrated and independently reviewed authenticated encryption. NET-100 remains open and blocking.
+The repeating-key XOR "encryption" prototype (`PacketEncrypt`/`Encrypt`/`GetEncryptionKey`, `NetworkStack::Encrypt`/`Decrypt`, and the `enableEncryption` flags in `NetworkStackConfig` and `[Network]` engine settings) was deleted under NET-100. `Tests/TestNetworkSecurity.cpp` static-asserts that the API stays gone, and `Tests/Tools/test_network_security_csprng.py` (label `network-security`) fails if XOR transform code returns to these headers.
+
+> **Warning:** The `NetworkManager` UDP path (protocol version 3) authenticates the server and seals every datagram after the handshake, but NET-100 remains open: the composition has not been independently reviewed, anti-amplification cookies are missing, and SparkGateway tickets are not yet bound to the UDP session. Its primitives are libsodium's (OD-06).
 
 ### NetworkEncryption (Advanced)
 
-Preserves a legacy packet-format prototype and an independent rate limiter. The “key,” “nonce,” “HMAC,” and replay-protection names do not make the custom XOR/FNV construction cryptographic:
+Holds thin wrappers over libsodium's RFC 8439 ChaCha20-Poly1305 and HKDF-SHA256, the `SecureChannel` packet channel built on them, the fail-closed token helpers, and an independent rate limiter. `NetworkManager` keeps one `SecureChannel` per peer (`m_secureChannels`), created by the handshake below, and seals every non-handshake message with it at transmit time (`SendFrameTo`); see [Networking Wire Format](../specifications/Networking-Wire-Format.md#security) for the frame rules and nonce discipline.
 
 ```cpp
-constexpr size_t SESSION_KEY_SIZE = 32;        // XOR state bytes
-constexpr size_t NONCE_SIZE = 8;               // serialized sequence bytes
-constexpr size_t HMAC_SIZE = 4;                // legacy name: forgeable keyed FNV tag
-constexpr size_t TOKEN_SIZE = 16;               // prototype token bytes
-constexpr size_t ENCRYPTION_OVERHEAD = 12;     // legacy packet-format overhead
+constexpr size_t SESSION_KEY_SIZE = 32;                     // shared secret / ChaCha20 key
+constexpr size_t AEAD_NONCE_SIZE = 12;                      // RFC 8439 96-bit nonce
+constexpr size_t AEAD_TAG_SIZE = 16;                        // full Poly1305 tag
+constexpr size_t TOKEN_SIZE = 16;                           // CSPRNG connection token
+constexpr uint8_t SECURE_TRANSPORT_VERSION = 1;             // only accepted wire version
+constexpr size_t SECURE_HEADER_SIZE = 1 + 1 + 8;            // [version][key epoch][sequence u64 LE]
 ```
 
-**Prototype layout:** `[sequence (8B)] [XOR-obfuscated payload] [keyed-FNV tag (4B)]`
+| Function / type | Description |
+|-----------------|-------------|
+| `EnsureSodium()` | Runs `sodium_init()` once per process; false means every crypto call fails closed |
+| `GenerateSessionKey(outKey)` / `GenerateConnectionToken(outToken)` | libsodium `randombytes_buf`; return false (output zeroed) when libsodium is unavailable |
+| `ValidateToken(expected, received)` | Constant-time token comparison (`sodium_memcmp`) |
+| `ChaCha20Poly1305Seal` / `ChaCha20Poly1305Open` | Raw RFC 8439 AEAD (`crypto_aead_chacha20poly1305_ietf_*`); the caller owns nonce uniqueness |
+| `SecureChannel::Seal` / `Open` | Per-direction HKDF keys, sender-owned sequence numbers, authenticated replay window, epoch ratchet; `Open` returns an `OpenResult` drop reason |
 
-| Function | Description |
-|----------|-------------|
-| `GenerateSessionKey()` | Create pseudo-random prototype state |
-| `GenerateConnectionToken()` | Create pseudo-random prototype bytes |
-| `EncryptPacket(key, sequence, payload)` | Apply the legacy XOR/FNV transform |
-| `DecryptPacket(key, packet, outPayload, outSeq)` | Check the forgeable tag and reverse XOR |
-| `ValidateToken(expected, received)` | Constant-time byte comparison only |
+Nonces are `[key epoch][0 0 0][sequence u64 LE]`: every epoch has its own key and the sender's sequence only increases, so a (key, nonce) pair never repeats. Keys are wiped with `sodium_memzero`.
+
+Tests: `Tests/TestNET100TransportReal.cpp` (`Transport_*`) and `Tests/TestNET100Libsodium.cpp` (`Transport_Libsodium_*`). No cryptographic primitive is implemented in `Engine/Networking`; the `SparkNetworkSecurityCsprngContract` CTest fails if a ChaCha20, Poly1305 or HMAC implementation reappears there. libsodium is the pinned `ThirdParty/Security/libsodium` submodule (1.0.22), built by `cmake/SparkLibsodium.cmake`.
+
+### SecureHandshake (key agreement in Connect)
+
+`SecureHandshake.h` produces the shared secret `SecureChannel` needs, with libsodium primitives only. The server holds a long-term Ed25519 identity (`GenerateServerIdentity`) whose public key the client pins. The client is anonymous at the transport layer. One round trip:
+
+| Message | Size | Layout (little-endian) |
+|---------|------|------------------------|
+| ClientHello | 55 bytes | `[magic u32 = 0x484E5053][NETWORK_PROTOCOL_VERSION u16][suite u8 = 1][client X25519 pub 32][client nonce 16]` |
+| ServerHello | 145 bytes | `[suite u8][server Ed25519 pub 32][server X25519 pub 32][server nonce 16][Ed25519 signature 64]` |
+
+Both sides hash the transcript `th = SHA-256("SPNH-v3" || ClientHello || accept prefix || ServerHello without the signature)` and the server signs `th`; the accept prefix is the 10 bytes of `ConnectAccepted` before the ServerHello (`[client id u32][server time f32][echoed version u16]`, `CONNECT_ACCEPT_PREFIX_SIZE`). Version, suite and the assigned client id sit inside the signed transcript, so rewriting any of them breaks the signature; the client adopts its id only from a verified prefix. A small-order client ephemeral key is refused by comparison against libsodium's blocklist (`IsLowOrderX25519PublicKey`) before any curve operation, and the server derives the shared secret before it signs, so a refused hello never costs an Ed25519 signature. The session secret is `HKDF-SHA256(salt = th, ikm = X25519(ephemeral, peer ephemeral), info = "spark-net-100 session v3")`, and it is the only input to `SecureChannel`. Fresh ephemeral keys and nonces on both sides make every session secret unique, so channel nonces never repeat across sessions. Ephemeral secrets and intermediate keys are wiped with `sodium_memzero`, and a `ClientHandshake` is single use.
+
+| Function / type | Description |
+|-----------------|-------------|
+| `ClientHandshake::Begin(version)` | Generates the ephemeral key and nonce, returns the ClientHello |
+| `RespondToClientHello(hello, acceptPrefix, identity)` | Validates the hello, returns the ServerHello (signed over the accept prefix too) and the server `SecureChannel`; allocates nothing for a rejected hello |
+| `ClientHandshake::Finish(acceptPrefix, serverHello, pinnedKey)` | Checks suite and pinned identity, verifies the signature over the transcript including the accept prefix, returns the client `SecureChannel` |
+| `IsLowOrderX25519PublicKey(key)` | Comparison-only small-order check; `HandleConnect` and `RespondToClientHello` call it before any curve work |
+| `ConnectRateLimiter` (`ConnectRateLimiter.h`) | Per-source-IPv4 token bucket for unadmitted `Connect`s (`NetworkSecurityConfig::connectRate`, default burst 16, 4/s); excess is dropped unanswered |
+| `HandshakeError` | `Malformed`, `UnsupportedVersion`, `UnsupportedSuite`, `BadSignature`, `ServerIdentityMismatch`, `WeakSharedSecret` (low-order X25519 point), `CsprngFailure`, `InvalidState` |
+
+Tests: `Tests/TestNET100Handshake.cpp` (`Transport_Handshake_*`, CTest `NetworkSecurity_Transport_Handshake`, exact count 11): interoperating channels, wrong pinned key, every ServerHello byte flip, every accept-prefix byte flip, every truncation and extension, version and suite downgrade, a replayed ServerHello, every small-order client point (checked against libsodium as an oracle), and deterministic rejection of malformed hellos; `Transport_RateLimit_*` (CTest `NetworkSecurity_Transport_RateLimit`) covers the Connect budget. The server lists a `Securing` slot only in `GetClientSlots()`: `GetClients()` returns admitted (`Connected`) clients, and `SendToClient` refuses a non-`Connected` slot everything but `ConnectAccepted`/`ConnectRejected`. `NetworkManager` carries them in production: the ClientHello is the `Connect` payload and the ServerHello follows the echoed version in `ConnectAccepted`; the server holds the new slot in state `Securing` until the client's sealed `ClientFinished` arrives. The server's identity and the client's trust come from `NetworkSecurityConfig` (`NetworkTrustStore.h`): `StartServer` refuses without an identity, `Connect` refuses without a usable pin or known_hosts path, and `UseDefaultSecurityConfig` fills them from `<user data>/net`. Wired tests: `Tests/TestSecureTransportWired.cpp` (CTest `NetworkSecureTransportWired`) and `Tests/TestNET100TrustStore.cpp` (`Transport_TrustStore_*`).
 
 ### RateLimiter
 
@@ -589,9 +630,8 @@ struct ServerConfig
     std::vector<std::string> mapRotation;
     bool randomizeMapOrder = false;
 
-    // Administration
-    std::string rconPassword;                  // Reserved; currently ignored
-    uint16_t rconPort = 0;                     // Reserved; currently ignored
+    // Administration: trusted in-process only. Remote RCON is permanently
+    // unavailable in stable-v1 (OD-05), so there is no password or port field.
     bool enableLogging = true;
     std::string logFilePath = "server.log";
 
@@ -660,9 +700,10 @@ struct ServerCallbacks
 
 ### Local Administration Commands (legacy RCON API names)
 
-There is currently no remote RCON listener. `ExecuteRcon` is for trusted
+There is no remote RCON listener, and remote administration is permanently
+unavailable in stable-v1 (owner decision OD-05). `ExecuteRcon` is for trusted
 in-process host/control code only; network chat never dispatches admin commands,
-and the compatibility fields `rconPassword`/`rconPort` are inactive.
+and `ServerConfig` has no RCON password or port field.
 
 ```cpp
 // Register custom local administration commands
@@ -762,7 +803,8 @@ void RegisterHandler(MessageType type, MessageHandler handler);
 | `GetServerTime()` | `float` | Server clock time |
 | `GetStats()` | `const NetworkStats&` | Bandwidth/latency stats |
 | `IsInitialized()` | `bool` | Whether Initialize() succeeded |
-| `GetClients()` | `const map<ClientID, ClientInfo>&` | Connected clients (server) |
+| `GetClients()` | `unordered_map<ClientID, ClientInfo>` | Admitted (`Connected`) clients only (server) |
+| `GetClientSlots()` | `unordered_map<ClientID, ClientInfo>` | Every slot, including `Securing` ones (diagnostics) |
 
 ### Network Statistics
 
@@ -800,10 +842,10 @@ struct ClientInfo
 
 ### Connection Handshake
 
-1. Client sends `MessageType::Connect` with player name
-2. Server validates (max clients, bans), assigns `ClientID`
-3. Server sends `ConnectAccepted` with assigned ID, or `ConnectRejected` with reason
-4. Server calls `SendFullEntitySync` to replicate existing entities to new client
+1. Client sends `MessageType::Connect` carrying its ClientHello (no player name)
+2. Server charges the source's Connect budget, validates version, suite, key and capacity, assigns a `ClientID` and holds the slot `Securing`
+3. Server sends `ConnectAccepted` (assigned ID + signed ServerHello), or `ConnectRejected` with reason
+4. Client verifies the signature and sends its name in a sealed `ClientFinished`; the server marks the slot `Connected` and only then surfaces it and syncs entities (`SendFullEntitySync`)
 
 ### Heartbeat System
 
@@ -818,7 +860,7 @@ The reliable channel provides guaranteed delivery with duplicate detection and o
 - **ACK tracking**: Receiver tracks the highest received sequence number and a 32-bit bitfield encoding the previous 32 sequences. ACKs are sent at ~30 Hz.
 - **Retransmission**: Unacknowledged messages are retransmitted with exponential backoff (base interval doubles each retry, capped at 8x). Configurable via `SetMaxReliableRetries()` (default: 10).
 - **Duplicate detection**: Receiver maintains a set of recently received sequence numbers (pruned after 30 seconds). Duplicate packets are silently dropped.
-- **Ordered delivery**: `ReliableOrdered` messages are buffered and delivered in sequence order. Out-of-order packets are held until the gap is filled.
+- **Ordered delivery**: `ReliableOrdered` messages carry their own per-peer ordered sequence (protocol v3), separate from the reliability/ACK sequence, and are delivered in that order. Out-of-order packets are held until the gap is filled; a copy older than the next expected ordered sequence is ACKed and dropped. Before v3 both channels shared one counter, so any Reliable message (such as a client's `ClientFinished`) left a gap and ordered delivery stalled forever (`Tests/TestReliableOrderedSequenceReal.cpp`).
 - **RTT estimation**: Jacobson/Karels algorithm (RFC 6298) computes smoothed RTT and variance. Karn's algorithm skips retransmitted packets for RTT samples.
 - **Connection failure**: After `m_maxReliableRetries` retransmissions, the message is dropped and `packetsDropped` is incremented.
 
@@ -847,7 +889,7 @@ This ensures clients see fair hit registration despite network latency.
 | `NetworkManager` | Queue mutex | `m_queueMutex` protects `m_incomingQueue` and `m_outgoingQueue`; `m_handlerMutex` protects handler registration |
 | `DedicatedServer` | Internal mutexes | Local admin registry (`m_rconMutex`), bans (`m_banMutex`), logging (`m_logMutex`). Tick loop runs on `m_tickThread`. |
 | `UDPTransport` | Not thread-safe | Socket operations should be called from the network thread only |
-| `NetworkSecurity` | Not thread-safe | Token map is not mutex-protected; call from single thread |
+| `NetworkSecurity` | Not thread-safe | Pending-token list is not mutex-protected; call from single thread |
 | `ClientPrediction` | Not thread-safe | Call from main game thread only |
 | `RateLimiter` | Not thread-safe | Access from network thread only |
 
@@ -884,7 +926,6 @@ This ensures clients see fair hit registration despite network latency.
 net_status           # Show NetworkManager connection state and role
 net_clients          # List connected clients with stats (server only)
 net_stats            # Show bandwidth, ping, jitter, packet loss
-net_stack_status     # Show transport and prototype-XOR status
 prediction_status    # Show prediction pending count and correction magnitude
 server_status        # Show DedicatedServer uptime, players, map, match state
 ```

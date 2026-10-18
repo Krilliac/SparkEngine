@@ -4,6 +4,7 @@
  */
 
 #include "MMOPlayerSystem.h"
+#include "Session/MMOSessionGate.h"
 #include "Utils/ContainerUtils.h"
 #include "Utils/SparkConsole.h"
 #include "Utils/LogMacros.h"
@@ -11,11 +12,12 @@
 
 #ifdef ENABLE_NETWORKING
 #include "Engine/Networking/NetworkManager.h"
+#include "MMOEntityEventCodec.h"
 #endif
 
 #include "Engine/World/SpatialGrid.h"
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -29,16 +31,31 @@ namespace MMO
     bool MMOPlayerSystem::Initialize(Spark::IEngineContext* context)
     {
         if (!context)
+        {
             return false;
+        }
         if (m_initialized || m_context)
+        {
             Shutdown();
+        }
 
         m_context = context;
 
         SetupNetworkHandlers();
 
-        // Spawn a default local player in the TownSquare (area 1)
-        SpawnLocalPlayer("Player", 1);
+        // Connected peers create actors only after character admission. Keep the
+        // demo actor for the offline interactive showcase.
+        bool networkActive = false;
+#ifdef ENABLE_NETWORKING
+        if (auto* network = context->GetNetwork())
+        {
+            networkActive = network->GetRole() != Spark::Net::NetworkRole::None;
+        }
+#endif
+        if (!context->IsHeadless() && !networkActive)
+        {
+            SpawnLocalPlayer("Player", 1);
+        }
 
         m_initialized = true;
 
@@ -55,36 +72,33 @@ namespace MMO
         // singleton — the module is handed its NetworkManager via Initialize(context).
         auto* netMgr = m_context ? m_context->GetNetwork() : nullptr;
         if (!netMgr)
+        {
             return;
+        }
 
         // EntitySpawn uses NetworkManager's canonical payload:
         // networkId, ownerId, entityType, position, rotation.
         netMgr->RegisterHandler(Spark::Net::MessageType::EntitySpawn,
                                 [this](const Spark::Net::NetworkMessage& netMsg)
                                 {
-                                    if (netMsg.payload.size() < sizeof(uint32_t) * 2)
+                                    const std::optional<EntitySpawnEvent> spawn = DecodeEntitySpawn(netMsg.payload);
+                                    if (!spawn || spawn->entityType != "MMOPlayer" ||
+                                        spawn->clientId == m_localClientId)
+                                    {
                                         return;
+                                    }
 
-                                    Spark::Net::NetBuffer buf;
-                                    buf.WriteBytes(netMsg.payload.data(), netMsg.payload.size());
-                                    uint32_t networkId = buf.ReadUint32();
-                                    uint32_t clientId = buf.ReadUint32();
-                                    std::string entityType = buf.ReadString();
-                                    const auto position = buf.ReadVector3();
-                                    (void)buf.ReadVector3(); // Rotation is not shown in the MMO player summary.
-                                    if (buf.HasError() || entityType != "MMOPlayer" || clientId == m_localClientId)
-                                        return;
-
+                                    const uint32_t clientId = spawn->clientId;
                                     if (!Spark::ContainerUtils::Contains(m_players, clientId))
                                     {
                                         MMOPlayer player{};
                                         player.clientId = clientId;
-                                        player.networkId = networkId;
+                                        player.networkId = spawn->networkId;
                                         player.name = "Player_" + std::to_string(clientId);
                                         player.currentAreaId = 0;
-                                        player.posX = player.targetPosX = position.x;
-                                        player.posY = player.targetPosY = position.y;
-                                        player.posZ = player.targetPosZ = position.z;
+                                        player.posX = player.targetPosX = spawn->position.x;
+                                        player.posY = player.targetPosY = spawn->position.y;
+                                        player.posZ = player.targetPosZ = spawn->position.z;
                                         m_players[clientId] = player;
 
                                         auto& console = Spark::SimpleConsole::GetInstance();
@@ -96,16 +110,15 @@ namespace MMO
         netMgr->RegisterHandler(Spark::Net::MessageType::EntityDestroy,
                                 [this](const Spark::Net::NetworkMessage& netMsg)
                                 {
-                                    if (netMsg.payload.size() < sizeof(uint32_t))
+                                    const std::optional<uint32_t> networkId = DecodeEntityDestroy(netMsg.payload);
+                                    if (!networkId)
+                                    {
                                         return;
-
-                                    Spark::Net::NetBuffer buf;
-                                    buf.WriteBytes(netMsg.payload.data(), netMsg.payload.size());
-                                    const uint32_t networkId = buf.ReadUint32();
-                                    if (buf.HasError())
-                                        return;
-                                    if (auto* player = FindPlayerByNetworkId(networkId))
+                                    }
+                                    if (auto* player = FindPlayerByNetworkId(*networkId))
+                                    {
                                         RemovePlayer(player->clientId);
+                                    }
                                 });
 
         // Do not replace NetworkManager's EntityStateUpdate handler here. It owns
@@ -191,6 +204,13 @@ namespace MMO
         auto it = m_players.find(clientId);
         if (it != m_players.end())
         {
+#ifdef ENABLE_NETWORKING
+            if (auto* netMgr = m_context ? m_context->GetNetwork() : nullptr;
+                netMgr && netMgr->GetRole() == Spark::Net::NetworkRole::Server && it->second.networkId != 0)
+            {
+                netMgr->UnregisterReplicatedEntity(it->second.networkId);
+            }
+#endif
             SPARK_LOG_DEBUG(Spark::LogCategory::Game, "Player removed: %s (client %u)", it->second.name.c_str(),
                             clientId);
             auto& console = Spark::SimpleConsole::GetInstance();
@@ -217,7 +237,9 @@ namespace MMO
         {
             (void)clientId;
             if (player.networkId == networkId)
+            {
                 return &player;
+            }
         }
         return nullptr;
     }
@@ -256,14 +278,37 @@ namespace MMO
     {
         auto* local = GetLocalPlayerMutable();
         if (!local || local->health <= 0.0f || deltaTime <= 0.0f)
+        {
             return false;
+        }
+
+#ifdef ENABLE_NETWORKING
+        auto* netMgr = m_context ? m_context->GetNetwork() : nullptr;
+        if (m_sessionGate && netMgr && netMgr->GetRole() == Spark::Net::NetworkRole::Client)
+        {
+            SessionGateWire::Packet packet;
+            packet.operation = SessionGateWire::Operation::Move;
+            packet.characterId = local->characterId;
+            packet.x = input.moveX;
+            packet.z = input.moveZ;
+            const float length = std::hypot(packet.x, packet.z);
+            if (length > 1.0f)
+            {
+                packet.x /= length;
+                packet.z /= length;
+            }
+            return m_sessionGate->Send(packet);
+        }
+#endif
 
         const float previousX = local->posX;
         const float previousZ = local->posZ;
         IntegrateMovement(*local, input, deltaTime);
         const bool moved = local->posX != previousX || local->posZ != previousZ;
         if (moved)
+        {
             MarkLocalStateDirty();
+        }
         return moved;
     }
 
@@ -271,7 +316,9 @@ namespace MMO
     {
         auto* input = m_context ? m_context->GetInput() : nullptr;
         if (!input)
+        {
             return;
+        }
 
         MMOPlayerInput movement;
         movement.moveX = (input->IsKeyDown('D') ? 1.0f : 0.0f) - (input->IsKeyDown('A') ? 1.0f : 0.0f);
@@ -284,7 +331,9 @@ namespace MMO
     {
         auto* local = GetLocalPlayerMutable();
         if (!local || areaId == 0 || !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z))
+        {
             return false;
+        }
 
         const uint32_t oldAreaId = local->currentAreaId;
         local->currentAreaId = areaId;
@@ -294,7 +343,9 @@ namespace MMO
         local->velocityX = local->velocityY = local->velocityZ = 0.0f;
         MarkLocalStateDirty();
         if (oldAreaId != areaId && m_areaTransitionCallback)
+        {
             m_areaTransitionCallback(oldAreaId, areaId);
+        }
         return true;
     }
 
@@ -303,7 +354,9 @@ namespace MMO
     {
         auto* local = GetLocalPlayerMutable();
         if (!local || name.empty() || level < 1 || !std::isfinite(maxHealth) || maxHealth <= 0.0f)
+        {
             return false;
+        }
 
         local->name = name;
         local->level = level;
@@ -316,7 +369,9 @@ namespace MMO
     {
         auto* local = GetLocalPlayerMutable();
         if (!local || !std::isfinite(amount) || amount <= 0.0f || local->health <= 0.0f)
+        {
             return false;
+        }
         local->health = std::max(0.0f, local->health - amount);
         MarkLocalStateDirty();
         return true;
@@ -327,7 +382,9 @@ namespace MMO
         auto* local = GetLocalPlayerMutable();
         if (!local || !std::isfinite(amount) || amount <= 0.0f || local->health <= 0.0f ||
             local->health >= local->maxHealth)
+        {
             return false;
+        }
         local->health = std::min(local->maxHealth, local->health + amount);
         MarkLocalStateDirty();
         return true;
@@ -337,7 +394,9 @@ namespace MMO
     {
         auto* local = GetLocalPlayerMutable();
         if (!local || local->health > 0.0f)
+        {
             return false;
+        }
         local->health = local->maxHealth;
         return TeleportLocalPlayer(areaId, x, y, z);
     }
@@ -353,18 +412,31 @@ namespace MMO
         auto* local = GetLocalPlayerMutable();
         auto* netMgr = m_context ? m_context->GetNetwork() : nullptr;
         if (!local || !netMgr)
-            return;
-
-        Spark::Net::ReplicatedEntityUpdate update;
-        update.position = DirectX::XMFLOAT3{local->posX, local->posY, local->posZ};
-        update.velocity = DirectX::XMFLOAT3{local->velocityX, local->velocityY, local->velocityZ};
-        update.areaId = local->currentAreaId;
-        update.needsFullSync = true;
-        (void)netMgr->UpdateReplicatedEntity(local->networkId, update);
-
-        if (netMgr->GetRole() == Spark::Net::NetworkRole::Client &&
-            netMgr->GetConnectionState() == Spark::Net::ConnectionState::Connected)
         {
+            return;
+        }
+
+        if (m_sessionGate && netMgr->GetRole() == Spark::Net::NetworkRole::Client)
+        {
+            return;
+        }
+
+        if (netMgr->GetRole() != Spark::Net::NetworkRole::Client)
+        {
+            // Host/standalone: this process owns the replicated entity directly.
+            Spark::Net::ReplicatedEntityUpdate update;
+            update.position = DirectX::XMFLOAT3{local->posX, local->posY, local->posZ};
+            update.velocity = DirectX::XMFLOAT3{local->velocityX, local->velocityY, local->velocityZ};
+            update.areaId = local->currentAreaId;
+            update.needsFullSync = true;
+            (void)netMgr->UpdateReplicatedEntity(local->networkId, update);
+        }
+        else if (netMgr->GetConnectionState() == Spark::Net::ConnectionState::Connected)
+        {
+            // A client's replicated-entity map holds server-assigned IDs, so the
+            // local player is never written there; its state goes to the server as a
+            // request that MMOWorldSetup::ApplyClientStateRequest binds to the
+            // sender's own server entity (the networkId below is informational).
             Spark::Net::NetBuffer payload;
             payload.WriteUint32(local->networkId);
             payload.WriteVector3({local->posX, local->posY, local->posZ});
@@ -384,7 +456,9 @@ namespace MMO
     void MMOPlayerSystem::Update(float deltaTime)
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         ProcessInput(deltaTime);
         UpdateInterpolation(deltaTime);
@@ -394,7 +468,9 @@ namespace MMO
     void MMOPlayerSystem::FixedUpdate(float fixedDeltaTime)
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         UpdatePrediction(fixedDeltaTime);
     }
@@ -418,6 +494,10 @@ namespace MMO
     {
 #ifdef ENABLE_NETWORKING
         auto* netMgr = m_context ? m_context->GetNetwork() : nullptr;
+        if (m_sessionGate && netMgr && netMgr->GetRole() == Spark::Net::NetworkRole::Client)
+        {
+            return;
+        }
         const float safeDelta = std::clamp(deltaTime, 0.0f, 0.25f);
         const float alpha = 1.0f - std::exp(-REMOTE_INTERPOLATION_RATE * safeDelta);
 
@@ -426,7 +506,9 @@ namespace MMO
         for (auto& [clientId, player] : m_players)
         {
             if (player.isLocalPlayer)
+            {
                 continue;
+            }
 
             if (netMgr)
             {
@@ -452,15 +534,21 @@ namespace MMO
     {
         auto it = m_players.find(m_localClientId);
         if (it == m_players.end())
+        {
             return;
+        }
 
         auto& local = it->second;
         if (!m_areaResolver)
+        {
             return;
+        }
 
         const uint32_t newAreaId = m_areaResolver(local.posX, local.posY, local.posZ, local.currentAreaId);
         if (newAreaId == 0 || newAreaId == local.currentAreaId)
+        {
             return;
+        }
 
         const uint32_t oldAreaId = local.currentAreaId;
         local.currentAreaId = newAreaId;
@@ -469,13 +557,17 @@ namespace MMO
         Spark::SimpleConsole::GetInstance().LogInfo("[MMO Player] Area transition " + std::to_string(oldAreaId) +
                                                     " -> " + std::to_string(newAreaId));
         if (m_areaTransitionCallback)
+        {
             m_areaTransitionCallback(oldAreaId, newAreaId);
+        }
     }
 
     void MMOPlayerSystem::Render()
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         // World meshes are rendered by the host scene/RHI. The module-owned
         // player presentation (status, health, nameplates) is drawn in OnImGui.
@@ -487,12 +579,17 @@ namespace MMO
         if (auto* netMgr = m_context ? m_context->GetNetwork() : nullptr)
         {
             if (const auto* local = GetLocalPlayer(); local && local->networkId != 0)
+            {
                 netMgr->UnregisterReplicatedEntity(local->networkId);
+            }
 
-            // NetworkManager has no per-handler unregister API. Replace module-owned
-            // handlers so no callback retains this DLL object after hot unload.
-            netMgr->RegisterHandler(Spark::Net::MessageType::EntitySpawn, [](const Spark::Net::NetworkMessage&) {});
-            netMgr->RegisterHandler(Spark::Net::MessageType::EntityDestroy, [](const Spark::Net::NetworkMessage&) {});
+            // Remove (never replace) this system's observers. Replacing them with an empty
+            // lambda left a callback compiled into this image behind after unload, and during
+            // hot reload it overwrote the replacement's handlers. Inside the module's teardown
+            // scope NetworkManager leaves a slot the replacement already owns untouched, and
+            // ModuleManager removes anything this image still owns before unmapping it.
+            netMgr->UnregisterHandler(Spark::Net::MessageType::EntitySpawn);
+            netMgr->UnregisterHandler(Spark::Net::MessageType::EntityDestroy);
         }
 #endif
         m_players.clear();
@@ -508,9 +605,11 @@ namespace MMO
 
     void MMOPlayerSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("MMO Players"))
+        {
             return;
+        }
 
         ImGui::Text("Total Players: %zu", m_players.size());
         ImGui::Text("Local Client ID: %u", m_localClientId);
@@ -522,7 +621,9 @@ namespace MMO
             ImGui::PushID(static_cast<int>(clientId));
             std::string label = player.name;
             if (player.isLocalPlayer)
+            {
                 label += " [LOCAL]";
+            }
 
             if (ImGui::TreeNode(label.c_str()))
             {
@@ -550,7 +651,9 @@ namespace MMO
             list += " Area:" + std::to_string(player.currentAreaId);
             list += " HP:" + std::to_string(static_cast<int>(player.health));
             if (player.isLocalPlayer)
+            {
                 list += " *LOCAL*";
+            }
             list += "\n";
         }
         return list;
@@ -560,7 +663,9 @@ namespace MMO
     {
         const auto* player = GetLocalPlayer();
         if (!player)
+        {
             return "Local player unavailable";
+        }
 
         std::ostringstream status;
         status << player->name << " - Lv" << player->level << "\n";

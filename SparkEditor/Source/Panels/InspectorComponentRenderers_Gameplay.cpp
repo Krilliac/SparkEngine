@@ -14,6 +14,8 @@
 #include "../CommandHistory.h"
 #include "Utils/LogMacros.h"
 #include "Utils/MathUtils.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 #include <imgui.h>
 #include <algorithm>
 #include <cinttypes>
@@ -31,7 +33,7 @@ namespace SparkEditor
 
     void InspectorPanel::RenderSplineComponent()
     {
-        bool headerOpen = ImGui::CollapsingHeader(ICON_FA_BEZIER_CURVE " Spline");
+        bool headerOpen = Spark::Ui::SectionHeader("Spline", ICON_FA_BEZIER_CURVE, false);
         if (ImGui::BeginPopupContextItem("##SplineCtx"))
         {
             if (ImGui::MenuItem(ICON_FA_TRASH " Remove Component"))
@@ -40,21 +42,28 @@ namespace SparkEditor
         }
         if (headerOpen)
         {
-            ImGui::Indent(4);
+            ImGui::Indent(Spark::Ui::Px(4.0f));
             Component* comp = FindComponent(m_scene, m_inspectedObjectID, ComponentType::SPLINE);
             SplineData* spline = comp ? comp->GetData<SplineData>() : nullptr;
             if (spline)
             {
-                ImGui::Checkbox("Debug Visible", &spline->debugVisible);
-                ImGui::Checkbox("Closed Loop", &spline->closed);
-                ImGui::Text("Control Points: %d", spline->pointCount);
-                ImGui::TextDisabled("Edit points in the Spline Editor panel");
+                if (Spark::Ui::BeginPropertyGrid("##SplineProps"))
+                {
+                    Spark::Ui::PropertyLabel("Debug Visible");
+                    ImGui::Checkbox("##DebugVisible", &spline->debugVisible);
+                    Spark::Ui::PropertyLabel("Closed Loop");
+                    ImGui::Checkbox("##ClosedLoop", &spline->closed);
+                    Spark::Ui::PropertyLabel("Control Points");
+                    Spark::Ui::MonoText("%d", spline->pointCount);
+                    Spark::Ui::SecondaryText("Edit points in the Spline Editor panel");
+                    Spark::Ui::EndPropertyGrid();
+                }
             }
             else
             {
-                ImGui::TextDisabled("(Component data unavailable)");
+                Spark::Ui::StatusText(Spark::Ui::Status::Warning, "Component data unavailable");
             }
-            ImGui::Unindent(4);
+            ImGui::Unindent(Spark::Ui::Px(4.0f));
         }
     }
 

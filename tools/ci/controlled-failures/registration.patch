@@ -1,0 +1,18 @@
+diff --git a/Tests/TestCI100RegistrationProbe.cpp b/Tests/TestCI100RegistrationProbe.cpp
+new file mode 100644
+index 000000000..fc814dfb0
+--- /dev/null
++++ b/Tests/TestCI100RegistrationProbe.cpp
+@@ -0,0 +1,12 @@
++// CI-100 controlled-failure probe (registration class).
++//
++// This source is deliberately absent from Tests/CMakeLists.txt and carries no
++// registration opt-out marker, so tools/check-test-registration.sh must report
++// it as MISSING REGISTRATION and exit non-zero. Nothing lists it in the build,
++// so it is never compiled and cannot affect any build or test count.
++#include "TestFramework.h"
++
++TEST(CI100_RegistrationProbe_Unregistered)
++{
++    EXPECT_TRUE(true);
++}

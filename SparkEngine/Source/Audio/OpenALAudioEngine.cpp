@@ -13,6 +13,7 @@
 #if !defined(SPARK_PLATFORM_WINDOWS)
 
 #include "../Utils/Validate.h"
+#include "SoundEffect.h"
 
 #ifdef SPARK_OPENAL_AVAILABLE
 // On macOS the system OpenAL.framework lays headers out as <OpenAL/al.h>.
@@ -68,31 +69,33 @@ namespace Spark::Audio
 {
 
     // ============================================================================
-    // WAV file parsing helpers
+    // WAV format mapping
     // ============================================================================
 
-    struct WAVHeader
+    int SelectOpenALWavFormat(const WAVEFORMATEX& format)
     {
-        char riffId[4];
-        uint32_t riffSize;
-        char waveId[4];
-    };
-
-    struct WAVChunkHeader
-    {
-        char id[4];
-        uint32_t size;
-    };
-
-    struct WAVFmtChunk
-    {
-        uint16_t audioFormat;
-        uint16_t numChannels;
-        uint32_t sampleRate;
-        uint32_t byteRate;
-        uint16_t blockAlign;
-        uint16_t bitsPerSample;
-    };
+        if (format.wFormatTag != WAVE_FORMAT_PCM)
+        {
+            return 0;
+        }
+        if (format.nChannels == 1 && format.wBitsPerSample == 8)
+        {
+            return AL_FORMAT_MONO8;
+        }
+        if (format.nChannels == 1 && format.wBitsPerSample == 16)
+        {
+            return AL_FORMAT_MONO16;
+        }
+        if (format.nChannels == 2 && format.wBitsPerSample == 8)
+        {
+            return AL_FORMAT_STEREO8;
+        }
+        if (format.nChannels == 2 && format.wBitsPerSample == 16)
+        {
+            return AL_FORMAT_STEREO16;
+        }
+        return 0;
+    }
 
     // ============================================================================
     // OpenALAudioEngine implementation
@@ -591,86 +594,37 @@ namespace Spark::Audio
             return false;
         }
         std::vector<uint8_t> fileData(static_cast<size_t>(fileSize));
-        file.read(reinterpret_cast<char*>(fileData.data()), fileSize);
+        if (!file.read(reinterpret_cast<char*>(fileData.data()), fileSize))
+        {
+            SPARK_LOG_ERROR(Spark::LogCategory::Audio, "OpenAL: WAV read incomplete for '%s'", filename.c_str());
+            return false;
+        }
         file.close();
 
-        if (fileData.size() < sizeof(WAVHeader))
-        {
-            SPARK_LOG_ERROR(Spark::LogCategory::Audio,
-                            "OpenAL: WAV file '%s' too small for RIFF header (%zu bytes, need %zu)", filename.c_str(),
-                            fileData.size(), sizeof(WAVHeader));
-            return false;
-        }
-
-        // Parse RIFF header
-        auto* header = reinterpret_cast<const WAVHeader*>(fileData.data());
-        if (std::memcmp(header->riffId, "RIFF", 4) != 0 || std::memcmp(header->waveId, "WAVE", 4) != 0)
-        {
-            fprintf(stderr, "[OpenAL] Not a valid WAV file: %s\n", filename.c_str());
-            return false;
-        }
-
-        // Find fmt chunk
-        const WAVFmtChunk* fmt = nullptr;
-        const uint8_t* dataChunk = nullptr;
-        uint32_t dataSize = 0;
-
-        size_t offset = sizeof(WAVHeader);
-        while (offset + sizeof(WAVChunkHeader) <= fileData.size())
-        {
-            auto* chunk = reinterpret_cast<const WAVChunkHeader*>(fileData.data() + offset);
-
-            // Validate chunk body fits inside the file before touching it.
-            const size_t chunkBodyStart = offset + sizeof(WAVChunkHeader);
-            if (chunk->size > fileData.size() || chunkBodyStart + chunk->size > fileData.size())
-                break; // truncated / corrupt chunk
-
-            if (std::memcmp(chunk->id, "fmt ", 4) == 0)
-            {
-                if (chunk->size >= sizeof(WAVFmtChunk))
-                    fmt = reinterpret_cast<const WAVFmtChunk*>(fileData.data() + chunkBodyStart);
-            }
-            else if (std::memcmp(chunk->id, "data", 4) == 0)
-            {
-                dataChunk = fileData.data() + chunkBodyStart;
-                dataSize = chunk->size;
-            }
-
-            size_t chunkTotalSize = sizeof(WAVChunkHeader) + chunk->size;
-            if (chunkTotalSize < chunk->size || offset + chunkTotalSize < offset)
-                break; // overflow protection
-            offset += chunkTotalSize;
-            if (offset % 2 != 0)
-                offset++; // WAV chunks are 2-byte aligned
-        }
-
-        if (!fmt || !dataChunk || dataSize == 0)
+        // Decode through SoundEffect, the engine's one (fuzzed) WAV parser: it bounds every chunk
+        // to the file and accepts only PCM / IEEE-float layouts with consistent header fields.
+        SoundEffect wav;
+        if (FAILED(wav.LoadFromMemory(fileData.data(), static_cast<DWORD>(fileData.size()))) || !wav.IsLoaded())
         {
             fprintf(stderr, "[OpenAL] Invalid WAV structure: %s\n", filename.c_str());
             return false;
         }
 
-        // Determine OpenAL format
-        ALenum alFormat;
-        if (fmt->numChannels == 1 && fmt->bitsPerSample == 8)
-            alFormat = AL_FORMAT_MONO8;
-        else if (fmt->numChannels == 1 && fmt->bitsPerSample == 16)
-            alFormat = AL_FORMAT_MONO16;
-        else if (fmt->numChannels == 2 && fmt->bitsPerSample == 8)
-            alFormat = AL_FORMAT_STEREO8;
-        else if (fmt->numChannels == 2 && fmt->bitsPerSample == 16)
-            alFormat = AL_FORMAT_STEREO16;
-        else
+        const WAVEFORMATEX& format = wav.GetFormat();
+        const int alFormat = SelectOpenALWavFormat(format);
+        if (alFormat == 0)
         {
-            fprintf(stderr, "[OpenAL] Unsupported format: %uch, %ubit\n", fmt->numChannels, fmt->bitsPerSample);
+            fprintf(stderr, "[OpenAL] Unsupported format: tag %u, %uch, %ubit\n",
+                    static_cast<unsigned>(format.wFormatTag), static_cast<unsigned>(format.nChannels),
+                    static_cast<unsigned>(format.wBitsPerSample));
             return false;
         }
 
-        // Create OpenAL buffer
+        // Both sizes are bounded by the 256 MB file cap, so they fit ALsizei.
         ALuint buffer;
         alGenBuffers(1, &buffer);
-        alBufferData(buffer, alFormat, dataChunk, static_cast<ALsizei>(dataSize),
-                     static_cast<ALsizei>(fmt->sampleRate));
+        alBufferData(buffer, static_cast<ALenum>(alFormat), wav.GetData(), static_cast<ALsizei>(wav.GetDataSize()),
+                     static_cast<ALsizei>(format.nSamplesPerSec));
 
         if (alGetError() != AL_NO_ERROR)
         {
@@ -680,11 +634,10 @@ namespace Spark::Audio
         }
 
         outBuffer.alBuffer = buffer;
-        outBuffer.sampleRate = fmt->sampleRate;
-        outBuffer.channels = fmt->numChannels;
-        outBuffer.bitsPerSample = fmt->bitsPerSample;
-        outBuffer.duration =
-            static_cast<float>(dataSize) / static_cast<float>(fmt->byteRate > 0 ? fmt->byteRate : fmt->sampleRate);
+        outBuffer.sampleRate = static_cast<uint32_t>(format.nSamplesPerSec);
+        outBuffer.channels = format.nChannels;
+        outBuffer.bitsPerSample = format.wBitsPerSample;
+        outBuffer.duration = wav.GetDuration();
 
         return true;
 #else

@@ -1,0 +1,17 @@
+name: Typed
+shader: Shaders/Typed.hlsl
+param scalar float 0.25
+param uv float2 2 3
+param direction float3 1 2 3
+param vector float4 1 2 3 4
+param tint color 0.1 0.2 0.3 1
+param integer int 17
+param switch bool true
+param image texture2d Textures/base color.png
+param cube texturecube Textures/sky cube.dds
+param transform matrix4x4 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1
+texture_slot Ambient Occlusion 4 Textures/ao map.png 2 3 0.1 0.2
+blend_mode 1
+cull_mode 2
+alpha_clip 0.25
+render_queue 2700

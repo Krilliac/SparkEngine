@@ -3,9 +3,11 @@
  * @brief Out-of-process crash report handler
  *
  * Standalone application launched by SparkEngine at startup. Monitors the
- * engine process and, when a crash is detected, shows a user-facing dialog
- * with consent, description input, screenshot selection, and local report
- * preparation. Network delivery is not implemented by this executable.
+ * engine process and, when a crash is detected, asks for consent through a
+ * native dialog (Windows) or a console prompt (elsewhere) and reviews the
+ * manifest and log locally. A separate user-local opt-in may create a
+ * metadata-only GitHub Issue via the user's authenticated GitHub CLI.
+ * Manifest fields cannot enable network delivery.
  *
  * Communication:
  *   Engine writes a crash manifest file (JSON) to a known path, then signals
@@ -14,7 +16,7 @@
  *
  * Why out-of-process:
  *   - Survives total process corruption (heap trashed, stack overflow)
- *   - Can show a proper GUI with text input (not just MessageBox buttons)
+ *   - Can ask for consent before anything is published
  *   - Non-blocking: engine process can terminate immediately
  *   - Reliable crash-artifact collection after the engine exits
  */
@@ -22,7 +24,10 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
+#include <iosfwd>
 #include <string>
+#include <string_view>
 
 namespace SparkCrashReporter
 {
@@ -71,15 +76,87 @@ namespace SparkCrashReporter
     /// Parse a crash manifest from a JSON file
     bool LoadManifest(const std::string& path, CrashManifest& out);
 
+    /// Parse bounded manifest JSON without touching the filesystem or artifacts.
+    /// The file/path trust boundary remains enforced by LoadManifest.
+    bool ParseManifestJson(std::string_view json, CrashManifest& out);
+
     /// Write a crash manifest to a JSON file
     bool WriteManifest(const std::string& path, const CrashManifest& manifest);
 
     /// Build the privacy disclosure shown before crash-report consent.
     std::string BuildConsentMessage(const CrashManifest& manifest);
 
+    /// Render an untrusted manifest string for a terminal. C0 controls, DEL,
+    /// C1 controls and malformed UTF-8 bytes are replaced with visible
+    /// \\xNN / \\u00NN escapes; well-formed printable UTF-8 is kept.
+    std::string TerminalSafe(std::string_view text);
+
+    /// Read one console consent answer. @p emptyMeansYes is the prompt's
+    /// documented default for a bare Enter.
+    bool ReadConsentAnswer(std::istream& input, bool emptyMeansYes);
+
+    /// The reporter's user-facing dialogs. Called on the reporter's thread only.
+    struct ReporterUi
+    {
+        /// Asks one yes/no question and returns true only for yes.
+        /// @p publication marks a question whose yes authorizes a public post;
+        /// it must default to no.
+        std::function<bool(const std::string& message, const char* title, bool publication)> ask;
+        /// Shows the outcome of an automatic Issue attempt.
+        std::function<void(const std::string& message, bool confirmed)> notifyIssueOutcome;
+    };
+
+    /// Icon of a native dialog.
+    enum class DialogIcon
+    {
+        Information,
+        Warning,
+        Shield ///< Marks a question whose yes authorizes a public post
+    };
+
+    /// One native dialog to show. Text is UTF-8.
+    struct DialogRequest
+    {
+        std::string title;
+        std::string instruction; ///< Optional main instruction shown above the content
+        std::string content;
+        DialogIcon icon = DialogIcon::Information;
+        bool askYesNo = false;  ///< Yes/No buttons; otherwise a single OK
+        bool defaultNo = false; ///< No is the default button (Yes/No dialogs only)
+    };
+
+    /// What the user did with a dialog. Failed means the dialog could not be shown.
+    enum class DialogAnswer
+    {
+        Yes,
+        No,
+        Failed
+    };
+
+    /// Shows one dialog and reports the answer. Called on the reporter's thread only.
+    using DialogBackend = std::function<DialogAnswer(const DialogRequest&)>;
+
+    /// Builds the reporter dialogs on top of @p backend. A question is confirmed
+    /// only by DialogAnswer::Yes: Failed, No, an empty backend or a throwing
+    /// backend all decline. This is the seam for the native dialogs and for tests.
+    ReporterUi MakeDialogReporterUi(DialogBackend backend);
+
+    /// The platform dialogs: TaskDialogs (MessageBoxW fallback) on Windows;
+    /// elsewhere a stdin [Y/n] / [y/N] question, and the outcome goes to
+    /// stderr only. An unanswered question or a dialog that cannot be shown
+    /// declines.
+    ReporterUi PlatformReporterUi();
+
     /// Run the crash reporter UI and prepare the local report
     /// Returns 0 on success, non-zero on error
     int RunCrashReporter(const CrashManifest& manifest);
+
+    /// Same as RunCrashReporter(manifest) with the dialogs sent to @p ui.
+    /// This is the test seam for the platform dialogs.
+    int RunCrashReporter(const CrashManifest& manifest, const ReporterUi& ui);
+
+    /// Show bounded, local automatic-Issue receipts from a crash directory.
+    int ShowAutoIssueStatus(const std::string& crashDirectory);
 
     /// Watch for the engine process to crash (used in watchdog mode)
     /// Consumes sequential manifests and returns after the engine exits

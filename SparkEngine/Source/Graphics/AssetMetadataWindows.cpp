@@ -17,8 +17,10 @@
 
 #include "AssetPipeline.h"
 #include "../Utils/SparkConsole.h"
+#include "Utils/FileUtils.h"
 #include "Utils/LogMacros.h"
 #include <fstream>
+#include <optional>
 #include <filesystem>
 #include <algorithm>
 
@@ -78,10 +80,21 @@ std::vector<std::string> AssetPipeline::ScanDirectory(const std::string& directo
         {
             if (entry.is_regular_file())
             {
-                AssetType detectedType = DetectAssetType(entry.path().string());
+                // Results are reopened through narrow std::string paths. A name the
+                // ANSI code page cannot spell has no such path, and path::string()
+                // throws for it, which used to discard the whole scan: skip just it.
+                const std::optional<std::string> narrow = Spark::FileUtils::TryPathToNarrow(entry.path());
+                if (!narrow)
+                {
+                    SPARK_LOG_WARN(Spark::LogCategory::Graphics,
+                                   "ScanDirectory: skipping '%s': its name has no spelling in the active code page",
+                                   Spark::FileUtils::TryPathToUtf8(entry.path()).value_or("?").c_str());
+                    continue;
+                }
+                AssetType detectedType = DetectAssetType(*narrow);
                 if (type == AssetType::Unknown || detectedType == type)
                 {
-                    assets.push_back(entry.path().string());
+                    assets.push_back(*narrow);
                 }
             }
         }

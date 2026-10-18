@@ -10,6 +10,7 @@
 #include "Game/TFSpectator.h"
 
 #include "Game/TFWeaponMath.h"
+#include "Net/TFRepProtocol.h" // QuantAim::WrapPi
 #include "World/TFWorldSetup.h"
 
 #include "Camera/SparkEngineCamera.h"
@@ -28,16 +29,11 @@ namespace Terrafront
     {
 
         constexpr float kMouseSens = 0.005f; // radians per count (TFClientNet::PumpInput value)
-        constexpr float kPi = 3.14159265358979f;
 
         /// Wrap an angle delta into [-pi, pi] (shortest turn).
-        float WrapPi(float a)
+        float WrapPi(float a) noexcept
         {
-            while (a > kPi)
-                a -= 2.0f * kPi;
-            while (a < -kPi)
-                a += 2.0f * kPi;
-            return a;
+            return QuantAim::WrapPi(a); // constant-time and total (no 2*pi loop)
         }
 
     } // namespace

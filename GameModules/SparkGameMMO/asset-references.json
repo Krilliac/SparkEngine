@@ -1,0 +1,49 @@
+{
+  "manifestVersion": 1,
+  "module": "SparkGameMMO",
+  "description": "Every asset path SparkGameMMO source names (the four area scenes registered by MMOWorldSetup and MMODungeonSystem, and the Blender TownSquare kit under Models/MMO/Kit placed by MMOEngineSystems::PlaceTownSquareKit), with its sha256 and the tools/asset-integrity/provenance.json rule that licenses it. The mmo-blender-kit rule and the kit's Assets/assets.integrity.json entries are added by the asset-integrity integrator. tools/check-module-asset-refs.py requires this record to match the source references, the files on disk and Assets/assets.integrity.json.",
+  "references": [
+    {
+      "path": "Assets/Models/MMO/Kit/portal_ring.obj",
+      "sha256": "c7bf5593c5f6ec4bbeabcdff8915c9a7bef07bd064e8004e4e05f8c74bbf0fcb",
+      "kind": "Blender kit prop (OBJ + MTL)",
+      "provenanceRule": "mmo-blender-kit"
+    },
+    {
+      "path": "Assets/Models/MMO/Kit/quest_board.obj",
+      "sha256": "30efbd9f04a4069cfdf7a324c34edb9ab9a17b4edda13b6748c0b497700aea65",
+      "kind": "Blender kit prop (OBJ + MTL)",
+      "provenanceRule": "mmo-blender-kit"
+    },
+    {
+      "path": "Assets/Models/MMO/Kit/vendor_stall.obj",
+      "sha256": "d4ce16b10084b59e46c0accd3a3accb5d013d7b0aade9b05865082d14172d2c2",
+      "kind": "Blender kit prop (OBJ + MTL)",
+      "provenanceRule": "mmo-blender-kit"
+    },
+    {
+      "path": "Assets/Scenes/MMO/battleground.scene",
+      "sha256": "f7cce0d5f33748c8fe23d9e8c68cfcb4705abe7c2f79d8a69c1023e30babc370",
+      "kind": "area scene (JSON)",
+      "provenanceRule": "repository-authored"
+    },
+    {
+      "path": "Assets/Scenes/MMO/shadow_crypt.scene",
+      "sha256": "2bca1312d6259a701f9f762e1352e13323b390a4a5ef6637178c92297fe4b4fb",
+      "kind": "area scene (JSON)",
+      "provenanceRule": "repository-authored"
+    },
+    {
+      "path": "Assets/Scenes/MMO/town_square.scene",
+      "sha256": "72049ec14b8a4a8131efab498ee5f144c820a19918b89eaebd56eb387fe99362",
+      "kind": "area scene (JSON)",
+      "provenanceRule": "repository-authored"
+    },
+    {
+      "path": "Assets/Scenes/MMO/wilderness.scene",
+      "sha256": "5cc278c427b086ec172f186eb5d90613c89e483b095cd60177d052315f18fa44",
+      "kind": "area scene (JSON)",
+      "provenanceRule": "repository-authored"
+    }
+  ]
+}

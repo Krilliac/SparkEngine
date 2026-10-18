@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "lane": "P3",
+  "description": "Panels: gameplay and graph/canvas tools (AI, abilities, dialogue, sequencer, visual script, decor/region maps).",
+  "allowlisted_tables": {
+    "SparkEditor/Source/Panels/DecorLayoutEditorCanvas.cpp": [
+      "kDecorCanvasArt"
+    ],
+    "SparkEditor/Source/Panels/RegionMapEditorCanvas.cpp": [
+      "kRegionMapCanvasArt"
+    ]
+  },
+  "total": 0,
+  "files": {
+    "SparkEditor/Source/Panels/AIEditorPanel.cpp": 0,
+    "SparkEditor/Source/Panels/AIEditorPanel.h": 0,
+    "SparkEditor/Source/Panels/AbilityEditorPanel.cpp": 0,
+    "SparkEditor/Source/Panels/AbilityEditorPanel.h": 0,
+    "SparkEditor/Source/Panels/AudioMixerPanel.cpp": 0,
+    "SparkEditor/Source/Panels/AudioMixerPanel.h": 0,
+    "SparkEditor/Source/Panels/CinematicSequencerPanel.cpp": 0,
+    "SparkEditor/Source/Panels/CinematicSequencerPanel.h": 0,
+    "SparkEditor/Source/Panels/ConditionEditorPanel.cpp": 0,
+    "SparkEditor/Source/Panels/ConditionEditorPanel.h": 0,
+    "SparkEditor/Source/Panels/DecorLayoutEditorCanvas.cpp": 0,
+    "SparkEditor/Source/Panels/DecorLayoutEditorIO.cpp": 0,
+    "SparkEditor/Source/Panels/DecorLayoutEditorInternal.h": 0,
+    "SparkEditor/Source/Panels/DecorLayoutEditorPanel.cpp": 0,
+    "SparkEditor/Source/Panels/DecorLayoutEditorPanel.h": 0,
+    "SparkEditor/Source/Panels/DecorLayoutEditorSidePane.cpp": 0,
+    "SparkEditor/Source/Panels/DialogueEditorPanel.cpp": 0,
+    "SparkEditor/Source/Panels/DialogueEditorPanel.h": 0,
+    "SparkEditor/Source/Panels/EventResponsePanel.cpp": 0,
+    "SparkEditor/Source/Panels/EventResponsePanel.h": 0,
+    "SparkEditor/Source/Panels/FPSToolsPanel.cpp": 0,
+    "SparkEditor/Source/Panels/FPSToolsPanel.h": 0,
+    "SparkEditor/Source/Panels/RegionMapDataSource.cpp": 0,
+    "SparkEditor/Source/Panels/RegionMapDataSource.h": 0,
+    "SparkEditor/Source/Panels/RegionMapEditorCanvas.cpp": 0,
+    "SparkEditor/Source/Panels/RegionMapEditorIO.cpp": 0,
+    "SparkEditor/Source/Panels/RegionMapEditorInternal.h": 0,
+    "SparkEditor/Source/Panels/RegionMapEditorPanel.cpp": 0,
+    "SparkEditor/Source/Panels/RegionMapEditorPanel.h": 0,
+    "SparkEditor/Source/Panels/RegionMapEditorSidePane.cpp": 0,
+    "SparkEditor/Source/Panels/ScriptEditorPanel.cpp": 0,
+    "SparkEditor/Source/Panels/ScriptEditorPanel.h": 0,
+    "SparkEditor/Source/Panels/TriggerEditorPanel.cpp": 0,
+    "SparkEditor/Source/Panels/TriggerEditorPanel.h": 0,
+    "SparkEditor/Source/Panels/VisualScriptPanel.cpp": 0,
+    "SparkEditor/Source/Panels/VisualScriptPanel.h": 0,
+    "SparkEditor/Source/Panels/WeaponEditorPanel.cpp": 0,
+    "SparkEditor/Source/Panels/WeaponEditorPanel.h": 0
+  }
+}

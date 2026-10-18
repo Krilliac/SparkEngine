@@ -1,0 +1,346 @@
+{
+  "schema_version": 1,
+  "blender_version": "4.0.2",
+  "module": "SparkGameRPG",
+  "author_script": {
+    "path": "tools/blender/author_rpg_kit.py",
+    "sha256": "577f347166e7cc1e93ba797b53854be5adfba969fecc2dc98c94342d4ca05a74"
+  },
+  "library": {
+    "path": "tools/blender/spark_kit.py",
+    "sha256": "f2635ad37db4874e568485beaef56654a67e25ee06294e3c7d4194d6cf8c856e"
+  },
+  "blend": {
+    "path": "Art/Blender/SparkGameRPG/rpg_kit.blend",
+    "sha256": "9384585b1f859673dff00ab34015917d98486c84fb09bbcc075fbcf44dbf4827",
+    "scene_sha256": "f771e177c254e43dddabc4f3015d084426bd30f7aa23ec8a3d5714fd36ae443a"
+  },
+  "license": {
+    "name": "Spark Open License 1.0",
+    "path": "LICENSE",
+    "sha256": "4d6e814541f2b8fbaef70c44d16a627b24d437e6983b58d90f1c2e00e6d89a45"
+  },
+  "export_convention": "meters, ground pivot, Y-up, forward_axis=Z (left-handed +Z-forward)",
+  "assets": [
+    {
+      "name": "village_well",
+      "obj_path": "Assets/Models/RPG/Kit/village_well.obj",
+      "mtl_path": "Assets/Models/RPG/Kit/village_well.mtl",
+      "bounds": {
+        "min": [
+          -1.02,
+          0.0,
+          -1.03
+        ],
+        "max": [
+          1.02,
+          2.401962,
+          1.03
+        ]
+      },
+      "triangle_count": 1788,
+      "obj_sha256": "b8dc4316701976360fa02d66bfbe08611fcacc184d75589cf80480ad466400c0",
+      "mtl_sha256": "5e9695e5e75986b4239fdeea0ad1ac53bc3fa0379846cd039a97b53f5120dfa3",
+      "triangle_budget": 2200,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/RPG/Kit/village_well_lod1.obj",
+          "mtl_path": "Assets/Models/RPG/Kit/village_well_lod1.mtl",
+          "bounds": {
+            "min": [
+              -1.02,
+              0.0125,
+              -1.03
+            ],
+            "max": [
+              1.02,
+              2.401962,
+              1.03
+            ]
+          },
+          "triangle_count": 642,
+          "obj_sha256": "bf308c06c051ccb60a901bc0906cdbd3b20e244b46e22d961c4da1a5a961eae7",
+          "mtl_sha256": "5e9695e5e75986b4239fdeea0ad1ac53bc3fa0379846cd039a97b53f5120dfa3",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/RPG/Kit/village_well_collision.obj",
+          "mtl_path": "Assets/Models/RPG/Kit/village_well_collision.mtl",
+          "bounds": {
+            "min": [
+              -1.02,
+              0.0,
+              -1.03
+            ],
+            "max": [
+              1.02,
+              2.401962,
+              1.03
+            ]
+          },
+          "triangle_count": 124,
+          "obj_sha256": "f27acae17cddecbe9e1f9ed9fd85ab5e99baa7aa87938f2c45a12cce4b8aca2b",
+          "mtl_sha256": "d2dbcd18a87ff48e19b5fc4a31712300f766db355f2a0b0766323dcdcec1a42d",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "quest_signpost",
+      "obj_path": "Assets/Models/RPG/Kit/quest_signpost.obj",
+      "mtl_path": "Assets/Models/RPG/Kit/quest_signpost.mtl",
+      "bounds": {
+        "min": [
+          -0.624596,
+          0.0,
+          -0.2
+        ],
+        "max": [
+          0.606068,
+          2.075981,
+          0.507069
+        ]
+      },
+      "triangle_count": 656,
+      "obj_sha256": "3d41ef0c1873d1843f29405f889ebffab513befd60dc1e12feb62d805bef009c",
+      "mtl_sha256": "afa6d9b43f00870ace78acffc29135936c09f98d6962308892bc6a558d02e261",
+      "triangle_budget": 700,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/RPG/Kit/quest_signpost_lod1.obj",
+          "mtl_path": "Assets/Models/RPG/Kit/quest_signpost_lod1.mtl",
+          "bounds": {
+            "min": [
+              -0.628451,
+              0.0,
+              -0.191962
+            ],
+            "max": [
+              0.61026,
+              2.068895,
+              0.512042
+            ]
+          },
+          "triangle_count": 236,
+          "obj_sha256": "0ccde4416576b729190e9fa93b84a64262c87605c5906a9bfc42589b75c945c2",
+          "mtl_sha256": "afa6d9b43f00870ace78acffc29135936c09f98d6962308892bc6a558d02e261",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/RPG/Kit/quest_signpost_collision.obj",
+          "mtl_path": "Assets/Models/RPG/Kit/quest_signpost_collision.mtl",
+          "bounds": {
+            "min": [
+              -0.624596,
+              0.0,
+              -0.2
+            ],
+            "max": [
+              0.606068,
+              2.075981,
+              0.507069
+            ]
+          },
+          "triangle_count": 110,
+          "obj_sha256": "062d9cb2fd6f14c708ab1a6b38201386ec3a73fcf2a794dc1d6cc50a3e2a4f06",
+          "mtl_sha256": "d2dbcd18a87ff48e19b5fc4a31712300f766db355f2a0b0766323dcdcec1a42d",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "treasure_chest",
+      "obj_path": "Assets/Models/RPG/Kit/treasure_chest.obj",
+      "mtl_path": "Assets/Models/RPG/Kit/treasure_chest.mtl",
+      "bounds": {
+        "min": [
+          -0.444,
+          0.0,
+          -0.3
+        ],
+        "max": [
+          0.444,
+          0.6,
+          0.311
+        ]
+      },
+      "triangle_count": 916,
+      "obj_sha256": "5a1afcfdb54151952981f49d017a366178c55328854de39ac62d116b737fd320",
+      "mtl_sha256": "5200fab70c919ce96e08dd9788bda97d8a0af26455a6bb7232cdc20e666496fb",
+      "triangle_budget": 1500,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/RPG/Kit/treasure_chest_lod1.obj",
+          "mtl_path": "Assets/Models/RPG/Kit/treasure_chest_lod1.mtl",
+          "bounds": {
+            "min": [
+              -0.444,
+              0.0,
+              -0.295463
+            ],
+            "max": [
+              0.444,
+              0.594767,
+              0.311
+            ]
+          },
+          "triangle_count": 328,
+          "obj_sha256": "2b5e168b7517b06b73750638ea4680a4ce56ac31effc67614209608229cfc807",
+          "mtl_sha256": "5200fab70c919ce96e08dd9788bda97d8a0af26455a6bb7232cdc20e666496fb",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/RPG/Kit/treasure_chest_collision.obj",
+          "mtl_path": "Assets/Models/RPG/Kit/treasure_chest_collision.mtl",
+          "bounds": {
+            "min": [
+              -0.444,
+              0.0,
+              -0.3
+            ],
+            "max": [
+              0.444,
+              0.6,
+              0.311
+            ]
+          },
+          "triangle_count": 12,
+          "obj_sha256": "4cf860cefa46f05ba8ecc1002d6d46a95aea84c53aa378aac2f5d594d81736df",
+          "mtl_sha256": "d2dbcd18a87ff48e19b5fc4a31712300f766db355f2a0b0766323dcdcec1a42d",
+          "kind": "box",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "wall_sconce",
+      "obj_path": "Assets/Models/RPG/Kit/wall_sconce.obj",
+      "mtl_path": "Assets/Models/RPG/Kit/wall_sconce.mtl",
+      "bounds": {
+        "min": [
+          -0.074,
+          0.0,
+          -0.000226
+        ],
+        "max": [
+          0.074,
+          0.6,
+          0.282
+        ]
+      },
+      "triangle_count": 386,
+      "obj_sha256": "8b2cc7aad306a971b6a201882054fe111ec5858c2c8a35f704326bbf382d7d43",
+      "mtl_sha256": "ee2af2ebb29fa08dc013a6e18a5ca3d546a2ab5cf7be495cf1fc175ffebb002e",
+      "triangle_budget": 500,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/RPG/Kit/wall_sconce_lod1.obj",
+          "mtl_path": "Assets/Models/RPG/Kit/wall_sconce_lod1.mtl",
+          "bounds": {
+            "min": [
+              -0.074,
+              0.001714,
+              -0.000929
+            ],
+            "max": [
+              0.074,
+              0.6,
+              0.282
+            ]
+          },
+          "triangle_count": 138,
+          "obj_sha256": "415079958df1a4d3044e39a8dd7eab85a2391b05b98ca52b8d49acb0ab1f0e5f",
+          "mtl_sha256": "ee2af2ebb29fa08dc013a6e18a5ca3d546a2ab5cf7be495cf1fc175ffebb002e",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/RPG/Kit/wall_sconce_collision.obj",
+          "mtl_path": "Assets/Models/RPG/Kit/wall_sconce_collision.mtl",
+          "bounds": {
+            "min": [
+              -0.074,
+              0.0,
+              -0.000226
+            ],
+            "max": [
+              0.074,
+              0.6,
+              0.282
+            ]
+          },
+          "triangle_count": 90,
+          "obj_sha256": "1c3a5f15ee301357ec3f3f622eb6b12375a8ff2e9c4d9363a9076a5a1d05eb88",
+          "mtl_sha256": "d2dbcd18a87ff48e19b5fc4a31712300f766db355f2a0b0766323dcdcec1a42d",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    },
+    {
+      "name": "barrel",
+      "obj_path": "Assets/Models/RPG/Kit/barrel.obj",
+      "mtl_path": "Assets/Models/RPG/Kit/barrel.mtl",
+      "bounds": {
+        "min": [
+          -0.372,
+          0.0,
+          -0.372
+        ],
+        "max": [
+          0.372,
+          0.895,
+          0.372
+        ]
+      },
+      "triangle_count": 628,
+      "obj_sha256": "23f43652831b889d53016c17ad927e87bbdd95785491dd0e9a52777df9773cd6",
+      "mtl_sha256": "5cff56642971cbabe5a322a7588923c3e001b2c147bf701f5030e646bb9ebdd6",
+      "triangle_budget": 800,
+      "variants": {
+        "lod1": {
+          "obj_path": "Assets/Models/RPG/Kit/barrel_lod1.obj",
+          "mtl_path": "Assets/Models/RPG/Kit/barrel_lod1.mtl",
+          "bounds": {
+            "min": [
+              -0.373542,
+              -0.001702,
+              -0.373542
+            ],
+            "max": [
+              0.385309,
+              0.8875,
+              0.385565
+            ]
+          },
+          "triangle_count": 218,
+          "obj_sha256": "2864334efab74ef9958a665b1e81e6e5f674b17d949cf0293c771dd582e0394f",
+          "mtl_sha256": "5cff56642971cbabe5a322a7588923c3e001b2c147bf701f5030e646bb9ebdd6",
+          "decimate_ratio": 0.36
+        },
+        "collision": {
+          "obj_path": "Assets/Models/RPG/Kit/barrel_collision.obj",
+          "mtl_path": "Assets/Models/RPG/Kit/barrel_collision.mtl",
+          "bounds": {
+            "min": [
+              -0.372,
+              0.0,
+              -0.372
+            ],
+            "max": [
+              0.372,
+              0.895,
+              0.372
+            ]
+          },
+          "triangle_count": 152,
+          "obj_sha256": "4a6478c56b71783ccc64a9707f81031141ded9efeb3ae01973c4a8d856299cb1",
+          "mtl_sha256": "d2dbcd18a87ff48e19b5fc4a31712300f766db355f2a0b0766323dcdcec1a42d",
+          "kind": "hull",
+          "triangle_cap": 200
+        }
+      }
+    }
+  ]
+}

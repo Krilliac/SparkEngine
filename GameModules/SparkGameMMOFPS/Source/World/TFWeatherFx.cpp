@@ -68,11 +68,12 @@ namespace Terrafront
 #ifdef ENABLE_NETWORKING
         if (m_netHandler)
         {
-            // NetworkManager has replacement semantics rather than an explicit
-            // unregister API. Remove the callback that captures this before the
-            // module DLL can unload.
-            Spark::Net::NetworkManager::GetInstance().RegisterHandler(
-                static_cast<Spark::Net::MessageType>(kTFMsgWeatherState), [](const Spark::Net::NetworkMessage&) {});
+            // Remove (never replace) the observer that captures this. An empty placeholder lambda is itself
+            // code in this module image: it outlived unload, and during hot reload it overwrote the
+            // replacement module's handler. Inside the module's teardown scope NetworkManager leaves a slot
+            // the replacement already owns untouched.
+            Spark::Net::NetworkManager::GetInstance().UnregisterHandler(
+                static_cast<Spark::Net::MessageType>(kTFMsgWeatherState));
             m_netHandler = false;
         }
 #endif
@@ -290,8 +291,8 @@ namespace Terrafront
     void TFWeatherFx::ClientPollHandler(TFGameContext& ctx)
     {
         // TFSocialSystem poll pattern (see TFAudioAmbience): register while the
-        // client connection is live, replace with a no-op when it drops so no
-        // dangling `this` survives the module DLL.
+        // client connection is live, remove it (UnregisterHandler) when it drops so
+        // no callback into this object or module image survives.
         auto& nm = Spark::Net::NetworkManager::GetInstance();
         const bool clientUp = ctx.role == NetRole::Client && nm.IsInitialized() &&
                               nm.GetRole() == Spark::Net::NetworkRole::Client &&
@@ -305,8 +306,7 @@ namespace Terrafront
         }
         else if (!clientUp && m_netHandler)
         {
-            nm.RegisterHandler(static_cast<Spark::Net::MessageType>(kTFMsgWeatherState),
-                               [](const Spark::Net::NetworkMessage&) {});
+            nm.UnregisterHandler(static_cast<Spark::Net::MessageType>(kTFMsgWeatherState));
             m_netHandler = false;
         }
     }

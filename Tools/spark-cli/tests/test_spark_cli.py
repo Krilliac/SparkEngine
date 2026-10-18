@@ -75,6 +75,94 @@ class SparkNewTests(unittest.TestCase):
         self.assertEqual(manifest["modules"][0]["name"], "FrontierGame")
         self.assertIn("FrontierGameModule", (project / "Source" / "GameModule.h").read_text(encoding="utf-8"))
 
+    def test_templates_lists_every_template_directory(self):
+        write_json(self.engine / "Templates" / "Blank3D" / "template.json", {"description": "Empty 3D scene"})
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), mock.patch.object(
+            spark_cli, "find_engine_root", return_value=self.engine
+        ):
+            result = spark_cli.cmd_templates(SimpleNamespace())
+
+        self.assertEqual(result, 0)
+        self.assertIn("Blank3D", output.getvalue())
+        self.assertIn("Empty 3D scene", output.getvalue())
+        self.assertIn("MMOStarter", output.getvalue())
+
+    def test_info_reports_the_resolved_engine_root_and_templates(self):
+        output = io.StringIO()
+        with working_directory(self.output), contextlib.redirect_stdout(output), mock.patch.object(
+            spark_cli, "find_engine_root", return_value=self.engine
+        ):
+            result = spark_cli.cmd_info(SimpleNamespace())
+
+        self.assertEqual(result, 0)
+        self.assertIn(f"Engine root:  {self.engine}", output.getvalue())
+        self.assertIn("Templates:    MMOStarter", output.getvalue())
+
+
+class SparkNewFromInstalledPrefixTests(unittest.TestCase):
+    """ASSET-220: `spark new` run from an install prefix, as the tools component installs it."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.prefix = self.root / "prefix"
+        self.output = self.root / "Projects"
+        self.output.mkdir()
+        touch(self.prefix / "lib" / "cmake" / "SparkEngine" / "SparkEngineConfig.cmake")
+        # The tools component installs Tools/ (minus tests/) at <prefix>/tools.
+        installed_cli = self.prefix / "tools" / "spark-cli"
+        shutil.copytree(
+            CLI_PATH.parent, installed_cli, ignore=shutil.ignore_patterns("tests", "__pycache__")
+        )
+        spec = importlib.util.spec_from_file_location("installed_spark_cli", installed_cli / "spark_cli.py")
+        self.cli = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.cli)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def write_template(self, directory):
+        write_json(directory / "EmptyProject.sparkproject", {"name": "EmptyProject"})
+        (directory / "CMakeLists.txt").write_text(
+            "project(EmptyProject LANGUAGES CXX)\nspark_add_game_module(EmptyProject)\n", encoding="utf-8"
+        )
+
+    def run_new(self):
+        args = SimpleNamespace(name="SparkGeneratedGame", template="EmptyProject", output=str(self.output))
+        stdout = io.StringIO()
+        with mock.patch.dict(os.environ, {}, clear=False), contextlib.redirect_stdout(stdout):
+            os.environ.pop("SPARK_ENGINE_DIR", None)
+            result = self.cli.cmd_new(args)
+        return result, stdout.getvalue()
+
+    def assert_generated(self, result, stdout):
+        project = self.output / "SparkGeneratedGame"
+        self.assertEqual(result, 0, stdout)
+        self.assertTrue((project / "SparkGeneratedGame.sparkproject").is_file())
+        self.assertFalse((project / "EmptyProject.sparkproject").exists())
+        self.assertIn(
+            "spark_add_game_module(SparkGeneratedGame)", (project / "CMakeLists.txt").read_text(encoding="utf-8")
+        )
+        package_dir = (self.prefix / "lib" / "cmake" / "SparkEngine").resolve().as_posix()
+        self.assertIn(f"-DSparkEngine_DIR={package_dir}", stdout)
+        self.assertNotIn("<path-to-engine-install>", stdout)
+
+    def test_new_from_installed_prefix_uses_share_templates(self):
+        self.write_template(self.prefix / "share" / "SparkEngine" / "templates" / "EmptyProject")
+        self.assertEqual(self.cli.find_engine_root(), self.prefix.resolve())
+        self.assert_generated(*self.run_new())
+
+    def test_new_from_sdk_only_install_uses_the_sdk_example(self):
+        self.write_template(self.prefix / "share" / "SparkEngine" / "sdk" / "examples" / "EmptyProject")
+        self.assert_generated(*self.run_new())
+
+    def test_new_from_install_without_templates_fails_cleanly(self):
+        result, stdout = self.run_new()
+        self.assertEqual(result, 1)
+        self.assertIn("Template 'EmptyProject' not found", stdout)
+        self.assertFalse((self.output / "SparkGeneratedGame").exists())
+
 
 class SparkExternalToolTests(unittest.TestCase):
     def setUp(self):
@@ -163,6 +251,28 @@ class SparkExternalToolTests(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertEqual([entry["command"] for entry in report["tools"]], list(spark_cli.EXTERNAL_TOOLS))
         self.assertTrue(all(entry["available"] for entry in report["tools"]))
+
+    def test_external_tool_dry_run_prints_invocation_without_starting(self):
+        executable = self.create_tool("SparkDaemon")
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), mock.patch.object(
+            spark_cli, "find_engine_root", return_value=self.engine
+        ), mock.patch.object(spark_cli.subprocess, "run") as run:
+            result = spark_cli.cmd_external_tool(self.args(dry_run=True))
+
+        self.assertEqual(result, 0)
+        run.assert_not_called()
+        self.assertEqual(
+            json.loads(output.getvalue()),
+            {"command": "daemon", "executable": str(executable), "arguments": ["--socket", "owner-endpoint"]},
+        )
+
+    def test_cook_alias_routes_to_the_cooker(self):
+        args = spark_cli.build_parser().parse_args(["cook", "--dry-run", "--", "--help"])
+        self.assertIs(args.handler, spark_cli.cmd_external_tool)
+        self.assertEqual(args.tool_command, "cooker")
+        self.assertEqual(args.tool_executable, "SparkCooker")
+        self.assertEqual(args.tool_args, ["--", "--help"])
 
 
 class SparkRunTests(unittest.TestCase):
@@ -348,6 +458,47 @@ class SparkRunTests(unittest.TestCase):
         self.assertIn("Multiple project descriptors", output.getvalue())
 
 
+class SparkValidateTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def test_validate_rejects_malformed_sparkscene(self):
+        scene = self.root / "Scenes" / "Broken.sparkscene"
+        scene.parent.mkdir(parents=True)
+        scene.write_text('{"entities": [', encoding="utf-8")
+        output = io.StringIO()
+
+        with working_directory(self.root), contextlib.redirect_stdout(output):
+            result = spark_cli.cmd_validate(
+                SimpleNamespace(path=".", strict=False, format="text")
+            )
+
+        self.assertEqual(result, 1)
+        self.assertIn("Broken.sparkscene", output.getvalue())
+        self.assertIn("Could not parse scene file", output.getvalue())
+
+    def test_strict_changes_nothing_because_every_finding_is_an_error(self):
+        scene = self.root / "Scenes" / "Start.sparkscene"
+        scene.parent.mkdir(parents=True)
+        scene.write_text('{"entities": []}', encoding="utf-8")
+
+        reports = []
+        for strict in (False, True):
+            output = io.StringIO()
+            with working_directory(self.root), contextlib.redirect_stdout(output):
+                result = spark_cli.cmd_validate(SimpleNamespace(path=".", strict=strict, format="json"))
+            reports.append((result, json.loads(output.getvalue())))
+
+        self.assertEqual(reports[0], reports[1])
+        self.assertEqual(reports[0][0], 0)
+        self.assertEqual(reports[0][1]["warnings"], [])
+        self.assertTrue(reports[0][1]["passed"])
+
+
 class SparkPackageTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -369,6 +520,7 @@ class SparkPackageTests(unittest.TestCase):
         touch(self.module.with_suffix(".pdb"))
 
         touch(self.root / "Assets" / "project.asset")
+        touch(self.root / "Data" / "base.spk")
         touch(self.root / "Scenes" / "Default.sparkscene")
         touch(self.root / "Config" / "Game.ini")
 
@@ -438,6 +590,10 @@ class SparkPackageTests(unittest.TestCase):
         self.assertTrue((package / "Resources" / "Config" / "Runtime.ini").is_file())
         self.assertTrue((package / "Assets" / "Engine" / "Branding" / "splash.wav").is_file())
         self.assertTrue((package / "Assets" / "project.asset").is_file())
+        self.assertEqual(
+            (package / "Data" / "base.spk").read_bytes(),
+            (self.root / "Data" / "base.spk").read_bytes(),
+        )
         self.assertTrue((package / "Scenes" / "Default.sparkscene").is_file())
         self.assertTrue((package / "Config" / "Game.ini").is_file())
         self.assertTrue((package / "Startup.sparkscene").is_file())
@@ -485,6 +641,19 @@ class SparkPackageTests(unittest.TestCase):
             spark_cli, "cmd_build"
         ) as build:
             result = spark_cli.cmd_package(self.args(output="Assets"))
+
+        self.assertEqual(result, 1)
+        self.assertIn("cannot replace or contain the project root", output.getvalue())
+        build.assert_not_called()
+
+    def test_package_rejects_output_inside_project_data_before_build(self):
+        output = io.StringIO()
+        with working_directory(self.root), contextlib.redirect_stdout(output), mock.patch.object(
+            spark_cli, "cmd_build"
+        ) as build, mock.patch.object(
+            spark_cli, "find_runtime_host", return_value=self.host.resolve()
+        ):
+            result = spark_cli.cmd_package(self.args(output="Data"))
 
         self.assertEqual(result, 1)
         self.assertIn("cannot replace or contain the project root", output.getvalue())
@@ -645,6 +814,16 @@ class SparkPackageTests(unittest.TestCase):
         self.assertIn("not an owned Spark CLI package", output)
         self.assertTrue((package / "unrelated.txt").is_file())
         build.assert_not_called()
+
+    def test_package_rejects_cross_platform_request_before_build(self):
+        foreign = next(p for p in ("windows", "linux", "macos") if p != spark_cli.current_platform())
+
+        result, output, build = self.run_package(self.args(platform=foreign))
+
+        self.assertEqual(result, 1)
+        self.assertIn(f"Cannot package {foreign} binaries", output)
+        build.assert_not_called()
+        self.assertFalse((self.root / "dist").exists())
 
     def test_package_force_replaces_unknown_non_linked_target(self):
         package = self.package_path()

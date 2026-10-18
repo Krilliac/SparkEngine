@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "spark-windows-shipping-toolchain-v1",
+  "profile": "stable-v1",
+  "platform": "Windows",
+  "configuration": "MinSizeRel",
+  "generator": "Visual Studio 17 2022",
+  "architecture": "x64",
+  "platformToolset": "v143",
+  "hostArchitecture": "x64",
+  "msvcToolsVersion": "14.44.35207",
+  "compilerId": "MSVC",
+  "compilerVersion": "19.44.35229.0",
+  "windowsSdkVersion": "10.0.26100.0"
+}

@@ -22,6 +22,9 @@
 #include <filesystem>
 #include <string>
 
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
+
 namespace fs = std::filesystem;
 
 namespace SparkEditor
@@ -77,7 +80,7 @@ namespace SparkEditor
             RenderToolbar();
             ImGui::Separator();
 
-            const float listWidth = 240.0f;
+            const float listWidth = Spark::Ui::Px(240.0f);
             ImGui::BeginChild("BasicMatList", ImVec2(listWidth, 0), true);
             RenderMaterialList();
             ImGui::EndChild();
@@ -91,12 +94,15 @@ namespace SparkEditor
             }
             else
             {
-                ImGui::TextDisabled("Select a material JSON to edit.");
                 if (m_materials.empty())
                 {
-                    ImGui::Spacing();
                     const std::string materialRoot = PathToUtf8(PathFromUtf8(m_projectRoot) / "Assets" / "Materials");
-                    ImGui::TextWrapped("No material JSONs found under '%s'.", materialRoot.c_str());
+                    const std::string hint = "No material JSONs found under '" + materialRoot + "'.";
+                    Spark::Ui::EmptyState(ICON_FA_PALETTE, "Select a material JSON to edit.", hint.c_str());
+                }
+                else
+                {
+                    Spark::Ui::EmptyState(ICON_FA_PALETTE, "Select a material JSON to edit.");
                 }
             }
             ImGui::EndChild();
@@ -141,7 +147,7 @@ namespace SparkEditor
             ImGui::SetTooltip("Rescan Assets/Materials (discards ALL unsaved edits)");
 
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(180.0f);
+        ImGui::SetNextItemWidth(Spark::Ui::Px(180.0f));
         ImGui::InputTextWithHint("##BasicMatFilter", ICON_FA_SEARCH " filter", m_searchFilter, sizeof(m_searchFilter));
 
         int modifiedCount = 0;
@@ -153,7 +159,7 @@ namespace SparkEditor
         if (modifiedCount > 0)
         {
             ImGui::SameLine();
-            ImGui::TextColored(ImVec4(0.96f, 0.65f, 0.14f, 1.0f), "%d unsaved", modifiedCount);
+            Spark::Ui::TextRole(Spark::Ui::Role::WarningText, "%d unsaved", modifiedCount);
         }
     }
 
@@ -176,7 +182,7 @@ namespace SparkEditor
                 currentGroup = doc.group;
                 const std::string header =
                     std::string(ICON_FA_FOLDER " ") + (currentGroup.empty() ? "Materials" : currentGroup);
-                groupOpen = ImGui::CollapsingHeader(header.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
+                groupOpen = Spark::Ui::SectionHeader(header.c_str());
             }
             if (!groupOpen)
                 continue;
@@ -196,7 +202,7 @@ namespace SparkEditor
         if (!TexturePathExists(buf))
         {
             ImGui::SameLine();
-            ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), ICON_FA_EXCLAMATION_TRIANGLE);
+            Spark::Ui::TextRole(Spark::Ui::Role::ErrorText, ICON_FA_EXCLAMATION_TRIANGLE);
             if (ImGui::IsItemHovered())
             {
                 const std::string missingPath = PathToUtf8(ResolveAssetDiskPath(buf));
@@ -210,8 +216,9 @@ namespace SparkEditor
                                                    float tilingY)
     {
         ImGui::BeginGroup();
-        ImGui::TextDisabled("%s", label);
+        Spark::Ui::SecondaryText("%s", label);
 
+        const float thumbSize = Spark::Ui::Px(m_thumbSize);
         const fs::path disk = ResolveAssetDiskPath(assetRelPath ? assetRelPath : "");
         ID3D11ShaderResourceView* srv = nullptr;
         if (m_graphics && !disk.empty())
@@ -223,7 +230,7 @@ namespace SparkEditor
 
         if (srv)
         {
-            ImGui::Image(static_cast<void*>(srv), ImVec2(m_thumbSize, m_thumbSize), ImVec2(0.0f, 0.0f),
+            ImGui::Image(static_cast<void*>(srv), ImVec2(thumbSize, thumbSize), ImVec2(0.0f, 0.0f),
                          ImVec2(tilingX, tilingY));
         }
         else
@@ -231,13 +238,15 @@ namespace SparkEditor
             // Placeholder box so the row keeps its layout without a texture.
             ImDrawList* dl = ImGui::GetWindowDrawList();
             const ImVec2 pos = ImGui::GetCursorScreenPos();
-            dl->AddRectFilled(pos, ImVec2(pos.x + m_thumbSize, pos.y + m_thumbSize), IM_COL32(30, 32, 38, 255), 2.0f);
-            dl->AddRect(pos, ImVec2(pos.x + m_thumbSize, pos.y + m_thumbSize), IM_COL32(70, 75, 85, 255), 2.0f);
+            const ImVec2 boxMax(pos.x + thumbSize, pos.y + thumbSize);
+            const float rounding = Spark::Ui::Px(2.0f);
+            dl->AddRectFilled(pos, boxMax, Spark::Ui::Col(Spark::Ui::Role::SurfaceSunken), rounding);
+            dl->AddRect(pos, boxMax, Spark::Ui::Col(Spark::Ui::Role::BorderSubtle), rounding);
             const char* text = (assetRelPath && assetRelPath[0]) ? "n/a" : "none";
             const ImVec2 ts = ImGui::CalcTextSize(text);
-            dl->AddText(ImVec2(pos.x + (m_thumbSize - ts.x) * 0.5f, pos.y + (m_thumbSize - ts.y) * 0.5f),
-                        IM_COL32(120, 125, 135, 255), text);
-            ImGui::Dummy(ImVec2(m_thumbSize, m_thumbSize));
+            dl->AddText(ImVec2(pos.x + (thumbSize - ts.x) * 0.5f, pos.y + (thumbSize - ts.y) * 0.5f),
+                        Spark::Ui::Col(Spark::Ui::Role::TextSecondary), text);
+            ImGui::Dummy(ImVec2(thumbSize, thumbSize));
         }
         ImGui::EndGroup();
     }
@@ -246,15 +255,15 @@ namespace SparkEditor
     {
         ImGui::Text(ICON_FA_PALETTE " %s", doc.fileName.c_str());
         ImGui::SameLine();
-        ImGui::TextDisabled("(%s)", doc.enginePath.c_str());
+        Spark::Ui::SecondaryText("(%s)", doc.enginePath.c_str());
         if (doc.modified)
         {
             ImGui::SameLine();
-            ImGui::TextColored(ImVec4(0.96f, 0.65f, 0.14f, 1.0f), "(Modified)");
+            Spark::Ui::TextRole(Spark::Ui::Role::WarningText, "(Modified)");
         }
         if (!doc.loaded)
         {
-            ImGui::TextColored(ImVec4(0.9f, 0.3f, 0.3f, 1.0f), "Failed to load: %s", doc.loadError.c_str());
+            Spark::Ui::StatusText(Spark::Ui::Status::Error, "Failed to load: %s", doc.loadError.c_str());
             return;
         }
         ImGui::Separator();
@@ -270,8 +279,7 @@ namespace SparkEditor
 
         // --- Textures ---------------------------------------------------------
         ImGui::Spacing();
-        ImGui::Text(ICON_FA_IMAGE " Textures");
-        ImGui::Separator();
+        Spark::Ui::SubHeader(ICON_FA_IMAGE " Textures");
         if (RenderTextureField("Albedo", doc.albedoPath, sizeof(doc.albedoPath)))
             doc.modified = true;
         if (RenderTextureField("Normal", doc.normalPath, sizeof(doc.normalPath)))
@@ -296,8 +304,7 @@ namespace SparkEditor
 
         // --- Scalars ----------------------------------------------------------
         ImGui::Spacing();
-        ImGui::Text(ICON_FA_COG " Surface");
-        ImGui::Separator();
+        Spark::Ui::SubHeader(ICON_FA_COG " Surface");
         if (ImGui::DragFloat("Metallic", &doc.metallic, 0.005f, 0.0f, 1.0f, "%.3f"))
             doc.modified = true;
         if (ImGui::DragFloat("AO", &doc.ao, 0.005f, 0.0f, 1.0f, "%.3f"))
@@ -314,18 +321,17 @@ namespace SparkEditor
         if (doc.hasTiling)
         {
             ImGui::SameLine();
-            ImGui::SetNextItemWidth(160.0f);
+            ImGui::SetNextItemWidth(Spark::Ui::Px(160.0f));
             if (ImGui::DragFloat2("##TilingXY", doc.tiling, 0.05f, 0.01f, 64.0f, "%.2f"))
                 doc.modified = true;
         }
 
         // --- Preview ----------------------------------------------------------
         ImGui::Spacing();
-        ImGui::Text(ICON_FA_CUBE " Preview");
-        ImGui::Separator();
+        Spark::Ui::SubHeader(ICON_FA_CUBE " Preview");
         if (!m_graphics)
         {
-            ImGui::TextDisabled("No GraphicsEngine attached — thumbnails unavailable.");
+            Spark::Ui::UnavailableFeature("Thumbnail preview", "No GraphicsEngine is attached to the editor.");
             return;
         }
 

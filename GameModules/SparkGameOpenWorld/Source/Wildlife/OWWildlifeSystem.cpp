@@ -4,10 +4,9 @@
  */
 
 #include "OWWildlifeSystem.h"
-#include "Utils/SparkConsole.h"
-#include "Utils/LogMacros.h"
+#include <Spark/ModuleLog.h>
 
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
 #include <imgui.h>
 #endif
 
@@ -30,10 +29,11 @@ namespace OpenWorld
         SpawnRegionWildlife(2); // Ironwood Forest
 
         m_initialized = true;
-        SPARK_LOG_INFO(Spark::LogCategory::Game, "Wildlife system initialized: %zu species, %zu active",
-                       m_species.size(), m_animals.size());
-        Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Wildlife: " + std::to_string(m_species.size()) +
-                                                    " species, " + std::to_string(m_animals.size()) + " spawned");
+        Spark::ModuleLog::Info(m_context, "Wildlife system initialized: {} species, {} active", m_species.size(),
+                               m_animals.size());
+        Spark::ModuleLog::Info(m_context, "{}",
+                               "[OpenWorld] Wildlife: " + std::to_string(m_species.size()) + " species, " +
+                                   std::to_string(m_animals.size()) + " spawned");
         return true;
     }
 
@@ -251,7 +251,9 @@ namespace OpenWorld
                 }
             }
             if (!native)
+            {
                 continue;
+            }
 
             uint32_t count = species.formsHerds ? species.herdSizeMin + 2 : 1;
 
@@ -286,7 +288,9 @@ namespace OpenWorld
                 m_animals[animal.instanceId] = animal;
 
                 if (herdId > 0)
+                {
                     m_herds[herdId].memberIds.push_back(animal.instanceId);
+                }
             }
         }
     }
@@ -296,7 +300,9 @@ namespace OpenWorld
         [[maybe_unused]] uint32_t currentRegionId) // Intentional: reserved for future region-based wildlife culling
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         UpdateBehaviors(deltaTime, playerX, playerZ);
         UpdatePredatorPrey(deltaTime);
@@ -308,7 +314,9 @@ namespace OpenWorld
         for (auto& [id, animal] : m_animals)
         {
             if (!animal.isAlive)
+            {
                 continue;
+            }
 
             // Find species info
             const AnimalSpecies* species = nullptr;
@@ -321,7 +329,9 @@ namespace OpenWorld
                 }
             }
             if (!species)
+            {
                 continue;
+            }
 
             if (animal.isTamed)
             {
@@ -395,7 +405,9 @@ namespace OpenWorld
     {
         m_respawnTimer += deltaTime;
         if (m_respawnTimer < 60.0f)
+        {
             return;
+        }
         m_respawnTimer = 0.0f;
 
         // Remove dead animals and count per region
@@ -403,10 +415,14 @@ namespace OpenWorld
         for (const auto& [id, animal] : m_animals)
         {
             if (!animal.isAlive)
+            {
                 toRemove.push_back(id);
+            }
         }
         for (uint32_t id : toRemove)
+        {
             m_animals.erase(id);
+        }
 
         // Keep herd membership consistent with the live population. Stale IDs
         // previously accumulated forever after hunted animals were culled.
@@ -415,9 +431,13 @@ namespace OpenWorld
             auto& members = herd->second.memberIds;
             std::erase_if(members, [this](uint32_t id) { return m_animals.find(id) == m_animals.end(); });
             if (members.empty())
+            {
                 herd = m_herds.erase(herd);
+            }
             else
+            {
                 ++herd;
+            }
         }
     }
 
@@ -425,7 +445,9 @@ namespace OpenWorld
     {
         auto it = m_animals.find(instanceId);
         if (it == m_animals.end() || !it->second.isAlive || it->second.isTamed)
+        {
             return false;
+        }
 
         // Check if species is tameable
         for (const auto& species : m_species)
@@ -434,8 +456,8 @@ namespace OpenWorld
             {
                 it->second.isTamed = true;
                 it->second.behavior = AnimalBehavior::Following;
-                Spark::SimpleConsole::GetInstance().LogInfo("[OpenWorld] Tamed " + species.name +
-                                                            " (id=" + std::to_string(instanceId) + ")");
+                Spark::ModuleLog::Info(
+                    m_context, "{}", "[OpenWorld] Tamed " + species.name + " (id=" + std::to_string(instanceId) + ")");
                 return true;
             }
         }
@@ -448,7 +470,9 @@ namespace OpenWorld
 
         auto it = m_animals.find(instanceId);
         if (it == m_animals.end() || !it->second.isAlive)
+        {
             return drops;
+        }
 
         it->second.isAlive = false;
         it->second.health = 0.0f;
@@ -458,7 +482,9 @@ namespace OpenWorld
             if (species.type == it->second.type)
             {
                 for (auto res : species.drops)
+                {
                     drops.emplace_back(res, 1);
+                }
                 break;
             }
         }
@@ -494,12 +520,16 @@ namespace OpenWorld
         auto fail = [&](const char* message)
         {
             if (error)
+            {
                 *error = message;
+            }
             return false;
         };
         if (state.animals.size() > 10000 || state.herds.size() > 2048 || !std::isfinite(state.respawnTimer) ||
             state.respawnTimer < 0.0f || state.respawnTimer > 3600.0f)
+        {
             return fail("invalid wildlife state size or timer");
+        }
 
         std::unordered_map<uint32_t, AnimalInstance> animals;
         animals.reserve(state.animals.size());
@@ -514,7 +544,9 @@ namespace OpenWorld
                 animal.regionId == 0 || animal.regionId > 8 || animal.isAlive != (animal.health > 0.0f) ||
                 (animal.isTamed && (!animal.isAlive || animal.behavior != AnimalBehavior::Following)) ||
                 !animals.emplace(animal.instanceId, animal).second)
+            {
                 return fail("invalid wildlife animal record");
+            }
             highestAnimalId = std::max(highestAnimalId, animal.instanceId);
         }
 
@@ -526,14 +558,18 @@ namespace OpenWorld
             if (herd.herdId == 0 || static_cast<uint8_t>(herd.type) >= static_cast<uint8_t>(AnimalType::Count) ||
                 !std::isfinite(herd.centerX) || !std::isfinite(herd.centerZ) || herd.regionId == 0 ||
                 herd.regionId > 8 || herd.memberIds.size() > 256 || !herds.emplace(herd.herdId, herd).second)
+            {
                 return fail("invalid wildlife herd record");
+            }
             std::unordered_set<uint32_t> members;
             for (uint32_t memberId : herd.memberIds)
             {
                 auto animal = animals.find(memberId);
                 if (animal == animals.end() || animal->second.herdId != herd.herdId ||
                     animal->second.type != herd.type || !members.insert(memberId).second)
+                {
                     return fail("invalid wildlife herd membership");
+                }
             }
             highestHerdId = std::max(highestHerdId, herd.herdId);
         }
@@ -546,12 +582,16 @@ namespace OpenWorld
                 const auto herd = herds.find(animal.herdId);
                 if (herd == herds.end() || std::find(herd->second.memberIds.begin(), herd->second.memberIds.end(),
                                                      animal.instanceId) == herd->second.memberIds.end())
+                {
                     return fail("animal references a missing herd membership");
+                }
             }
         }
         if (state.nextInstanceId == 0 || state.nextInstanceId <= highestAnimalId || state.nextHerdId == 0 ||
             state.nextHerdId <= highestHerdId)
+        {
             return fail("invalid wildlife next id");
+        }
 
         m_animals = std::move(animals);
         m_herds = std::move(herds);
@@ -567,7 +607,9 @@ namespace OpenWorld
         for (const auto& [id, animal] : m_animals)
         {
             if (animal.isTamed)
+            {
                 ++count;
+            }
         }
         return count;
     }
@@ -593,9 +635,13 @@ namespace OpenWorld
                                                    : "Omni")
                << ") HP:" << s.health << " Spd:" << s.speed;
             if (s.isTameable)
+            {
                 ss << " [Tameable]";
+            }
             if (s.formsHerds)
+            {
                 ss << " [Herd:" << s.herdSizeMin << "-" << s.herdSizeMax << "]";
+            }
             ss << "\n";
         }
         return ss.str();
@@ -604,7 +650,9 @@ namespace OpenWorld
     void OWWildlifeSystem::Shutdown()
     {
         if (!m_initialized)
+        {
             return;
+        }
 
         m_species.clear();
         m_animals.clear();
@@ -614,9 +662,11 @@ namespace OpenWorld
 
     void OWWildlifeSystem::RenderDebugUI()
     {
-#ifdef ENABLE_EDITOR
+#ifdef SPARK_HAS_IMGUI
         if (!ImGui::CollapsingHeader("Wildlife"))
+        {
             return;
+        }
 
         ImGui::Text("Species: %zu | Active: %zu | Herds: %zu | Tamed: %zu", m_species.size(), m_animals.size(),
                     m_herds.size(), GetTamedCount());

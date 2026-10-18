@@ -48,8 +48,9 @@ namespace Spark
         class TelemetrySpool final
         {
           public:
-            /** Configure the owned directory and hard byte/event bounds. */
-            TelemetrySpoolResult Configure(std::string_view directory, uint64_t maxBytes, uint32_t maxEvents);
+            /** @brief Configure the owned directory and hard byte/event/age bounds (zero is rejected). */
+            TelemetrySpoolResult Configure(std::string_view directory, uint64_t maxBytes, uint32_t maxEvents,
+                                           uint64_t maxAgeMilliseconds = 7ull * 24ull * 60ull * 60ull * 1000ull);
 
             /** Whether a trusted spool directory was configured. */
             [[nodiscard]] bool IsConfigured() const { return !m_directory.empty(); }
@@ -63,11 +64,14 @@ namespace Spark
 
             /**
              * Keep the oldest representable events within the configured
-             * format and capacity limits.
+             * format, capacity and age limits. An event stamped more than the
+             * age bound before or after now is dropped.
+             * @param nowMilliseconds Zero uses the wall clock; explicit values
+             * permit deterministic boundary checks.
              * @return Number of events removed from @p events.
              */
-            uint64_t Constrain(std::vector<TelemetryEvent>& events,
-                               std::vector<uint64_t>* droppedSequences = nullptr) const;
+            uint64_t Constrain(std::vector<TelemetryEvent>& events, std::vector<uint64_t>* droppedSequences = nullptr,
+                               uint64_t nowMilliseconds = 0) const;
 
             /** Restore a valid committed artifact without modifying it. */
             TelemetrySpoolResult Restore(std::vector<TelemetryEvent>& events) const;
@@ -89,6 +93,7 @@ namespace Spark
             std::filesystem::path m_stagingPath;
             uint64_t m_maxBytes = 0;
             uint32_t m_maxEvents = 0;
+            uint64_t m_maxAgeMilliseconds = 0;
         };
     } // namespace TelemetryDetail
 } // namespace Spark

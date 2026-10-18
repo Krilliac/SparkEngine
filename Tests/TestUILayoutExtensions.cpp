@@ -2,6 +2,10 @@
 #include "TestFramework.h"
 #include "Engine/UI/UILayoutExtensions.h"
 
+#include <algorithm>
+#include <cstdint>
+#include <string>
+
 // ============================================================================
 // UIFlexContainer
 // ============================================================================
@@ -310,4 +314,122 @@ TEST(UIDropdown_Toggle)
     EXPECT_TRUE(dropdown.IsOpen());
     dropdown.Toggle();
     EXPECT_FALSE(dropdown.IsOpen());
+}
+
+// ============================================================================
+// UILayoutLoader (SEC-120 ui-layout target)
+// ============================================================================
+
+namespace
+{
+    /// Deepest widget level below @p panel (0 when it has no children).
+    uint32_t LayoutDepth(const Spark::UI::UIPanel& panel)
+    {
+        uint32_t deepest = 0;
+        for (const auto& child : panel.GetChildren())
+        {
+            uint32_t level = 1;
+            if (const auto* nested = dynamic_cast<const Spark::UI::UIPanel*>(child.get()))
+            {
+                level += LayoutDepth(*nested);
+            }
+            deepest = std::max(deepest, level);
+        }
+        return deepest;
+    }
+
+    /// A layout of @p depth panels, each the only child of the one above it.
+    std::string NestedPanelLayout(uint32_t depth)
+    {
+        std::string json = "{\"children\":[";
+        for (uint32_t i = 0; i < depth; ++i)
+        {
+            json += "{\"type\":\"panel\",\"name\":\"p" + std::to_string(i) + "\",\"children\":[";
+        }
+        for (uint32_t i = 0; i < depth; ++i)
+        {
+            json += "]}";
+        }
+        return json + "]}";
+    }
+} // namespace
+
+TEST(UILayoutLoader_LoadsWidgetsWithGeometry)
+{
+    Spark::UI::UIPanel root("root");
+    const std::string layout = R"({"children":[
+        {"type":"label","name":"title","text":"Hi","x":5,"y":6,"w":70,"h":20},
+        {"type":"panel","name":"box","children":[{"type":"button","name":"ok","text":"OK"}]}
+    ]})";
+    ASSERT_TRUE(Spark::UI::UILayoutLoader::LoadFromJSON(layout, &root));
+
+    ASSERT_EQ(root.GetChildren().size(), size_t(2));
+    const auto* title = dynamic_cast<const Spark::UI::UILabel*>(root.GetChildren()[0].get());
+    ASSERT_TRUE(title != nullptr);
+    EXPECT_TRUE(title->GetName() == "title");
+    EXPECT_TRUE(title->GetText() == "Hi");
+    EXPECT_NEAR(title->GetX(), 5.0f, 0.0001f);
+    EXPECT_NEAR(title->GetY(), 6.0f, 0.0001f);
+    EXPECT_NEAR(title->GetWidth(), 70.0f, 0.0001f);
+    EXPECT_NEAR(title->GetHeight(), 20.0f, 0.0001f);
+
+    const auto* box = dynamic_cast<const Spark::UI::UIPanel*>(root.GetChildren()[1].get());
+    ASSERT_TRUE(box != nullptr);
+    ASSERT_EQ(box->GetChildren().size(), size_t(1));
+    const auto* ok = dynamic_cast<const Spark::UI::UIButton*>(box->GetChildren()[0].get());
+    ASSERT_TRUE(ok != nullptr);
+    EXPECT_TRUE(ok->GetLabel() == "OK");
+}
+
+TEST(UILayoutLoader_LoadsNestingAtTheDepthBound)
+{
+    constexpr uint32_t kBound = Spark::UI::UILayoutLoader::kMaxNestingDepth;
+    Spark::UI::UIPanel root("root");
+    EXPECT_TRUE(Spark::UI::UILayoutLoader::LoadFromJSON(NestedPanelLayout(kBound), &root));
+    EXPECT_EQ(LayoutDepth(root), kBound);
+}
+
+TEST(UILayoutLoader_RefusesNestingBeyondTheDepthBound)
+{
+    // Each nested panel recursed with no bound: a deep enough layout exhausted the stack,
+    // and every level re-copied its whole subtree.
+    constexpr uint32_t kBound = Spark::UI::UILayoutLoader::kMaxNestingDepth;
+    Spark::UI::UIPanel root("root");
+    EXPECT_FALSE(Spark::UI::UILayoutLoader::LoadFromJSON(NestedPanelLayout(kBound + 10), &root));
+    EXPECT_TRUE(LayoutDepth(root) <= kBound);
+}
+
+TEST(UILayoutLoader_RejectsMalformedInputWithoutPartialMutation)
+{
+    Spark::UI::UIPanel root("root");
+    const std::string malformed =
+        R"({"children":[{"type":"label","name":"already-created"},{"type":"panel","name":"broken","children":[)";
+
+    EXPECT_FALSE(Spark::UI::UILayoutLoader::LoadFromJSON(malformed, &root));
+    EXPECT_EQ(root.GetChildren().size(), size_t(0));
+}
+
+TEST(UILayoutLoader_DecodesEscapedStrings)
+{
+    Spark::UI::UIPanel root("root");
+    const std::string layout = R"({"children":[{"type":"label","name":"title \"quoted\"","text":"say \"hi\""}]})";
+
+    ASSERT_TRUE(Spark::UI::UILayoutLoader::LoadFromJSON(layout, &root));
+    ASSERT_EQ(root.GetChildren().size(), size_t(1));
+    const auto* label = dynamic_cast<const Spark::UI::UILabel*>(root.GetChildren()[0].get());
+    ASSERT_TRUE(label != nullptr);
+    EXPECT_TRUE(label->GetName() == "title \"quoted\"");
+    EXPECT_TRUE(label->GetText() == "say \"hi\"");
+}
+
+TEST(UILayoutLoader_DecodesEscapedBackslashesBeforeBraces)
+{
+    Spark::UI::UIPanel root("root");
+    const std::string layout = R"({"children":[{"type":"label","name":"path","text":"a\\{b}"}]})";
+
+    ASSERT_TRUE(Spark::UI::UILayoutLoader::LoadFromJSON(layout, &root));
+    ASSERT_EQ(root.GetChildren().size(), size_t(1));
+    const auto* label = dynamic_cast<const Spark::UI::UILabel*>(root.GetChildren()[0].get());
+    ASSERT_TRUE(label != nullptr);
+    EXPECT_TRUE(label->GetText() == "a\\{b}");
 }

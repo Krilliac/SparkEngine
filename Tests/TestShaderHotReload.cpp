@@ -4,6 +4,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <algorithm>
 #include <string>
 
 // Helper: create a temporary directory with shader files for testing
@@ -58,26 +59,120 @@ TEST(ShaderHotReload_Initialize_ValidDirectory)
     CleanupTempShaderDir(dir);
 }
 
+TEST(ShaderHotReload_Initialize_UnicodePath)
+{
+    const auto dir = std::filesystem::temp_directory_path() / L"SparkShaderHotReload-世界";
+    const auto shader = dir / L"Basic-世界.hlsl";
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    std::ofstream(shader)
+        << "float4 main(float3 position : POSITION) : SV_Position { return float4(position, 1.0f); }\n";
+
+    const auto dirUtf8Value = dir.u8string();
+    const std::string dirUtf8(reinterpret_cast<const char*>(dirUtf8Value.data()), dirUtf8Value.size());
+    auto& hr = Spark::Graphics::ShaderHotReload::GetInstance();
+    EXPECT_NO_THROW(hr.Initialize(dirUtf8));
+    EXPECT_EQ(hr.GetWatchedShaderCount(), 1u);
+    hr.Shutdown();
+    std::filesystem::remove_all(dir, ec);
+}
+
+TEST(ShaderHotReload_UnicodeReload_PreservesUtf8PathAndClassification)
+{
+    struct ScopedShaderDirectory
+    {
+        std::filesystem::path dir = std::filesystem::temp_directory_path() / L"SparkShaderHotReload-世界-reload";
+        ~ScopedShaderDirectory()
+        {
+            auto& hotReload = Spark::Graphics::ShaderHotReload::GetInstance();
+            hotReload.Shutdown();
+            std::error_code cleanupEc;
+            std::filesystem::remove_all(dir, cleanupEc);
+        }
+    } scope;
+
+    const auto shader = scope.dir / L"Basic-世界_VS.hlsl";
+    std::error_code ec;
+    std::filesystem::create_directories(scope.dir, ec);
+    std::ofstream(shader)
+        << "float4 main(float3 position : POSITION) : SV_Position { return float4(position, 1.0f); }\n";
+
+    const auto dirUtf8Value = scope.dir.u8string();
+    const std::string dirUtf8(reinterpret_cast<const char*>(dirUtf8Value.data()), dirUtf8Value.size());
+    const auto expectedPathValue = shader.generic_u8string();
+    const std::string expectedPath(reinterpret_cast<const char*>(expectedPathValue.data()), expectedPathValue.size());
+    const auto expectedNameValue = shader.stem().generic_u8string();
+    const std::string expectedName(reinterpret_cast<const char*>(expectedNameValue.data()), expectedNameValue.size());
+
+    auto& hr = Spark::Graphics::ShaderHotReload::GetInstance();
+    hr.Initialize(dirUtf8);
+    EXPECT_EQ(hr.GetWatchedShaderCount(), 1u);
+
+    std::string callbackPath;
+    std::string callbackName;
+    hr.OnShaderReloaded(
+        [&](const Spark::Graphics::ShaderReloadEvent& event)
+        {
+            callbackPath = event.shaderPath;
+            callbackName = event.shaderName;
+        });
+    hr.ForceReload(expectedName);
+
+    EXPECT_EQ(callbackPath, expectedPath);
+    EXPECT_EQ(callbackName, expectedName);
+    EXPECT_NE(callbackPath, std::string{});
+}
+
+TEST(ShaderHotReload_RemoveWatchDirectory_CanonicalizesEquivalentPaths)
+{
+    auto dir = CreateTempShaderDir();
+    auto& hr = Spark::Graphics::ShaderHotReload::GetInstance();
+    hr.Initialize(dir);
+
+    const auto absolutePath = std::filesystem::absolute(std::filesystem::path(dir));
+    const auto absoluteUtf8Value = absolutePath.generic_u8string();
+    std::string equivalent(reinterpret_cast<const char*>(absoluteUtf8Value.data()), absoluteUtf8Value.size());
+#ifdef _WIN32
+    // Exercise Windows' alternate accepted separator spelling. On POSIX a
+    // backslash is a literal filename character, not a directory separator.
+    std::replace(equivalent.begin(), equivalent.end(), '/', '\\');
+#endif
+
+    hr.AddWatchDirectory(equivalent);
+    EXPECT_TRUE(hr.IsWatching());
+    hr.RemoveWatchDirectory(equivalent);
+    EXPECT_FALSE(hr.IsWatching());
+    hr.Shutdown();
+    CleanupTempShaderDir(dir);
+}
+
 // ============================================================================
 // Poll interval
 // ============================================================================
 
+// These tests watch the small fixture directory, not ".": the working directory is the
+// repository root, and walking it (ThirdParty, .git, Assets) cost up to 24 s per test in
+// the sanitizer lane without exercising anything the assertions check.
 TEST(ShaderHotReload_SetPollInterval)
 {
+    auto dir = CreateTempShaderDir();
     auto& hr = Spark::Graphics::ShaderHotReload::GetInstance();
-    hr.Initialize(".");
+    hr.Initialize(dir);
     hr.SetPollInterval(2.0f);
     EXPECT_NEAR(hr.GetPollInterval(), 2.0f, 0.001f);
     hr.Shutdown();
+    CleanupTempShaderDir(dir);
 }
 
 TEST(ShaderHotReload_SetPollInterval_ClampMinimum)
 {
+    auto dir = CreateTempShaderDir();
     auto& hr = Spark::Graphics::ShaderHotReload::GetInstance();
-    hr.Initialize(".");
+    hr.Initialize(dir);
     hr.SetPollInterval(0.01f);
     EXPECT_GE(hr.GetPollInterval(), 0.05f);
     hr.Shutdown();
+    CleanupTempShaderDir(dir);
 }
 
 // ============================================================================
@@ -86,8 +181,9 @@ TEST(ShaderHotReload_SetPollInterval_ClampMinimum)
 
 TEST(ShaderHotReload_SetEnabled)
 {
+    auto dir = CreateTempShaderDir();
     auto& hr = Spark::Graphics::ShaderHotReload::GetInstance();
-    hr.Initialize(".");
+    hr.Initialize(dir);
     EXPECT_TRUE(hr.IsEnabled());
 
     hr.SetEnabled(false);
@@ -97,6 +193,7 @@ TEST(ShaderHotReload_SetEnabled)
     EXPECT_TRUE(hr.IsEnabled());
 
     hr.Shutdown();
+    CleanupTempShaderDir(dir);
 }
 
 // ============================================================================

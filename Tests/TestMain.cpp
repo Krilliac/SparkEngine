@@ -21,6 +21,7 @@
  *   SPARK_TEST_LIMIT=N     Stop after N tests
  *   SPARK_TEST_FILE=name   Filter tests by source file
  *   SPARK_TEST_NAME=name   Filter tests by test name
+ *   SPARK_TEST_NAME_PREFIX=p Run only tests whose name starts with p
  *   SPARK_TEST_EXPECT_COUNT=N Fail unless exactly N tests execute
  *   SPARK_TEST_EXCLUDE=pat Exclude tests whose name contains pat (comma-separated)
  */
@@ -28,6 +29,7 @@
 #include "TestFramework.h"
 #include "TestWarnings.h"
 #include "Utils/Logger.h"
+#include "Fixtures/NetworkTestSecurity.h"
 
 #include <algorithm>
 #include <charconv>
@@ -37,6 +39,7 @@
 #include <fstream>
 #include <limits>
 #include <numeric>
+#include <optional>
 #include <random>
 #include <sstream>
 
@@ -224,6 +227,32 @@ static LONG WINAPI CrashExceptionFilter(EXCEPTION_POINTERS* exInfo)
         WriteFile(hErr, " (", 2, &written, nullptr);
         WriteFile(hErr, excName, static_cast<DWORD>(strlen(excName)), &written, nullptr);
         WriteFile(hErr, ")\n", 2, &written, nullptr);
+        // Preserve the original fault record before the stack walker advances
+        // through frames. This opt-in probe does not recover from the exception.
+        if (std::getenv("SPARK_SHADOW_DEVICE_TRACE") && exInfo && exInfo->ExceptionRecord)
+        {
+            const EXCEPTION_RECORD& record = *exInfo->ExceptionRecord;
+            char details[256];
+            const int length =
+                std::snprintf(details, sizeof(details), "[shadow-probe] exception code=0x%08lx pc=%p parameters=%lu\n",
+                              static_cast<unsigned long>(record.ExceptionCode), record.ExceptionAddress,
+                              static_cast<unsigned long>(record.NumberParameters));
+            if (length > 0 && static_cast<size_t>(length) < sizeof(details))
+            {
+                WriteFile(hErr, details, static_cast<DWORD>(length), &written, nullptr);
+            }
+            if (record.ExceptionCode == EXCEPTION_ACCESS_VIOLATION && record.NumberParameters >= 2)
+            {
+                const int accessLength = std::snprintf(details, sizeof(details),
+                                                       "[shadow-probe] access-operation=%llu access-target=0x%016llx\n",
+                                                       static_cast<unsigned long long>(record.ExceptionInformation[0]),
+                                                       static_cast<unsigned long long>(record.ExceptionInformation[1]));
+                if (accessLength > 0 && static_cast<size_t>(accessLength) < sizeof(details))
+                {
+                    WriteFile(hErr, details, static_cast<DWORD>(accessLength), &written, nullptr);
+                }
+            }
+        }
     }
 
     // Print to stdout as well so test output captures it
@@ -555,6 +584,7 @@ static void PrintUsage(const char* argv0)
               << "  SPARK_TEST_LIMIT=N     Stop after N tests\n"
               << "  SPARK_TEST_FILE=name   Filter tests by source file\n"
               << "  SPARK_TEST_NAME=name   Filter tests by test name\n"
+              << "  SPARK_TEST_NAME_PREFIX=p Run only tests whose name starts with p\n"
               << "  SPARK_TEST_EXPECT_COUNT=N Fail unless exactly N tests execute\n"
               << "  SPARK_TEST_EXCLUDE=pat Exclude tests whose name contains pat (comma-separated)\n";
 }
@@ -672,6 +702,11 @@ int main(int argc, char** argv)
     // Individual tests that verify stack trace capture enable it explicitly.
     logger.SetStackTraceLevel(Spark::LogLevel::Off);
 
+    // NET-100: NetworkManager has no unauthenticated mode. Every test runs with one
+    // in-memory server identity and a pin on its key, so no test reads or writes the
+    // per-user identity file or known_hosts (Tests/Fixtures/NetworkTestSecurity.h).
+    SparkTestFixtures::InstallTestNetworkSecurity();
+
     auto& tests = GetTestRegistry();
     int passed = 0;
     int failed = 0;
@@ -702,9 +737,24 @@ int main(int argc, char** argv)
     int testLimit = static_cast<int>(tests.size());
     if (const char* limitEnv = std::getenv("SPARK_TEST_LIMIT"))
         testLimit = std::min(testLimit, std::atoi(limitEnv));
-    const char* fileFilter = std::getenv("SPARK_TEST_FILE");
-    const char* nameFilter = std::getenv("SPARK_TEST_NAME");
-    const char* expectedCountText = std::getenv("SPARK_TEST_EXPECT_COUNT");
+    // Tests may change the environment mid-run (e.g. to launch child processes), and
+    // setenv/_putenv can free the strings getenv returned. Own copies of the selection
+    // variables so a test cannot silently widen or break the run's selection.
+    const auto environmentCopy = [](const char* name) -> std::optional<std::string>
+    {
+        const char* value = std::getenv(name);
+        return value != nullptr ? std::optional<std::string>(value) : std::nullopt;
+    };
+    const std::optional<std::string> fileFilterValue = environmentCopy("SPARK_TEST_FILE");
+    const std::optional<std::string> nameFilterValue = environmentCopy("SPARK_TEST_NAME");
+    const std::optional<std::string> namePrefixFilterValue = environmentCopy("SPARK_TEST_NAME_PREFIX");
+    const std::optional<std::string> expectedCountValue = environmentCopy("SPARK_TEST_EXPECT_COUNT");
+    const char* fileFilter = fileFilterValue ? fileFilterValue->c_str() : nullptr;
+    const char* nameFilter = nameFilterValue ? nameFilterValue->c_str() : nullptr;
+    // SPARK_TEST_NAME matches anywhere in the name ("RPG_" also selects "ARPG_*");
+    // selectors that must count one family exactly use the anchored prefix filter.
+    const char* namePrefixFilter = namePrefixFilterValue ? namePrefixFilterValue->c_str() : nullptr;
+    const char* expectedCountText = expectedCountValue ? expectedCountValue->c_str() : nullptr;
     int expectedTestCount = 0;
     bool expectedCountValid = expectedCountText == nullptr;
     if (expectedCountText != nullptr)
@@ -753,6 +803,8 @@ int main(int argc, char** argv)
         if (fileFilter && !std::strstr(test->file, fileFilter))
             continue;
         if (nameFilter && !std::strstr(test->name, nameFilter))
+            continue;
+        if (namePrefixFilter && std::strncmp(test->name, namePrefixFilter, std::strlen(namePrefixFilter)) != 0)
             continue;
         bool excluded = false;
         for (const auto& pat : excludePatterns)
@@ -1032,7 +1084,8 @@ int main(int argc, char** argv)
 
     auto suiteEnd = std::chrono::steady_clock::now();
     double totalMs = std::chrono::duration<double, std::milli>(suiteEnd - suiteStart).count();
-    const bool filteredSelectionEmpty = ranCount == 0 && (fileFilter != nullptr || nameFilter != nullptr);
+    const bool filteredSelectionEmpty =
+        ranCount == 0 && (fileFilter != nullptr || nameFilter != nullptr || namePrefixFilter != nullptr);
     const bool expectedSelectionMismatch =
         expectedCountText != nullptr && (!expectedCountValid || ranCount != expectedTestCount);
 

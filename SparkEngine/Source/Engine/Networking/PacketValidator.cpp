@@ -42,14 +42,17 @@ namespace Spark::Net
     void PacketValidator::RegisterDefaultSchemas()
     {
         // Connection messages
-        RegisterSchema(MessageType::Connect, {.minPayloadSize = 0,
+        // Connect (v2): exactly one 55-byte ClientHello. The bounds stay loose so HandleConnect can
+        // answer an older or malformed hello with a typed rejection instead of silence.
+        RegisterSchema(MessageType::Connect, {.minPayloadSize = 8,
                                               .maxPayloadSize = 256,
                                               .requiresAuth = false,
                                               .allowedFromClient = true,
                                               .allowedFromServer = false});
 
-        RegisterSchema(MessageType::ConnectAccepted, {.minPayloadSize = 4,
-                                                      .maxPayloadSize = 8,
+        // ConnectAccepted: client ID (4) + server time (4) + echoed protocol version (2) + ServerHello (145).
+        RegisterSchema(MessageType::ConnectAccepted, {.minPayloadSize = 155,
+                                                      .maxPayloadSize = 155,
                                                       .requiresAuth = false,
                                                       .allowedFromClient = false,
                                                       .allowedFromServer = true});
@@ -92,6 +95,12 @@ namespace Spark::Net
                                                     .allowedFromClient = false,
                                                     .allowedFromServer = true});
 
+        // EntityStateUpdate is server -> client replication. The client -> server
+        // direction stays open only as a *state request* for modules whose players
+        // author their own movement (SparkGameMMO): the engine ignores it in the
+        // server role, and a server-side consumer must parse and range-check it,
+        // bind it to an entity the sender owns and republish through replication.
+        // It must never be relayed verbatim to other clients.
         RegisterSchema(MessageType::EntityStateUpdate, {.minPayloadSize = 8,
                                                         .maxPayloadSize = 2048,
                                                         .requiresAuth = true,
@@ -154,6 +163,13 @@ namespace Spark::Net
                                                   .requiresAuth = true,
                                                   .allowedFromClient = false,
                                                   .allowedFromServer = true});
+
+        // NET-100 ClientFinished (client -> server, sealed): length-prefixed player name (<= 64 bytes).
+        RegisterSchema(MessageType::ClientFinished, {.minPayloadSize = 2,
+                                                     .maxPayloadSize = 2 + 64,
+                                                     .requiresAuth = true,
+                                                     .allowedFromClient = true,
+                                                     .allowedFromServer = false});
 
         // Delta replication acknowledgement (client -> server only):
         // [4 bytes deltaSequence] echoed from an applied EntityStateUpdate

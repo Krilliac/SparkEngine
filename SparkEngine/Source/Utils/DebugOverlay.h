@@ -159,6 +159,26 @@ namespace Spark
             m_maxFrameTime = (count > 0) ? maxT : 0.0f;
         }
 
+        /**
+     * @brief Clear the frame statistics: frame count, FPS window and frame-time history
+     *
+     * The overlay is a process-lifetime singleton, so the debug-system shutdown calls
+     * this to keep a later boot in the same process from inheriting stale frame stats.
+     * Game thread only, like Update().
+     */
+        void ResetStats()
+        {
+            m_currentFPS = 0.0f;
+            m_fpsAccumulator = 0.0f;
+            m_fpsSampleCount = 0;
+            m_frameCount = 0;
+            m_avgFrameTime = 0.0f;
+            m_minFrameTime = 0.0f;
+            m_maxFrameTime = 0.0f;
+            m_frameHistory.fill({});
+            m_frameHistoryIndex = 0;
+        }
+
         // ========================================================================
         // Configuration
         // ========================================================================

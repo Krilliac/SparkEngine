@@ -4,21 +4,34 @@
  */
 
 #include "VisualScriptPanel.h"
+#include "../Core/EditorIcons.h"
 #include "Engine/Scripting/AngelScriptEngine.h"
+#include "Engine/Scripting/VisualScriptGraphIO.h"
 #include "Utils/LogMacros.h"
 #include <imgui.h>
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <unordered_map>
+#include "SparkUI/Fonts.h"
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
 
 namespace SparkEditor
 {
 
     using namespace Spark::Scripting;
+
+    /// Variable type combo order (VariableUI::typeIndex) to pin kind.
+    static constexpr PinKind kVariableKinds[] = {PinKind::Bool,   PinKind::Int,     PinKind::Float,
+                                                 PinKind::String, PinKind::Vector3, PinKind::Entity};
+    static constexpr const char* kVariableKindNames[] = {"Bool", "Int", "Float", "String", "Vector3", "Entity"};
+    static_assert(std::size(kVariableKinds) == std::size(kVariableKindNames));
 
     struct PaletteCategory
     {
@@ -44,29 +57,46 @@ namespace SparkEditor
         return categories;
     }
 
+    /// Slots of the colour-blind-safe Okabe-Ito categorical palette (Spark::Ui::CategoryColor);
+    /// each name is the hue of that slot in every appearance.
+    enum class CategorySlot : std::uint8_t
+    {
+        Orange = 0,
+        SkyBlue = 1,
+        BluishGreen = 2,
+        Yellow = 3,
+        Blue = 4,
+        Vermillion = 5,
+        ReddishPurple = 6,
+        Grey = 7,
+    };
+
+    static ImU32 SlotColor(CategorySlot slot)
+    {
+        return Spark::Ui::CategoryColor(static_cast<int>(slot));
+    }
+
     // Node colors by category
     static ImU32 GetNodeColor(ScriptNodeType type)
     {
         auto val = static_cast<uint32_t>(type);
         if (val <= 7)
-            return IM_COL32(180, 40, 40, 255); // Events: red
+            return SlotColor(CategorySlot::Vermillion); // Events
         if (val >= 50 && val <= 53)
-            return IM_COL32(60, 60, 160, 255); // Flow: blue
+            return SlotColor(CategorySlot::Blue); // Flow
         if (val >= 100 && val <= 108)
-            return IM_COL32(40, 140, 80, 255); // Getters: green
+            return SlotColor(CategorySlot::BluishGreen); // Getters
         if (val >= 150 && val <= 159)
-            return IM_COL32(160, 100, 40, 255); // Actions: orange
-        if (val >= 200 && val <= 212)
-            return IM_COL32(80, 80, 140, 255); // Math: purple
-        if (val >= 250 && val <= 258)
-            return IM_COL32(100, 140, 100, 255); // Logic: teal
+            return SlotColor(CategorySlot::Orange); // Actions
+        if (val >= 200 && val <= 216)
+            return SlotColor(CategorySlot::ReddishPurple); // Math and text
+        if (val >= 250 && val <= 259)
+            return SlotColor(CategorySlot::SkyBlue); // Logic
         if (val >= 300 && val <= 301)
-            return IM_COL32(140, 140, 40, 255); // Variables: yellow
-        if (val >= 350 && val <= 354)
-            return IM_COL32(100, 100, 100, 255); // Constants: gray
+            return SlotColor(CategorySlot::Yellow); // Variables
         if (val == 500)
-            return IM_COL32(60, 120, 60, 255); // Comment: dark green
-        return IM_COL32(80, 80, 80, 255);
+            return Spark::Ui::Col(Spark::Ui::Role::TextSecondary); // Comment
+        return SlotColor(CategorySlot::Grey);                      // Constants and anything uncategorised
     }
 
     static const char* GetNodeTitle(ScriptNodeType type)
@@ -80,21 +110,21 @@ namespace SparkEditor
         switch (kind)
         {
         case PinKind::Execution:
-            return IM_COL32(255, 255, 255, 255);
+            return Spark::Ui::Col(Spark::Ui::Role::TextPrimary);
         case PinKind::Bool:
-            return IM_COL32(180, 40, 40, 255);
+            return SlotColor(CategorySlot::Vermillion);
         case PinKind::Int:
-            return IM_COL32(40, 180, 120, 255);
+            return SlotColor(CategorySlot::BluishGreen);
         case PinKind::Float:
-            return IM_COL32(80, 180, 80, 255);
+            return SlotColor(CategorySlot::SkyBlue);
         case PinKind::String:
-            return IM_COL32(180, 80, 180, 255);
+            return SlotColor(CategorySlot::ReddishPurple);
         case PinKind::Vector3:
-            return IM_COL32(220, 180, 40, 255);
+            return SlotColor(CategorySlot::Yellow);
         case PinKind::Entity:
-            return IM_COL32(40, 120, 220, 255);
+            return SlotColor(CategorySlot::Blue);
         default:
-            return IM_COL32(150, 150, 150, 255);
+            return SlotColor(CategorySlot::Grey);
         }
     }
 
@@ -259,25 +289,25 @@ namespace SparkEditor
     {
         ImVec2 canvasPos = ImGui::GetCursorScreenPos();
         ImVec2 canvasSize = ImGui::GetContentRegionAvail();
-        canvasSize.y = std::max(canvasSize.y, 200.0f);
+        canvasSize.y = std::max(canvasSize.y, Spark::Ui::Px(200.0f));
 
         ImDrawList* drawList = ImGui::GetWindowDrawList();
 
         // Canvas background
         drawList->AddRectFilled(canvasPos, ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y),
-                                IM_COL32(30, 30, 30, 255));
+                                Spark::Ui::Col(Spark::Ui::Role::SurfaceSunken));
 
         // Grid
         float gridSize = 32.0f * m_canvasZoom;
         for (float x = std::fmod(m_canvasOffsetX, gridSize); x < canvasSize.x; x += gridSize)
         {
             drawList->AddLine(ImVec2(canvasPos.x + x, canvasPos.y), ImVec2(canvasPos.x + x, canvasPos.y + canvasSize.y),
-                              IM_COL32(50, 50, 50, 255));
+                              Spark::Ui::Col(Spark::Ui::Role::BorderSubtle));
         }
         for (float y = std::fmod(m_canvasOffsetY, gridSize); y < canvasSize.y; y += gridSize)
         {
             drawList->AddLine(ImVec2(canvasPos.x, canvasPos.y + y), ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + y),
-                              IM_COL32(50, 50, 50, 255));
+                              Spark::Ui::Col(Spark::Ui::Role::BorderSubtle));
         }
 
         // Clip to canvas area
@@ -323,9 +353,10 @@ namespace SparkEditor
         }
 
         // Info text
-        ImGui::SetCursorScreenPos(ImVec2(canvasPos.x + 5, canvasPos.y + canvasSize.y - 20));
-        ImGui::TextDisabled("Nodes: %zu | Connections: %zu | Right-click to add nodes", m_nodes.size(),
-                            m_connections.size());
+        ImGui::SetCursorScreenPos(ImVec2(canvasPos.x + Spark::Ui::Px(5.0f),
+                                         canvasPos.y + canvasSize.y - ImGui::GetTextLineHeightWithSpacing()));
+        Spark::Ui::SecondaryText("Nodes: %zu | Connections: %zu | Right-click to add nodes", m_nodes.size(),
+                                 m_connections.size());
     }
 
     void VisualScriptPanel::RenderNode(int nodeIndex)
@@ -339,30 +370,38 @@ namespace SparkEditor
         float nw = nodeUI.width * m_canvasZoom;
         float nh = nodeUI.height * m_canvasZoom;
 
-        ImU32 nodeColor = GetNodeColor(nodeUI.node.type);
-        ImU32 headerColor = nodeColor;
-        ImU32 bodyColor = IM_COL32(40, 40, 40, 230);
+        const ImU32 categoryColor = GetNodeColor(nodeUI.node.type);
+        const ImU32 headerColor = Spark::Ui::Col(Spark::Ui::Role::SurfaceRaised);
+        const ImU32 bodyColor = Spark::Ui::Col(Spark::Ui::Role::SurfaceOverlay, 0.9f);
 
         // Node body
         drawList->AddRectFilled(ImVec2(nx, ny), ImVec2(nx + nw, ny + nh), bodyColor, 4.0f);
 
-        // Header
-        drawList->AddRectFilled(ImVec2(nx, ny), ImVec2(nx + nw, ny + 24.0f * m_canvasZoom), headerColor, 4.0f);
+        // Header: a neutral bar keeps the title legible on every category; the category hue is the
+        // band along its top edge.
+        drawList->AddRectFilled(ImVec2(nx, ny), ImVec2(nx + nw, ny + 24.0f * m_canvasZoom), headerColor, 4.0f,
+                                ImDrawFlags_RoundCornersTop);
+        drawList->AddRectFilled(ImVec2(nx, ny), ImVec2(nx + nw, ny + 4.0f * m_canvasZoom), categoryColor, 4.0f,
+                                ImDrawFlags_RoundCornersTop);
 
-        // Border
-        ImU32 borderColor = nodeUI.selected ? IM_COL32(255, 200, 50, 255) : IM_COL32(80, 80, 80, 255);
-        drawList->AddRect(ImVec2(nx, ny), ImVec2(nx + nw, ny + nh), borderColor, 4.0f, 0, 2.0f);
+        // Border: the selected node gets the accent and a thicker outline, so selection is not colour-only.
+        const ImU32 borderColor = nodeUI.selected ? Spark::Ui::Col(Spark::Ui::Role::AccentFill)
+                                                  : Spark::Ui::Col(Spark::Ui::Role::BorderSubtle);
+        drawList->AddRect(ImVec2(nx, ny), ImVec2(nx + nw, ny + nh), borderColor, 4.0f, 0,
+                          nodeUI.selected ? 3.0f : 1.5f);
 
         // Title
         const char* title = GetNodeTitle(nodeUI.node.type);
-        drawList->AddText(ImVec2(nx + 8, ny + 4), IM_COL32(255, 255, 255, 255), title);
+        drawList->AddText(ImVec2(nx + 8, ny + 5.0f * m_canvasZoom), Spark::Ui::Col(Spark::Ui::Role::TextPrimary),
+                          title);
 
         // Comment nodes: render text body
         if (nodeUI.node.type == ScriptNodeType::Comment)
         {
             auto it = nodeUI.node.properties.find("text");
             const char* commentText = (it != nodeUI.node.properties.end()) ? it->second.c_str() : "Comment";
-            drawList->AddText(ImVec2(nx + 8, ny + 26.0f * m_canvasZoom), IM_COL32(200, 230, 200, 220), commentText);
+            drawList->AddText(ImVec2(nx + 8, ny + 26.0f * m_canvasZoom), Spark::Ui::Col(Spark::Ui::Role::TextSecondary),
+                              commentText);
         }
 
         // Input pins (with click detection for connection dragging)
@@ -380,7 +419,7 @@ namespace SparkEditor
             if (label[0] != '\0' && m_canvasZoom > 0.5f)
             {
                 drawList->AddText(ImVec2(pinPos.x + pinRadius + 3.0f, pinPos.y - 6.0f * m_canvasZoom),
-                                  IM_COL32(180, 180, 180, 200), label);
+                                  Spark::Ui::Col(Spark::Ui::Role::TextSecondary), label);
             }
 
             // Hover highlight
@@ -388,7 +427,8 @@ namespace SparkEditor
             float dy = pinIO.MousePos.y - pinPos.y;
             if (dx * dx + dy * dy < (pinRadius + 4.0f) * (pinRadius + 4.0f))
             {
-                drawList->AddCircle(pinPos, pinRadius + 3.0f, IM_COL32(255, 255, 255, 200), 12, 2.0f);
+                drawList->AddCircle(pinPos, pinRadius + 3.0f, Spark::Ui::Col(Spark::Ui::Role::TextPrimary, .78f), 12,
+                                    2.0f);
                 if (ImGui::IsMouseClicked(0))
                 {
                     if (m_isDrawingConnection)
@@ -415,14 +455,15 @@ namespace SparkEditor
             {
                 float textWidth = ImGui::CalcTextSize(outLabel).x;
                 drawList->AddText(ImVec2(pinPos.x - pinRadius - 3.0f - textWidth, pinPos.y - 6.0f * m_canvasZoom),
-                                  IM_COL32(180, 180, 180, 200), outLabel);
+                                  Spark::Ui::Col(Spark::Ui::Role::TextSecondary), outLabel);
             }
 
             float dx = pinIO.MousePos.x - pinPos.x;
             float dy = pinIO.MousePos.y - pinPos.y;
             if (dx * dx + dy * dy < (pinRadius + 4.0f) * (pinRadius + 4.0f))
             {
-                drawList->AddCircle(pinPos, pinRadius + 3.0f, IM_COL32(255, 255, 255, 200), 12, 2.0f);
+                drawList->AddCircle(pinPos, pinRadius + 3.0f, Spark::Ui::Col(Spark::Ui::Role::TextPrimary, .78f), 12,
+                                    2.0f);
                 if (ImGui::IsMouseClicked(0))
                 {
                     if (m_isDrawingConnection)
@@ -500,7 +541,7 @@ namespace SparkEditor
             float toY = canvasPos.y + (toNode->posY + 30.0f + conn.toPin * 18.0f + m_canvasOffsetY) * m_canvasZoom;
 
             // Determine wire color from source pin
-            ImU32 wireColor = IM_COL32(180, 180, 180, 200);
+            ImU32 wireColor = Spark::Ui::Col(Spark::Ui::Role::TextSecondary, 0.78f);
             if (conn.fromPin < fromNode->node.outputs.size())
             {
                 wireColor = GetPinColor(fromNode->node.outputs[conn.fromPin].kind);
@@ -587,6 +628,14 @@ namespace SparkEditor
 
     void VisualScriptPanel::AddNodeAtPosition(ScriptNodeType type, float x, float y)
     {
+        if (m_nextNodeId > VisualScriptGraphIO::kMaxNodeId)
+        {
+            // Ids never wrap: a reused id would make the graph unsavable and drop a node at compile time.
+            m_compileErrors = {"Cannot add node: node ids are exhausted (largest id " +
+                               std::to_string(VisualScriptGraphIO::kMaxNodeId) + ")"};
+            return;
+        }
+
         NodeUI nodeUI;
         nodeUI.node.id = m_nextNodeId++;
         nodeUI.node.type = type;
@@ -785,7 +834,35 @@ namespace SparkEditor
             addOutput(PinKind::Float);
             break;
 
+        case ScriptNodeType::BreakVector3:
+            addInput(PinKind::Vector3);
+            addOutput(PinKind::Float); // X
+            addOutput(PinKind::Float); // Y
+            addOutput(PinKind::Float); // Z
+            break;
+        case ScriptNodeType::MakeVector3:
+            addInput(PinKind::Float); // X
+            addInput(PinKind::Float); // Y
+            addInput(PinKind::Float); // Z
+            addOutput(PinKind::Vector3);
+            break;
+        case ScriptNodeType::ToInt:
+            addInput(PinKind::Float);
+            addOutput(PinKind::Int);
+            break;
+        case ScriptNodeType::AppendString:
+            addInput(PinKind::String);
+            addInput(PinKind::Any); // Value appended as text
+            addOutput(PinKind::String);
+            break;
+
         // Logic
+        case ScriptNodeType::Select:
+            addInput(PinKind::Bool);  // Condition
+            addInput(PinKind::Float); // A (condition true)
+            addInput(PinKind::Float); // B (condition false)
+            addOutput(PinKind::Float);
+            break;
         case ScriptNodeType::And:
         case ScriptNodeType::Or:
             addInput(PinKind::Bool);
@@ -877,18 +954,16 @@ namespace SparkEditor
         ImGui::Text("Variables");
         ImGui::Separator();
 
-        static const char* typeNames[] = {"Bool", "Int", "Float", "String", "Vector3"};
-
         for (int i = 0; i < static_cast<int>(m_variables.size()); ++i)
         {
             ImGui::PushID(i);
             auto& var = m_variables[i];
 
-            ImGui::SetNextItemWidth(80.0f);
+            ImGui::SetNextItemWidth(Spark::Ui::Px(80.0f));
             ImGui::InputText("##name", var.name, sizeof(var.name));
             ImGui::SameLine();
-            ImGui::SetNextItemWidth(60.0f);
-            ImGui::Combo("##type", &var.typeIndex, typeNames, 5);
+            ImGui::SetNextItemWidth(Spark::Ui::Px(60.0f));
+            ImGui::Combo("##type", &var.typeIndex, kVariableKindNames, static_cast<int>(std::size(kVariableKindNames)));
             ImGui::SameLine();
             if (ImGui::SmallButton("X"))
             {
@@ -902,8 +977,17 @@ namespace SparkEditor
 
         if (ImGui::SmallButton("+ Variable"))
         {
+            // First free varN: a count-based name would repeat after a delete, and the loader rejects duplicates.
             VariableUI var{};
-            std::snprintf(var.name, sizeof(var.name), "var%zu", m_variables.size());
+            for (size_t suffix = m_variables.size();; ++suffix)
+            {
+                std::snprintf(var.name, sizeof(var.name), "var%zu", suffix);
+                const bool taken =
+                    std::any_of(m_variables.begin(), m_variables.end(), [&var](const VariableUI& existing)
+                                { return std::strcmp(existing.name, var.name) == 0; });
+                if (!taken)
+                    break;
+            }
             m_variables.push_back(var);
         }
     }
@@ -914,17 +998,16 @@ namespace SparkEditor
 
     void VisualScriptPanel::RenderNodeProperties()
     {
-        ImGui::Text("Properties");
-        ImGui::Separator();
+        Spark::Ui::SubHeader("Properties");
 
         if (m_selectedNode < 0 || m_selectedNode >= static_cast<int>(m_nodes.size()))
         {
-            ImGui::TextDisabled("Select a node");
+            Spark::Ui::EmptyState(ICON_FA_PROJECT_DIAGRAM, "No node selected", "Select a node on the canvas");
             return;
         }
 
         auto& nodeUI = m_nodes[m_selectedNode];
-        ImGui::Text("Type: %s", GetNodeTitle(nodeUI.node.type));
+        Spark::Ui::KeyValue("Type", "%s", GetNodeTitle(nodeUI.node.type));
         ImGui::Text("ID: %u", nodeUI.node.id);
 
         // Edit default values for input pins
@@ -940,8 +1023,11 @@ namespace SparkEditor
                 break;
             case PinKind::Int:
             {
+                // The .vscript format stores Int defaults in a float, exact only within +-2^24.
+                constexpr int kIntDefaultLimit = 1 << 24;
                 int val = static_cast<int>(pin.defaultValue[0]);
-                if (ImGui::DragInt("##val", &val))
+                if (ImGui::DragInt("##val", &val, 1.0f, -kIntDefaultLimit, kIntDefaultLimit, "%d",
+                                   ImGuiSliderFlags_AlwaysClamp))
                 {
                     pin.defaultValue[0] = static_cast<float>(val);
                 }
@@ -1099,7 +1185,7 @@ namespace SparkEditor
 
     void VisualScriptPanel::RenderCompileBar()
     {
-        ImGui::SetNextItemWidth(200.0f);
+        ImGui::SetNextItemWidth(Spark::Ui::Px(200.0f));
         ImGui::InputText("Script Name", m_scriptName, sizeof(m_scriptName));
         ImGui::SameLine();
 
@@ -1110,14 +1196,20 @@ namespace SparkEditor
         ImGui::SameLine();
         if (ImGui::Button("Save"))
         {
-            std::string savePath = std::string(m_savePath) + std::string(m_scriptName) + ".vscript";
-            SaveGraph(savePath);
+            // The typed name becomes a file name: only an identifier is accepted, so the
+            // file cannot land outside m_savePath (see VisualScriptGraphIO::ScriptFilePath).
+            if (const auto savePath = VisualScriptGraphIO::ScriptFilePath(m_savePath, m_scriptName, ".vscript"))
+                SaveGraph(savePath->string());
+            else
+                m_compileErrors = {"Save refused: " + savePath.error()};
         }
         ImGui::SameLine();
         if (ImGui::Button("Load"))
         {
-            std::string loadPath = std::string(m_savePath) + std::string(m_scriptName) + ".vscript";
-            LoadGraph(loadPath);
+            if (const auto loadPath = VisualScriptGraphIO::ScriptFilePath(m_savePath, m_scriptName, ".vscript"))
+                LoadGraph(loadPath->string());
+            else
+                m_compileErrors = {"Load refused: " + loadPath.error()};
         }
 
         ImGui::SameLine();
@@ -1128,11 +1220,11 @@ namespace SparkEditor
         ImGui::SameLine();
         if (m_compileSuccess)
         {
-            ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), "Compiled OK");
+            Spark::Ui::StatusText(Spark::Ui::Status::Success, "Compiled OK");
         }
         else if (!m_compileErrors.empty())
         {
-            ImGui::TextColored(ImVec4(0.8f, 0.2f, 0.2f, 1.0f), "Errors: %zu", m_compileErrors.size());
+            Spark::Ui::StatusText(Spark::Ui::Status::Error, "Errors: %zu", m_compileErrors.size());
         }
 
         // Show errors if any
@@ -1140,17 +1232,20 @@ namespace SparkEditor
         {
             for (const auto& err : m_compileErrors)
             {
-                ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "  %s", err.c_str());
+                Spark::Ui::StatusText(Spark::Ui::Status::Error, "%s", err.c_str());
             }
         }
 
         // Generated code preview (collapsible)
         if (!m_lastCompiledSource.empty())
         {
-            if (ImGui::CollapsingHeader("Generated AngelScript"))
+            if (Spark::Ui::SectionHeader("Generated AngelScript", nullptr, false))
             {
-                ImGui::BeginChild("CodePreview", ImVec2(0, 200), true);
-                ImGui::TextUnformatted(m_lastCompiledSource.c_str());
+                ImGui::BeginChild("CodePreview", Spark::Ui::Px2(0, 200), true);
+                {
+                    Spark::Ui::ScopedFont mono(Spark::Ui::FontRole::Mono);
+                    ImGui::TextUnformatted(m_lastCompiledSource.c_str());
+                }
                 ImGui::EndChild();
             }
         }
@@ -1160,33 +1255,48 @@ namespace SparkEditor
     // Compilation
     // ========================================================================
 
-    void VisualScriptPanel::CompileGraph()
+    Spark::Scripting::VisualScriptGraph VisualScriptPanel::BuildGraph() const
     {
-        // Build the graph from UI state
         VisualScriptGraph graph;
         graph.className = m_scriptName;
-
+        graph.description = m_description;
         for (const auto& nodeUI : m_nodes)
         {
             graph.nodes.push_back(nodeUI.node);
+            graph.nodes.back().editorX = nodeUI.posX;
+            graph.nodes.back().editorY = nodeUI.posY;
         }
         for (const auto& connUI : m_connections)
         {
             graph.connections.push_back(connUI.connection);
         }
-
-        // Map variable types
-        static constexpr PinKind kVarTypes[] = {PinKind::Bool, PinKind::Int, PinKind::Float, PinKind::String,
-                                                PinKind::Vector3};
         for (const auto& varUI : m_variables)
         {
             VariableDecl var;
             var.name = varUI.name;
-            var.type = kVarTypes[std::clamp(varUI.typeIndex, 0, 4)];
+            var.type = kVariableKinds[std::clamp(varUI.typeIndex, 0, static_cast<int>(std::size(kVariableKinds)) - 1)];
             var.defaultValue = varUI.defaultValue;
             graph.variables.push_back(std::move(var));
         }
+        graph.functions = m_functions;
+        graph.customEvents = m_customEvents;
+        return graph;
+    }
 
+    void VisualScriptPanel::CompileGraph()
+    {
+        // Validate the output file name before compiling: the generated .as is
+        // written as m_savePath + name, so the name must not carry a path.
+        const auto outPath = VisualScriptGraphIO::ScriptFilePath(m_savePath, m_scriptName, ".as");
+        if (!outPath)
+        {
+            m_compileErrors = {"Compile refused: " + outPath.error()};
+            m_compileSuccess = false;
+            m_lastCompiledSource.clear();
+            return;
+        }
+
+        const VisualScriptGraph graph = BuildGraph();
         auto result = VisualScriptCompiler::Compile(graph, m_debugCompile);
         m_compileErrors = result.errors;
         m_compileSuccess = result.success;
@@ -1194,9 +1304,9 @@ namespace SparkEditor
 
         if (result.success)
         {
-            // Write generated .as file
-            std::string outPath = std::string(m_savePath) + std::string(m_scriptName) + ".as";
-            std::ofstream file(outPath);
+            // Write the generated .as byte for byte (binary: no CRLF translation), so a
+            // graph regenerates exactly the script checked in beside it.
+            std::ofstream file(*outPath, std::ios::binary);
             if (file.is_open())
             {
                 file << result.angelScriptSource;
@@ -1221,241 +1331,64 @@ namespace SparkEditor
     {
         SPARK_LOG_INFO(Spark::LogCategory::Editor, "VisualScriptPanel::SaveGraph — '%s' (%zu nodes, %zu connections)",
                        path.c_str(), m_nodes.size(), m_connections.size());
-        std::ofstream file(path);
-        if (!file.is_open())
+        if (auto saved = VisualScriptGraphIO::SaveFile(path, BuildGraph()); !saved)
         {
-            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "SaveGraph: failed to open '%s' for writing", path.c_str());
-            return;
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "SaveGraph: %s", saved.error().c_str());
+            m_compileErrors = {"Save failed: " + saved.error()};
         }
-
-        // Simple JSON serialization
-        file << "{\n";
-        file << "  \"className\": \"" << m_scriptName << "\",\n";
-
-        // Nodes
-        file << "  \"nodes\": [\n";
-        for (size_t i = 0; i < m_nodes.size(); i++)
-        {
-            const auto& n = m_nodes[i];
-            file << "    {\"id\":" << n.node.id << ",\"type\":" << static_cast<uint32_t>(n.node.type)
-                 << ",\"x\":" << n.posX << ",\"y\":" << n.posY << ",\"inputs\":" << n.node.inputs.size()
-                 << ",\"outputs\":" << n.node.outputs.size();
-            // Save node properties
-            if (!n.node.properties.empty())
-            {
-                file << ",\"props\":{";
-                bool firstProp = true;
-                for (const auto& [key, val] : n.node.properties)
-                {
-                    if (!firstProp)
-                        file << ",";
-                    file << "\"" << key << "\":\"" << val << "\"";
-                    firstProp = false;
-                }
-                file << "}";
-            }
-            // Save pin default values for constants
-            if (!n.node.outputs.empty() && static_cast<uint32_t>(n.node.type) >= 350)
-            {
-                const auto& pin = n.node.outputs[0];
-                file << ",\"defVal\":[" << pin.defaultValue[0] << "," << pin.defaultValue[1] << ","
-                     << pin.defaultValue[2] << "," << pin.defaultValue[3] << "]";
-                if (!pin.defaultString.empty())
-                    file << ",\"defStr\":\"" << pin.defaultString << "\"";
-            }
-            file << "}";
-            if (i + 1 < m_nodes.size())
-                file << ",";
-            file << "\n";
-        }
-        file << "  ],\n";
-
-        // Connections
-        file << "  \"connections\": [\n";
-        for (size_t i = 0; i < m_connections.size(); i++)
-        {
-            const auto& c = m_connections[i].connection;
-            file << "    {\"from\":" << c.fromNode << ",\"fromPin\":" << c.fromPin << ",\"to\":" << c.toNode
-                 << ",\"toPin\":" << c.toPin << "}";
-            if (i + 1 < m_connections.size())
-                file << ",";
-            file << "\n";
-        }
-        file << "  ],\n";
-
-        // Variables
-        file << "  \"variables\": [\n";
-        for (size_t i = 0; i < m_variables.size(); i++)
-        {
-            const auto& v = m_variables[i];
-            file << "    {\"name\":\"" << v.name << "\",\"type\":" << v.typeIndex << ",\"default\":\"" << v.defaultValue
-                 << "\"}";
-            if (i + 1 < m_variables.size())
-                file << ",";
-            file << "\n";
-        }
-        file << "  ]\n";
-
-        file << "}\n";
-        file.close();
     }
 
     void VisualScriptPanel::LoadGraph(const std::string& path)
     {
-        std::ifstream file(path);
-        if (!file.is_open())
+        auto graph = VisualScriptGraphIO::LoadFile(path);
+        if (!graph)
+        {
+            // The editor keeps the current graph; the file is reported, never half-applied.
+            SPARK_LOG_ERROR(Spark::LogCategory::Editor, "LoadGraph: %s", graph.error().c_str());
+            m_compileErrors = {"Load failed: " + graph.error()};
             return;
-
-        std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-        file.close();
+        }
 
         m_nodes.clear();
         m_connections.clear();
         m_variables.clear();
         m_selectedNode = -1;
         m_nextNodeId = 1;
+        m_compileErrors.clear();
 
-        // Helpers for parsing our simple JSON format
-        auto extractInt = [](const std::string& s, const std::string& key) -> int
+        for (auto& node : graph->nodes)
         {
-            auto pos = s.find("\"" + key + "\":");
-            if (pos == std::string::npos)
-                return 0;
-            pos += key.size() + 3;
-            return std::atoi(s.c_str() + pos);
-        };
-        auto extractFloat = [](const std::string& s, const std::string& key) -> float
-        {
-            auto pos = s.find("\"" + key + "\":");
-            if (pos == std::string::npos)
-                return 0.0f;
-            pos += key.size() + 3;
-            return std::strtof(s.c_str() + pos, nullptr);
-        };
-        auto extractStr = [](const std::string& s, const std::string& key) -> std::string
-        {
-            auto pos = s.find("\"" + key + "\":\"");
-            if (pos == std::string::npos)
-                return "";
-            pos += key.size() + 4;
-            auto end = s.find("\"", pos);
-            return (end != std::string::npos) ? s.substr(pos, end - pos) : "";
-        };
-        // Find matching closing brace accounting for nesting
-        auto findMatchingBrace = [](const std::string& s, size_t openPos) -> size_t
-        {
-            int depth = 0;
-            for (size_t i = openPos; i < s.size(); i++)
+            NodeUI nodeUI;
+            nodeUI.posX = node.editorX;
+            nodeUI.posY = node.editorY;
+            if (node.type == ScriptNodeType::Comment)
             {
-                if (s[i] == '{')
-                    depth++;
-                else if (s[i] == '}')
-                {
-                    depth--;
-                    if (depth == 0)
-                        return i;
-                }
+                nodeUI.width = 200.0f;
+                nodeUI.height = 60.0f;
             }
-            return std::string::npos;
-        };
-        // Extract properties sub-object: "props":{"key":"val",...}
-        auto extractProps = [](const std::string& s) -> std::unordered_map<std::string, std::string>
+            m_nextNodeId = std::max(m_nextNodeId, node.id + 1);
+            nodeUI.node = std::move(node);
+            m_nodes.push_back(std::move(nodeUI));
+        }
+        for (const auto& connection : graph->connections)
         {
-            std::unordered_map<std::string, std::string> props;
-            auto pos = s.find("\"props\":{");
-            if (pos == std::string::npos)
-                return props;
-            pos += 8; // skip to inner {
-            auto end = s.find("}", pos + 1);
-            if (end == std::string::npos)
-                return props;
-            std::string inner = s.substr(pos + 1, end - pos - 1);
-            // Parse "key":"val" pairs
-            size_t p = 0;
-            while ((p = inner.find("\"", p)) != std::string::npos)
-            {
-                auto keyEnd = inner.find("\"", p + 1);
-                if (keyEnd == std::string::npos)
-                    break;
-                std::string key = inner.substr(p + 1, keyEnd - p - 1);
-                auto valStart = inner.find("\"", keyEnd + 2);
-                if (valStart == std::string::npos)
-                    break;
-                auto valEnd = inner.find("\"", valStart + 1);
-                if (valEnd == std::string::npos)
-                    break;
-                props[key] = inner.substr(valStart + 1, valEnd - valStart - 1);
-                p = valEnd + 1;
-            }
-            return props;
-        };
-
-        // Parse sections with brace-depth-aware object extraction
-        auto parseSection = [&](const std::string& sectionName, auto callback)
+            m_connections.push_back(ConnectionUI{connection});
+        }
+        for (const auto& var : graph->variables)
         {
-            auto start = content.find("\"" + sectionName + "\"");
-            auto arrayStart = content.find("[", start);
-            auto arrayEnd = content.find("]", arrayStart);
-            if (start == std::string::npos || arrayStart == std::string::npos || arrayEnd == std::string::npos)
-                return;
-            std::string section = content.substr(arrayStart, arrayEnd - arrayStart);
-            size_t pos = 0;
-            while ((pos = section.find("{", pos)) != std::string::npos)
-            {
-                auto objEnd = findMatchingBrace(section, pos);
-                if (objEnd == std::string::npos)
-                    break;
-                callback(section.substr(pos, objEnd - pos + 1));
-                pos = objEnd + 1;
-            }
-        };
-
-        parseSection("nodes",
-                     [&](const std::string& obj)
-                     {
-                         uint32_t id = static_cast<uint32_t>(extractInt(obj, "id"));
-                         auto type = static_cast<ScriptNodeType>(extractInt(obj, "type"));
-                         float x = extractFloat(obj, "x");
-                         float y = extractFloat(obj, "y");
-                         AddNodeAtPosition(type, x, y);
-                         if (!m_nodes.empty())
-                         {
-                             m_nodes.back().node.id = id;
-                             if (id >= m_nextNodeId)
-                                 m_nextNodeId = id + 1;
-                             // Restore properties
-                             auto props = extractProps(obj);
-                             for (const auto& [k, v] : props)
-                                 m_nodes.back().node.properties[k] = v;
-                         }
-                     });
-
-        parseSection("connections",
-                     [&](const std::string& obj)
-                     {
-                         ConnectionUI conn;
-                         conn.connection.fromNode = static_cast<uint32_t>(extractInt(obj, "from"));
-                         conn.connection.fromPin = static_cast<uint32_t>(extractInt(obj, "fromPin"));
-                         conn.connection.toNode = static_cast<uint32_t>(extractInt(obj, "to"));
-                         conn.connection.toPin = static_cast<uint32_t>(extractInt(obj, "toPin"));
-                         m_connections.push_back(conn);
-                     });
-
-        parseSection("variables",
-                     [&](const std::string& obj)
-                     {
-                         VariableUI var{};
-                         std::string name = extractStr(obj, "name");
-                         std::strncpy(var.name, name.c_str(), sizeof(var.name) - 1);
-                         var.typeIndex = extractInt(obj, "type");
-                         std::string defVal = extractStr(obj, "default");
-                         std::strncpy(var.defaultValue, defVal.c_str(), sizeof(var.defaultValue) - 1);
-                         m_variables.push_back(var);
-                     });
-
-        std::string className = extractStr(content, "className");
-        if (!className.empty())
-            std::strncpy(m_scriptName, className.c_str(), sizeof(m_scriptName) - 1);
+            VariableUI varUI{};
+            std::strncpy(varUI.name, var.name.c_str(), sizeof(varUI.name) - 1);
+            const auto* kind = std::find(std::begin(kVariableKinds), std::end(kVariableKinds), var.type);
+            varUI.typeIndex =
+                kind != std::end(kVariableKinds) ? static_cast<int>(kind - std::begin(kVariableKinds)) : 2;
+            std::strncpy(varUI.defaultValue, var.defaultValue.c_str(), sizeof(varUI.defaultValue) - 1);
+            m_variables.push_back(varUI);
+        }
+        std::strncpy(m_scriptName, graph->className.c_str(), sizeof(m_scriptName) - 1);
+        m_scriptName[sizeof(m_scriptName) - 1] = '\0';
+        m_description = graph->description;
+        m_functions = std::move(graph->functions);
+        m_customEvents = std::move(graph->customEvents);
     }
 
     // ========================================================================
@@ -1531,11 +1464,18 @@ namespace SparkEditor
 
                     if (!duplicate)
                     {
-                        // Remove existing connection to same input (only one wire per input)
+                        // One wire per input, and one wire out of an execution output: the same rules the
+                        // .vscript loader enforces, so every graph the panel builds can be saved.
+                        const bool execOutput = srcKind == PinKind::Execution;
                         std::erase_if(m_connections,
-                                      [toId, inPin](const ConnectionUI& c) {
-                                          return c.connection.toNode == toId &&
-                                                 c.connection.toPin == static_cast<uint32_t>(inPin);
+                                      [fromId, outPin, toId, inPin, execOutput](const ConnectionUI& c)
+                                      {
+                                          const bool sameInput = c.connection.toNode == toId &&
+                                                                 c.connection.toPin == static_cast<uint32_t>(inPin);
+                                          const bool sameExecOutput =
+                                              execOutput && c.connection.fromNode == fromId &&
+                                              c.connection.fromPin == static_cast<uint32_t>(outPin);
+                                          return sameInput || sameExecOutput;
                                       });
 
                         ConnectionUI conn;
@@ -1555,18 +1495,8 @@ namespace SparkEditor
 
     bool VisualScriptPanel::AreTypesCompatible(PinKind a, PinKind b) const
     {
-        // Execution pins can only connect to Execution pins
-        if (a == PinKind::Execution || b == PinKind::Execution)
-            return a == b;
-        // Data pins
-        if (a == b)
-            return true;
-        if (a == PinKind::Any || b == PinKind::Any)
-            return true;
-        // Allow Int ↔ Float implicit conversion
-        if ((a == PinKind::Int && b == PinKind::Float) || (a == PinKind::Float && b == PinKind::Int))
-            return true;
-        return false;
+        // Same rule the .vscript loader enforces, in either wiring direction.
+        return VisualScriptGraphIO::ArePinKindsCompatible(a, b) || VisualScriptGraphIO::ArePinKindsCompatible(b, a);
     }
 
     void VisualScriptPanel::GetPinScreenPos(int nodeIndex, int pinIndex, bool isOutput, float& outX, float& outY) const
@@ -1600,7 +1530,7 @@ namespace SparkEditor
         ImVec2 endPos = ImGui::GetIO().MousePos;
 
         // Determine wire color from source pin
-        ImU32 wireColor = IM_COL32(200, 200, 200, 150);
+        ImU32 wireColor = Spark::Ui::Col(Spark::Ui::Role::TextSecondary, 0.6f);
         if (m_connectionSourceNode < static_cast<int>(m_nodes.size()))
         {
             const auto& srcNode = m_nodes[m_connectionSourceNode];

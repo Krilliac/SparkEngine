@@ -52,6 +52,9 @@ namespace Spark
         std::string scenarioName;
         bool passed = true;
         std::vector<RegressionDetail> regressions;
+        // Non-empty when the comparison could not establish evidence, such as
+        // a missing baseline. This is distinct from a measured regression.
+        std::string failureReason;
     };
 
     class IBenchmarkScenario

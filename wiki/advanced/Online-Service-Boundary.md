@@ -1,0 +1,210 @@
+# Online Service Boundary
+
+> **Audience:** Programmers, operators, and anyone writing public claims about SparkEngine
+>
+> **Thread Context:** Mixed (network transport threads, game thread, separate server processes)
+>
+> **Platform/Backend Scope:** All platforms; independent of the RHI backend
+
+## Overview
+
+This page is the contract for where SparkEngine stops and a game's own online
+services begin. It records owner decision **OD-08**
+([`docs/readiness/OWNER-DECISIONS.md`](../../docs/readiness/OWNER-DECISIONS.md)):
+
+> Identity, matchmaking, fleet, entitlement and billing services are out of
+> engine scope. The engine ships no hosted online services.
+
+SparkEngine is software you build and run yourself. It gives you a network
+transport, points where you plug in authentication, and server executables you
+can deploy. It does not run, host, or operate any online service for players.
+Nothing in this repository is a hosted service, and no page may say or imply
+otherwise. The release-readiness work item is `NET-110`. The capability row is
+`services.production`, which is `unsupported`.
+
+## What the engine provides
+
+| Layer | What ships in the engine | Where |
+|---|---|---|
+| Transport | UDP client/server transport behind `ITransport`, reliability, replication, prediction, lag compensation, packet validation, and a fail-closed bind policy (loopback or private LAN only) | `SparkEngine/Source/Engine/Networking/` ([Networking](../subsystems/Networking.md)) |
+| Authentication hooks | Integration points only. `IGatewayAuthenticator::Authenticate` accepts an opaque admission credential and returns a result. `KeyFileAuthenticator` is the local reference: owner-local key file, HMAC credentials, replay rejection. `LocalFixtureAuthenticator` is the local, deterministic stand-in for identity, entitlement and moderation. `IAreaPlacementPolicy` is where a matchmaker chooses the area for an admission, and `LocalDeterministicPlacement` is its local, deterministic default. `NetworkManager::RegisterSensitiveHandler` erases received payload copies for credential-bearing messages. `Spark::PasswordHash` provides PBKDF2-HMAC-SHA256 helpers for any account store you build yourself | `SparkGateway/src/GatewayCoordinator.h`, `SparkGateway/src/GatewaySecurity.h`, `SparkGateway/src/GatewayLocalAdapters.h`, `SparkEngine/Source/Engine/Networking/NetworkManager.h`, `SparkEngine/Source/Utils/PasswordHash.h` |
+| Server processes | `SparkServer` (headless authoritative module host), `SparkGateway` (admission and fenced area handoff), `SparkDaemon` / `SparkOrchestrator` (owner-local supervision), `SparkCollabServer` (editor collaboration) | [External Services and Orchestration](../../docs/guides/External-Services-and-Orchestration.md), [Dedicated Server](../subsystems/Dedicated-Server.md), [Area Server Architecture](../subsystems/Area-Server-Architecture.md) |
+| Platform service interface | `IOnlinePlatform` and `OnlineServiceManager`. The default `NullOnlinePlatform` works offline and keeps everything in process memory. `SteamPlatform`, `EpicPlatform`, and `ConsolePlatform` are compile-only stubs that report no capabilities and fail every call | `SparkEngine/Source/Engine/OnlineServices/OnlineServices.h` ([Online Services](../gameplay-tools/Online-Services.md)) |
+
+These are building blocks you deploy and run yourself. The server processes are
+development and reference executables. They sit outside the service-free
+`stable-v1` profile, and they are not evidence of a production deployment.
+
+## What the engine does not provide
+
+The engine does not include, host, or operate any of these services. A game
+that needs them must build them, buy them, or use a platform holder's service,
+and connect them through the hooks above:
+
+- **Identity and accounts:** sign-up, login, account recovery, credential
+  storage, and issuing the admission credentials that `IGatewayAuthenticator`
+  checks.
+- **Matchmaking and lobbies:** skill rating, queues, party formation, and
+  session discovery beyond LAN. `NullOnlinePlatform` session calls are local
+  only. A matchmaker places players through `IAreaPlacementPolicy`; the engine's
+  `LocalDeterministicPlacement` is a local stand-in, not a matchmaking service.
+- **Fleet management:** provisioning, scaling, placement, health-driven
+  replacement, and regional routing of server processes. `SparkDaemon` looks
+  after processes on a single host only. It is not a fleet control plane.
+- **Entitlements, billing, and payments:** ownership checks, store integration,
+  receipts, refunds, and tax.
+- **Player data services:** cloud saves, leaderboards, achievements, friends, and
+  presence as a service. `NullOnlinePlatform` keeps these in process memory,
+  and they are lost when the process exits.
+- **Operations:** secrets management for production credentials, abuse and
+  moderation tooling, telemetry pipelines, backups, and incident response.
+
+A Steam, Epic, or console build needs that vendor's SDK, agreement, and
+backend. The engine ships none of them. The stub platforms and
+`SteamTransport` exist so an integration can be added without changing the
+interface. They do nothing on their own.
+
+## Trust boundaries
+
+The full contract, with a Mermaid deployment diagram, the nine named boundaries
+(B1 to B9), per-call budgets, and the adapter status register, is
+[`docs/specs/online-services.md`](../../docs/specs/online-services.md). The
+sketch below is a summary.
+
+```
+ Player client  ──UDP──►  SparkServer / AreaServer   (engine: gameplay authority)
+       │                         ▲
+       │ admission credential    │ owner-local control link (named pipe / Unix socket)
+       ▼                         │
+   SparkGateway  ────────────────┘                   (engine: admission + handoff)
+       ▲
+       │ issues credentials, owns accounts, billing, matchmaking, fleet
+   Product-owned services                            (NOT engine: your infrastructure)
+```
+
+- The engine trusts a credential only after the configured
+  `IGatewayAuthenticator` accepts it. Whoever issues credentials sits outside
+  the engine, and the game owns that service.
+- Gateway credentials protect admission and the owner-local control plane. They
+  do not authenticate the gameplay UDP path. That path is experimental and
+  unauthenticated, and it binds to loopback by default. See
+  [External Services and Orchestration](../../docs/guides/External-Services-and-Orchestration.md).
+- Production secrets never live in the engine's shipped configuration (OD-22).
+
+## Running locally with deterministic adapters
+
+Because those services are out of engine scope, the engine runs locally by putting a
+local, deterministic adapter at each seam a product service would plug into
+(spec section 6.1):
+
+| Product service | Engine seam | Local stand-in |
+|---|---|---|
+| Platform services (B1) | `IOnlinePlatform` | `NullOnlinePlatform` |
+| Identity, entitlement, moderation (B2, B4) | `IGatewayAuthenticator` | `LocalFixtureAuthenticator`, from `SparkGateway --admission-fixture <path>` or `[Security] admission_fixture` |
+| Matchmaking (B9) | `IAreaPlacementPolicy` | `LocalDeterministicPlacement`, the default policy of `GatewayCoordinator` |
+| Fleet (B8) | Health snapshots, `GatewayCoordinator::BeginDrain` | `SparkDaemon` on one host plus `BeginDrain` |
+
+An admission fixture is a small strict JSON file (64 KiB at most):
+
+```json
+{"version": 1, "principals": [
+  {"credential": "dev-alice-01", "principalId": "alice", "entitled": true, "moderation": "none"},
+  {"credential": "dev-mallory-02", "principalId": "mallory", "entitled": true, "moderation": "banned"}]}
+```
+
+A client sends the `credential` as its opaque admission credential. An unknown
+credential, a banned principal and an unentitled one are rejected with the fixed
+reasons `Unknown credential`, `Principal is banned` and `Principal is not entitled`,
+and the credential never reaches a log or a reason. A fixture that is malformed,
+oversized or inconsistent is rejected as a whole, and the gateway then admits
+nobody. The fixture is for owner-local development: it holds credentials in
+plain text, so it is not a secret store.
+
+`LocalDeterministicPlacement` puts each admission in the online area with the
+fewest sessions that is below its `max_clients`, and breaks ties by the lowest area
+id. Whatever policy is installed, `GatewayCoordinator` admits only to a registered,
+online area with free capacity. Neither adapter reads a clock or a random source,
+so the same admission script on a fresh gateway gives a byte-identical result.
+The `OnlineServicesLocalStack` CTest checks that.
+
+## When to Use
+
+- Before you write a website, README, store page, or wiki claim about online
+  features. Read this page first.
+- When you plan a multiplayer game and need to know what you must build or buy.
+- When you add a platform integration. Implement `IOnlinePlatform` or
+  `IGatewayAuthenticator` in your game or integration layer instead of adding a
+  hosted service to the engine.
+
+## Threading Model
+
+`IGatewayAuthenticator::Authenticate` can be called from any gateway transport
+thread and must be thread-safe. `OnlineServiceManager` is ticked from the
+gameplay lifecycle on the game thread. The rules for transport threads are on
+the [Networking](../subsystems/Networking.md) page.
+
+## Platform and Backend Support
+
+The boundary is the same on every platform. The service-free `stable-v1`
+profile ships no online services and no multiplayer support claim.
+
+## Key APIs and Types
+
+| Type | Role at the boundary |
+|---|---|
+| `Spark::OnlineServices::IOnlinePlatform` | The interface a product's platform integration implements |
+| `Spark::OnlineServices::NullOnlinePlatform` | Offline, in-memory default. It never contacts a network service |
+| `IGatewayAuthenticator` | Checks product-issued admission credentials |
+| `KeyFileAuthenticator` | Local reference authenticator (owner-local key file) |
+| `LocalFixtureAuthenticator` | Local, deterministic admission from a principal fixture file |
+| `IAreaPlacementPolicy` | Chooses the area for an admission. A product matchmaker implements it |
+| `LocalDeterministicPlacement` | Local, deterministic default placement: fewest sessions, then lowest area id |
+| `Spark::PasswordHash` | PBKDF2 helpers for product-owned account stores |
+
+## Performance Notes
+
+Section 5 of [`docs/specs/online-services.md`](../../docs/specs/online-services.md)
+sets the timeout, retry, and circuit-breaker budgets that apply at each engine
+boundary, such as a 5 ms game-thread limit per `IOnlinePlatform` call and 2 s
+local I/O deadlines on gateway admission and area control. The engine guards
+enforce them for any adapter: `GuardedOnlinePlatform` measures every
+`IOnlinePlatform` call against the 5 ms budget and runs a per-capability circuit
+breaker, and `GuardedGatewayAuthenticator` rejects authenticator exceptions and
+answers slower than 2 s and opens a circuit after 5 consecutive faults. The spec
+also says which budgets remain adapter responsibilities. The internal budgets of
+a product service belong to the product that runs it.
+
+## Troubleshooting
+
+- **"Cloud save" data is gone after a restart.** `NullOnlinePlatform` keeps it
+  in memory on purpose. Use the local [Save System](../gameplay-tools/Save-System.md)
+  or your own backend.
+- **`SteamPlatform::Login` always fails.** The Steamworks SDK is not linked. The
+  class is a stub.
+
+## Enforcement
+
+`python3 tools/site-data/validate.py` rejects any sentence on a governed public
+surface that says the engine hosts, manages, or operates an online service
+(identity, matchmaking, fleet, entitlement, billing, leaderboard, cloud-save, or
+similar), unless the same sentence, or the same table row, negates it. The patterns are
+`HOSTED_ONLINE_SERVICE_CLAIM` and `hosted_online_service_claim_errors` in
+`tools/site-data/validate.py`. The governed surfaces are every public claim
+surface plus this page, the Online Services page, and `docs/site/readiness.json`.
+`Tests/Tools/test_site_data_contract.py` covers the rule.
+
+## Related Pages
+
+- [Online Services](../gameplay-tools/Online-Services.md)
+- [Online-Services Boundary Specification](../../docs/specs/online-services.md)
+- [Networking](../subsystems/Networking.md)
+- [Dedicated Server](../subsystems/Dedicated-Server.md)
+- [Daemon Services Architecture](Daemon-Services-Architecture.md)
+- [Server Operations Runbook](Server-Operations-Runbook.md)
+
+## Source & Freshness
+
+Written 2026-09-24 for `NET-110` from OD-08 and the current sources listed
+above. Updated 2026-09-27 for the local, deterministic adapters in
+`SparkGateway/src/GatewayLocalAdapters.h`. When an online-service claim or the owner decision changes, update this
+page.

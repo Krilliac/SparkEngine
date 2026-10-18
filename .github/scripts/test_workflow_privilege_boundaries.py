@@ -24,6 +24,10 @@ CODEQL_REPORT = ROOT / ".github" / "workflows" / "codeql-report.yml"
 SUMMARY = ROOT / ".github" / "workflows" / "summary.yml"
 RELEASE = ROOT / ".github" / "workflows" / "release.yml"
 MSVC = ROOT / ".github" / "workflows" / "msvc.yml"
+OPERATIONS = ROOT / ".github" / "workflows" / "operations-scheduled.yml"
+GPU_CERTIFICATION = ROOT / ".github" / "workflows" / "gpu-certification.yml"
+SCORECARD = ROOT / ".github" / "workflows" / "scorecard.yml"
+TEST_REPORT = ROOT / ".github" / "workflows" / "test-report.yml"
 CODEQL_ACTION_SHA = "cdf488f595d80d6e07e03d4674febd5ab45fa938"
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 
@@ -132,7 +136,7 @@ class WorkflowPrivilegeBoundaryTests(unittest.TestCase):
 
     def test_codeql_action_family_uses_one_reviewed_revision(self) -> None:
         revisions: set[str] = set()
-        for workflow in (CODEQL, CODACY_REPORT, MSVC):
+        for workflow in (CODEQL, CODACY_REPORT, MSVC, SCORECARD):
             text = workflow.read_text(encoding="utf-8")
             revisions.update(
                 re.findall(
@@ -158,6 +162,43 @@ class WorkflowPrivilegeBoundaryTests(unittest.TestCase):
             },
         )
         self.assertNotIn("actions: write", release)
+
+    def test_release_approval_job_is_read_only(self) -> None:
+        text = RELEASE.read_text(encoding="utf-8")
+        approval = _block(text, "release-approval", 2)
+
+        self.assertEqual(_permissions(approval), {"actions": "read", "contents": "read"})
+        self.assertNotIn(": write", approval)
+        self.assertNotIn("secrets.", approval)
+
+    def test_release_publisher_verifies_published_asset_attestation(self) -> None:
+        text = RELEASE.read_text(encoding="utf-8")
+        release = _block(text, "release", 2)
+        step_name = "    - name: Verify published release attestation as a consumer\n"
+
+        self.assertEqual(
+            release.count(step_name),
+            1,
+            "release publication must include exactly one consumer attestation check",
+        )
+        self.assertIn(
+            'gh release verify "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"',
+            release,
+        )
+        verify_index = release.index(step_name)
+        verify_end = release.find("\n    - name:", verify_index + len(step_name))
+        verify_step = release[verify_index:verify_end]
+        self.assertNotIn("\n      if:", verify_step,
+                         "both stable and nightly publications require consumer verification")
+        self.assertNotIn("continue-on-error:", verify_step)
+        self.assertLess(
+            release.index("    - name: Verify release tag immediately after publication\n"),
+            verify_index,
+        )
+        self.assertLess(
+            verify_index,
+            release.index("    - name: Complete published release and download counters\n"),
+        )
 
     def test_codeql_source_workflow_executes_no_repository_code(self) -> None:
         text = CODEQL.read_text(encoding="utf-8")
@@ -298,6 +339,75 @@ class WorkflowPrivilegeBoundaryTests(unittest.TestCase):
         self.assertEqual(_permissions(job), {"issues": "write", "models": "read"})
         self.assertNotIn("actions/checkout@", job)
         _assert_full_sha_pins(self, text)
+
+    def test_scheduled_operations_jobs_are_read_only(self) -> None:
+        text = OPERATIONS.read_text(encoding="utf-8")
+        self.assertEqual(_block(text, "permissions", 0).splitlines()[1:], ["  contents: read"])
+        for name in ("recovery-drill", "server-soak", "soak-scheduled", "headless-windows-soak",
+                     "observability-canary", "terrafront-soak"):
+            job = _block(text, name, 2)
+            with self.subTest(job=name):
+                self.assertEqual(_permissions(job), {"contents": "read"})
+                self.assertIn("persist-credentials: false", job)
+                self.assertNotIn("secrets.", job)
+        _assert_full_sha_pins(self, text)
+
+    def test_only_gpu_certification_names_the_self_hosted_runner(self) -> None:
+        # OD-31: the repository is public, so a self-hosted label anywhere else
+        # (including inside a matrix value or expression) could hand the owner's
+        # workstation to a trigger that untrusted code reaches.
+        for workflow in sorted(WORKFLOW_ROOT.glob("*.y*ml")):
+            if workflow == GPU_CERTIFICATION:
+                continue
+            text = workflow.read_text(encoding="utf-8").lower()
+            with self.subTest(workflow=workflow.name):
+                self.assertNotIn("self-hosted", text)
+                self.assertNotIn("spark-gpu", text)
+
+    def test_gpu_certification_has_only_trusted_triggers_and_no_privilege(self) -> None:
+        text = GPU_CERTIFICATION.read_text(encoding="utf-8")
+        workflow = parse_workflow_yaml(text)
+        self.assertEqual(workflow["on"], {"workflow_dispatch": None, "push": {"branches": ["Working"]}})
+        self.assertEqual(workflow["permissions"], {})
+        self.assertNotIn("secrets.", text)
+        self.assertNotIn("environment:", text)
+        self.assertNotIn("id-token", text)
+        for name, job in workflow["jobs"].items():
+            with self.subTest(job=name):
+                self.assertEqual(job["permissions"], {"contents": "read"})
+                self.assertIn("github.repository == 'Krilliac/SparkEngine'", job["if"])
+                self.assertIn("spark-gpu", job["runs-on"])
+                for step in job["steps"]:
+                    if str(step.get("uses", "")).startswith("actions/checkout@"):
+                        self.assertEqual(step["with"]["persist-credentials"], False)
+        _assert_full_sha_pins(self, text)
+
+    def test_test_report_reads_exact_source_artifacts_and_runs_no_repository_code(self) -> None:
+        text = TEST_REPORT.read_text(encoding="utf-8")
+        report = _block(text, "report", 2)
+
+        self.assertIn('workflows: ["Build SparkEngine"]', text)
+        self.assertIn("types: [completed]", text)
+        self.assertIsNone(re.search(r"^\s*pull_request(?:_target)?:", text, flags=re.MULTILINE))
+        self.assertIn("\npermissions: {}\n", text)
+        self.assertIn("github.event.workflow_run.path == '.github/workflows/build.yml'", report)
+        self.assertEqual(
+            _permissions(report),
+            {"actions": "read", "checks": "write", "contents": "read", "pull-requests": "write"},
+        )
+        # Untrusted JUnit data only: nothing from the source commit is checked out or executed.
+        self.assertNotIn("actions/checkout@", report)
+        self.assertIsNone(re.search(r"^\s*-?\s*run:", report, flags=re.MULTILINE))
+        self.assertIn("run-id: ${{ github.event.workflow_run.id }}", report)
+        self.assertIn("repository: ${{ github.repository }}", report)
+        # Fork PRs are only found by search, and the base delta needs the head commit build mode.
+        self.assertIn("search_pull_requests: true", report)
+        self.assertIn("pull_request_build: commit", report)
+        self.assertIn("commit: ${{ github.event.workflow_run.head_sha }}", report)
+        self.assertRegex(
+            report,
+            r"uses: docker://ghcr\.io/enricomi/publish-unit-test-result-action@sha256:[0-9a-f]{64}\n",
+        )
 
 
 if __name__ == "__main__":

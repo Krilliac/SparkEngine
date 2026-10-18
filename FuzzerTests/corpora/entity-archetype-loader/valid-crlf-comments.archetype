@@ -1,0 +1,7 @@
+// c
+
+name = Crlf
+category =  Props 
+component = Transform : 1,2,3 
+not a pair
+unknown = x

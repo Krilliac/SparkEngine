@@ -361,16 +361,39 @@ void* PhysicsSystem::CreateConvexHullShape(const std::vector<XMFLOAT3>& vertices
 
 size_t PhysicsSystem::HashShape(const CollisionShapeDesc& desc) const
 {
+    // The cache returns the stored shape on a key match, so every field that changes the built geometry must feed
+    // the key. Inline mesh, hull and heightfield data are hashed by content: two meshes with equal vertex/index
+    // counts but different positions (e.g. two procedurally built road surfaces) must not share one shape.
     size_t hash = std::hash<int>()(static_cast<int>(desc.type));
+    const auto combineFloat = [&hash](float value) { Spark::CombineHash(hash, std::hash<float>()(value)); };
+    const auto combineFloat3 = [&combineFloat](const XMFLOAT3& value)
+    {
+        combineFloat(value.x);
+        combineFloat(value.y);
+        combineFloat(value.z);
+    };
 
-    Spark::CombineHash(hash, std::hash<float>()(desc.dimensions.x));
-    Spark::CombineHash(hash, std::hash<float>()(desc.dimensions.y));
-    Spark::CombineHash(hash, std::hash<float>()(desc.dimensions.z));
-    Spark::CombineHash(hash, std::hash<float>()(desc.radius));
-    Spark::CombineHash(hash, std::hash<float>()(desc.height));
+    combineFloat3(desc.dimensions);
+    combineFloat(desc.radius);
+    combineFloat(desc.height);
+    combineFloat(desc.topRadius);
+    combineFloat3(desc.localOffset);
+    combineFloat3(desc.localRotation);
+    combineFloat3(desc.scale);
+    combineFloat3(desc.planeNormal);
+    combineFloat(desc.planeDistance);
+    combineFloat(desc.heightfieldScale);
+    Spark::CombineHash(hash, std::hash<uint32_t>()(desc.heightfieldSamples));
     Spark::CombineHash(hash, std::hash<std::string>()(desc.meshPath));
     Spark::CombineHash(hash, std::hash<size_t>()(desc.vertices.size()));
     Spark::CombineHash(hash, std::hash<size_t>()(desc.indices.size()));
+    Spark::CombineHash(hash, std::hash<size_t>()(desc.heightfieldData.size()));
+    Spark::CombineHash(
+        hash, static_cast<size_t>(Spark::FNV1a64(desc.vertices.data(), desc.vertices.size() * sizeof(XMFLOAT3))));
+    Spark::CombineHash(
+        hash, static_cast<size_t>(Spark::FNV1a64(desc.indices.data(), desc.indices.size() * sizeof(uint32_t))));
+    Spark::CombineHash(hash, static_cast<size_t>(Spark::FNV1a64(desc.heightfieldData.data(),
+                                                                desc.heightfieldData.size() * sizeof(float))));
 
     return hash;
 }

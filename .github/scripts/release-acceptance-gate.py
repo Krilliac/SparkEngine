@@ -10,6 +10,7 @@ window and records the instant at which recovery may be needed.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
 import re
@@ -31,6 +32,9 @@ ALLOWED_CI_EVENTS = frozenset({"push", "workflow_dispatch"})
 BUILD_WORKFLOW_NAME = "Build SparkEngine"
 BUILD_WORKFLOW_PATH = ".github/workflows/build.yml"
 WORKING_BRANCH = "Working"
+VERSION_TAG_PATTERN = re.compile(r"v[0-9]+\.[0-9]+\.[0-9]+")
+NIGHTLY_TAG_PATTERN = re.compile(r"nightly-[1-9][0-9]*-[1-9][0-9]*-[0-9a-f]{12}")
+SIGNATURE_CONTROL_ASSET = "SparkEngine-release-signature-bundle.tar.gz"
 
 
 class GateError(Exception):
@@ -43,7 +47,7 @@ def _fetch_json(url: str, token: str) -> Any:
         headers={
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {token}",
-            "X-GitHub-Api-Version": "2022-11-28",
+            "X-GitHub-Api-Version": "2026-03-10",
             "User-Agent": "SparkEngine-release-acceptance-gate",
         },
     )
@@ -72,7 +76,13 @@ def _mark_patch_started() -> None:
         raise GateError(f"cannot record release PATCH attempt: {error}") from error
 
 
-def _patch_json(url: str, token: str, body: dict[str, Any]) -> Any:
+def _patch_json(
+    url: str,
+    token: str,
+    body: dict[str, Any],
+    *,
+    mark_attempt: bool = True,
+) -> Any:
     data = json.dumps(body).encode("utf-8")
     request = Request(
         url,
@@ -82,11 +92,12 @@ def _patch_json(url: str, token: str, body: dict[str, Any]) -> Any:
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
-            "X-GitHub-Api-Version": "2022-11-28",
+            "X-GitHub-Api-Version": "2026-03-10",
             "User-Agent": "SparkEngine-release-acceptance-gate",
         },
     )
-    _mark_patch_started()
+    if mark_attempt:
+        _mark_patch_started()
     try:
         with urlopen(request, timeout=30) as response:  # noqa: S310
             return json.load(response)
@@ -132,6 +143,15 @@ def _read_expected_digests(path: Path, expected_names: list[str]) -> dict[str, s
     return digests
 
 
+def _validate_release_tag(release_tag: str, is_versioned: bool) -> None:
+    """Require the tag identity to match the publication channel."""
+    if is_versioned:
+        if VERSION_TAG_PATTERN.fullmatch(release_tag) is None:
+            raise GateError("versioned release tag must have the form vMAJOR.MINOR.PATCH")
+    elif NIGHTLY_TAG_PATTERN.fullmatch(release_tag) is None:
+        raise GateError("nightly publication must use a unique immutable nightly tag")
+
+
 def _fetch_release_assets(
     api_url: str,
     token: str,
@@ -172,6 +192,53 @@ def _fetch_release_assets(
     raise GateError(f"release assets exceed the {MAX_ASSET_PAGES}-page acceptance limit")
 
 
+def _verify_release_assets(
+    assets: list[dict[str, Any]],
+    expected_names: list[str],
+    expected_digests: dict[str, str],
+    *,
+    allow_signature_control: bool = False,
+    signature_control_digest: str | None = None,
+    signature_control_size: int | None = None,
+    require_signature_control: bool = False,
+) -> None:
+    """Verify the complete asset inventory against the frozen manifest."""
+    asset_names = {asset["name"] for asset in assets}
+    has_control = SIGNATURE_CONTROL_ASSET in asset_names
+    if require_signature_control and not has_control:
+        raise GateError("stable release is missing its signature control asset")
+    allowed_names = set(expected_names) | ({SIGNATURE_CONTROL_ASSET} if allow_signature_control and has_control else set())
+    if len(assets) != len(allowed_names) or asset_names != allowed_names:
+        missing = set(expected_names) - asset_names
+        extra = asset_names - set(expected_names)
+        raise GateError(f"asset mismatch — missing: {missing}, extra: {extra}")
+
+    for asset in assets:
+        name = asset["name"]
+        if asset.get("state") != "uploaded":
+            raise GateError(f"asset '{name}' is not in 'uploaded' state")
+        if name == SIGNATURE_CONTROL_ASSET:
+            if not allow_signature_control:
+                raise GateError(f"asset '{name}' is not allowed on this channel")
+            digest = asset.get("digest")
+            uploader = asset.get("uploader")
+            if (not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest)
+                    or not isinstance(uploader, dict) or uploader.get("id") != 41898282
+                    or uploader.get("login") != "github-actions[bot]"):
+                raise GateError("signature control asset metadata is not trusted")
+            if signature_control_digest is not None and digest != signature_control_digest:
+                raise GateError("signature control asset digest does not match the frozen local bundle")
+            if signature_control_size is not None and asset.get("size") != signature_control_size:
+                raise GateError("signature control asset size does not match the frozen local bundle")
+            continue
+        expected_digest = expected_digests[name]
+        actual_digest = asset.get("digest")
+        if not isinstance(actual_digest, str) or actual_digest.lower() != expected_digest:
+            raise GateError(
+                f"asset '{name}' digest mismatch: expected {expected_digest}, got {actual_digest}"
+            )
+
+
 def verify_draft_release(
     api_url: str,
     token: str,
@@ -181,6 +248,10 @@ def verify_draft_release(
     is_versioned: bool,
     expected_names: list[str],
     expected_digests: dict[str, str],
+    *,
+    signature_control_digest: str | None = None,
+    signature_control_size: int | None = None,
+    require_signature_control: bool = False,
 ) -> None:
     release = _fetch_json(f"{api_url}/repos/{repository}/releases/{release_id}", token)
     if not isinstance(release, dict):
@@ -198,20 +269,63 @@ def verify_draft_release(
 
     assets = _fetch_release_assets(api_url, token, repository, release_id)
 
-    asset_names = {asset["name"] for asset in assets}
-    if len(assets) != len(expected_names) or asset_names != set(expected_names):
-        missing = set(expected_names) - asset_names
-        extra = asset_names - set(expected_names)
-        raise GateError(f"asset mismatch — missing: {missing}, extra: {extra}")
+    _verify_release_assets(assets, expected_names, expected_digests,
+                           allow_signature_control=is_versioned,
+                           signature_control_digest=signature_control_digest,
+                           signature_control_size=signature_control_size,
+                           require_signature_control=require_signature_control)
 
-    for asset in assets:
-        name = asset["name"]
-        if asset.get("state") != "uploaded":
-            raise GateError(f"asset '{name}' is not in 'uploaded' state")
-        expected_digest = expected_digests[name]
-        actual_digest = asset.get("digest")
-        if not isinstance(actual_digest, str) or actual_digest.lower() != expected_digest:
-            raise GateError(f"asset '{name}' digest mismatch: expected {expected_digest}, got {actual_digest}")
+
+def verify_published_release(
+    api_url: str,
+    token: str,
+    repository: str,
+    release_id: int,
+    release_tag: str,
+    is_versioned: bool,
+    published: Any,
+    expected_names: list[str],
+    expected_digests: dict[str, str],
+    *,
+    signature_control_digest: str | None = None,
+    signature_control_size: int | None = None,
+    require_signature_control: bool = False,
+) -> None:
+    """Re-check publication response and assets before reporting success."""
+    if not isinstance(published, dict):
+        raise GateError("publication PATCH response is not an object")
+    if published.get("id") != release_id:
+        raise GateError("published release ID mismatch")
+    if published.get("tag_name") != release_tag:
+        raise GateError("published release tag mismatch")
+    if published.get("draft") is not False:
+        raise GateError("publication PATCH did not clear draft flag")
+    expected_prerelease = not is_versioned
+    if published.get("prerelease") is not expected_prerelease:
+        raise GateError("publication PATCH returned the wrong release channel")
+    if published.get("immutable") is not is_versioned:
+        raise GateError("publication PATCH returned incompatible release immutability")
+
+    current = _fetch_json(f"{api_url}/repos/{repository}/releases/{release_id}", token)
+    if not isinstance(current, dict):
+        raise GateError("post-PATCH release GET response is not an object")
+    if current.get("id") != release_id:
+        raise GateError("post-PATCH release ID mismatch")
+    if current.get("tag_name") != release_tag:
+        raise GateError("post-PATCH release tag mismatch")
+    if current.get("draft") is not False:
+        raise GateError("post-PATCH release GET did not prove a public release")
+    if current.get("prerelease") is not expected_prerelease:
+        raise GateError("post-PATCH release GET returned the wrong release channel")
+    if current.get("immutable") is not is_versioned:
+        raise GateError("post-PATCH release immutability does not match its channel")
+
+    assets = _fetch_release_assets(api_url, token, repository, release_id)
+    _verify_release_assets(assets, expected_names, expected_digests,
+                           allow_signature_control=is_versioned,
+                           signature_control_digest=signature_control_digest,
+                           signature_control_size=signature_control_size,
+                           require_signature_control=require_signature_control)
 
 
 def verify_tag(
@@ -435,6 +549,24 @@ def verify_ci_gate(
 
 
 
+def verify_release_policy(api_url: str, token: str, repository: str, is_versioned: bool) -> None:
+    policy_token = os.environ.get("RELEASE_POLICY_READ_TOKEN")
+    if not policy_token:
+        raise GateError("environment RELEASE_POLICY_READ_TOKEN with Administration(read) is required")
+    policy = _fetch_json(f"{api_url}/repos/{repository}/immutable-releases", policy_token)
+    if not isinstance(policy, dict) or policy.get("enabled") is not is_versioned:
+        raise GateError("repository immutability is incompatible with the publication channel")
+    if not is_versioned and policy.get("enforced_by_owner") is not False:
+        raise GateError("rolling nightly cannot mutate under enforced or unknown immutable policy")
+
+
+def exact_mutable_stable(record: Any, release_id: int, release_tag: str, *, draft: bool) -> bool:
+    return (isinstance(record, dict) and type(record.get("id")) is int
+            and record["id"] == release_id and record.get("tag_name") == release_tag
+            and record.get("prerelease") is False and record.get("draft") is draft
+            and record.get("immutable") is False)
+
+
 def acceptance_gate(
     api_url: str,
     token: str,
@@ -448,16 +580,46 @@ def acceptance_gate(
 ) -> dict[str, Any]:
     """Run every pre-publication check, then PATCH draft=false in one step."""
 
+    _validate_release_tag(release_tag, is_versioned)
+    immutable_channel = is_versioned or os.environ.get("RELEASE_IMMUTABLE") == "true"
     expected_names = _read_expected_assets(expected_assets_file)
     expected_digests = _read_expected_digests(expected_digests_file, expected_names)
+    signature_control_digest = None
+    signature_control_size = None
+    require_signature_control = False
+    control_path = os.environ.get("SIGNATURE_BUNDLE_PATH", "")
+    if is_versioned:
+        if not control_path:
+            raise GateError("stable publication requires the protected signature control bundle path")
+        path = Path(control_path)
+        if not path.is_file() or path.is_symlink():
+            raise GateError("protected stable signature control bundle is missing or link-like")
+        if path.stat().st_size <= 0 or path.stat().st_size > 64 * 1024 * 1024:
+            raise GateError("protected stable signature control bundle is outside the size bound")
+        signature_control_digest = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+        signature_control_size = path.stat().st_size
+        require_signature_control = True
 
     verify_draft_release(
         api_url, token, repository, release_id, release_tag, is_versioned,
         expected_names, expected_digests,
+        signature_control_digest=signature_control_digest,
+        signature_control_size=signature_control_size,
+        require_signature_control=require_signature_control,
     )
     verify_tag(token, release_tag, target_sha)
     verify_ci_gate(api_url, token, repository, target_sha)
     verify_working(api_url, token, repository, target_sha)
+    # The checks above can take several API round trips. Re-read the mutable
+    # release boundary immediately before publication so a concurrent asset or
+    # visibility change cannot rely on the earlier stale snapshot.
+    verify_draft_release(
+        api_url, token, repository, release_id, release_tag, is_versioned,
+        expected_names, expected_digests,
+        signature_control_digest=signature_control_digest,
+        signature_control_size=signature_control_size,
+        require_signature_control=require_signature_control,
+    )
 
     patch_body: dict[str, Any] = {"draft": False}
     if is_versioned:
@@ -467,24 +629,73 @@ def acceptance_gate(
         patch_body["make_latest"] = "false"
         patch_body["prerelease"] = True
 
+    verify_release_policy(api_url, token, repository, immutable_channel)
     published = _patch_json(
         f"{api_url}/repos/{repository}/releases/{release_id}",
         token,
         patch_body,
     )
 
-    if not isinstance(published, dict):
-        raise GateError("publication PATCH response is not an object")
-    if published.get("id") != release_id:
-        raise GateError("published release ID mismatch")
-    if published.get("tag_name") != release_tag:
-        raise GateError("published release tag mismatch")
-    if published.get("draft") is not False:
-        raise GateError("publication PATCH did not clear draft flag")
-    if is_versioned and published.get("prerelease") is not False:
-        raise GateError("stable publication PATCH did not clear prerelease flag")
-    if not is_versioned and published.get("prerelease") is not True:
-        raise GateError("nightly publication PATCH did not set prerelease flag")
+    try:
+        verify_published_release(
+            api_url,
+            token,
+            repository,
+            release_id,
+            release_tag,
+            immutable_channel,
+            published,
+            expected_names,
+            expected_digests,
+            signature_control_digest=signature_control_digest,
+            signature_control_size=signature_control_size,
+            require_signature_control=require_signature_control,
+        )
+    except GateError as publication_error:
+        if is_versioned:
+            # Quarantine only an exactly identified mutable stable publication.
+            # An immutable, contradictory, or missing response is never authority
+            # to send a blind compensating PATCH.
+            if exact_mutable_stable(published, release_id, release_tag, draft=False):
+                current = _fetch_json(f"{api_url}/repos/{repository}/releases/{release_id}", token)
+                if exact_mutable_stable(current, release_id, release_tag, draft=False):
+                    redrafted = _patch_json(
+                        f"{api_url}/repos/{repository}/releases/{release_id}", token,
+                        {"draft": True, "make_latest": "false"}, mark_attempt=False,
+                    )
+                    confirmed = _fetch_json(f"{api_url}/repos/{repository}/releases/{release_id}", token)
+                    if (exact_mutable_stable(redrafted, release_id, release_tag, draft=True)
+                            and exact_mutable_stable(confirmed, release_id, release_tag, draft=True)):
+                        raise GateError(f"stable publication failed ({publication_error}); proven mutable target was quarantined as draft") from publication_error
+            raise GateError(f"stable publication validation failed ({publication_error}); immutable or ambiguous target preserved for owner investigation") from publication_error
+        if immutable_channel:
+            raise GateError(
+                f"post-PATCH publication validation failed ({publication_error}); immutable target preserved for owner investigation"
+            ) from publication_error
+        try:
+            verify_release_policy(api_url, token, repository, False)
+            redrafted = _patch_json(
+                f"{api_url}/repos/{repository}/releases/{release_id}",
+                token,
+                {"draft": True, "make_latest": "false"},
+                mark_attempt=False,
+            )
+            if (
+                not isinstance(redrafted, dict)
+                or redrafted.get("id") != release_id
+                or redrafted.get("tag_name") != release_tag
+                or redrafted.get("draft") is not True
+            ):
+                raise GateError("redraft PATCH did not prove a mutable draft release")
+        except GateError as redraft_error:
+            raise GateError(
+                f"post-PATCH publication validation failed ({publication_error}); "
+                f"redraft failed ({redraft_error})"
+            ) from redraft_error
+        raise GateError(
+            f"post-PATCH publication validation failed; release was redrafted: "
+            f"{publication_error}"
+        ) from publication_error
 
     return published
 

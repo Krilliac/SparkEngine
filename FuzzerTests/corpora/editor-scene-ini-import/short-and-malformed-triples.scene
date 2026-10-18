@@ -1,0 +1,9 @@
+[Object]
+type=cube
+position=1,2
+rotation=abc
+scale=2,x,4
+[Object]
+type=cube
+position=  7 ,8,9
+scale=0x1p3,1e-3,-0

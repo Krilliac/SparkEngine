@@ -269,16 +269,15 @@ TEST(MeshObjLoader_PreservesMtlColorRangesForBasicRenderer)
     ComPtr<ID3D11Device> dev;
     ComPtr<ID3D11DeviceContext> ctx;
     D3D_FEATURE_LEVEL featureLevel{};
-    HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION,
-                                   &dev, &featureLevel, &ctx);
+    HRESULT hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION, &dev,
+                                   &featureLevel, &ctx);
     if (FAILED(hr))
         hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr, 0, nullptr, 0, D3D11_SDK_VERSION, &dev,
                                &featureLevel, &ctx);
     if (FAILED(hr))
         return;
 
-    const std::filesystem::path root =
-        std::filesystem::temp_directory_path() / "spark_obj_mtl_color_ranges";
+    const std::filesystem::path root = std::filesystem::temp_directory_path() / "spark_obj_mtl_color_ranges";
     const std::filesystem::path objPath = root / "two_colors.obj";
     const std::filesystem::path mtlPath = root / "two_colors.mtl";
     std::error_code ec;
@@ -662,7 +661,7 @@ TEST(WorldBasicRender_SpriteTextureTopIsNotVerticallyMirrored)
         CoUninitialize();
 }
 
-TEST(BasicTextureCache_RetriesTransientComFailureAndInvalidatesDeterministicMissingFile)
+TEST(BasicTextureCache_LoadsWithoutCallerComAndInvalidatesDeterministicMissingFile)
 {
     ComPtr<ID3D11Device> device;
     ComPtr<ID3D11DeviceContext> context;
@@ -703,27 +702,26 @@ TEST(BasicTextureCache_RetriesTransientComFailureAndInvalidatesDeterministicMiss
     }
     else
     {
-        // Keep the worker-thread transient-failure check meaningful even if
-        // this runner cannot establish a COM apartment on the main thread.
+        // Keep the worker-thread load check meaningful even if this runner
+        // cannot establish a COM apartment on the main thread.
         EXPECT_TRUE(WriteTwoBandBmp(texturePath));
     }
 
     if (uninitializeCom)
         CoUninitialize();
 
-    // A fresh std::thread has no COM apartment. The first factory creation
-    // therefore fails for thread state, not for the image. Initializing COM on
-    // that same thread must make the very next attempt succeed without an
-    // explicit cache invalidation.
+    // A fresh std::thread has no caller COM apartment. The loader must establish
+    // its own short-lived apartment, so the first load succeeds. A later load
+    // under caller-initialized COM must still hit the same texture cache.
     GraphicsEngine retryGraphics;
     EXPECT_TRUE(SUCCEEDED(retryGraphics.InitializeFromDevice(device.Get(), context.Get())));
-    bool failedBeforeComInitialization = false;
+    bool loadedBeforeComInitialization = false;
     bool loadedAfterComInitialization = false;
     HRESULT workerComResult = E_FAIL;
     std::thread worker(
         [&]
         {
-            failedBeforeComInitialization = retryGraphics.GetOrLoadTextureSRV(texturePathUtf8) == nullptr;
+            loadedBeforeComInitialization = retryGraphics.GetOrLoadTextureSRV(texturePathUtf8) != nullptr;
             workerComResult = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
             if (SUCCEEDED(workerComResult) || workerComResult == RPC_E_CHANGED_MODE)
                 loadedAfterComInitialization = retryGraphics.GetOrLoadTextureSRV(texturePathUtf8) != nullptr;
@@ -731,12 +729,7 @@ TEST(BasicTextureCache_RetriesTransientComFailureAndInvalidatesDeterministicMiss
                 CoUninitialize();
         });
     worker.join();
-    if (!failedBeforeComInitialization)
-    {
-        // Some compatibility layers implicitly establish a COM apartment.
-        // They cannot exercise the pre-initialization half of this regression.
-        std::cout << "[ INFO   ] COM transient texture-cache precondition skipped: WIC was already available.\n";
-    }
+    EXPECT_TRUE(loadedBeforeComInitialization);
     EXPECT_TRUE(SUCCEEDED(workerComResult) || workerComResult == RPC_E_CHANGED_MODE);
     EXPECT_TRUE(loadedAfterComInitialization);
 

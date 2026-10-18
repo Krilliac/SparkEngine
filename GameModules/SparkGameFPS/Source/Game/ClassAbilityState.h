@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include "Enums/GameSystemEnums.h"
+#include <Spark/GameTypes.h>
 
 namespace Spark
 {

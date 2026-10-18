@@ -77,6 +77,18 @@
  *    (which in turn calls ClearPlayer() below, so a recycled PlayerId never
  *    inherits a stale score and instantly re-trips the same kick).
  *
+ *  - FORGED STATE (TF-110): client messages that claim state the server never
+ *    granted -- a TF_LoadoutChange carrying a WeaponId that does not resolve
+ *    (Net/TFLoadoutWire.h), a loadout or grenade/suit pick the player is not
+ *    eligible for, or a TF_FireEvent for a weapon outside the class loadout or
+ *    still locked -- are rejected at their call sites and reported through
+ *    RecordForgedStateReject(). That bumps forgedStateRejects (weighted into
+ *    ViolationScore), appends a TFForgedStateAudit record to a bounded ring
+ *    (AuditTrail()) and emits a throttled "[TF-AUDIT] forged-state" log line.
+ *    Ability requests are NOT covered: TF_AbilityRequest carries no ability id
+ *    (the server derives the ability from the pawn's class via
+ *    TFAbilitySystem::AbilityDefOf), so there is no ability state to forge.
+ *
  * All counters below are DETECTION + CLAMP/REJECT as they're recorded; the
  * KICK ESCALATION bullet above is what finally acts on them (closing what
  * used to be a "no bans this wave" gap -- see tf_cheat_stats,
@@ -92,6 +104,9 @@
 
 #include "Core/TFTypes.h"
 
+#include <cstddef>
+#include <cstdint>
+#include <deque>
 #include <unordered_map>
 
 namespace Terrafront
@@ -100,12 +115,34 @@ namespace Terrafront
     /// Per-player violation counters (tf_cheat_stats).
     struct TFViolationStats
     {
-        uint32_t movementClamps = 0;    ///< tick displacement exceeded the plausible cap and was pulled back
-        uint32_t movementSpikes = 0;    ///< subset of movementClamps that were a gross (>= kSpikeRatio) overshoot
-        uint32_t fireRateRejects = 0;   ///< TFWeaponSystem::ValidateFire rejections (mirrored counter)
-        uint32_t fireOriginRejects = 0; ///< TF_FireEvent claimed origin diverged from the trusted pawn position
-        uint32_t inputRateRejects = 0;  ///< TF_ClientInput dropped by AllowInput()'s 60Hz(+fudge) token bucket
+        uint32_t movementClamps = 0;     ///< tick displacement exceeded the plausible cap and was pulled back
+        uint32_t movementSpikes = 0;     ///< subset of movementClamps that were a gross (>= kSpikeRatio) overshoot
+        uint32_t fireRateRejects = 0;    ///< TFWeaponSystem::ValidateFire rejections (mirrored counter)
+        uint32_t fireOriginRejects = 0;  ///< TF_FireEvent claimed origin diverged from the trusted pawn position
+        uint32_t inputRateRejects = 0;   ///< TF_ClientInput dropped by AllowInput()'s 60Hz(+fudge) token bucket
+        uint32_t forgedStateRejects = 0; ///< TF-110: client claimed state the server never granted (TFForgedState)
     };
+
+    /// TF-110: kinds of forged client state the server rejects and audits.
+    enum class TFForgedState : uint8_t
+    {
+        LoadoutUnknownWeapon,   ///< TF_LoadoutChange carried a WeaponId that resolves to no weapon
+        LoadoutIneligible,      ///< TFProgressionSystem::ServerSetLoadout refused the requested keys
+        LoadoutExtIneligible,   ///< TFProgressionSystem::ServerSetLoadoutExt refused the grenade/suit pick
+        FireWeaponNotInLoadout, ///< TF_FireEvent weapon is not issued to the shooter's class
+        FireWeaponLocked,       ///< TF_FireEvent weapon is loadout-eligible but not unlocked
+    };
+
+    /// One audited forged-state rejection (AuditTrail()).
+    struct TFForgedStateAudit
+    {
+        PlayerId player = kInvalidPlayer;
+        TFForgedState kind = TFForgedState::LoadoutUnknownWeapon;
+        double time = 0.0; ///< server clock at rejection (TFServerSim::ServerTime())
+    };
+
+    /// Stable log/console name for a TFForgedState ("loadout-unknown-weapon", ...).
+    const char* ForgedStateName(TFForgedState kind);
 
     /// Process-singleton (same lifetime/access pattern as TFImpactFx::Get()).
     /// Server-authority-only in practice: only TFServerSim (IsAuthority()
@@ -125,8 +162,8 @@ namespace Terrafront
         /// generous constant vertically -- jumps/falls/jet-thrust are already
         /// bounded by the shared movement model, this is a backstop, not the
         /// primary limiter). `now` paces the throttled spike log.
-        void ValidateMovementTick(PlayerId player, const float prevPos[3], float pos[3], float maxHorizSpeed,
-                                  float dt, double now);
+        void ValidateMovementTick(PlayerId player, const float prevPos[3], float pos[3], float maxHorizSpeed, float dt,
+                                  double now);
 
         /// Redeploy / tf_tp / any future explicit server-authoritative
         /// reposition: call immediately before writing the new position so the
@@ -152,6 +189,19 @@ namespace Terrafront
         /// per-player counters (see file header: no second gate here).
         void RecordFireRateReject(PlayerId player);
 
+        /// TF-110: the caller has already REJECTED a forged client message;
+        /// this records it (file header: FORGED STATE). Bumps
+        /// forgedStateRejects, appends to the bounded audit ring (oldest
+        /// dropped past kForgedAuditCapacity) and logs "[TF-AUDIT] forged-state
+        /// kind=<name> player=<id>" at most once per second per player.
+        void RecordForgedStateReject(PlayerId player, TFForgedState kind, double now);
+
+        /// Most recent forged-state rejections, oldest first. Survives
+        /// ClearPlayer() on purpose: the audit outlives the kicked session.
+        const std::deque<TFForgedStateAudit>& AuditTrail() const { return m_audit; }
+
+        static constexpr std::size_t kForgedAuditCapacity = 256;
+
         /// Weighted sum of `player`'s violation counters (see the .cpp
         /// anonymous namespace for the per-counter weights). movementClamps
         /// is NOT included -- only its movementSpikes subset is (file header:
@@ -166,7 +216,8 @@ namespace Terrafront
         /// instantly re-trip the same kick.
         bool ShouldKick(PlayerId player) const;
 
-        /// Session teardown hygiene: drop this player's counters so a recycled
+        /// Session teardown hygiene: drop this player's counters (but not
+        /// the forged-state AuditTrail() entries) so a recycled
         /// PlayerId doesn't inherit a stale violation history (same pattern as
         /// TFServerSim::CleanupPlayerSession's other ClearPlayer calls).
         void ClearPlayer(PlayerId player);
@@ -185,6 +236,9 @@ namespace Terrafront
         std::unordered_map<PlayerId, float> m_inputTokens;
         std::unordered_map<PlayerId, double> m_inputLastRefill;
         std::unordered_map<PlayerId, double> m_lastInputRejectLog;
+
+        std::deque<TFForgedStateAudit> m_audit;
+        std::unordered_map<PlayerId, double> m_lastForgedLog;
     };
 
 } // namespace Terrafront

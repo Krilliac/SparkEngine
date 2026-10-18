@@ -11,26 +11,26 @@
 #include <cstring>
 #include <string>
 
+#include "SparkUI/Runtime.h"
+#include "SparkUI/Widgets.h"
+
 using namespace DirectX;
 namespace SparkEditor
 {
 
     void TerrainEditor::RenderNoTerrainView()
     {
+        Spark::Ui::EmptyState(ICON_FA_MOUNTAIN, "No terrain loaded", "Create a new terrain or load an existing one.");
         ImGui::Spacing();
-        ImGui::TextWrapped("No terrain loaded. Create a new terrain or load an existing one.");
-        ImGui::Spacing();
-        ImGui::Separator();
 
         // --- Quick-create presets ---
-        ImGui::Text(ICON_FA_PLUS " Create Terrain");
-        ImGui::Spacing();
+        Spark::Ui::SubHeader(ICON_FA_PLUS " Create Terrain");
 
         static int presetSize = 1; // 0=Small, 1=Medium, 2=Large
         static int presetRes = 1;  // 0=Low, 1=Medium, 2=High
         static int presetType = 0; // 0=Flat, 1=Noise Hills, 2=Mountains
 
-        ImGui::Text("Size:");
+        Spark::Ui::SecondaryText("Size:");
         ImGui::SameLine();
         ImGui::RadioButton("512m", &presetSize, 0);
         ImGui::SameLine();
@@ -38,7 +38,7 @@ namespace SparkEditor
         ImGui::SameLine();
         ImGui::RadioButton("2048m", &presetSize, 2);
 
-        ImGui::Text("Resolution:");
+        Spark::Ui::SecondaryText("Resolution:");
         ImGui::SameLine();
         ImGui::RadioButton("257", &presetRes, 0);
         ImGui::SameLine();
@@ -46,7 +46,7 @@ namespace SparkEditor
         ImGui::SameLine();
         ImGui::RadioButton("1025", &presetRes, 2);
 
-        ImGui::Text("Preset:");
+        Spark::Ui::SecondaryText("Preset:");
         ImGui::SameLine();
         ImGui::RadioButton("Flat", &presetType, 0);
         ImGui::SameLine();
@@ -59,7 +59,7 @@ namespace SparkEditor
         float sizes[] = {512.0f, 1024.0f, 2048.0f};
         int resolutions[] = {257, 513, 1025};
 
-        if (ImGui::Button(ICON_FA_PLUS " Create Terrain", ImVec2(-1, 36)))
+        if (Spark::Ui::PrimaryButton(ICON_FA_PLUS " Create Terrain", ImVec2(-1, Spark::Ui::Px(36.0f))))
         {
             float selectedSize = sizes[presetSize];
             int selectedRes = resolutions[presetRes];
@@ -86,19 +86,16 @@ namespace SparkEditor
         }
 
         ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Spacing();
 
         // --- Load existing ---
-        ImGui::Text(ICON_FA_FOLDER_OPEN " Load Existing");
-        ImGui::Spacing();
+        Spark::Ui::SubHeader(ICON_FA_FOLDER_OPEN " Load Existing");
 
         if (m_loadPathBuffer[0] == '\0')
         {
             RefreshPathBuffers();
         }
         ImGui::InputText("##terrainpath", m_loadPathBuffer, sizeof(m_loadPathBuffer));
-        if (ImGui::Button(ICON_FA_FOLDER_OPEN " Load Terrain File", ImVec2(-1, 32)))
+        if (ImGui::Button(ICON_FA_FOLDER_OPEN " Load Terrain File", ImVec2(-1, Spark::Ui::Px(32.0f))))
         {
             if (!LoadTerrain(m_loadPathBuffer))
             {
@@ -111,7 +108,7 @@ namespace SparkEditor
         }
         if (!m_terrainIoMessage.empty())
         {
-            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", m_terrainIoMessage.c_str());
+            Spark::Ui::StatusText(Spark::Ui::Status::Error, "%s", m_terrainIoMessage.c_str());
         }
     }
 
@@ -133,21 +130,25 @@ namespace SparkEditor
 
     void TerrainEditor::RenderToolPalette()
     {
-        ImGui::Text(ICON_FA_MOUNTAIN " Terrain Tools");
-        ImGui::Spacing();
+        Spark::Ui::SubHeader(ICON_FA_MOUNTAIN " Terrain Tools");
 
-        float btnWidth = (ImGui::GetContentRegionAvail().x - 12.0f) / 4.0f;
-        ImVec2 btnSize(btnWidth, 28.0f);
+        const float spacing = ImGui::GetStyle().ItemSpacing.x;
+        float btnWidth = (ImGui::GetContentRegionAvail().x - spacing * 3.0f) / 4.0f;
+        ImVec2 btnSize(btnWidth, Spark::Ui::Px(28.0f));
 
         auto ToolButton = [&](const char* label, TerrainTool tool)
         {
-            bool active = (m_currentTool == tool);
-            if (active)
+            bool clicked = false;
+            if (m_currentTool == tool)
             {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.55f, 0.9f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.6f, 0.95f, 1.0f));
+                Spark::Ui::ScopedPrimaryButtonColors activeColours;
+                clicked = ImGui::Button(label, btnSize);
             }
-            if (ImGui::Button(label, btnSize))
+            else
+            {
+                clicked = ImGui::Button(label, btnSize);
+            }
+            if (clicked)
             {
                 m_currentTool = tool;
                 m_showHeightmapTools = (static_cast<int>(tool) < 10);
@@ -156,13 +157,11 @@ namespace SparkEditor
                                          (tool == TerrainTool::PAINT_DETAIL || tool == TerrainTool::PAINT_TREES));
                 m_showGenerationTools = false;
             }
-            if (active)
-                ImGui::PopStyleColor(2);
             ImGui::SameLine();
         };
 
         // Sculpt row
-        ImGui::TextDisabled("Sculpt:");
+        Spark::Ui::SecondaryText("Sculpt:");
         ToolButton(ICON_FA_LEVEL_UP_ALT " Raise", TerrainTool::SCULPT_RAISE);
         ToolButton(ICON_FA_ANGLE_DOWN " Lower", TerrainTool::SCULPT_LOWER);
         ToolButton(ICON_FA_MAGIC " Smooth", TerrainTool::SCULPT_SMOOTH);
@@ -170,14 +169,14 @@ namespace SparkEditor
         ImGui::NewLine();
 
         // Paint row
-        ImGui::TextDisabled("Paint:");
+        Spark::Ui::SecondaryText("Paint:");
         ToolButton(ICON_FA_PAINT_BRUSH " Texture", TerrainTool::PAINT_TEXTURE);
         ToolButton(ICON_FA_TREE " Trees", TerrainTool::PAINT_TREES);
         ToolButton(ICON_FA_LAYER_GROUP " Detail", TerrainTool::PAINT_DETAIL);
         ImGui::NewLine();
 
         // Utility row
-        ImGui::TextDisabled("Utility:");
+        Spark::Ui::SecondaryText("Utility:");
         if (ImGui::Button(ICON_FA_COGS " Generate", btnSize))
         {
             m_showGenerationTools = !m_showGenerationTools;
@@ -196,9 +195,9 @@ namespace SparkEditor
 
     void TerrainEditor::RenderBrushSettings()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_PAINT_BRUSH " Brush Settings", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Brush Settings", ICON_FA_PAINT_BRUSH))
         {
-            ImGui::Indent(8.0f);
+            ImGui::Indent(Spark::Ui::Px(8.0f));
 
             ImGui::DragFloat("Radius", &m_brushSettings.radius, 0.5f, 1.0f, 500.0f, "%.1f");
             ImGui::DragFloat("Strength", &m_brushSettings.strength, 0.01f, 0.0f, 1.0f, "%.2f");
@@ -214,53 +213,52 @@ namespace SparkEditor
             ImGui::Checkbox("Show Preview", &m_brushSettings.showPreview);
             ImGui::Checkbox("Pen Pressure", &m_brushSettings.enablePressure);
 
-            ImGui::Unindent(8.0f);
+            ImGui::Unindent(Spark::Ui::Px(8.0f));
         }
     }
 
     void TerrainEditor::RenderHeightmapTools()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_MOUNTAIN " Heightmap", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Heightmap", ICON_FA_MOUNTAIN))
         {
-            ImGui::Indent(8.0f);
+            ImGui::Indent(Spark::Ui::Px(8.0f));
 
             if (m_currentTerrain)
             {
                 auto& hm = m_currentTerrain->heightmap;
-                ImGui::Text("Resolution: %d x %d", hm.width, hm.height);
+                Spark::Ui::KeyValue("Resolution:", "%d x %d", hm.width, hm.height);
                 ImGui::DragFloat("Height Scale", &hm.scale, 0.1f, 0.1f, 100.0f, "%.1f");
                 ImGui::DragFloat("Min Height", &hm.minHeight, 0.5f, -1000.0f, hm.maxHeight, "%.1f");
                 ImGui::DragFloat("Max Height", &hm.maxHeight, 0.5f, hm.minHeight, 1000.0f, "%.1f");
 
-                ImGui::Separator();
-                ImGui::Text("Visualization:");
+                Spark::Ui::SubHeader("Visualization");
                 ImGui::Checkbox("Wireframe", &m_showWireframe);
                 ImGui::SameLine();
                 ImGui::Checkbox("Normals", &m_showNormals);
             }
 
-            ImGui::Unindent(8.0f);
+            ImGui::Unindent(Spark::Ui::Px(8.0f));
         }
     }
 
     void TerrainEditor::RenderTexturePaintingTools()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_PAINT_BRUSH " Texture Painting", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Texture Painting", ICON_FA_PAINT_BRUSH))
         {
-            ImGui::Indent(8.0f);
+            ImGui::Indent(Spark::Ui::Px(8.0f));
             RenderTextureLayersPanel();
             ImGui::Checkbox("Show Splatmaps", &m_showSplatmaps);
-            ImGui::Unindent(8.0f);
+            ImGui::Unindent(Spark::Ui::Px(8.0f));
         }
     }
 
     void TerrainEditor::RenderDetailPlacementTools()
     {
-        if (ImGui::CollapsingHeader(ICON_FA_TREE " Detail Placement", ImGuiTreeNodeFlags_DefaultOpen))
+        if (Spark::Ui::SectionHeader("Detail Placement", ICON_FA_TREE))
         {
-            ImGui::Indent(8.0f);
+            ImGui::Indent(Spark::Ui::Px(8.0f));
             RenderDetailMeshesPanel();
-            ImGui::Unindent(8.0f);
+            ImGui::Unindent(Spark::Ui::Px(8.0f));
         }
     }
 
